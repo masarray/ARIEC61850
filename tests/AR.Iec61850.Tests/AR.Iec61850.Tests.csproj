@@ -24,4 +24,8 @@
     <ProjectReference Include="..\..\src\AR.Iec61850\AR.Iec61850.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\samples\scl\minimal-station.scd" Link="Fixtures\Scl\minimal-station.scd" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

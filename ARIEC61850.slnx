@@ -1,5 +1,9 @@
 <Solution>
+  <Folder Name="/apps/">
+    <Project Path="apps/AR.Iec61850.Cli/AR.Iec61850.Cli.csproj" />
+  </Folder>
   <Folder Name="/src/">
+    <Project Path="src/AR.Iec61850.Transports.Npcap/AR.Iec61850.Transports.Npcap.csproj" />
     <Project Path="src/AR.Iec61850/AR.Iec61850.csproj" />
   </Folder>
   <Folder Name="/tests/">

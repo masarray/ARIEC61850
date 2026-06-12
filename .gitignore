@@ -480,3 +480,41 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Generated demo output
+out/
+
+# IEC 61850 lab/generated artifacts - keep GitHub source-only.
+captures/
+pcaps/
+*.pcap
+*.pcapng
+*.cap
+*.pkt
+*.etl
+*.trc
+*.blf
+*.comtrade
+
+# Local build/test/publish artifacts that should never be source history.
+coverage/
+*.trx
+*.coverage
+*.coveragexml
+*.binlog
+*.nupkg
+*.snupkg
+*.zip
+*.7z
+*.rar
+*.dll
+*.exe
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+# Local operator/runtime state.
+*.local.json
+*.local.xml
+*.session.json
+*.adapter.json

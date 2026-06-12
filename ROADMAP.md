@@ -177,9 +177,14 @@ Latest verified local status:
 - Report frame mapping now decodes typed report header evidence: `RptID`,
   `OptFlds`, `SqNum`, `TimeOfEntry`, `DatSet`, `BufOvfl`, `EntryID`,
   `ConfRev`, and per-value reason-for-inclusion when present.
+- Report sessions now include diagnostics for sequence gaps/regressions,
+  duplicate report keys, EntryID gaps/regressions, poll-read status, write
+  failures, reason counts, and buffer-overflow evidence.
+- Guarded report commands can export JSON/Markdown evidence artifacts with
+  `--evidence`.
 - MMS `binary-time` is decoded as a typed raw value for report timestamps.
 - Latest automated validation: `dotnet test .\ARIEC61850.slnx -c Release
-  --no-build` passed with 70 tests.
+  --no-build` passed with 71 tests.
 
 Latest live MMS evidence against lab IED `192.16.1.157:102`:
 
@@ -195,8 +200,9 @@ RCB=286
 BRCB=8
 URCB=278
 static report=enable, GI, receive, map 2/2 values, disable OK
-static report monitor=poll smart-read during active report, 6/6 poll reads OK, 4 reports mapped
+static report monitor=poll smart-read during active report, 4/4 poll reads OK, 4 reports mapped
 report header=RptID/OptFlds/SqNum/TimeOfEntry/DatSet/BufOvfl/EntryID/ConfRev/reason decoded
+report diagnostics=sequence/EntryID/reason/write/poll/evidence export implemented
 dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanup OK
 ```
 
@@ -219,7 +225,7 @@ dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanu
 | Confirmed write foundation | Partial | Used for guarded report/DataSet flows; generic write API remains guarded. |
 | Static reporting | Guarded lab MVP | Enable, GI, receive, map, disable validated. |
 | Dynamic reporting | Guarded lab MVP | Create/bind/enable/GI/receive/cleanup/delete validated. |
-| Report object model | Partial lab MVP | Header, optional fields, inclusion bits, BinaryTime, and reason-for-inclusion decode are validated on current relay and unit fixtures. |
+| Report object model | Partial lab MVP | Header, optional fields, inclusion bits, BinaryTime, reason-for-inclusion, sequence/EntryID diagnostics, and evidence export are validated by tests and the current relay. |
 | MMS receive routing | Unit-tested MVP | PDU classifier, invoke-aware queue, background pump, and pending registry are implemented. |
 | Full MMS receive pump | In progress | Background pump and static monitor polling exist; longer multi-vendor report/read/write soak is next. |
 | BRCB recovery | Planned | Needs EntryID, PurgeBuf, reconnect, duplicate/loss diagnostics. |
@@ -335,8 +341,12 @@ Progress:
   `TimeOfEntry`, `DatSet`, `BufOvfl`, `EntryID`, and `ConfRev`;
 - done: per-value reason-for-inclusion names for trailing reason bitstrings;
 - done: MMS `binary-time` is preserved as raw timestamp evidence;
-- remaining: sequence diagnostics, duplicate/loss detection, EntryID
-  persistence, PurgeBuf, and reconnect recovery.
+- done: session diagnostics for sequence gaps/regressions, duplicate report
+  keys, EntryID gaps/regressions, write failures, poll status, reason counts,
+  and buffer-overflow evidence;
+- done: JSON/Markdown evidence export for guarded report commands;
+- remaining: post-write readback verification, EntryID persistence, PurgeBuf,
+  reconnect recovery, and longer multi-vendor evidence export runs.
 
 Deliverables:
 
@@ -344,6 +354,7 @@ Deliverables:
   BufOvfl, EntryID, ConfRev, inclusion bits, and reason-for-inclusion;
 - sequence diagnostics;
 - duplicate report detection;
+- JSON/Markdown report evidence export;
 - `EntryID` persistence in session;
 - `PurgeBuf` support;
 - reconnect/re-enable strategy;

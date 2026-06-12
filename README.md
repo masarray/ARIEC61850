@@ -77,12 +77,19 @@ Implemented and tested today:
 - Report frames decode typed report header evidence: `RptID`, `OptFlds`,
   `SqNum`, `TimeOfEntry`, `DatSet`, `BufOvfl`, `EntryID`, `ConfRev`, and
   per-value reason-for-inclusion when present.
+- Report sessions produce reusable diagnostics for report counts, mapping
+  failures, sequence gaps/regressions, duplicate report keys, EntryID
+  gaps/regressions, reason counts, poll-read status, write failures, and buffer
+  overflow evidence.
+- Guarded report commands can export evidence artifacts with `--evidence`,
+  including `summary.json`, `reports.json`, `poll-reads.json`,
+  `write-steps.json`, and `summary.md`.
 - MMS `binary-time` values are preserved and rendered as raw evidence.
 - GOOSE frame builder/parser and SCL-backed live publisher.
 - Sampled Values frame builder/parser and SCL-backed live publisher.
 - PCAP writer, reader, inspector, and stream playback.
 - Npcap raw Ethernet transport for live process-bus lab publishing.
-- 69 automated tests passing in the latest local validation run.
+- 71 automated tests passing in the latest local validation run.
 
 Still experimental or not implemented yet:
 
@@ -203,6 +210,12 @@ subscription is active:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --yes
 ```
 
+Export report evidence artifacts for FAT/SAT notes:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --evidence .\out\report-session01 --yes
+```
+
 Run a guarded dynamic report smoke test:
 
 ```powershell
@@ -231,7 +244,7 @@ against production equipment or RCBs used by another client.
 Latest local validation evidence:
 
 - `dotnet build .\ARIEC61850.slnx -c Release` passed.
-- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 70 tests.
+- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 71 tests.
 - Live MMS association to lab IED `192.16.1.157:102` reached `MmsInitiated`.
 - Live directory evidence: 4 logical devices, 123 logical nodes, 9,464
   FC-aware points, 3,456 report attributes, and 457 control attributes.
@@ -239,11 +252,13 @@ Latest local validation evidence:
 - Static BRCB smoke test received InformationReport frames and mapped 2 of 2
   DataSet values.
 - Static BRCB monitor kept the receive pump active while smart-read polling ran
-  during the report session: 4 report frames received and 6/6 poll reads
+  during the report session: 4 report frames received and 4/4 poll reads
   succeeded.
 - Live report header evidence decoded `RptID`, `OptFlds`, `SqNum`,
   `TimeOfEntry`, `DatSet`, `BufOvfl`, `EntryID`, `ConfRev`, and
   reason-for-inclusion.
+- Report diagnostics and evidence export generated sequence/EntryID/reason
+  summaries plus JSON/Markdown artifacts.
 - Dynamic report smoke test created a DataSet, bound an RCB, enabled reporting,
   triggered GI, received a report, cleared the RCB DataSet, and deleted the
   dynamic DataSet.
@@ -294,7 +309,7 @@ AGENTS.md                             engineering rules for contributors
 Next engineering phases:
 
 1. run receive-pump/report-monitor soak tests while reads/writes occur;
-2. mature report decoding, optional fields, and BRCB recovery;
+2. mature report evidence, post-write readback, and BRCB recovery;
 3. implement MMS file transfer;
 4. implement IEC 61850 control services safely;
 5. add GOOSE and SV subscribers;

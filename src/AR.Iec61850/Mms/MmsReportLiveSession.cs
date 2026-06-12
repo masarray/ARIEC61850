@@ -136,6 +136,7 @@ public sealed class MmsStaticReportSessionResult
     public IReadOnlyList<MmsReportFrame> Reports { get; init; } = Array.Empty<MmsReportFrame>();
     public IReadOnlyList<MmsReportPollRead> PollReads { get; init; } = Array.Empty<MmsReportPollRead>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+    public MmsReportSessionDiagnostics Diagnostics { get; init; } = new();
     public string Message { get; init; } = string.Empty;
 }
 
@@ -635,6 +636,7 @@ public sealed partial class MmsClientSession
             Reports = reports,
             PollReads = pollReads,
             Warnings = warnings,
+            Diagnostics = MmsReportSessionDiagnostics.Analyze(reports, pollReads, writes),
             Message = $"Static report guarded session complete: writes={writes.Count}, reports={reports.Count}, pollReads={pollReads.Count}."
         };
     }
@@ -788,6 +790,7 @@ public sealed partial class MmsClientSession
             WriteSteps = writes,
             Reports = reports,
             Warnings = warnings,
+            Diagnostics = MmsReportSessionDiagnostics.Analyze(reports, Array.Empty<MmsReportPollRead>(), writes),
             Message = $"Dynamic report guarded session complete: writes={writes.Count}, reports={reports.Count}."
         };
     }

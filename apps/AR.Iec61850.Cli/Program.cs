@@ -9,6 +9,7 @@ using AR.Iec61850.Transports;
 using AR.Iec61850.Transports.Npcap;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 
 return await Cli.RunAsync(args);
 
@@ -771,6 +772,7 @@ internal static class Cli
         var rawLimit = options.GetInt("raw-limit", 80);
         var preferredRcb = options.Get("rcb", string.Empty);
         var preferredDataSet = options.Get("dataset", string.Empty);
+        var evidencePath = options.Get("evidence", string.Empty);
         var durationSec = options.GetInt("duration-sec", monitorMode ? 60 : 15);
         if (durationSec < 1)
             throw new ArgumentException("--duration-sec must be at least 1.");
@@ -799,6 +801,8 @@ internal static class Cli
         await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
         Console.WriteLine($"Association: {session.State}");
         Console.WriteLine($"  {session.LastHandshakeMessage}");
+        var associationState = session.State.ToString();
+        var associationMessage = session.LastHandshakeMessage;
         Console.WriteLine($"Receive pump: {(session.IsReceivePumpRunning ? "running" : "stopped")}");
 
         var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
@@ -880,6 +884,7 @@ internal static class Cli
         Console.WriteLine();
         Console.WriteLine(live.Message);
         Console.WriteLine($"Receive routing: {TextOrDash(session.LastReceiveRoutingSummary)} pending={session.PendingConfirmedOperationCount} queuedReports={session.QueuedInformationReportCount}");
+        WriteReportDiagnostics(live.Diagnostics);
 
         if (live.Warnings.Count > 0)
         {
@@ -910,6 +915,25 @@ internal static class Cli
         foreach (var report in TakeWithLimit(live.Reports, rawLimit))
             WriteReportFrame(report);
         WriteLimitNotice(live.Reports.Count, rawLimit, "report frame(s)");
+
+        if (!string.IsNullOrWhiteSpace(evidencePath))
+        {
+            var files = await WriteReportEvidenceAsync(
+                evidencePath,
+                $"{host}:{port}",
+                monitorMode ? "mms-report-monitor" : "mms-report-static-live",
+                associationState,
+                associationMessage,
+                discovery.IedDirectory.Summary,
+                discovery.ReportInventory.Summary,
+                session.LastReceiveRoutingSummary,
+                plan,
+                live).ConfigureAwait(false);
+
+            Console.WriteLine("Evidence written:");
+            foreach (var file in files)
+                Console.WriteLine($"  {file}");
+        }
 
         return live.IsSuccess ? 0 : 1;
     }
@@ -995,6 +1019,7 @@ internal static class Cli
         if (requestedPoints.Count == 0)
             throw new ArgumentException("--points must contain at least one IEC 61850 point reference separated by comma.");
 
+        var evidencePath = options.Get("evidence", string.Empty);
         var preferredLd = options.Get("ld", string.Empty);
         var preferredRcb = options.Get("rcb", string.Empty);
         var dataSetName = options.Get("dataset-name", "AR_DYN_DS01");
@@ -1018,6 +1043,8 @@ internal static class Cli
         await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
         Console.WriteLine($"Association: {session.State}");
         Console.WriteLine($"  {session.LastHandshakeMessage}");
+        var associationState = session.State.ToString();
+        var associationMessage = session.LastHandshakeMessage;
 
         var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
         Console.WriteLine(discovery.IedDirectory.Summary);
@@ -1068,6 +1095,7 @@ internal static class Cli
         Console.WriteLine();
         Console.WriteLine(live.Message);
         Console.WriteLine($"Receive routing: {TextOrDash(session.LastReceiveRoutingSummary)} pending={session.PendingConfirmedOperationCount} queuedReports={session.QueuedInformationReportCount}");
+        WriteReportDiagnostics(live.Diagnostics);
 
         if (live.Warnings.Count > 0)
         {
@@ -1084,6 +1112,25 @@ internal static class Cli
         foreach (var report in TakeWithLimit(live.Reports, rawLimit))
             WriteReportFrame(report);
         WriteLimitNotice(live.Reports.Count, rawLimit, "report frame(s)");
+
+        if (!string.IsNullOrWhiteSpace(evidencePath))
+        {
+            var files = await WriteReportEvidenceAsync(
+                evidencePath,
+                $"{host}:{port}",
+                "mms-report-dynamic-live",
+                associationState,
+                associationMessage,
+                discovery.IedDirectory.Summary,
+                discovery.ReportInventory.Summary,
+                session.LastReceiveRoutingSummary,
+                plan,
+                live).ConfigureAwait(false);
+
+            Console.WriteLine("Evidence written:");
+            foreach (var file in files)
+                Console.WriteLine($"  {file}");
+        }
 
         return live.IsSuccess ? 0 : 1;
     }
@@ -1878,6 +1925,166 @@ internal static class Cli
         WriteLimitNotice(report.Values.Count, 32, "report value(s)");
     }
 
+    private static void WriteReportDiagnostics(MmsReportSessionDiagnostics diagnostics)
+    {
+        Console.WriteLine("Diagnostics:");
+        Console.WriteLine($"  {diagnostics.Summary}");
+        if (!string.IsNullOrWhiteSpace(diagnostics.FirstEntryIdHex) || !string.IsNullOrWhiteSpace(diagnostics.LastEntryIdHex))
+            Console.WriteLine($"  EntryID: {TextOrDash(diagnostics.FirstEntryIdHex)} -> {TextOrDash(diagnostics.LastEntryIdHex)}");
+        if (diagnostics.ReasonCounts.Count > 0)
+            Console.WriteLine($"  Reasons: {string.Join(", ", diagnostics.ReasonCounts.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}={x.Value}"))}");
+    }
+
+    private static async Task<IReadOnlyList<string>> WriteReportEvidenceAsync(
+        string directoryPath,
+        string target,
+        string mode,
+        string associationState,
+        string associationMessage,
+        string iedSummary,
+        string reportInventorySummary,
+        string receiveRoutingSummary,
+        MmsReportSubscriptionPlan plan,
+        MmsStaticReportSessionResult result)
+    {
+        var directory = Path.GetFullPath(directoryPath);
+        Directory.CreateDirectory(directory);
+
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        var selectedRcb = plan.ReportControl;
+        var context = new
+        {
+                generatedAt = DateTimeOffset.UtcNow,
+            target,
+            mode,
+            association = new
+            {
+                state = associationState,
+                message = associationMessage
+            },
+            iedSummary,
+            reportInventorySummary,
+            receiveRoutingSummary,
+                plan = new
+                {
+                    plan.Summary,
+                    Mode = plan.Mode.ToString(),
+                    plan.DataSetReference,
+                plan.IsReady,
+                selectedRcb = selectedRcb == null ? null : new
+                {
+                    selectedRcb.Reference,
+                    selectedRcb.Mode,
+                    selectedRcb.DataSetReference,
+                    selectedRcb.ReportId,
+                    selectedRcb.ConfRev,
+                    selectedRcb.EnabledState,
+                    selectedRcb.ReservationState,
+                    selectedRcb.ReservationTimeSeconds,
+                    selectedRcb.OptionalFields,
+                    selectedRcb.TriggerOptions
+                }
+            },
+            result.IsSuccess,
+            result.Message,
+            result.Diagnostics,
+            warnings = result.Warnings
+        };
+
+        var summaryJsonPath = Path.Combine(directory, "summary.json");
+        var reportsJsonPath = Path.Combine(directory, "reports.json");
+        var pollReadsJsonPath = Path.Combine(directory, "poll-reads.json");
+        var writeStepsJsonPath = Path.Combine(directory, "write-steps.json");
+        var summaryMdPath = Path.Combine(directory, "summary.md");
+
+        await File.WriteAllTextAsync(summaryJsonPath, JsonSerializer.Serialize(context, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(reportsJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportEvidence), jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(pollReadsJsonPath, JsonSerializer.Serialize(result.PollReads, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(writeStepsJsonPath, JsonSerializer.Serialize(result.WriteSteps, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(summaryMdPath, BuildReportEvidenceMarkdown(context.generatedAt, target, mode, plan, result), System.Text.Encoding.UTF8).ConfigureAwait(false);
+
+        return [summaryJsonPath, reportsJsonPath, pollReadsJsonPath, writeStepsJsonPath, summaryMdPath];
+    }
+
+    private static object ToReportEvidence(MmsReportFrame report)
+        => new
+        {
+            report.ReceivedAt,
+            report.Message,
+            report.RawAccessResultCount,
+            report.InclusionBitstringItemIndex,
+            report.IncludedDataSetIndexes,
+            header = report.Header,
+            values = report.Values.Select(value => new
+            {
+                value.Index,
+                value.MemberReference,
+                value.DataReference,
+                value.ReasonForInclusion,
+                value.FailureCode,
+                displayValue = value.DisplayValue
+            })
+        };
+
+    private static string BuildReportEvidenceMarkdown(
+        DateTimeOffset generatedAt,
+        string target,
+        string mode,
+        MmsReportSubscriptionPlan plan,
+        MmsStaticReportSessionResult result)
+    {
+        var diagnostics = result.Diagnostics;
+        var lines = new List<string>
+        {
+            "# IEC 61850 Report Evidence",
+            string.Empty,
+            $"- Generated: {generatedAt:yyyy-MM-dd HH:mm:ss.fff} UTC",
+            $"- Target: {target}",
+            $"- Mode: {mode}",
+            $"- Plan: {plan.Summary}",
+            $"- Result: {(result.IsSuccess ? "PASS" : "FAIL")} - {result.Message}",
+            $"- Diagnostics: {diagnostics.Summary}",
+            $"- EntryID: {TextOrDash(diagnostics.FirstEntryIdHex)} -> {TextOrDash(diagnostics.LastEntryIdHex)}",
+            string.Empty,
+            "## Counts",
+            string.Empty,
+            $"| Metric | Value |",
+            $"| --- | ---: |",
+            $"| Reports | {diagnostics.ReportCount} |",
+            $"| Report values | {diagnostics.ValueCount} |",
+            $"| Mapping failures | {diagnostics.MappingFailureCount} |",
+            $"| Poll reads OK | {diagnostics.PollReadSuccessCount}/{diagnostics.PollReadCount} |",
+            $"| Write failures | {diagnostics.WriteFailureCount} |",
+            $"| Duplicate report keys | {diagnostics.DuplicateReportKeyCount} |",
+            $"| Sequence gaps | {diagnostics.SequenceGapCount} |",
+            $"| Sequence regressions | {diagnostics.SequenceRegressionCount} |",
+            $"| EntryID gaps | {diagnostics.EntryIdGapCount} |",
+            $"| EntryID regressions | {diagnostics.EntryIdRegressionCount} |",
+            $"| Buffer overflow observed | {diagnostics.BufferOverflowObserved.ToString().ToLowerInvariant()} |",
+            string.Empty
+        };
+
+        if (diagnostics.ReasonCounts.Count > 0)
+        {
+            lines.Add("## Reasons");
+            lines.Add(string.Empty);
+            lines.Add("| Reason | Count |");
+            lines.Add("| --- | ---: |");
+            foreach (var reason in diagnostics.ReasonCounts.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+                lines.Add($"| {reason.Key} | {reason.Value} |");
+            lines.Add(string.Empty);
+        }
+
+        lines.Add("## Write Steps");
+        lines.Add(string.Empty);
+        lines.Add("| Status | Attribute | Reference | Message |");
+        lines.Add("| --- | --- | --- | --- |");
+        foreach (var step in result.WriteSteps)
+            lines.Add($"| {(step.IsSuccess ? "OK" : "FAIL")} | {step.Attribute} | {step.Reference} | {step.Message.Replace("|", "\\|")} |");
+
+        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
+    }
+
     private static int UnknownCommand(string command)
     {
         Console.Error.WriteLine($"ERROR: unknown command '{command}'.");
@@ -1904,9 +2111,9 @@ internal static class Cli
         Console.WriteLine("  mms-report-static-plan <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--dataset LD/LLN0.DataSet] [--read-values]");
         Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01]");
         Console.WriteLine("  mms-rcb-probe <host-or-ip> <LD/LN.BR.name|LD/LN.RP.name> [--port 102] [--timeout-ms 120000]");
-        Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--yes]");
-        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 60] [--gi true|false] [--poll-points LD/LN.DO.da,...] [--poll-interval-ms 1000] [--yes]");
-        Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--yes]");
+        Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--evidence out/session] [--yes]");
+        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 60] [--gi true|false] [--poll-points LD/LN.DO.da,...] [--poll-interval-ms 1000] [--evidence out/session] [--yes]");
+        Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--evidence out/session] [--yes]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
         Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
@@ -1926,7 +2133,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-plan 192.168.1.10 --read-values");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-plan 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-live 192.168.1.10 --duration-sec 15 --yes");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --yes");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --evidence out/report-session01 --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-live 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-dataset-directory 192.168.1.10 OCR7SR12PROT/LLN0.DataSet --raw-limit 80");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");

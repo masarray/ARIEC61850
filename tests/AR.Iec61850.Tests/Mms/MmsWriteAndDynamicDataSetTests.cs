@@ -203,4 +203,70 @@ public sealed class MmsInformationReportDecoderTests
         Assert.Equal(["data-change"], frame.Values[0].ReasonForInclusion);
         Assert.Equal(["quality-change"], frame.Values[1].ReasonForInclusion);
     }
+
+    [Fact]
+    public void ReportSessionDiagnostics_FindsGapsDuplicatesAndReasonCounts()
+    {
+        var reports = new[]
+        {
+            DiagnosticReport("rpt", sequence: 1, entryId: "0001", reason: "general-interrogation"),
+            DiagnosticReport("rpt", sequence: 3, entryId: "0003", reason: "quality-change"),
+            DiagnosticReport("rpt", sequence: 3, entryId: "0003", reason: "quality-change", bufferOverflow: true),
+            DiagnosticReport("rpt", sequence: 2, entryId: "0002", reason: "data-change")
+        };
+        var pollReads = new[]
+        {
+            new MmsReportPollRead { Reference = "LD0/GGIO1.Ind1.stVal", IsSuccess = true },
+            new MmsReportPollRead { Reference = "LD0/GGIO1.Ind2.stVal", IsSuccess = false }
+        };
+        var writeSteps = new[]
+        {
+            new MmsReportAttributeWriteStep { Attribute = "RptEna", IsSuccess = true },
+            new MmsReportAttributeWriteStep { Attribute = "GI", IsSuccess = false }
+        };
+
+        var diagnostics = MmsReportSessionDiagnostics.Analyze(reports, pollReads, writeSteps);
+
+        Assert.Equal(4, diagnostics.ReportCount);
+        Assert.Equal(4, diagnostics.ValueCount);
+        Assert.Equal(1, diagnostics.SequenceGapCount);
+        Assert.Equal(1, diagnostics.SequenceRegressionCount);
+        Assert.Equal(1, diagnostics.EntryIdGapCount);
+        Assert.Equal(2, diagnostics.EntryIdRegressionCount);
+        Assert.Equal(1, diagnostics.DuplicateReportKeyCount);
+        Assert.True(diagnostics.BufferOverflowObserved);
+        Assert.Equal("0001", diagnostics.FirstEntryIdHex);
+        Assert.Equal("0002", diagnostics.LastEntryIdHex);
+        Assert.Equal(1, diagnostics.PollReadSuccessCount);
+        Assert.Equal(1, diagnostics.PollReadFailureCount);
+        Assert.Equal(1, diagnostics.WriteFailureCount);
+        Assert.Equal(2, diagnostics.ReasonCounts["quality-change"]);
+    }
+
+    private static MmsReportFrame DiagnosticReport(
+        string reportId,
+        ulong sequence,
+        string entryId,
+        string reason,
+        bool bufferOverflow = false)
+        => new()
+        {
+            Header = new MmsReportHeader
+            {
+                ReportId = reportId,
+                SequenceNumber = sequence,
+                EntryIdHex = entryId,
+                BufferOverflow = bufferOverflow
+            },
+            InclusionBitstringItemIndex = 5,
+            Values =
+            [
+                new MmsReportValue
+                {
+                    Index = 0,
+                    Value = MmsDataValue.Boolean(true),
+                    ReasonForInclusion = [reason]
+                }
+            ]
+        };
 }

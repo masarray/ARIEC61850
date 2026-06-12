@@ -216,6 +216,20 @@ pump:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 10 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --gi true --yes
 ```
 
+To preserve report evidence artifacts for review:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 10 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --gi true --evidence .\out\report-session01 --yes
+```
+
+Expected evidence files:
+
+- `summary.json`
+- `reports.json`
+- `poll-reads.json`
+- `write-steps.json`
+- `summary.md`
+
 Expected behavior:
 
 1. The command discovers the live IED directory and report inventory.
@@ -256,6 +270,31 @@ typedHeader=RptID, OptFlds, SqNum, TimeOfEntry, DatSet, BufOvfl, EntryID, ConfRe
 optFlds=sequence-number, report-time-stamp, reason-for-inclusion, data-set-name, buffer-overflow, entryID, conf-revision
 reasonForInclusion=application-trigger and quality-change observed
 binaryTime=preserved as raw TimeOfEntry evidence
+```
+
+Report session diagnostics now summarize:
+
+```text
+reports, values, mapping failures, poll read success/fail, write failures,
+sequence gaps/regressions, EntryID gaps/regressions, duplicate report keys,
+buffer-overflow observation, and reason-for-inclusion counts.
+```
+
+Recorded live evidence export result:
+
+```text
+command=mms-report-monitor --duration-sec 4 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --evidence .\out\report-evidence-smoke
+files=summary.json, reports.json, poll-reads.json, write-steps.json, summary.md
+reports=4
+values=6
+mappingFailures=0
+pollReads=4/4 OK
+writeFailures=0
+sequenceGaps=0
+entryIdGaps=1
+duplicates=0
+bufferOverflowObserved=true
+reasons=application-trigger:4, quality-change:2
 ```
 
 ## Dynamic report live smoke test (guarded)

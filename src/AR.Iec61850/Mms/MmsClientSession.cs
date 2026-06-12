@@ -405,6 +405,77 @@ public sealed class MmsClientSession : IAsyncDisposable
         return results;
     }
 
+    public async Task<MmsWriteResult> WriteSingleVariableAsync(
+        MmsObjectReference reference,
+        MmsDataValue value,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+        if (string.IsNullOrWhiteSpace(reference.Domain))
+            throw new ArgumentException("MMS domain is empty.", nameof(reference));
+
+        if (string.IsNullOrWhiteSpace(reference.Item))
+            throw new ArgumentException("MMS item is empty.", nameof(reference));
+
+        ArgumentNullException.ThrowIfNull(value);
+
+        var invokeId = NextInvokeId();
+        var request = MmsWriteRequest.BuildSingleVariableWrite(invokeId, reference, value);
+        LastReadRequestHex = HexDump.ToCompactString(request);
+
+        try
+        {
+            var response = await SendPresentationPayloadAsync(request, cancellationToken).ConfigureAwait(false);
+            var result = MmsWriteResponseDecoder.Decode(response, invokeId);
+            LastReadResponseHex = result.ResponseHexPreview;
+            return result;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
+        {
+            await MarkProtocolFaultAsync().ConfigureAwait(false);
+            return new MmsWriteResult
+            {
+                IsSuccess = false,
+                Message = $"MMS write transport fault: {ex.GetType().Name}: {ex.Message}",
+                ResponseHexPreview = LastReadResponseHex
+            };
+        }
+    }
+
+    public async Task<MmsDefineNamedVariableListResult> DefineNamedVariableListAsync(
+        string dataSetReference,
+        IEnumerable<MmsObjectReference> members,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataSetReference);
+        ArgumentNullException.ThrowIfNull(members);
+
+        var invokeId = NextInvokeId();
+        var request = MmsDefineNamedVariableListRequest.Build(invokeId, dataSetReference, members);
+        LastDiscoveryRequestHex = HexDump.ToCompactString(request);
+
+        try
+        {
+            var response = await SendPresentationPayloadAsync(request, cancellationToken).ConfigureAwait(false);
+            var result = MmsDefineNamedVariableListResponseDecoder.Decode(response, invokeId, dataSetReference);
+            LastDiscoveryResponseHex = result.ResponseHexPreview;
+            LastDiscoveryAttemptSummary = result.Message;
+            return result;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
+        {
+            await MarkProtocolFaultAsync().ConfigureAwait(false);
+            return new MmsDefineNamedVariableListResult
+            {
+                IsSuccess = false,
+                DataSetReference = dataSetReference,
+                Message = $"DefineNamedVariableList transport fault: {ex.GetType().Name}: {ex.Message}",
+                ResponseHexPreview = LastDiscoveryResponseHex
+            };
+        }
+    }
+
     public async Task<byte[]> SendPresentationPayloadAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken = default)
     {
         if (!IsTransportConnected)

@@ -159,3 +159,36 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-dataset-directory 192.16.1.15
 ```
 
 Use `--read-values` only on test/engineering networks because it performs extra MMS read requests for selected DataSet members.
+
+## Report subscription planning validation
+
+Use these commands before enabling any report write workflow. They are intentionally read-only and are designed to validate the static and dynamic report paths without changing the IED state.
+
+### Static report plan
+
+```powershell
+ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-plan 192.16.1.157 --port 102 --timeout-ms 120000 --read-values --raw-limit 40
+```
+
+Expected result:
+
+- one static RCB is selected, preferably a BRCB when available;
+- the selected RCB has `DatSet` assigned and `RptEna=false`;
+- the DataSet directory is decoded;
+- DataSet members are shown as `LD/LN.DO.da [FC]`;
+- optional sample reads return decoded values, quality, or timestamp structures.
+
+### Dynamic report plan
+
+```powershell
+ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-dynamic-plan 192.16.1.157 --port 102 --timeout-ms 120000 --points OCR7SR12PROT/A50PTOC1.Str,OCR7SR12PROT/A50PTOC1.Op --dataset-name AR_DYN_DS01
+```
+
+Expected result:
+
+- requested points are resolved from the live IED directory;
+- a free RCB slot is selected from `EmptyDynamicSlotNeedsDataSet` candidates;
+- the proposed dynamic DataSet reference is shown;
+- the execution steps explicitly list `CreateDataSet`, `Write RCB.DatSet`, reservation, `RptEna`, `GI`, and cleanup.
+
+Do not run live report-enable code until the report receiver/dispatcher exists. Reporting is unsolicited, so the receive pump has to be active before `RptEna=true`; otherwise the first GI/report message can be missed or misrouted as a normal confirmed response.

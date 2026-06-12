@@ -285,3 +285,17 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-dataset-directory 192.16.1.15
 ```
 
 This command uses native MMS `GetNamedVariableListAttributes` (IEC 61850 DataSet directory) to resolve DataSet members back into user-friendly references with FC, for example `LD/LN.DO.da [ST|MX|CO]`. It is intentionally read-only and should be run before any future RCB enable/GI workflow.
+
+### Static and dynamic reporting planners
+
+The MMS client now includes read-only planners for report subscription workflows. These commands do not enable `RptEna`; they validate the RCB/DataSet/member mapping first.
+
+```powershell
+# Static report plan: select a safe RCB that already has a DataSet
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-plan 192.16.1.157 --port 102 --timeout-ms 120000 --read-values
+
+# Dynamic report plan: resolve user points, select a free RCB slot, and propose a DataSet workflow
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-dynamic-plan 192.16.1.157 --port 102 --timeout-ms 120000 --points OCR7SR12PROT/A50PTOC1.Str,OCR7SR12PROT/A50PTOC1.Op --dataset-name AR_DYN_DS01
+```
+
+Static reporting is the first safe live-reporting target. Dynamic reporting is planned as: resolve points from the live IED directory, create an MMS NamedVariableList/DataSet, write `RCB.DatSet`, reserve the RCB, enable `RptEna`, trigger `GI`, receive unsolicited `InformationReport`, then clean up. Live write commands remain intentionally gated until the receive pump and report cleanup state machine are complete.

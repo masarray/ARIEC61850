@@ -1010,3 +1010,16 @@ status.
 - No making a WPF screen before the stack API it needs exists.
 - No deleting tests to make a build pass.
 - No silently choosing one interpretation when SCL/live model conflicts.
+
+## Current implementation checkpoint: report static/dynamic planning
+
+The stack now validates the complete pre-reporting chain without writing to the IED:
+
+1. Live MMS directory discovery builds FC-aware points from the IED model.
+2. DataSet directory reads `GetNamedVariableListAttributes` and maps members to `LD/LN.DO.da [FC]`.
+3. Report readiness classifies RCBs into static-ready, dynamic empty slot, occupied, reserved, or incomplete.
+4. Static report planner selects a safe static RCB and binds it to a verified DataSet value map.
+5. Dynamic report planner resolves user-selected points and selects a free RCB slot for a future dynamic DataSet.
+6. MMS write and DefineNamedVariableList codec foundations exist, but live write workflows remain gated until the receive pump and cleanup state machine are implemented.
+
+Next phase must implement the asynchronous MMS receive pump and InformationReport decoder before exposing any live `RptEna=true` command.

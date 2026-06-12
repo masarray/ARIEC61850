@@ -22,7 +22,12 @@ public static class MmsWriteRequest
 {
     public static byte[] BuildSingleVariableWrite(int invokeId, MmsObjectReference reference, MmsDataValue value)
     {
-        ArgumentNullException.ThrowIfNull(reference);
+        if (string.IsNullOrWhiteSpace(reference.Domain))
+            throw new ArgumentException("MMS domain is empty. Use an object reference such as LD0/LLN0.Mod.stVal.", nameof(reference));
+
+        if (string.IsNullOrWhiteSpace(reference.Item))
+            throw new ArgumentException("MMS item is empty.", nameof(reference));
+
         ArgumentNullException.ThrowIfNull(value);
 
         var variableAccessSpecification = BuildListOfVariable(reference);

@@ -37,6 +37,8 @@ internal static class Cli
                 "mms-resolve" => await MmsResolveAsync(args[1..]).ConfigureAwait(false),
                 "mms-read-smart" => await MmsReadSmartAsync(args[1..]).ConfigureAwait(false),
                 "mms-report-plan" => await MmsReportPlanAsync(args[1..]).ConfigureAwait(false),
+                "mms-report-static-plan" => await MmsReportStaticPlanAsync(args[1..]).ConfigureAwait(false),
+                "mms-report-dynamic-plan" => await MmsReportDynamicPlanAsync(args[1..]).ConfigureAwait(false),
                 "mms-dataset-directory" => await MmsDataSetDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "publish-sv-live" => await PublishSvLiveAsync(args[1..]).ConfigureAwait(false),
                 "publish-goose-live" => await PublishGooseLiveAsync(args[1..]).ConfigureAwait(false),
@@ -603,6 +605,133 @@ internal static class Cli
         return results.Any(x => x.IsSuccess && x.Members.Count > 0) ? 0 : 1;
     }
 
+
+    private static async Task<int> MmsReportStaticPlanAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-report-static-plan requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 120000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var rawLimit = options.GetInt("raw-limit", 80);
+        var preferredRcb = options.Get("rcb", string.Empty);
+        var preferredDataSet = options.Get("dataset", string.Empty);
+        var readValues = options.GetBool("read-values", fallback: false);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: static report subscription planner (read-only, no RptEna write).");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+
+        var staticDataSets = discovery.ReportInventory.ReportControls
+            .Where(x => !string.IsNullOrWhiteSpace(x.DataSetReference))
+            .Select(x => x.DataSetReference)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (!string.IsNullOrWhiteSpace(preferredDataSet) && !staticDataSets.Contains(preferredDataSet, StringComparer.OrdinalIgnoreCase))
+            staticDataSets = staticDataSets.Append(preferredDataSet).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        var directories = await session.GetDataSetDirectoriesAsync(staticDataSets, discovery.IedDirectory, timeout.Token).ConfigureAwait(false);
+        var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet);
+
+        Console.WriteLine();
+        WriteReportSubscriptionPlan(plan, rawLimit);
+
+        if (readValues && plan.Members.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Sample DataSet member reads:");
+            foreach (var member in TakeWithLimit(plan.Members.Where(x => !string.IsNullOrWhiteSpace(x.UserReference)), Math.Min(rawLimit <= 0 ? plan.Members.Count : rawLimit, 16)))
+            {
+                var read = await session.ReadSmartAsync(discovery.IedDirectory, member.UserReference, timeout.Token).ConfigureAwait(false);
+                Console.WriteLine($"  {member.UserReference}: {(read.IsSuccess && read.ReadResult.Value != null ? MmsDataCodec.ToDisplayString(read.ReadResult.Value) : read.Message)}");
+            }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Next implementation gate:");
+        Console.WriteLine("  After this static plan is stable, implement guarded writes: reserve -> RptEna=true -> GI=true -> receive InformationReport -> cleanup.");
+        Console.WriteLine("  Do not enable reporting from an automatic wizard until report receiver/dispatcher is already running.");
+
+        return plan.IsReady ? 0 : 1;
+    }
+
+    private static async Task<int> MmsReportDynamicPlanAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-report-dynamic-plan requires <host-or-ip> --points <point1,point2,...>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 120000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var rawLimit = options.GetInt("raw-limit", 80);
+        var requestedPoints = SplitCsv(options.Get("points", string.Empty));
+        if (requestedPoints.Count == 0)
+            throw new ArgumentException("--points must contain at least one IEC 61850 point reference separated by comma.");
+
+        var preferredLd = options.Get("ld", string.Empty);
+        var preferredRcb = options.Get("rcb", string.Empty);
+        var dataSetName = options.Get("dataset-name", "AR_DYN_DS01");
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: dynamic report workflow planner (read-only, no CreateDataSet/DatSet write).");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+
+        Console.WriteLine();
+        Console.WriteLine("Requested dynamic DataSet points:");
+        foreach (var point in requestedPoints)
+        {
+            var resolve = MmsFcResolver.Resolve(discovery.IedDirectory, point);
+            Console.WriteLine($"  {point}: {resolve.Message}");
+            if (resolve.BestCandidate != null)
+                Console.WriteLine($"      -> {resolve.BestCandidate.UserReference} [{resolve.BestCandidate.FunctionalConstraint}] mms={resolve.BestCandidate.MmsReference}");
+        }
+
+        var plan = MmsReportSubscriptionPlanner.BuildDynamicPlan(discovery.ReportInventory, discovery.IedDirectory, requestedPoints, preferredLd, preferredRcb, dataSetName);
+
+        Console.WriteLine();
+        WriteReportSubscriptionPlan(plan, rawLimit);
+
+        Console.WriteLine();
+        Console.WriteLine("Next implementation gate:");
+        Console.WriteLine("  Dynamic reporting requires verified MMS DefineNamedVariableList, Write RCB.DatSet, reservation, RptEna, GI, and cleanup.");
+        Console.WriteLine("  Keep first dynamic test small: 2-8 ST/MX points, isolated IED, no production SCADA connected to the same RCB pool.");
+
+        return plan.IsReady ? 0 : 1;
+    }
 
     private static async Task<int> MmsReportPlanAsync(string[] args)
     {
@@ -1309,6 +1438,64 @@ internal static class Cli
     }
 
 
+    private static IReadOnlyList<string> SplitCsv(string value)
+        => string.IsNullOrWhiteSpace(value)
+            ? Array.Empty<string>()
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToArray();
+
+    private static void WriteReportSubscriptionPlan(MmsReportSubscriptionPlan plan, int rawLimit)
+    {
+        Console.WriteLine(plan.Summary);
+
+        if (plan.ReportControl != null)
+        {
+            var r = plan.ReportControl;
+            var reservation = r.Buffered ? TextOrDash(r.ReservationTimeSeconds) : TextOrDash(r.ReservationState);
+            Console.WriteLine($"Selected RCB: {r.Mode} {r.Reference}");
+            Console.WriteLine($"  DatSet={TextOrDash(r.DataSetReference)} RptEna={TextOrDash(r.EnabledState)} Resv={reservation} RptID={TextOrDash(r.ReportId)} ConfRev={TextOrDash(r.ConfRev)}");
+        }
+
+        if (plan.Blockers.Count > 0)
+        {
+            Console.WriteLine("Blockers:");
+            foreach (var blocker in plan.Blockers)
+                Console.WriteLine($"  - {blocker}");
+        }
+
+        if (plan.Warnings.Count > 0)
+        {
+            Console.WriteLine("Warnings:");
+            foreach (var warning in plan.Warnings)
+                Console.WriteLine($"  - {warning}");
+        }
+
+        if (plan.Members.Count > 0)
+        {
+            Console.WriteLine("Report value map / DataSet members:");
+            foreach (var member in TakeWithLimit(plan.Members, rawLimit))
+                Console.WriteLine($"  {member.UserReference} [{TextOrDash(member.FunctionalConstraint)}] mms={member.MmsReference}");
+            WriteLimitNotice(plan.Members.Count, rawLimit, "report member(s)");
+        }
+
+        if (plan.DynamicPoints.Count > 0)
+        {
+            Console.WriteLine("Dynamic DataSet source points:");
+            foreach (var point in TakeWithLimit(plan.DynamicPoints, rawLimit))
+                Console.WriteLine($"  {point.UserReference} [{point.FunctionalConstraint}] mms={point.MmsReference}");
+            WriteLimitNotice(plan.DynamicPoints.Count, rawLimit, "dynamic point(s)");
+        }
+
+        if (plan.Steps.Count > 0)
+        {
+            Console.WriteLine("Execution steps:");
+            var index = 1;
+            foreach (var step in plan.Steps)
+                Console.WriteLine($"  {index++}. {step}");
+        }
+    }
+
     private static string FormatReportReadiness(MmsReportReadiness item)
     {
         var r = item.ReportControl;
@@ -1339,6 +1526,8 @@ internal static class Cli
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
         Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");
         Console.WriteLine("  mms-report-plan <host-or-ip> [--port 102] [--timeout-ms 60000] [--max-report-probes N] [--only-safe] [--kind ReadyStaticDataSet]");
+        Console.WriteLine("  mms-report-static-plan <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--dataset LD/LLN0.DataSet] [--read-values]");
+        Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
         Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
@@ -1355,6 +1544,8 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-read-smart 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-plan 192.168.1.10 --max-report-probes 64 --only-safe");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-plan 192.168.1.10 --read-values");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-plan 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-dataset-directory 192.168.1.10 OCR7SR12PROT/LLN0.DataSet --raw-limit 80");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --continuous --yes");

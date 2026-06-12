@@ -24,7 +24,7 @@ public static class MmsInformationReportDecoder
     public static bool IsInformationReport(ReadOnlyMemory<byte> presentationPayload)
     {
         var mms = MmsPresentation.StripPresentationPrefix(presentationPayload);
-        return mms.Length > 0 && mms.Span[0] == 0xA3;
+        return mms.Length > 0 && mms[0] == 0xA3;
     }
 
     public static MmsInformationReport Decode(ReadOnlyMemory<byte> presentationPayload)
@@ -37,8 +37,8 @@ public static class MmsInformationReportDecoder
             if (mms.Length == 0)
                 return Fail("Empty MMS InformationReport payload.", hex);
 
-            if (mms.Span[0] != 0xA3)
-                return Fail($"Expected MMS Unconfirmed-PDU [3] (0xA3), received 0x{mms.Span[0]:X2}.", hex);
+            if (mms[0] != 0xA3)
+                return Fail($"Expected MMS Unconfirmed-PDU [3] (0xA3), received 0x{mms[0]:X2}.", hex);
 
             var offset = 0;
             if (!BerReader.TryReadTlv(mms, ref offset, out var outer))

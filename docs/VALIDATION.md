@@ -193,10 +193,11 @@ Expected result:
 - the execution steps explicitly list `CreateDataSet`, `Write RCB.DatSet`, reservation, `RptEna`, `GI`, and cleanup.
 
 Live report-enable commands are guarded with `--yes`. Reporting is unsolicited,
-so the stack queues `InformationReport` frames that arrive while a confirmed
-response is pending. The remaining production hardening item is a full
-association receive pump that can monitor reports while arbitrary confirmed
-requests are in flight.
+so the stack uses the MMS receive pump to route confirmed responses by invoke ID
+and queue `InformationReport` frames separately. The `mms-report-monitor`
+command exposes this path for selected static RCBs. The remaining production
+hardening item is soak validation while arbitrary reads/writes occur during a
+report session.
 
 ## Static report live smoke test (guarded)
 
@@ -228,6 +229,8 @@ RptEna=true OK
 GI=true OK
 InformationReport frames=2
 mapped DataSet values=2/2
+receivePump=running
+includedDataSetIndexes=[0,1]
 cleanup RptEna=false OK
 post-check RptEna=false
 note=relay holds ResvTms after disable until its timer expires

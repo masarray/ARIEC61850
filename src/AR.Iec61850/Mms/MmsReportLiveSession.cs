@@ -429,6 +429,14 @@ public sealed partial class MmsClientSession
                 continue;
             }
 
+            if (IsReceivePumpRunning)
+            {
+                var delay = remaining < TimeSpan.FromMilliseconds(100) ? remaining : TimeSpan.FromMilliseconds(100);
+                if (delay > TimeSpan.Zero)
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
             if (!_cotp.HasDataAvailable)
             {
                 var delay = remaining < TimeSpan.FromMilliseconds(100) ? remaining : TimeSpan.FromMilliseconds(100);

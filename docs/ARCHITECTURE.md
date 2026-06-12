@@ -85,14 +85,16 @@ Client-side implementation now includes:
 - DataSet inventory and DataSet member directory.
 - RCB inventory, bounded RCB attribute probing, and readiness planning.
 - Confirmed write foundation for guarded report/DataSet workflows.
+- MMS receive pump with pending invoke registry and queued InformationReports.
 - Guarded static report enable, GI, receive, map, and cleanup.
+- Guarded static report monitor command using the receive pump.
 - Guarded dynamic DataSet create, RCB bind, report enable, GI, receive, cleanup,
   and DataSet delete.
 
 Next implementation:
 
 - ACSE release/abort state model.
-- full association receive pump.
+- receive-pump soak validation while reads/writes occur during report sessions.
 - typed report optional-field model.
 - BRCB recovery.
 - MMS file transfer.

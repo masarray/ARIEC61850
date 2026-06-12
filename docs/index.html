@@ -83,7 +83,7 @@
             </div>
             <div>
               <dt>Validation</dt>
-              <dd>66 tests passed</dd>
+              <dd>68 tests passed</dd>
             </div>
             <div>
               <dt>Runtime</dt>
@@ -215,7 +215,7 @@
           </div>
           <div class="stat">
             <span>Tests</span>
-            <strong>66 passed</strong>
+            <strong>68 passed</strong>
             <small>unit and round-trip coverage</small>
           </div>
         </div>
@@ -264,7 +264,7 @@
         <pre class="command-block" data-command-panel="inspect"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-scl .\samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd</code></pre>
         <pre class="command-block is-hidden" data-command-panel="dryrun"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- publish-sv-live ".\samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd" --adapter 5 --stream-index 1 --frames 4000 --dry-run</code></pre>
         <pre class="command-block is-hidden" data-command-panel="live"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 5 --stream-index 1 --duration-sec 10 --toggle-every-sec 2 --yes</code></pre>
-        <pre class="command-block is-hidden" data-command-panel="mms"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-live 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 15 --yes</code></pre>
+        <pre class="command-block is-hidden" data-command-panel="mms"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --yes</code></pre>
         <p class="safety-note">
           Active publishing sends raw multicast Ethernet frames. Live report
           commands write RCB attributes. Use only isolated lab equipment.

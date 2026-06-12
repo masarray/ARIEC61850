@@ -41,6 +41,7 @@ internal static class Cli
                 "mms-report-dynamic-plan" => await MmsReportDynamicPlanAsync(args[1..]).ConfigureAwait(false),
                 "mms-rcb-probe" => await MmsRcbProbeAsync(args[1..]).ConfigureAwait(false),
                 "mms-report-static-live" => await MmsReportStaticLiveAsync(args[1..]).ConfigureAwait(false),
+                "mms-report-monitor" => await MmsReportStaticLiveAsync(args[1..], monitorMode: true).ConfigureAwait(false),
                 "mms-report-dynamic-live" => await MmsReportDynamicLiveAsync(args[1..]).ConfigureAwait(false),
                 "mms-dataset-directory" => await MmsDataSetDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "publish-sv-live" => await PublishSvLiveAsync(args[1..]).ConfigureAwait(false),
@@ -255,6 +256,7 @@ internal static class Cli
         await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
         Console.WriteLine($"Association: {session.State}");
         Console.WriteLine($"  {session.LastHandshakeMessage}");
+        Console.WriteLine($"Receive pump: {(session.IsReceivePumpRunning ? "running" : "stopped")}");
 
         var discovery = await session.DiscoverAsync(probeReports, maxReportProbes, timeout.Token).ConfigureAwait(false);
         Console.WriteLine(discovery.Summary);
@@ -637,6 +639,7 @@ internal static class Cli
         await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
         Console.WriteLine($"Association: {session.State}");
         Console.WriteLine($"  {session.LastHandshakeMessage}");
+        Console.WriteLine($"Receive pump: {(session.IsReceivePumpRunning ? "running" : "stopped")}");
 
         var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
         Console.WriteLine(discovery.IedDirectory.Summary);
@@ -750,7 +753,7 @@ internal static class Cli
         return 0;
     }
 
-    private static async Task<int> MmsReportStaticLiveAsync(string[] args)
+    private static async Task<int> MmsReportStaticLiveAsync(string[] args, bool monitorMode = false)
     {
         if (args.Length < 1)
             throw new ArgumentException("mms-report-static-live requires <host-or-ip>.");
@@ -768,7 +771,7 @@ internal static class Cli
         var rawLimit = options.GetInt("raw-limit", 80);
         var preferredRcb = options.Get("rcb", string.Empty);
         var preferredDataSet = options.Get("dataset", string.Empty);
-        var durationSec = options.GetInt("duration-sec", 15);
+        var durationSec = options.GetInt("duration-sec", monitorMode ? 60 : 15);
         if (durationSec < 1)
             throw new ArgumentException("--duration-sec must be at least 1.");
 
@@ -783,10 +786,13 @@ internal static class Cli
         await using var session = new MmsClientSession();
 
         Console.WriteLine($"MMS target: {host}:{port}");
-        Console.WriteLine("Mode: guarded static report live session (writes RptEna/GI only when --yes is provided).");
+        Console.WriteLine(monitorMode
+            ? "Mode: guarded static report monitor (receive pump, writes RptEna/GI only when --yes is provided)."
+            : "Mode: guarded static report live session (writes RptEna/GI only when --yes is provided).");
         await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
         Console.WriteLine($"Association: {session.State}");
         Console.WriteLine($"  {session.LastHandshakeMessage}");
+        Console.WriteLine($"Receive pump: {(session.IsReceivePumpRunning ? "running" : "stopped")}");
 
         var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
         Console.WriteLine(discovery.IedDirectory.Summary);
@@ -848,7 +854,9 @@ internal static class Cli
         }
 
         Console.WriteLine();
-        Console.WriteLine($"Starting guarded static report session for {durationSec}s...");
+        Console.WriteLine(monitorMode
+            ? $"Starting guarded report monitor for {durationSec}s..."
+            : $"Starting guarded static report session for {durationSec}s...");
         var live = await session.RunGuardedStaticReportSessionAsync(
             plan,
             TimeSpan.FromSeconds(durationSec),
@@ -858,6 +866,7 @@ internal static class Cli
 
         Console.WriteLine();
         Console.WriteLine(live.Message);
+        Console.WriteLine($"Receive routing: {TextOrDash(session.LastReceiveRoutingSummary)} pending={session.PendingConfirmedOperationCount} queuedReports={session.QueuedInformationReportCount}");
 
         if (live.Warnings.Count > 0)
         {
@@ -918,6 +927,7 @@ internal static class Cli
         await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
         Console.WriteLine($"Association: {session.State}");
         Console.WriteLine($"  {session.LastHandshakeMessage}");
+        Console.WriteLine($"Receive pump: {(session.IsReceivePumpRunning ? "running" : "stopped")}");
 
         var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
         Console.WriteLine(discovery.IedDirectory.Summary);
@@ -1038,6 +1048,7 @@ internal static class Cli
 
         Console.WriteLine();
         Console.WriteLine(live.Message);
+        Console.WriteLine($"Receive routing: {TextOrDash(session.LastReceiveRoutingSummary)} pending={session.PendingConfirmedOperationCount} queuedReports={session.QueuedInformationReportCount}");
 
         if (live.Warnings.Count > 0)
         {
@@ -1863,6 +1874,7 @@ internal static class Cli
         Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01]");
         Console.WriteLine("  mms-rcb-probe <host-or-ip> <LD/LN.BR.name|LD/LN.RP.name> [--port 102] [--timeout-ms 120000]");
         Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--yes]");
+        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 60] [--gi true|false] [--yes]");
         Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--yes]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
@@ -1883,6 +1895,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-plan 192.168.1.10 --read-values");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-plan 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-live 192.168.1.10 --duration-sec 15 --yes");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-live 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-dataset-directory 192.168.1.10 OCR7SR12PROT/LLN0.DataSet --raw-limit 80");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");

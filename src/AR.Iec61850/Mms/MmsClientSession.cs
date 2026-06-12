@@ -19,6 +19,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
     private readonly TpktClient _tpkt = new();
     private readonly CotpClient _cotp;
     private readonly MmsReceiveRouter _receiveRouter = new();
+    private readonly MmsReceivePump _receivePump;
     private string _lastHost = string.Empty;
     private int _lastPort = 102;
     private TimeSpan _lastTimeout = TimeSpan.FromSeconds(5);
@@ -27,6 +28,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
     public MmsClientSession()
     {
         _cotp = new CotpClient(_tpkt);
+        _receivePump = new MmsReceivePump(_receiveRouter, cancellationToken => _cotp.ReceiveDataAsync(cancellationToken));
     }
 
     public MmsAssociationState State { get; private set; } = MmsAssociationState.Disconnected;
@@ -51,6 +53,8 @@ public sealed partial class MmsClientSession : IAsyncDisposable
     public string LastReceiveRoutingSummary { get; private set; } = string.Empty;
     public int QueuedInformationReportCount => _receiveRouter.QueuedInformationReportCount;
     public int QueuedConfirmedResultCount => _receiveRouter.QueuedConfirmedResultCount;
+    public bool IsReceivePumpRunning => _receivePump.IsRunning;
+    public int PendingConfirmedOperationCount => _receivePump.PendingOperationCount;
 
     public Task ConnectAsync(string host, int port = 102, CancellationToken cancellationToken = default)
         => ConnectAsync(host, port, TimeSpan.FromSeconds(5), cancellationToken);
@@ -519,6 +523,9 @@ public sealed partial class MmsClientSession : IAsyncDisposable
         if (!IsTransportConnected)
             throw new InvalidOperationException("Native IEC 61850 transport is not connected.");
 
+        if (_receivePump.IsRunning)
+            throw new InvalidOperationException("Raw send/receive is unavailable while the MMS receive pump is running. Use a confirmed service API with invokeID routing.");
+
         await _cotp.SendDataAsync(payload, cancellationToken).ConfigureAwait(false);
         return await _cotp.ReceiveDataAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -530,6 +537,15 @@ public sealed partial class MmsClientSession : IAsyncDisposable
     {
         if (!IsTransportConnected)
             throw new InvalidOperationException("Native IEC 61850 transport is not connected.");
+
+        if (_receivePump.IsRunning)
+        {
+            using var pending = _receivePump.RegisterConfirmedOperation(expectedInvokeId);
+            await _cotp.SendDataAsync(payload, cancellationToken).ConfigureAwait(false);
+            var envelope = await pending.WaitAsync(cancellationToken).ConfigureAwait(false);
+            LastReceiveRoutingSummary = $"Receive pump completed {envelope.Kind} for invokeID={expectedInvokeId}. queuedReports={_receivePump.QueuedInformationReportCount}.";
+            return envelope.PresentationPayload;
+        }
 
         await _cotp.SendDataAsync(payload, cancellationToken).ConfigureAwait(false);
 
@@ -623,6 +639,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
                 {
                     State = MmsAssociationState.MmsInitiated;
                     LastHandshakeMessage = result.Message;
+                    _receivePump.Start(cancellationToken);
                     return;
                 }
 
@@ -920,8 +937,10 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 
     private async ValueTask ResetTransportAsync()
     {
+        await _receivePump.StopAsync().ConfigureAwait(false);
         _cotp.Reset();
         await _tpkt.DisposeAsync().ConfigureAwait(false);
+        _receiveRouter.Clear();
     }
 
     private static IReadOnlyList<(string Profile, MmsObjectReference Reference)> BuildReadCandidates(MmsObjectReference reference)

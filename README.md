@@ -63,11 +63,12 @@ Implemented and tested today:
 - Smart FC resolver and smart read CLI.
 - DataSet directory using MMS named variable list attributes.
 - Confirmed write foundation used by guarded report/DataSet workflows.
-- MMS PDU envelope classification and receive router for invoke-matched
-  confirmed responses/errors and queued unconfirmed InformationReports.
+- MMS receive pump with pending invoke registry, invoke-matched confirmed
+  responses/errors, and queued unconfirmed InformationReports.
 - RCB discovery, report readiness planning, static report planning, and dynamic
   report planning.
 - Guarded static report enable, GI, receive, value mapping, and cleanup.
+- Guarded static `mms-report-monitor` command on top of the receive pump.
 - Guarded dynamic DataSet create, RCB bind, report enable, GI, receive, cleanup,
   and DataSet delete.
 - Report frames now preserve raw access-result count, inclusion bitstring index,
@@ -76,12 +77,12 @@ Implemented and tested today:
 - Sampled Values frame builder/parser and SCL-backed live publisher.
 - PCAP writer, reader, inspector, and stream playback.
 - Npcap raw Ethernet transport for live process-bus lab publishing.
-- 66 automated tests passing in the latest local validation run.
+- 68 automated tests passing in the latest local validation run.
 
 Still experimental or not implemented yet:
 
-- full long-running MMS receive pump for arbitrary concurrent requests and
-  unsolicited reports;
+- multi-vendor receive-pump soak evidence while reads/writes occur during a
+  report session;
 - complete report optional-field model and reason-for-inclusion names;
 - BRCB recovery with `EntryID`, `PurgeBuf`, duplicate handling, and reconnect
   diagnostics;
@@ -183,6 +184,12 @@ Run a guarded static report smoke test:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-live 192.168.1.10 --port 102 --timeout-ms 120000 --duration-sec 15 --yes
 ```
 
+Run a guarded static report monitor:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --yes
+```
+
 Run a guarded dynamic report smoke test:
 
 ```powershell
@@ -211,7 +218,7 @@ against production equipment or RCBs used by another client.
 Latest local validation evidence:
 
 - `dotnet build .\ARIEC61850.slnx -c Release` passed.
-- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 66 tests.
+- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 68 tests.
 - Live MMS association to lab IED `192.16.1.157:102` reached `MmsInitiated`.
 - Live directory evidence: 4 logical devices, 123 logical nodes, 9,464
   FC-aware points, 3,456 report attributes, and 457 control attributes.
@@ -267,7 +274,7 @@ AGENTS.md                             engineering rules for contributors
 
 Next engineering phases:
 
-1. promote the guarded report receive queue into a full MMS receive pump;
+1. run receive-pump/report-monitor soak tests while reads/writes occur;
 2. mature report decoding, optional fields, and BRCB recovery;
 3. implement MMS file transfer;
 4. implement IEC 61850 control services safely;

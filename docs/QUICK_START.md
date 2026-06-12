@@ -141,6 +141,12 @@ RCB:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-live 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 15 --yes
 ```
 
+Run a guarded static report monitor on a selected RCB:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --yes
+```
+
 Run a guarded dynamic report smoke test only on a confirmed unused dynamic RCB
 slot:
 

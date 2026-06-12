@@ -55,6 +55,9 @@ public sealed class MmsDataValue
     public static MmsDataValue UtcTime(Iec61850UtcTime value)
         => new(MmsDataKind.UtcTime, value);
 
+    public static MmsDataValue BinaryTime(ReadOnlySpan<byte> value)
+        => new(MmsDataKind.BinaryTime, rawValue: value.ToArray());
+
     public static MmsDataValue Unknown(int tagNumber, ReadOnlySpan<byte> rawValue)
         => new(MmsDataKind.Unknown, rawValue: rawValue.ToArray(), unknownTagNumber: tagNumber);
 }

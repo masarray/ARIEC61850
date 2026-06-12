@@ -84,6 +84,7 @@ public static class MmsDataValueRenderer
             MmsDataKind.VisibleString or MmsDataKind.MmsString => Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty,
             MmsDataKind.UtcTime => value.Value is Iec61850UtcTime utc ? $"{utc.Value:yyyy-MM-dd HH:mm:ss.fff} UTC (q=0x{utc.Quality:X2})" : string.Empty,
             MmsDataKind.BitString => FormatBitString(value),
+            MmsDataKind.BinaryTime => $"binary-time={Convert.ToHexString(value.RawValue.ToArray())}",
             MmsDataKind.OctetString => Convert.ToHexString(value.RawValue.ToArray()),
             MmsDataKind.Unknown => $"unknown(tag={value.UnknownTagNumber}, raw={Convert.ToHexString(value.RawValue.ToArray())})",
             _ => MmsDataCodec.ToDisplayString(value)

@@ -174,8 +174,12 @@ Latest verified local status:
   exercising confirmed request routing during a report session.
 - Report frame mapping now preserves raw access-result count, inclusion
   bitstring position, and included DataSet member indexes.
+- Report frame mapping now decodes typed report header evidence: `RptID`,
+  `OptFlds`, `SqNum`, `TimeOfEntry`, `DatSet`, `BufOvfl`, `EntryID`,
+  `ConfRev`, and per-value reason-for-inclusion when present.
+- MMS `binary-time` is decoded as a typed raw value for report timestamps.
 - Latest automated validation: `dotnet test .\ARIEC61850.slnx -c Release
-  --no-build` passed with 69 tests.
+  --no-build` passed with 70 tests.
 
 Latest live MMS evidence against lab IED `192.16.1.157:102`:
 
@@ -191,7 +195,8 @@ RCB=286
 BRCB=8
 URCB=278
 static report=enable, GI, receive, map 2/2 values, disable OK
-static report monitor=poll smart-read during active report, 8/8 poll reads OK, 2 reports mapped
+static report monitor=poll smart-read during active report, 6/6 poll reads OK, 4 reports mapped
+report header=RptID/OptFlds/SqNum/TimeOfEntry/DatSet/BufOvfl/EntryID/ConfRev/reason decoded
 dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanup OK
 ```
 
@@ -214,6 +219,7 @@ dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanu
 | Confirmed write foundation | Partial | Used for guarded report/DataSet flows; generic write API remains guarded. |
 | Static reporting | Guarded lab MVP | Enable, GI, receive, map, disable validated. |
 | Dynamic reporting | Guarded lab MVP | Create/bind/enable/GI/receive/cleanup/delete validated. |
+| Report object model | Partial lab MVP | Header, optional fields, inclusion bits, BinaryTime, and reason-for-inclusion decode are validated on current relay and unit fixtures. |
 | MMS receive routing | Unit-tested MVP | PDU classifier, invoke-aware queue, background pump, and pending registry are implemented. |
 | Full MMS receive pump | In progress | Background pump and static monitor polling exist; longer multi-vendor report/read/write soak is next. |
 | BRCB recovery | Planned | Needs EntryID, PurgeBuf, reconnect, duplicate/loss diagnostics. |
@@ -322,6 +328,15 @@ acceptance work is long-duration read/write soak across more vendors.
 ### Phase 2 - Report Object Model and BRCB Recovery
 
 Goal: move from short smoke reporting to useful commissioning reporting.
+
+Progress:
+
+- done: typed report header model for `RptID`, `OptFlds`, `SqNum`,
+  `TimeOfEntry`, `DatSet`, `BufOvfl`, `EntryID`, and `ConfRev`;
+- done: per-value reason-for-inclusion names for trailing reason bitstrings;
+- done: MMS `binary-time` is preserved as raw timestamp evidence;
+- remaining: sequence diagnostics, duplicate/loss detection, EntryID
+  persistence, PurgeBuf, and reconnect recovery.
 
 Deliverables:
 

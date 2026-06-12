@@ -246,6 +246,18 @@ post-check RptEna=false
 note=relay holds ResvTms after disable until its timer expires
 ```
 
+Recorded live typed report-object result against `192.16.1.157`:
+
+```text
+command=mms-report-monitor --duration-sec 6 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f
+InformationReport frames=4
+pollReads=6/6 OK while report session active
+typedHeader=RptID, OptFlds, SqNum, TimeOfEntry, DatSet, BufOvfl, EntryID, ConfRev
+optFlds=sequence-number, report-time-stamp, reason-for-inclusion, data-set-name, buffer-overflow, entryID, conf-revision
+reasonForInclusion=application-trigger and quality-change observed
+binaryTime=preserved as raw TimeOfEntry evidence
+```
+
 ## Dynamic report live smoke test (guarded)
 
 Use the guarded dynamic report command only on an isolated test IED or a

@@ -46,6 +46,7 @@ public static class MmsDataCodec
             7 => MmsDataValue.FloatingPoint(DecodeFloatingPoint(tlv.Value.Span)),
             9 => MmsDataValue.OctetString(tlv.Value.Span),
             10 => MmsDataValue.VisibleString(BerReader.ReadAsciiString(tlv)),
+            12 => MmsDataValue.BinaryTime(tlv.Value.Span),
             16 => MmsDataValue.MmsString(BerReader.ReadAsciiString(tlv)),
             17 => MmsDataValue.UtcTime(Iec61850UtcTime.FromBytes(tlv.Value.Span)),
             _ => MmsDataValue.Unknown(tlv.TagNumber, tlv.Value.Span)
@@ -61,6 +62,7 @@ public static class MmsDataCodec
             MmsDataKind.Unsigned => Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty,
             MmsDataKind.FloatingPoint => value.Value is float f ? f.ToString("0.###", CultureInfo.InvariantCulture) : string.Empty,
             MmsDataKind.VisibleString or MmsDataKind.MmsString => Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty,
+            MmsDataKind.BinaryTime => $"binary-time={Convert.ToHexString(value.RawValue.ToArray())}",
             MmsDataKind.UtcTime => value.Value is Iec61850UtcTime utc ? $"{utc.Value:yyyy-MM-dd HH:mm:ss.fff} UTC (q=0x{utc.Quality:X2})" : string.Empty,
             MmsDataKind.Structure or MmsDataKind.Array => MmsDataValueRenderer.ToCompactString(value),
             _ => Convert.ToHexString(value.RawValue.ToArray())
@@ -80,6 +82,7 @@ public static class MmsDataCodec
             MmsDataKind.OctetString => value.RawValue.ToArray(),
             MmsDataKind.VisibleString => BerWriter.EncodeAscii((string)value.Value!),
             MmsDataKind.MmsString => BerWriter.EncodeAscii((string)value.Value!),
+            MmsDataKind.BinaryTime => value.RawValue.ToArray(),
             MmsDataKind.UtcTime => value.Value is Iec61850UtcTime utc
                 ? BerWriter.EncodeUtcTime(utc.Value, utc.Quality)
                 : throw new InvalidOperationException("UTC time value is missing."),

@@ -908,15 +908,7 @@ internal static class Cli
 
         Console.WriteLine($"Reports received: {live.Reports.Count}");
         foreach (var report in TakeWithLimit(live.Reports, rawLimit))
-        {
-            Console.WriteLine($"  {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} UTC - {report.Message}");
-            Console.WriteLine($"      rawAccessResults={report.RawAccessResultCount} inclusionItem={FormatNullableInt(report.InclusionBitstringItemIndex)} included=[{string.Join(",", report.IncludedDataSetIndexes)}]");
-            foreach (var value in TakeWithLimit(report.Values, 32))
-            {
-                Console.WriteLine($"      [{value.Index}] {value.MemberReference}: {value.DisplayValue}");
-            }
-            WriteLimitNotice(report.Values.Count, 32, "report value(s)");
-        }
+            WriteReportFrame(report);
         WriteLimitNotice(live.Reports.Count, rawLimit, "report frame(s)");
 
         return live.IsSuccess ? 0 : 1;
@@ -1090,15 +1082,7 @@ internal static class Cli
 
         Console.WriteLine($"Reports received: {live.Reports.Count}");
         foreach (var report in TakeWithLimit(live.Reports, rawLimit))
-        {
-            Console.WriteLine($"  {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} UTC - {report.Message}");
-            Console.WriteLine($"      rawAccessResults={report.RawAccessResultCount} inclusionItem={FormatNullableInt(report.InclusionBitstringItemIndex)} included=[{string.Join(",", report.IncludedDataSetIndexes)}]");
-            foreach (var value in TakeWithLimit(report.Values, 32))
-            {
-                Console.WriteLine($"      [{value.Index}] {value.MemberReference}: {value.DisplayValue}");
-            }
-            WriteLimitNotice(report.Values.Count, 32, "report value(s)");
-        }
+            WriteReportFrame(report);
         WriteLimitNotice(live.Reports.Count, rawLimit, "report frame(s)");
 
         return live.IsSuccess ? 0 : 1;
@@ -1872,6 +1856,26 @@ internal static class Cli
         var r = item.ReportControl;
         var reservation = r.Buffered ? TextOrDash(r.ReservationTimeSeconds) : TextOrDash(r.ReservationState);
         return $"  {item.Label,-30} {r.Mode} {r.Reference} datSet={TextOrDash(r.DataSetReference)} rptEna={TextOrDash(r.EnabledState)} resv={reservation} rptID={TextOrDash(r.ReportId)} reason={item.Reason}";
+    }
+
+    private static void WriteReportFrame(MmsReportFrame report)
+    {
+        Console.WriteLine($"  {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} UTC - {report.Message}");
+        if (report.Header.HasAny)
+            Console.WriteLine($"      header: {report.Header.Summary}");
+        Console.WriteLine($"      rawAccessResults={report.RawAccessResultCount} inclusionItem={FormatNullableInt(report.InclusionBitstringItemIndex)} included=[{string.Join(",", report.IncludedDataSetIndexes)}]");
+        foreach (var value in TakeWithLimit(report.Values, 32))
+        {
+            var extras = new List<string>();
+            if (!string.IsNullOrWhiteSpace(value.DataReference))
+                extras.Add($"dataRef={value.DataReference}");
+            if (value.ReasonForInclusion.Count > 0)
+                extras.Add($"reason={value.ReasonSummary}");
+
+            var suffix = extras.Count == 0 ? string.Empty : $" ({string.Join("; ", extras)})";
+            Console.WriteLine($"      [{value.Index}] {value.MemberReference}: {value.DisplayValue}{suffix}");
+        }
+        WriteLimitNotice(report.Values.Count, 32, "report value(s)");
     }
 
     private static int UnknownCommand(string command)

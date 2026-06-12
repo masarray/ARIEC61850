@@ -74,6 +74,10 @@ Implemented and tested today:
   and DataSet delete.
 - Report frames now preserve raw access-result count, inclusion bitstring index,
   and included DataSet member indexes for diagnostics.
+- Report frames decode typed report header evidence: `RptID`, `OptFlds`,
+  `SqNum`, `TimeOfEntry`, `DatSet`, `BufOvfl`, `EntryID`, `ConfRev`, and
+  per-value reason-for-inclusion when present.
+- MMS `binary-time` values are preserved and rendered as raw evidence.
 - GOOSE frame builder/parser and SCL-backed live publisher.
 - Sampled Values frame builder/parser and SCL-backed live publisher.
 - PCAP writer, reader, inspector, and stream playback.
@@ -84,7 +88,8 @@ Still experimental or not implemented yet:
 
 - long multi-vendor receive-pump soak evidence while reports, reads, and writes
   interleave during a report session;
-- complete report optional-field model and reason-for-inclusion names;
+- multi-vendor report optional-field coverage for data-reference and
+  segmentation variants;
 - BRCB recovery with `EntryID`, `PurgeBuf`, duplicate handling, and reconnect
   diagnostics;
 - MMS file transfer services;
@@ -226,7 +231,7 @@ against production equipment or RCBs used by another client.
 Latest local validation evidence:
 
 - `dotnet build .\ARIEC61850.slnx -c Release` passed.
-- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 69 tests.
+- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 70 tests.
 - Live MMS association to lab IED `192.16.1.157:102` reached `MmsInitiated`.
 - Live directory evidence: 4 logical devices, 123 logical nodes, 9,464
   FC-aware points, 3,456 report attributes, and 457 control attributes.
@@ -234,8 +239,11 @@ Latest local validation evidence:
 - Static BRCB smoke test received InformationReport frames and mapped 2 of 2
   DataSet values.
 - Static BRCB monitor kept the receive pump active while smart-read polling ran
-  during the report session: 2 report frames received and 8/8 poll reads
+  during the report session: 4 report frames received and 6/6 poll reads
   succeeded.
+- Live report header evidence decoded `RptID`, `OptFlds`, `SqNum`,
+  `TimeOfEntry`, `DatSet`, `BufOvfl`, `EntryID`, `ConfRev`, and
+  reason-for-inclusion.
 - Dynamic report smoke test created a DataSet, bound an RCB, enabled reporting,
   triggered GI, received a report, cleared the RCB DataSet, and deleted the
   dynamic DataSet.

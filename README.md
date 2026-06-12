@@ -36,8 +36,11 @@ Implemented now:
 - **In-memory transport** for repeatable tests.
 - **PCAP writer, PCAP reader, and stream monitor** for offline validation.
 - **Npcap raw Ethernet transport** for live SV publish smoke testing.
+- **Live GOOSE publisher** with SCL-backed GSEControl selection, retransmission
+  schedule, `stNum` and `sqNum` behavior, and optional state toggling.
 - **CLI tester** for SCL inspection, PCAP generation, PCAP inspection, decoded
-  stream playback, adapter discovery, and live SV publishing.
+  stream playback, adapter discovery, live SV publishing, and live GOOSE
+  publishing.
 
 Planned next:
 
@@ -123,6 +126,18 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- publish-sv-live ".\samples\scl\01
 
 Use the adapter index from `list-adapters`. Do not guess adapter indexes.
 
+Publish a bounded GOOSE stream from SCL:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 5 --stream-index 1 --duration-sec 5 --toggle-every-sec 2 --yes
+```
+
+Publish GOOSE continuously until `Ctrl+C`:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 5 --stream-index 1 --continuous --toggle-every-sec 2 --yes
+```
+
 ## Offline PCAP workflow
 
 Generate a PCAP containing SCL-backed SV and GOOSE frames:
@@ -181,13 +196,17 @@ Validated on 2026-06-12:
 - SCL import resolved three SV streams from the 9-2LE sample file.
 - Live SV publish through Npcap sent 20,000 frames over five seconds at roughly
   4,000 frames per second.
+- Live GOOSE publish through Npcap sent a bounded stream with SCL `minTime` and
+  `maxTime`, `sqNum` retransmission increments, and `stNum` reset behavior on
+  simulated state changes.
 - Generated payload followed 4I+4V DataSet order with 64 bytes per SV sample.
 
 Important limitation: active SV publishing is a lab smoke path. It is
 software-paced and should not be treated as protection-grade timing evidence.
 
 See [Validation](docs/VALIDATION.md) and
-[Live SV Publish Validation](docs/validation/live-sv-publish.md).
+[Live SV Publish Validation](docs/validation/live-sv-publish.md) or
+[Live GOOSE Publish Validation](docs/validation/live-goose-publish.md).
 
 ## Safety notes
 

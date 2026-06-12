@@ -67,6 +67,30 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- publish-sv-live ".\samples\scl\01
 
 Replace `--adapter 5` with the adapter index from your machine.
 
+## Publish GOOSE to a lab adapter
+
+Dry-run first:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 5 --stream-index 1 --frames 8 --dry-run
+```
+
+Publish a bounded GOOSE stream:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 5 --stream-index 1 --duration-sec 5 --toggle-every-sec 2 --yes
+```
+
+Publish continuously until `Ctrl+C`:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 5 --stream-index 1 --continuous --toggle-every-sec 2 --yes
+```
+
+The GOOSE command uses the selected SCL `GSEControl`, APPID, destination MAC,
+VLAN, `minTime`, and `maxTime`. Retransmissions increment `sqNum`; state
+changes increment `stNum` and reset the retransmission schedule.
+
 ## Safety boundary
 
 Active publishing sends raw multicast Ethernet frames. Use only an isolated lab

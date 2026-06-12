@@ -77,8 +77,8 @@ ARIEC61850/
 Current repository status: the stack projects exist with BER, Ethernet
 process-bus frames, MMS data values, GOOSE frame builder and parser, SV frame
 builder and parser, SCL parsing, SCL-backed GOOSE/SV publisher profiles,
-in-memory publisher sessions, PCAP generation/inspection/replay, and Npcap raw
-SV live publishing.
+in-memory publisher sessions, PCAP generation/inspection/replay, Npcap raw SV
+live publishing, and Npcap raw GOOSE live publishing.
 
 ## Non-Negotiable Boundaries
 
@@ -358,8 +358,9 @@ Current limitations:
 ### M2 - SCL -> GOOSE/SV Publish Profiles
 
 Status: first usable pass implemented for in-memory sessions, PCAP smoke
-generation, offline PCAP inspection, decoded console stream output, and live SV
-publish smoke through the Npcap transport.
+generation, offline PCAP inspection, decoded console stream output, live SV
+publish smoke through the Npcap transport, and live GOOSE publish smoke through
+the Npcap transport.
 
 Goal: publish process-bus frames from SCL, not hand-coded fields.
 
@@ -385,14 +386,14 @@ Current limitations:
   payload packing is next.
 - GOOSE accepts typed MMS values and validates value count against DataSet order.
 - Generated PCAP output, offline PCAP inspection, decoded stream output, adapter
-  listing, dry-run publish, and live SV publish are available through
+  listing, dry-run publish, live SV publish, and live GOOSE publish are available through
   `apps/AR.Iec61850.Cli`.
 - Live SV pacing exists as a software smoke-test clock. It is not yet a
   hard-real-time publisher.
 
 ### M3 - Raw Ethernet Transport
 
-Status: first usable pass implemented for SV publish.
+Status: first usable pass implemented for SV and GOOSE publish.
 
 Goal: safely send and receive process-bus frames through replaceable transports.
 
@@ -407,6 +408,9 @@ Deliverables:
   `--yes`; safe validation path available with `--dry-run`.
 - Bounded and long-running SV publish controls implemented with `--frames`,
   `--duration-sec`, and `--continuous`.
+- Bounded and long-running GOOSE publish controls implemented with `--frames`,
+  `--duration-sec`, and `--continuous`, plus optional `--toggle-every-sec`
+  state changes.
 
 Done means:
 

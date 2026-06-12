@@ -32,6 +32,7 @@ internal static class Cli
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
                 "list-adapters" => ListAdapters(),
                 "publish-sv-live" => await PublishSvLiveAsync(args[1..]).ConfigureAwait(false),
+                "publish-goose-live" => await PublishGooseLiveAsync(args[1..]).ConfigureAwait(false),
                 _ => UnknownCommand(args[0])
             };
         }
@@ -209,7 +210,7 @@ internal static class Cli
         }
 
         Console.WriteLine();
-        Console.WriteLine("Use the adapter index with publish-sv-live --adapter <index>.");
+        Console.WriteLine("Use the adapter index with publish-sv-live or publish-goose-live --adapter <index>.");
         return 0;
     }
 
@@ -262,7 +263,7 @@ internal static class Cli
         Console.WriteLine($"SV stream: #{streamIndex}/{profiles.Count} {profile.Stream.ControlBlockReference}");
         Console.WriteLine($"  svID={TextOrDash(profile.Stream.SvId)} APPID=0x{profile.AppId:X4} dst={profile.Destination} VLAN={FormatVlan(profile.Vlan)}");
         Console.WriteLine($"  source={sourceMac} {FormatFrameLimit(frameLimit)} rate={sampleRateHz.ToString("0.###", CultureInfo.InvariantCulture)} Hz nominal={nominalHz.ToString("0.###", CultureInfo.InvariantCulture)} Hz datasetEntries={profile.Entries.Count}");
-        if (!frameLimit.HasValue)
+        if (!frameLimit.HasValue && durationSeconds <= 0)
             Console.WriteLine("  Press Ctrl+C to stop the continuous publisher.");
 
         IProcessBusTransport transport = dryRun
@@ -325,6 +326,152 @@ internal static class Cli
         var elapsed = Stopwatch.GetElapsedTime(startedTicks);
         var effectiveRate = sent / Math.Max(elapsed.TotalSeconds, 0.000001);
         Console.WriteLine($"SV publish complete: frames={sent} elapsed={elapsed.TotalSeconds:0.###}s effectiveRate={effectiveRate:0.###} fps lastSmpCnt={lastSampleCount} payloadBytes={lastPayloadBytes}");
+        return 0;
+    }
+
+    private static async Task<int> PublishGooseLiveAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("publish-goose-live requires <scl-file> --adapter <index|name>.");
+
+        var options = CliOptions.Parse(args[1..]);
+        var adapterSelector = options.GetRequired("adapter");
+        var streamIndex = options.GetInt("stream-index", 1);
+        if (streamIndex < 1)
+            throw new ArgumentException("--stream-index is 1-based and must be at least 1.");
+
+        var dryRun = options.GetBool("dry-run", fallback: false);
+        var confirmed = options.GetBool("yes", fallback: false);
+        if (!dryRun && !confirmed)
+            throw new InvalidOperationException("Live GOOSE publish sends raw Ethernet frames. Re-run with --yes after selecting an isolated test NIC.");
+
+        var document = new SclParser().Load(args[0]);
+        var profiles = GoosePublisherProfile.CreateMany(document);
+        if (profiles.Count == 0)
+            throw new InvalidOperationException("The SCL document does not contain a publishable GSEControl stream.");
+
+        if (streamIndex > profiles.Count)
+            throw new ArgumentOutOfRangeException(nameof(streamIndex), $"--stream-index must be 1..{profiles.Count} for this SCL.");
+
+        var profile = profiles[streamIndex - 1];
+        var adapter = NpcapAdapterCatalog.ResolveAdapterInfo(adapterSelector);
+        var sourceMac = ResolveSourceMac(options, adapter);
+        var minTimeMs = (uint)options.GetInt("min-ms", checked((int)profile.Stream.MinTimeMilliseconds));
+        var maxTimeMs = (uint)options.GetInt("max-ms", checked((int)profile.Stream.MaxTimeMilliseconds));
+        var schedule = new GooseRetransmissionSchedule(minTimeMs, maxTimeMs);
+        var continuous = options.GetBool("continuous", fallback: false);
+        var durationSeconds = options.GetDouble("duration-sec", 0);
+        if (durationSeconds < 0)
+            throw new ArgumentException("--duration-sec must be greater than or equal to 0.");
+
+        var frameLimit = ResolveGooseFrameLimit(options, continuous, durationSeconds);
+        var statusIntervalMs = options.GetInt("status-ms", 1000);
+        var toggleEverySeconds = options.GetDouble("toggle-every-sec", 0);
+        if (toggleEverySeconds < 0)
+            throw new ArgumentException("--toggle-every-sec must be greater than or equal to 0.");
+
+        var test = options.GetBool("test", fallback: false);
+        var needsCommissioning = options.GetBool("nds-com", fallback: false);
+        var state = options.GetBool("initial-state", fallback: false);
+
+        Console.WriteLine($"SCL: {Path.GetFullPath(args[0])}");
+        Console.WriteLine($"Mode: {(dryRun ? "dry-run (no NIC transmit)" : "live raw Ethernet transmit")}");
+        Console.WriteLine($"Adapter: [{adapter.Index}] MAC={adapter.MacAddress?.ToString() ?? "-"} {TextOrDash(adapter.Description)}");
+        Console.WriteLine($"GOOSE stream: #{streamIndex}/{profiles.Count} {profile.Stream.ControlBlockReference}");
+        Console.WriteLine($"  goID={TextOrDash(profile.Stream.GoId)} APPID=0x{profile.AppId:X4} dst={profile.Destination} VLAN={FormatVlan(profile.Vlan)}");
+        Console.WriteLine($"  source={sourceMac} {FormatGooseLimit(frameLimit, durationSeconds)} min={schedule.MinTimeMilliseconds} ms max={schedule.MaxTimeMilliseconds} ms datasetEntries={profile.Entries.Count}");
+        Console.WriteLine($"  toggleEvery={(toggleEverySeconds <= 0 ? "off" : $"{toggleEverySeconds.ToString("0.###", CultureInfo.InvariantCulture)}s")} test={test} ndsCom={needsCommissioning}");
+        if (!frameLimit.HasValue && durationSeconds <= 0)
+            Console.WriteLine("  Press Ctrl+C to stop the continuous publisher.");
+
+        IProcessBusTransport transport = dryRun
+            ? new InMemoryProcessBusTransport()
+            : new NpcapProcessBusTransport(adapterSelector);
+
+        var session = new GoosePublisherSession(profile, sourceMac, transport);
+        var startedTicks = Stopwatch.GetTimestamp();
+        var deadlineTicks = durationSeconds > 0
+            ? startedTicks + (long)Math.Round(durationSeconds * Stopwatch.Frequency)
+            : (long?)null;
+        var eventTimestamp = DateTimeOffset.UtcNow;
+        var nextStatusTicks = startedTicks;
+        var nextToggleTicks = toggleEverySeconds > 0
+            ? startedTicks + (long)Math.Round(toggleEverySeconds * Stopwatch.Frequency)
+            : long.MaxValue;
+        var finiteProgressEvery = frameLimit.HasValue ? Math.Max(1, frameLimit.Value / 10) : 0;
+        using var stop = new CancellationTokenSource();
+        ConsoleCancelEventHandler? cancelHandler = null;
+        cancelHandler = (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            stop.Cancel();
+            Console.WriteLine();
+            Console.WriteLine("Stop requested; finishing current GOOSE publish loop.");
+        };
+        Console.CancelKeyPress += cancelHandler;
+
+        long sent = 0;
+        uint lastStateNumber = 0;
+        uint lastSequenceNumber = 0;
+        var lastPayloadValues = 0;
+
+        try
+        {
+            while ((!frameLimit.HasValue || sent < frameLimit.Value) &&
+                   (!deadlineTicks.HasValue || Stopwatch.GetTimestamp() < deadlineTicks.Value))
+            {
+                var nowTicks = Stopwatch.GetTimestamp();
+                var stateChanged = false;
+                if (nowTicks >= nextToggleTicks)
+                {
+                    state = !state;
+                    eventTimestamp = DateTimeOffset.UtcNow;
+                    schedule.Reset();
+                    stateChanged = true;
+                    nextToggleTicks = nowTicks + (long)Math.Round(toggleEverySeconds * Stopwatch.Frequency);
+                }
+
+                var values = BuildGooseStateValues(profile.Entries, eventTimestamp, state, sent);
+                var frame = await session.PublishAsync(
+                    values,
+                    new Iec61850UtcTime(DateTimeOffset.UtcNow, Quality: 0),
+                    stateChanged,
+                    test,
+                    needsCommissioning,
+                    stop.Token).ConfigureAwait(false);
+
+                sent++;
+                lastPayloadValues = values.Count;
+                if (GooseFrameParser.TryParseEthernetFrame(frame, out var parsed))
+                {
+                    lastStateNumber = parsed.Pdu.StateNumber;
+                    lastSequenceNumber = parsed.Pdu.SequenceNumber;
+                }
+
+                nowTicks = Stopwatch.GetTimestamp();
+                var reachedFiniteProgress = frameLimit.HasValue && (sent == 1 || sent == frameLimit.Value || sent % finiteProgressEvery == 0);
+                var reachedContinuousStatus = !frameLimit.HasValue && statusIntervalMs > 0 && nowTicks >= nextStatusTicks;
+                if (reachedFiniteProgress || reachedContinuousStatus)
+                {
+                    Console.WriteLine(FormatGoosePublishProgress(sent, frameLimit, startedTicks, lastStateNumber, lastSequenceNumber, state, lastPayloadValues));
+                    if (statusIntervalMs > 0)
+                        nextStatusTicks = nowTicks + (long)Math.Round(statusIntervalMs * Stopwatch.Frequency / 1000.0);
+                }
+
+                var delayMs = schedule.NextDelayMilliseconds();
+                if (!WaitForDelay(delayMs, stop.Token, deadlineTicks))
+                    break;
+            }
+        }
+        finally
+        {
+            Console.CancelKeyPress -= cancelHandler;
+            (transport as IDisposable)?.Dispose();
+        }
+
+        var elapsed = Stopwatch.GetElapsedTime(startedTicks);
+        var rate = sent / Math.Max(elapsed.TotalSeconds, 0.000001);
+        Console.WriteLine($"GOOSE publish complete: frames={sent} elapsed={elapsed.TotalSeconds:0.###}s effectiveRate={rate:0.###} fps stNum={lastStateNumber} sqNum={lastSequenceNumber} values={lastPayloadValues}");
         return 0;
     }
 
@@ -495,6 +642,42 @@ internal static class Cli
         return values;
     }
 
+    private static IReadOnlyList<MmsDataValue> BuildGooseStateValues(
+        IReadOnlyList<SclDataSetEntry> entries,
+        DateTimeOffset eventTimestamp,
+        bool state,
+        long stateIndex)
+    {
+        var values = new List<MmsDataValue>(entries.Count);
+
+        foreach (var entry in entries)
+        {
+            if (entry.IsTimestamp)
+            {
+                values.Add(MmsDataValue.UtcTime(new Iec61850UtcTime(eventTimestamp, Quality: 0)));
+            }
+            else if (entry.IsQuality)
+            {
+                values.Add(MmsDataValue.BitString(0, new byte[] { 0x00, 0x00 }));
+            }
+            else if (string.Equals(entry.BType, "BOOLEAN", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(entry.BType, "Bool", StringComparison.OrdinalIgnoreCase))
+            {
+                values.Add(MmsDataValue.Boolean(state));
+            }
+            else if (entry.BType.Contains("INT", StringComparison.OrdinalIgnoreCase))
+            {
+                values.Add(MmsDataValue.Integer(stateIndex + entry.Index));
+            }
+            else
+            {
+                values.Add(MmsDataValue.VisibleString($"state-{stateIndex}-{entry.Index}"));
+            }
+        }
+
+        return values;
+    }
+
     private static long ResolveSvIntervalMicros(ushort sampleRate)
         => sampleRate == 0 ? 250 : Math.Max(1, 1_000_000L / sampleRate);
 
@@ -526,8 +709,38 @@ internal static class Cli
         return continuous ? null : 4000;
     }
 
+    private static long? ResolveGooseFrameLimit(
+        CliOptions options,
+        bool continuous,
+        double durationSeconds)
+    {
+        if (options.TryGet("frames", out _))
+        {
+            var frames = options.GetInt("frames", 0);
+            if (frames < 1)
+                throw new ArgumentException("--frames must be at least 1.");
+
+            return frames;
+        }
+
+        if (durationSeconds > 0)
+            return null;
+
+        return continuous ? null : 16;
+    }
+
     private static string FormatFrameLimit(long? frameLimit)
         => frameLimit.HasValue ? $"frames={frameLimit.Value}" : "frames=continuous";
+
+    private static string FormatGooseLimit(long? frameLimit, double durationSeconds)
+    {
+        if (frameLimit.HasValue)
+            return $"frames={frameLimit.Value}";
+
+        return durationSeconds > 0
+            ? $"duration={durationSeconds.ToString("0.###", CultureInfo.InvariantCulture)}s"
+            : "frames=continuous";
+    }
 
     private static string FormatLivePublishProgress(
         long sent,
@@ -542,6 +755,21 @@ internal static class Cli
         return $"  sent={sent}{target} elapsed={elapsed.TotalSeconds:0.###}s rate={rate:0.###} fps smpCnt={sampleCount} payloadBytes={payloadBytes}";
     }
 
+    private static string FormatGoosePublishProgress(
+        long sent,
+        long? frameLimit,
+        long startedTicks,
+        uint stateNumber,
+        uint sequenceNumber,
+        bool state,
+        int valueCount)
+    {
+        var elapsed = Stopwatch.GetElapsedTime(startedTicks);
+        var rate = sent / Math.Max(elapsed.TotalSeconds, 0.000001);
+        var target = frameLimit.HasValue ? $"/{frameLimit.Value}" : string.Empty;
+        return $"  sent={sent}{target} elapsed={elapsed.TotalSeconds:0.###}s rate={rate:0.###} fps stNum={stateNumber} sqNum={sequenceNumber} state={state} values={valueCount}";
+    }
+
     private static bool WaitUntil(long startTimestamp, long frameIndex, double rateHz, CancellationToken cancellationToken)
     {
         var targetTimestamp = startTimestamp + (long)Math.Round(frameIndex * Stopwatch.Frequency / rateHz);
@@ -552,6 +780,30 @@ internal static class Cli
                 return false;
 
             var remainingTicks = targetTimestamp - Stopwatch.GetTimestamp();
+            if (remainingTicks <= 0)
+                return true;
+
+            var remainingMilliseconds = remainingTicks * 1000.0 / Stopwatch.Frequency;
+            if (remainingMilliseconds > 2)
+                Thread.Sleep(1);
+            else
+                Thread.SpinWait(50);
+        }
+    }
+
+    private static bool WaitForDelay(int delayMilliseconds, CancellationToken cancellationToken, long? deadlineTicks = null)
+    {
+        var started = Stopwatch.GetTimestamp();
+        var target = started + (long)Math.Round(delayMilliseconds * Stopwatch.Frequency / 1000.0);
+        if (deadlineTicks.HasValue)
+            target = Math.Min(target, deadlineTicks.Value);
+
+        while (true)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return false;
+
+            var remainingTicks = target - Stopwatch.GetTimestamp();
             if (remainingTicks <= 0)
                 return true;
 
@@ -618,6 +870,7 @@ internal static class Cli
         Console.WriteLine("  stream-pcap <file.pcap> [--delay-ms N] [--limit N]");
         Console.WriteLine("  list-adapters");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
+        Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-scl samples/scl/minimal-station.scd");
@@ -627,6 +880,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --continuous --yes");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-goose-live samples/scl/minimal-station.scd --adapter 1 --stream-index 1 --duration-sec 10 --toggle-every-sec 2 --yes");
     }
 
     private static bool IsHelp(string value)

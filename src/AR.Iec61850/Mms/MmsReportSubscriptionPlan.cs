@@ -50,39 +50,62 @@ public static class MmsReportSubscriptionPlanner
         ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(dataSetDirectories);
 
-        var readiness = MmsReportReadinessPlanner.Build(inventory);
-        var candidates = readiness.Items
-            .Where(x => x.Kind == MmsReportReadinessKind.ReadyStaticDataSet)
-            .Select(x => x.ReportControl)
+        var dataSetMap = dataSetDirectories
+            .Where(x => x.IsSuccess && !string.IsNullOrWhiteSpace(x.DataSetReference))
+            .GroupBy(x => NormalizeReference(x.DataSetReference), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+        var candidates = inventory.ReportControls
+            .Where(x => !string.IsNullOrWhiteSpace(x.DataSetReference))
+            .Where(x => !IsExplicitlyEnabled(x))
+            .Where(x => !IsReservedByOtherClient(x))
             .ToArray();
 
         if (!string.IsNullOrWhiteSpace(preferredRcbReference))
-            candidates = candidates.Where(x => x.Reference.Equals(preferredRcbReference, StringComparison.OrdinalIgnoreCase)).ToArray();
+            candidates = candidates.Where(x => IsSameReference(x.Reference, preferredRcbReference)).ToArray();
 
         if (!string.IsNullOrWhiteSpace(preferredDataSetReference))
-            candidates = candidates.Where(x => x.DataSetReference.Equals(preferredDataSetReference, StringComparison.OrdinalIgnoreCase)).ToArray();
+            candidates = candidates.Where(x => IsSameReference(x.DataSetReference, preferredDataSetReference)).ToArray();
 
-        var selected = candidates
-            .OrderByDescending(x => x.Buffered)
-            .ThenBy(x => x.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.LogicalNode.Equals("LLN0", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenBy(x => x.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+        var scored = candidates
+            .Select(x => new
+            {
+                ReportControl = x,
+                DataSet = dataSetMap.TryGetValue(NormalizeReference(x.DataSetReference), out var mapped) ? mapped : null,
+                SafetyScore = StaticCandidateSafetyScore(x),
+                DataSetScore = dataSetMap.TryGetValue(NormalizeReference(x.DataSetReference), out var mapped2) && mapped2.Members.Count > 0 ? 0 : 1
+            })
+            .OrderBy(x => x.DataSetScore)
+            .ThenByDescending(x => x.ReportControl.Buffered)
+            .ThenByDescending(x => x.SafetyScore)
+            .ThenBy(x => x.ReportControl.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ReportControl.LogicalNode.Equals("LLN0", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(x => x.ReportControl.LogicalNode, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ReportControl.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
+        var selectedEntry = scored.FirstOrDefault();
+        var selected = selectedEntry?.ReportControl;
         if (selected == null)
         {
+            var knownStatic = inventory.ReportControls.Count(x => !string.IsNullOrWhiteSpace(x.DataSetReference));
+            var occupied = inventory.ReportControls.Count(IsExplicitlyEnabled);
+            var reserved = inventory.ReportControls.Count(IsReservedByOtherClient);
             return new MmsReportSubscriptionPlan
             {
                 Mode = MmsReportSubscriptionPlanMode.StaticDataSet,
                 Status = MmsReportSubscriptionPlanStatus.Blocked,
                 DataSetReference = preferredDataSetReference ?? string.Empty,
-                Blockers = ["No ReadyStaticDataSet RCB matched the requested filter. Run mms-report-plan --only-safe first."],
-                Steps = ["Keep the workflow read-only until at least one RCB has DatSet, RptEna=false, and no active reservation."]
+                Blockers =
+                [
+                    $"No static RCB with a usable DatSet matched the requested filter. Static RCB seen={knownStatic}, occupied={occupied}, reserved={reserved}.",
+                    "Run mms-report-plan --max-report-probes 286 --raw-limit 0 and verify at least one RCB has DatSet plus RptEna=false/0."
+                ],
+                Steps = ["Keep the workflow read-only until at least one RCB has DatSet, is not enabled, and is not actively reserved."]
             };
         }
 
-        var dataSet = dataSetDirectories.FirstOrDefault(x => x.IsSuccess && x.DataSetReference.Equals(selected.DataSetReference, StringComparison.OrdinalIgnoreCase));
+        var dataSet = selectedEntry!.DataSet;
         var members = dataSet?.Members ?? Array.Empty<MmsDataSetDirectoryMember>();
         var blockers = new List<string>();
         var warnings = new List<string>();
@@ -92,6 +115,9 @@ public static class MmsReportSubscriptionPlanner
 
         if (!selected.Buffered)
             warnings.Add("Selected RCB is URCB. It is fine for online monitoring, but BRCB is preferred for buffered event recovery when available.");
+
+        if (!IsExplicitlyDisabled(selected))
+            warnings.Add("RptEna was not decoded as explicit false/0. The selector accepted this RCB only because it has a valid DataSet map and is not explicitly enabled/reserved. Verify with mms-report-plan before live write.");
 
         if (string.IsNullOrWhiteSpace(selected.OptionalFields))
             warnings.Add("OptFlds has not been decoded into named flags yet; first live enable should keep current IED settings.");
@@ -228,6 +254,75 @@ public static class MmsReportSubscriptionPlanner
             Source = point.Source,
             Confidence = point.Confidence
         };
+
+    private static bool IsSameReference(string left, string right)
+        => NormalizeReference(left).Equals(NormalizeReference(right), StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeReference(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.');
+
+    private static int StaticCandidateSafetyScore(MmsReportControlCandidate rcb)
+    {
+        var score = 0;
+        if (IsExplicitlyDisabled(rcb))
+            score += 30;
+        if (!IsReservedByOtherClient(rcb))
+            score += 20;
+        if (rcb.Status.Contains("probe", StringComparison.OrdinalIgnoreCase) || rcb.Status.Contains("Attribute", StringComparison.OrdinalIgnoreCase))
+            score += 10;
+        if (!string.IsNullOrWhiteSpace(rcb.ReportId))
+            score += 5;
+        if (!string.IsNullOrWhiteSpace(rcb.ConfRev))
+            score += 5;
+        return score;
+    }
+
+    public static bool IsExplicitlyEnabled(MmsReportControlCandidate rcb)
+        => ParseBool(rcb.EnabledState) == true;
+
+    public static bool IsExplicitlyDisabled(MmsReportControlCandidate rcb)
+        => ParseBool(rcb.EnabledState) == false;
+
+    public static bool IsReservedByOtherClient(MmsReportControlCandidate rcb)
+        => ParseBool(rcb.ReservationState) == true || ParsePositiveInteger(rcb.ReservationTimeSeconds) == true;
+
+    public static bool HasExplicitSafeStaticWriteState(MmsReportControlCandidate rcb)
+        => !string.IsNullOrWhiteSpace(rcb.DataSetReference) &&
+           IsExplicitlyDisabled(rcb) &&
+           !IsReservedByOtherClient(rcb);
+
+    private static bool? ParseBool(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(text) || text == "-")
+            return null;
+
+        if (bool.TryParse(text, out var parsed))
+            return parsed;
+
+        if (text.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("on", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (text.Equals("0", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("false", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("no", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("off", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return null;
+    }
+
+    private static bool? ParsePositiveInteger(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(text) || text == "-")
+            return null;
+
+        return ulong.TryParse(text, out var number) ? number > 0 : null;
+    }
 
     private static string SanitizeDataSetName(string name)
     {

@@ -11,6 +11,6 @@ public sealed class MmsSmartReadResult
         : ReadResult.Message.Length > 0 ? ReadResult.Message : ResolveResult.Message;
 
     private static string FormatValue(MmsDataValue? value)
-        => value == null ? "-" : MmsDataCodec.ToDisplayString(value);
+        => value == null ? "-" : MmsDataValueRenderer.ToCompactString(value);
 }
 

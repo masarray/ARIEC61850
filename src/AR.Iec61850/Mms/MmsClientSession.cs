@@ -14,7 +14,7 @@ public enum MmsAssociationState
     MmsInitiateFailed
 }
 
-public sealed class MmsClientSession : IAsyncDisposable
+public sealed partial class MmsClientSession : IAsyncDisposable
 {
     private readonly TpktClient _tpkt = new();
     private readonly CotpClient _cotp;
@@ -612,6 +612,146 @@ public sealed class MmsClientSession : IAsyncDisposable
         }
     }
 
+
+    public async Task ProbeReportControlAttributesAsync(
+        MmsReportControlCandidate reportControl,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+        ArgumentNullException.ThrowIfNull(reportControl);
+        reportControl.ProbeDiagnostics.Clear();
+
+        await ProbeReportControlAttributeAsync(reportControl, "DatSet", value =>
+        {
+            var text = NormalizeReportAttributeText(value);
+            if (!string.IsNullOrWhiteSpace(text))
+                reportControl.DataSetReference = NormalizeReportedDataSetReference(reportControl.Domain, text);
+        }, cancellationToken).ConfigureAwait(false);
+
+        await ProbeReportControlAttributeAsync(reportControl, "RptID", value => reportControl.ReportId = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+        await ProbeReportControlAttributeAsync(reportControl, "ConfRev", value => reportControl.ConfRev = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+        await ProbeReportControlAttributeAsync(reportControl, "IntgPd", value => reportControl.IntegrityPeriodMs = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+        await ProbeReportControlAttributeAsync(reportControl, "RptEna", value => reportControl.EnabledState = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+        await ProbeReportControlAttributeAsync(reportControl, "BufTm", value => reportControl.BufferTimeMs = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+        await ProbeReportControlAttributeAsync(reportControl, "TrgOps", value => reportControl.TriggerOptions = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+        await ProbeReportControlAttributeAsync(reportControl, "OptFlds", value => reportControl.OptionalFields = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+
+        if (reportControl.Buffered)
+            await ProbeReportControlAttributeAsync(reportControl, "ResvTms", value => reportControl.ReservationTimeSeconds = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+        else
+            await ProbeReportControlAttributeAsync(reportControl, "Resv", value => reportControl.ReservationState = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+
+        // Many IEDs are more reliable when the complete RCB structure is read and
+        // then unpacked client-side. libiec61850's GetRCBValues follows this mental
+        // model: refresh a client-side RCB representation from the server before
+        // writing RptEna/GI. If individual attribute reads are rejected or partial,
+        // fall back to the base RCB object.
+        if (!HasExplicitReportRuntimeState(reportControl))
+            await TryReadReportControlStructureAsync(reportControl, cancellationToken).ConfigureAwait(false);
+
+        reportControl.Status = HasUsefulReportProbeData(reportControl) ? "Attribute-probed" : reportControl.Status;
+    }
+
+    private async Task TryReadReportControlStructureAsync(
+        MmsReportControlCandidate reportControl,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var baseReference = MmsObjectReference.Parse(reportControl.Reference, reportControl.FunctionalConstraint);
+            var result = await ReadSingleVariableAsync(baseReference, cancellationToken).ConfigureAwait(false);
+            reportControl.ProbeDiagnostics.Add($"RCB base {baseReference.Item}: {(result.IsSuccess ? "OK" : result.Message)}");
+
+            if (result.IsSuccess && result.Value != null)
+                ApplyReportControlStructure(reportControl, result.Value);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            reportControl.ProbeDiagnostics.Add($"RCB base structure read failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private static void ApplyReportControlStructure(MmsReportControlCandidate reportControl, MmsDataValue value)
+    {
+        if (value.Kind != MmsDataKind.Structure || value.Children.Count == 0)
+            return;
+
+        var names = reportControl.Buffered
+            ? new[]
+            {
+                "RptID", "RptEna", "DatSet", "ConfRev", "OptFlds", "BufTm", "SqNum",
+                "TrgOps", "IntgPd", "GI", "PurgeBuf", "EntryID", "TimeOfEntry", "ResvTms"
+            }
+            : new[]
+            {
+                "RptID", "RptEna", "Resv", "DatSet", "ConfRev", "OptFlds", "BufTm",
+                "SqNum", "TrgOps", "IntgPd", "GI"
+            };
+
+        var count = Math.Min(names.Length, value.Children.Count);
+        for (var index = 0; index < count; index++)
+        {
+            var text = NormalizeReportAttributeText(value.Children[index]);
+            if (string.IsNullOrWhiteSpace(text))
+                continue;
+
+            ApplyReportAttributeText(reportControl, names[index], text);
+        }
+
+        reportControl.ProbeDiagnostics.Add($"RCB base structure decoded: fields={value.Children.Count}, mapped={count}");
+    }
+
+    private static void ApplyReportAttributeText(MmsReportControlCandidate reportControl, string attribute, string text)
+    {
+        if (attribute.Equals("DatSet", StringComparison.OrdinalIgnoreCase))
+        {
+            reportControl.DataSetReference = NormalizeReportedDataSetReference(reportControl.Domain, text);
+            return;
+        }
+
+        if (attribute.Equals("RptID", StringComparison.OrdinalIgnoreCase))
+            reportControl.ReportId = text;
+        else if (attribute.Equals("ConfRev", StringComparison.OrdinalIgnoreCase))
+            reportControl.ConfRev = text;
+        else if (attribute.Equals("IntgPd", StringComparison.OrdinalIgnoreCase))
+            reportControl.IntegrityPeriodMs = text;
+        else if (attribute.Equals("RptEna", StringComparison.OrdinalIgnoreCase))
+            reportControl.EnabledState = text;
+        else if (attribute.Equals("BufTm", StringComparison.OrdinalIgnoreCase))
+            reportControl.BufferTimeMs = text;
+        else if (attribute.Equals("TrgOps", StringComparison.OrdinalIgnoreCase))
+            reportControl.TriggerOptions = text;
+        else if (attribute.Equals("OptFlds", StringComparison.OrdinalIgnoreCase))
+            reportControl.OptionalFields = text;
+        else if (attribute.Equals("Resv", StringComparison.OrdinalIgnoreCase))
+            reportControl.ReservationState = text;
+        else if (attribute.Equals("ResvTms", StringComparison.OrdinalIgnoreCase))
+            reportControl.ReservationTimeSeconds = text;
+    }
+
+    private static bool HasExplicitReportRuntimeState(MmsReportControlCandidate reportControl)
+    {
+        var hasEnableState = !string.IsNullOrWhiteSpace(reportControl.EnabledState);
+        var hasReservationState = reportControl.Buffered
+            ? !string.IsNullOrWhiteSpace(reportControl.ReservationTimeSeconds)
+            : !string.IsNullOrWhiteSpace(reportControl.ReservationState);
+
+        return hasEnableState && hasReservationState && !string.IsNullOrWhiteSpace(reportControl.ReportId);
+    }
+
+    private async Task ProbeReportControlAttributeAsync(
+        MmsReportControlCandidate reportControl,
+        string attribute,
+        Action<MmsDataValue?> apply,
+        CancellationToken cancellationToken)
+    {
+        // Force-probe the selected RCB even when the initial variable-list parser did not attach
+        // the attribute name to the candidate. Some IEDs expose the base RCB and attribute nodes
+        // inconsistently in GetNameList pagination; static live gating must read the selected
+        // RCB directly before any RptEna write.
+        await TryReadReportAttributeAsync(reportControl, attribute, apply, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task TryReadReportAttributeIfPresentAsync(
         MmsReportControlCandidate reportControl,
         string attribute,
@@ -634,13 +774,23 @@ public sealed class MmsClientSession : IAsyncDisposable
         {
             var reference = MmsObjectReference.Parse($"{reportControl.Reference}.{attribute}", reportControl.FunctionalConstraint);
             var result = await ReadSingleVariableAsync(reference, cancellationToken).ConfigureAwait(false);
+            var label = $"{attribute} item={reference.Item}";
+
             if (result.IsSuccess)
+            {
                 apply(result.Value);
-            else if (reportControl.Status == "Discovered")
-                reportControl.Status = $"Attribute probe partial: {attribute}";
+                reportControl.ProbeDiagnostics.Add($"{label}: OK {MmsDataValueRenderer.ToCompactString(result.Value)}");
+            }
+            else
+            {
+                reportControl.ProbeDiagnostics.Add($"{label}: {result.Message}");
+                if (reportControl.Status == "Discovered")
+                    reportControl.Status = $"Attribute probe partial: {attribute}";
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            reportControl.ProbeDiagnostics.Add($"{attribute}: exception {ex.GetType().Name}: {ex.Message}");
             if (reportControl.Status == "Discovered")
                 reportControl.Status = $"Attribute probe partial: {attribute} {ex.GetType().Name}";
         }

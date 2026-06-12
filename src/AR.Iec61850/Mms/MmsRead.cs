@@ -100,6 +100,21 @@ public static class MmsReadResponseDecoder
             if (!TryValidateConfirmedResponse(mms, expectedInvokeId, out var message))
                 return Fail(message, hex);
 
+            if (TryDecodeConfirmedReadAccessResult(mms, out var accessValue, out var accessMessage))
+            {
+                return new MmsReadResult
+                {
+                    IsSuccess = true,
+                    Value = accessValue,
+                    Message = $"Native MMS Confirmed-Read decoded value: {MmsDataValueRenderer.ToCompactString(accessValue)}.",
+                    ResponseHexPreview = hex
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(accessMessage))
+                return Fail(accessMessage, hex);
+
+            // Legacy fallback for tolerant decoding of non-standard/short responses.
             var values = new List<BerTlv>();
             CollectTlv(mms, values, depth: 0);
 
@@ -115,7 +130,7 @@ public static class MmsReadResponseDecoder
                     {
                         IsSuccess = true,
                         Value = value,
-                        Message = $"Native MMS Confirmed-Read decoded value: {MmsDataCodec.ToDisplayString(value)}.",
+                        Message = $"Native MMS Confirmed-Read decoded value: {MmsDataValueRenderer.ToCompactString(value)}.",
                         ResponseHexPreview = hex
                     };
                 }
@@ -127,6 +142,114 @@ public static class MmsReadResponseDecoder
         {
             return Fail($"MMS read response decode failed: {ex.GetType().Name}: {ex.Message}", hex);
         }
+    }
+
+
+    private static bool TryDecodeConfirmedReadAccessResult(ReadOnlyMemory<byte> mms, out MmsDataValue value, out string message)
+    {
+        value = default!;
+        message = string.Empty;
+
+        var offset = 0;
+        if (!BerReader.TryReadTlv(mms, ref offset, out var outer))
+        {
+            message = "MMS Confirmed-Response PDU could not be decoded as BER.";
+            return false;
+        }
+
+        var children = BerReader.ReadChildren(outer.Value);
+        var readService = children.Skip(1).FirstOrDefault(x => x.Class == BerClass.ContextSpecific && x.TagNumber == 4);
+        if (readService.EncodedTag == 0)
+        {
+            message = string.Empty;
+            return false;
+        }
+
+        var accessResults = new List<BerTlv>();
+        CollectAccessResults(readService, accessResults, depth: 0);
+        if (accessResults.Count == 0)
+        {
+            message = "MMS read response has no AccessResult nodes.";
+            return false;
+        }
+
+        var first = accessResults[0];
+        if (first.Class == BerClass.ContextSpecific && first.TagNumber == 1)
+        {
+            var code = BerReader.ReadUnsignedInteger(first);
+            message = $"MMS read returned AccessResult.failure code {code}.";
+            return false;
+        }
+
+        // In MMS ReadResponse, AccessResult.success is encoded directly as MMS Data.
+        // It is not wrapped in an extra [0] success node.  The previous decoder only
+        // accepted a synthetic [0] wrapper and therefore rejected primitive RCB
+        // attributes such as RptEna(boolean), ConfRev(unsigned), BufTm(unsigned),
+        // TrgOps(bit-string), and OptFlds(bit-string).  Accept direct MMS Data here.
+        if (IsMmsDataTlv(first))
+        {
+            value = MmsDataCodec.Decode(first);
+            return value.Kind != MmsDataKind.Unknown;
+        }
+
+        // Keep a tolerant path for non-standard servers or older decoder tests that
+        // expose a success wrapper containing one Data child.
+        if (first.Class == BerClass.ContextSpecific && first.TagNumber == 0 && first.Constructed)
+        {
+            var successChildren = BerReader.ReadChildren(first.Value);
+            var data = successChildren.FirstOrDefault(IsMmsDataTlv);
+            if (data.EncodedTag != 0)
+            {
+                value = MmsDataCodec.Decode(data);
+                return value.Kind != MmsDataKind.Unknown;
+            }
+        }
+
+        message = string.Empty;
+        return false;
+    }
+
+    private static void CollectAccessResults(BerTlv tlv, ICollection<BerTlv> output, int depth)
+    {
+        if (depth > 16)
+            return;
+
+        // AccessResult.failure is [1] primitive.  It conflicts numerically with
+        // MMS Data.array [1], but array is constructed, so the distinction is safe.
+        if (tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 1 && !tlv.Constructed)
+        {
+            output.Add(tlv);
+            return;
+        }
+
+        // AccessResult.success is the Data value itself: [1] array, [2] structure,
+        // [3] boolean, [4] bit-string, [5] integer, [6] unsigned, [10] string,
+        // [17] UTC time, etc.  Only accept primitive tags for 3..17 so service
+        // wrappers such as readResponse [4] constructed are not mistaken as Data.
+        if (IsMmsDataTlv(tlv))
+        {
+            output.Add(tlv);
+            return;
+        }
+
+        if (!tlv.Constructed)
+            return;
+
+        foreach (var child in BerReader.ReadChildren(tlv.Value))
+            CollectAccessResults(child, output, depth + 1);
+    }
+
+    private static bool IsMmsDataTlv(BerTlv tlv)
+    {
+        if (tlv.Class != BerClass.ContextSpecific)
+            return false;
+
+        return tlv.TagNumber switch
+        {
+            1 or 2 => tlv.Constructed,
+            >= 3 and <= 17 => !tlv.Constructed,
+            _ => false
+        };
     }
 
     private static bool TryValidateConfirmedResponse(ReadOnlyMemory<byte> mms, int? expectedInvokeId, out string message)

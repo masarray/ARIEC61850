@@ -62,7 +62,7 @@ public static class MmsDataCodec
             MmsDataKind.FloatingPoint => value.Value is float f ? f.ToString("0.###", CultureInfo.InvariantCulture) : string.Empty,
             MmsDataKind.VisibleString or MmsDataKind.MmsString => Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty,
             MmsDataKind.UtcTime => value.Value is Iec61850UtcTime utc ? $"{utc.Value:yyyy-MM-dd HH:mm:ss.fff} UTC (q=0x{utc.Quality:X2})" : string.Empty,
-            MmsDataKind.Structure or MmsDataKind.Array => $"{value.Kind} ({value.Children.Count})",
+            MmsDataKind.Structure or MmsDataKind.Array => MmsDataValueRenderer.ToCompactString(value),
             _ => Convert.ToHexString(value.RawValue.ToArray())
         };
     }

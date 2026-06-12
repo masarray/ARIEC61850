@@ -45,6 +45,23 @@ public class MmsClientCodecTests
         Assert.Equal("OCR7SR12PROT/LLN0$BR$brcbA01", result.Value.Value);
     }
 
+
+    [Fact]
+    public void ReadResponseDecoderAcceptsDirectMmsDataAccessResult()
+    {
+        // Real MMS ReadResponse encodes AccessResult.success as the Data value itself,
+        // not as an additional [0] success wrapper.  This is required for primitive
+        // RCB attributes such as RptEna(boolean), ConfRev(unsigned), and TrgOps(bit-string).
+        var response = BuildDirectReadResponse(invokeId: 24, MmsDataValue.Boolean(false));
+
+        var result = MmsReadResponseDecoder.DecodeSingleVariable(response, expectedInvokeId: 24);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.NotNull(result.Value);
+        Assert.Equal(MmsDataKind.Boolean, result.Value.Kind);
+        Assert.False((bool)result.Value.Value!);
+    }
+
     private static byte[] BuildGetNameListResponse(int invokeId, IReadOnlyList<string> names, bool moreFollows)
     {
         var identifiers = Concat(names
@@ -60,6 +77,19 @@ public class MmsClientCodecTests
         var mms = BerWriter.EncodeTlv(
             0xA1,
             Concat(Integer(invokeId), service));
+
+        return MmsPresentation.WrapIsoPresentationPData(mms);
+    }
+
+
+    private static byte[] BuildDirectReadResponse(int invokeId, MmsDataValue value)
+    {
+        var data = MmsDataCodec.Encode(value);
+        var listOfAccessResult = BerWriter.EncodeTlv(0xA0, data);
+        var readService = BerWriter.EncodeTlv(0xA4, listOfAccessResult);
+        var mms = BerWriter.EncodeTlv(
+            0xA1,
+            Concat(Integer(invokeId), readService));
 
         return MmsPresentation.WrapIsoPresentationPData(mms);
     }

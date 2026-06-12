@@ -39,6 +39,8 @@ internal static class Cli
                 "mms-report-plan" => await MmsReportPlanAsync(args[1..]).ConfigureAwait(false),
                 "mms-report-static-plan" => await MmsReportStaticPlanAsync(args[1..]).ConfigureAwait(false),
                 "mms-report-dynamic-plan" => await MmsReportDynamicPlanAsync(args[1..]).ConfigureAwait(false),
+                "mms-rcb-probe" => await MmsRcbProbeAsync(args[1..]).ConfigureAwait(false),
+                "mms-report-static-live" => await MmsReportStaticLiveAsync(args[1..]).ConfigureAwait(false),
                 "mms-dataset-directory" => await MmsDataSetDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "publish-sv-live" => await PublishSvLiveAsync(args[1..]).ConfigureAwait(false),
                 "publish-goose-live" => await PublishGooseLiveAsync(args[1..]).ConfigureAwait(false),
@@ -591,7 +593,7 @@ internal static class Cli
                 foreach (var member in TakeWithLimit(result.Members.Where(x => !string.IsNullOrWhiteSpace(x.UserReference)), Math.Min(rawLimit <= 0 ? result.Members.Count : rawLimit, 16)))
                 {
                     var read = await session.ReadSmartAsync(discovery.IedDirectory, member.UserReference, timeout.Token).ConfigureAwait(false);
-                    Console.WriteLine($"        {member.UserReference}: {(read.IsSuccess && read.ReadResult.Value != null ? MmsDataCodec.ToDisplayString(read.ReadResult.Value) : read.Message)}");
+                    Console.WriteLine($"        {member.UserReference}: {(read.IsSuccess && read.ReadResult.Value != null ? MmsDataValueRenderer.ToCompactString(read.ReadResult.Value, member.UserReference) : read.Message)}");
                 }
             }
         }
@@ -661,7 +663,7 @@ internal static class Cli
             foreach (var member in TakeWithLimit(plan.Members.Where(x => !string.IsNullOrWhiteSpace(x.UserReference)), Math.Min(rawLimit <= 0 ? plan.Members.Count : rawLimit, 16)))
             {
                 var read = await session.ReadSmartAsync(discovery.IedDirectory, member.UserReference, timeout.Token).ConfigureAwait(false);
-                Console.WriteLine($"  {member.UserReference}: {(read.IsSuccess && read.ReadResult.Value != null ? MmsDataCodec.ToDisplayString(read.ReadResult.Value) : read.Message)}");
+                Console.WriteLine($"  {member.UserReference}: {(read.IsSuccess && read.ReadResult.Value != null ? MmsDataValueRenderer.ToCompactString(read.ReadResult.Value, member.UserReference) : read.Message)}");
             }
         }
 
@@ -671,6 +673,215 @@ internal static class Cli
         Console.WriteLine("  Do not enable reporting from an automatic wizard until report receiver/dispatcher is already running.");
 
         return plan.IsReady ? 0 : 1;
+    }
+
+    private static async Task<int> MmsRcbProbeAsync(string[] args)
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("mms-rcb-probe requires <host-or-ip> <LD/LN.BR.name|LD/LN.RP.name>.");
+
+        var host = args[0];
+        var rcbReference = args[1];
+        var options = CliOptions.Parse(args[2..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 120000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: direct selected RCB attribute probe (read-only).");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReportAttributes: false, maxReportAttributeProbes: 0, timeout.Token).ConfigureAwait(false);
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+
+        var rcb = discovery.ReportInventory.ReportControls.FirstOrDefault(x =>
+            x.Reference.Equals(rcbReference, StringComparison.OrdinalIgnoreCase));
+        if (rcb == null)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"RCB not found: {rcbReference}");
+            Console.WriteLine("Closest candidates:");
+            foreach (var candidate in discovery.ReportInventory.ReportControls
+                         .Where(x => x.Reference.Contains(rcbReference, StringComparison.OrdinalIgnoreCase) ||
+                                     rcbReference.Contains(x.Name, StringComparison.OrdinalIgnoreCase))
+                         .Take(20))
+            {
+                Console.WriteLine($"  {candidate.Mode} {candidate.Reference}");
+            }
+            return 1;
+        }
+
+        await session.ProbeReportControlAttributesAsync(rcb, timeout.Token).ConfigureAwait(false);
+
+        Console.WriteLine();
+        Console.WriteLine($"Selected RCB: {rcb.Mode} {rcb.Reference}");
+        Console.WriteLine($"  DatSet={TextOrDash(rcb.DataSetReference)}");
+        Console.WriteLine($"  RptID={TextOrDash(rcb.ReportId)}");
+        Console.WriteLine($"  ConfRev={TextOrDash(rcb.ConfRev)}");
+        Console.WriteLine($"  RptEna={TextOrDash(rcb.EnabledState)}");
+        Console.WriteLine($"  Resv={(rcb.Buffered ? TextOrDash(rcb.ReservationTimeSeconds) : TextOrDash(rcb.ReservationState))}");
+        Console.WriteLine($"  BufTm={TextOrDash(rcb.BufferTimeMs)}");
+        Console.WriteLine($"  IntgPd={TextOrDash(rcb.IntegrityPeriodMs)}");
+        Console.WriteLine($"  TrgOps={TextOrDash(rcb.TriggerOptions)}");
+        Console.WriteLine($"  OptFlds={TextOrDash(rcb.OptionalFields)}");
+        var explicitSafe = MmsReportSubscriptionPlanner.HasExplicitSafeStaticWriteState(rcb);
+        Console.WriteLine($"  Explicit-safe for static write: {(explicitSafe ? "YES" : "NO")}");
+
+        if (!explicitSafe && rcb.ProbeDiagnostics.Count > 0)
+        {
+            Console.WriteLine("  Probe diagnostics:");
+            foreach (var line in rcb.ProbeDiagnostics.Take(16))
+                Console.WriteLine($"    - {line}");
+            if (rcb.ProbeDiagnostics.Count > 16)
+                Console.WriteLine($"    ... +{rcb.ProbeDiagnostics.Count - 16} more");
+        }
+
+        return 0;
+    }
+
+    private static async Task<int> MmsReportStaticLiveAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-report-static-live requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 120000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var rawLimit = options.GetInt("raw-limit", 80);
+        var preferredRcb = options.Get("rcb", string.Empty);
+        var preferredDataSet = options.Get("dataset", string.Empty);
+        var durationSec = options.GetInt("duration-sec", 15);
+        if (durationSec < 1)
+            throw new ArgumentException("--duration-sec must be at least 1.");
+
+        var reserveSec = options.GetInt("reserve-sec", 30);
+        if (reserveSec < 1)
+            throw new ArgumentException("--reserve-sec must be at least 1.");
+
+        var triggerGi = options.GetBool("gi", fallback: true);
+        var confirmed = options.GetBool("yes", fallback: false);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: guarded static report live session (writes RptEna/GI only when --yes is provided).");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+
+        var staticDataSets = discovery.ReportInventory.ReportControls
+            .Where(x => !string.IsNullOrWhiteSpace(x.DataSetReference))
+            .Select(x => x.DataSetReference)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (!string.IsNullOrWhiteSpace(preferredDataSet) && !staticDataSets.Contains(preferredDataSet, StringComparer.OrdinalIgnoreCase))
+            staticDataSets = staticDataSets.Append(preferredDataSet).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        var directories = await session.GetDataSetDirectoriesAsync(staticDataSets, discovery.IedDirectory, timeout.Token).ConfigureAwait(false);
+        var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet);
+
+        if (plan.IsReady && plan.ReportControl != null)
+        {
+            await session.ProbeReportControlAttributesAsync(plan.ReportControl, timeout.Token).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(plan.ReportControl.DataSetReference) &&
+                !staticDataSets.Contains(plan.ReportControl.DataSetReference, StringComparer.OrdinalIgnoreCase))
+            {
+                directories = await session.GetDataSetDirectoriesAsync(
+                    staticDataSets.Append(plan.ReportControl.DataSetReference).Distinct(StringComparer.OrdinalIgnoreCase),
+                    discovery.IedDirectory,
+                    timeout.Token).ConfigureAwait(false);
+            }
+
+            plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet);
+        }
+
+        Console.WriteLine();
+        WriteReportSubscriptionPlan(plan, rawLimit);
+
+        if (!plan.IsReady || plan.ReportControl == null)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Live static report is blocked. Fix the plan first.");
+            return 1;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Safety gate:");
+        Console.WriteLine("  This command writes RptEna=true and optionally GI=true to the selected RCB, then cleans up with RptEna=false.");
+        Console.WriteLine("  Use only on an isolated FAT/test IED or an unused RCB. The command will not proceed without --yes.");
+        if (!MmsReportSubscriptionPlanner.HasExplicitSafeStaticWriteState(plan.ReportControl))
+        {
+            Console.WriteLine("  Live write is blocked because the selected RCB state is not explicit-safe after direct attribute backfill.");
+            Console.WriteLine("  Required: DatSet present, RptEna=false, and no active Resv/ResvTms.");
+            Console.WriteLine("  Run mms-report-plan --max-report-probes 286 --raw-limit 0 and inspect the selected RCB.");
+            return 1;
+        }
+
+        if (!confirmed)
+        {
+            Console.WriteLine("  Dry-run only. Re-run with --yes to execute the guarded live session.");
+            return 0;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Starting guarded static report session for {durationSec}s...");
+        var live = await session.RunGuardedStaticReportSessionAsync(
+            plan,
+            TimeSpan.FromSeconds(durationSec),
+            reserveSec,
+            triggerGi,
+            timeout.Token).ConfigureAwait(false);
+
+        Console.WriteLine();
+        Console.WriteLine(live.Message);
+
+        if (live.Warnings.Count > 0)
+        {
+            Console.WriteLine("Warnings:");
+            foreach (var warning in live.Warnings)
+                Console.WriteLine($"  - {warning}");
+        }
+
+        Console.WriteLine("Write steps:");
+        foreach (var step in live.WriteSteps)
+            Console.WriteLine($"  {(step.IsSuccess ? "OK" : "FAIL")} {step.Attribute} {step.Reference}: {step.Message}");
+
+        Console.WriteLine($"Reports received: {live.Reports.Count}");
+        foreach (var report in TakeWithLimit(live.Reports, rawLimit))
+        {
+            Console.WriteLine($"  {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} UTC - {report.Message}");
+            foreach (var value in TakeWithLimit(report.Values, 32))
+            {
+                Console.WriteLine($"      [{value.Index}] {value.MemberReference}: {value.DisplayValue}");
+            }
+            WriteLimitNotice(report.Values.Count, 32, "report value(s)");
+        }
+        WriteLimitNotice(live.Reports.Count, rawLimit, "report frame(s)");
+
+        return live.IsSuccess ? 0 : 1;
     }
 
     private static async Task<int> MmsReportDynamicPlanAsync(string[] args)
@@ -1528,6 +1739,8 @@ internal static class Cli
         Console.WriteLine("  mms-report-plan <host-or-ip> [--port 102] [--timeout-ms 60000] [--max-report-probes N] [--only-safe] [--kind ReadyStaticDataSet]");
         Console.WriteLine("  mms-report-static-plan <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--dataset LD/LLN0.DataSet] [--read-values]");
         Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01]");
+        Console.WriteLine("  mms-rcb-probe <host-or-ip> <LD/LN.BR.name|LD/LN.RP.name> [--port 102] [--timeout-ms 120000]");
+        Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--yes]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
         Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
@@ -1546,6 +1759,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-plan 192.168.1.10 --max-report-probes 64 --only-safe");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-plan 192.168.1.10 --read-values");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-plan 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-live 192.168.1.10 --duration-sec 15 --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-dataset-directory 192.168.1.10 OCR7SR12PROT/LLN0.DataSet --raw-limit 80");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --continuous --yes");

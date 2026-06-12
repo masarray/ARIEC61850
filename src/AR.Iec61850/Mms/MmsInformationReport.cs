@@ -8,7 +8,7 @@ public sealed class MmsInformationReportItem
     public int Index { get; init; }
     public MmsDataValue? Value { get; init; }
     public int? FailureCode { get; init; }
-    public string DisplayValue => Value == null ? $"failure={FailureCode}" : MmsDataCodec.ToDisplayString(Value);
+    public string DisplayValue => Value == null ? $"failure={FailureCode}" : MmsDataValueRenderer.ToCompactString(Value);
 }
 
 public sealed class MmsInformationReport
@@ -74,7 +74,7 @@ public static class MmsInformationReportDecoder
         if (depth > 32)
             return;
 
-        if (tlv.EncodedTag == 0x80 || (tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 0 && !tlv.Constructed))
+        if (tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 1 && !tlv.Constructed)
         {
             var code = BerReader.ReadUnsignedInteger(tlv);
             output.Add(new MmsInformationReportItem
@@ -82,6 +82,34 @@ public static class MmsInformationReportDecoder
                 Index = output.Count,
                 FailureCode = code.HasValue ? (int)code.Value : null
             });
+            return;
+        }
+
+        if (tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 0 && tlv.Constructed)
+        {
+            IReadOnlyList<BerTlv> children;
+            try
+            {
+                children = BerReader.ReadChildren(tlv.Value);
+            }
+            catch (BerFormatException)
+            {
+                return;
+            }
+
+            if (children.Count == 1 && children[0].Class == BerClass.ContextSpecific && children[0].TagNumber is >= 1 and <= 17)
+            {
+                output.Add(new MmsInformationReportItem
+                {
+                    Index = output.Count,
+                    Value = MmsDataCodec.Decode(children[0])
+                });
+                return;
+            }
+
+            foreach (var child in children)
+                CollectAccessResults(child, output, depth + 1);
+
             return;
         }
 

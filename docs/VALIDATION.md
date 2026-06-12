@@ -192,3 +192,20 @@ Expected result:
 - the execution steps explicitly list `CreateDataSet`, `Write RCB.DatSet`, reservation, `RptEna`, `GI`, and cleanup.
 
 Do not run live report-enable code until the report receiver/dispatcher exists. Reporting is unsolicited, so the receive pump has to be active before `RptEna=true`; otherwise the first GI/report message can be missed or misrouted as a normal confirmed response.
+
+## Static report live smoke test (guarded)
+
+After static planning and DataSet directory mapping are stable, use the guarded live report command only on an isolated test IED or an unused RCB:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-live 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 15 --yes
+```
+
+Expected behavior:
+
+1. The command discovers the live IED directory and report inventory.
+2. It selects a static-ready RCB with a valid DataSet.
+3. It writes reservation when supported, writes `RptEna=true`, optionally writes `GI=true`, listens for InformationReport frames, then cleans up with `RptEna=false` and releases reservation.
+4. Report values are mapped by DataSet member index and rendered with structured MMS values when available.
+
+If no report is received, the write steps are still valuable evidence. Check `RptEna`, GI support, trigger options, RCB ownership, and whether the selected DataSet points are currently changing.

@@ -28,7 +28,8 @@ public sealed class MmsReportReadinessPlannerTests
         var item = Assert.Single(plan.Items);
         Assert.Equal(MmsReportReadinessKind.ReadyStaticDataSet, item.Kind);
         Assert.True(item.IsReadyForSafeSubscription);
-        Assert.Equal(1, plan.SafeCandidates.Count);
+        var safeCandidate = Assert.Single(plan.SafeCandidates);
+        Assert.Same(item, safeCandidate);
         Assert.Equal(1, plan.BufferedSafeCandidateCount);
     }
 

@@ -29,6 +29,7 @@ public sealed class MmsReportControlCandidate
     public string OptionalFields { get; set; } = string.Empty;
     public string Status { get; set; } = "Discovered";
     public List<string> Attributes { get; set; } = new();
+    public List<string> ProbeDiagnostics { get; } = new();
 
     public string Mode => Buffered ? "BRCB" : "URCB";
     public string Summary => $"{Mode} {Reference}" + (string.IsNullOrWhiteSpace(DataSetReference) ? string.Empty : $" -> {DataSetReference}");

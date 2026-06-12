@@ -31,6 +31,7 @@ internal static class Cli
                 "inspect-pcap" => InspectPcap(args[1..]),
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
                 "list-adapters" => ListAdapters(),
+                "mms-discover" => await MmsDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "publish-sv-live" => await PublishSvLiveAsync(args[1..]).ConfigureAwait(false),
                 "publish-goose-live" => await PublishGooseLiveAsync(args[1..]).ConfigureAwait(false),
                 _ => UnknownCommand(args[0])
@@ -211,6 +212,104 @@ internal static class Cli
 
         Console.WriteLine();
         Console.WriteLine("Use the adapter index with publish-sv-live or publish-goose-live --adapter <index>.");
+        return 0;
+    }
+
+    private static async Task<int> MmsDiscoverAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-discover requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 30000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var probeReports = !options.GetBool("no-report-probe", fallback: false);
+        var maxReportProbes = options.GetInt("max-report-probes", 32);
+        var rawLimit = options.GetInt("raw-limit", 50);
+        var showRaw = options.GetBool("show-raw", fallback: false);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine($"Mode: native clean-room TCP/TPKT/COTP/ACSE/MMS discovery; reportProbe={probeReports} maxReportProbes={maxReportProbes}");
+
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReports, maxReportProbes, timeout.Token).ConfigureAwait(false);
+        Console.WriteLine(discovery.Summary);
+
+        Console.WriteLine();
+        Console.WriteLine($"Logical devices: {discovery.Snapshot.DomainVariables.Count}");
+        foreach (var domain in discovery.Snapshot.DomainVariables.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+            discovery.Snapshot.DomainVariables.TryGetValue(domain, out var variables);
+            discovery.Snapshot.DomainVariableLists.TryGetValue(domain, out var lists);
+            Console.WriteLine($"  {domain}: variables={variables?.Count ?? 0} datasets={lists?.Count ?? 0}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine(discovery.ReportInventory.Summary);
+
+        if (discovery.ReportInventory.DataSets.Count > 0)
+        {
+            Console.WriteLine("DataSets:");
+            foreach (var dataSet in TakeWithLimit(discovery.ReportInventory.DataSets, rawLimit))
+                Console.WriteLine($"  {dataSet.Reference} raw={TextOrDash(dataSet.RawMmsName)}");
+            WriteLimitNotice(discovery.ReportInventory.DataSets.Count, rawLimit, "DataSets");
+        }
+
+        if (discovery.ReportInventory.ReportControls.Count > 0)
+        {
+            Console.WriteLine("Report controls:");
+            foreach (var report in TakeWithLimit(discovery.ReportInventory.ReportControls, rawLimit))
+            {
+                Console.WriteLine(
+                    $"  {report.Mode} {report.Reference} datSet={TextOrDash(report.DataSetReference)} rptID={TextOrDash(report.ReportId)} confRev={TextOrDash(report.ConfRev)} intgPd={TextOrDash(report.IntegrityPeriodMs)} rptEna={TextOrDash(report.EnabledState)} status={report.Status}");
+
+                if (report.Attributes.Count > 0)
+                    Console.WriteLine($"      attrs={string.Join(",", report.Attributes)}");
+            }
+            WriteLimitNotice(discovery.ReportInventory.ReportControls.Count, rawLimit, "Report controls");
+        }
+
+        if (showRaw)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Raw MMS names:");
+            foreach (var domain in discovery.Snapshot.DomainVariables.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"  [{domain}] NamedVariable");
+                foreach (var item in TakeWithLimit(discovery.Snapshot.DomainVariables[domain], rawLimit))
+                    Console.WriteLine($"    {item}");
+                WriteLimitNotice(discovery.Snapshot.DomainVariables[domain].Count, rawLimit, $"{domain} variables");
+
+                if (discovery.Snapshot.DomainVariableLists.TryGetValue(domain, out var lists))
+                {
+                    Console.WriteLine($"  [{domain}] NamedVariableList");
+                    foreach (var item in TakeWithLimit(lists, rawLimit))
+                        Console.WriteLine($"    {item}");
+                    WriteLimitNotice(lists.Count, rawLimit, $"{domain} variable lists");
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(session.LastAssociationAttemptSummary))
+        {
+            Console.WriteLine();
+            Console.WriteLine("Association attempts:");
+            Console.WriteLine($"  {session.LastAssociationAttemptSummary}");
+        }
+
         return 0;
     }
 
@@ -852,6 +951,15 @@ internal static class Cli
             : $"{common} stNum={summary.LastStateNumber} sqNum={summary.LastSequenceNumber}";
     }
 
+    private static IEnumerable<T> TakeWithLimit<T>(IEnumerable<T> source, int limit)
+        => limit <= 0 ? source : source.Take(limit);
+
+    private static void WriteLimitNotice(int total, int limit, string label)
+    {
+        if (limit > 0 && total > limit)
+            Console.WriteLine($"  ... {total - limit} more {label}; use --raw-limit 0 to show all.");
+    }
+
     private static int UnknownCommand(string command)
     {
         Console.Error.WriteLine($"ERROR: unknown command '{command}'.");
@@ -869,6 +977,7 @@ internal static class Cli
         Console.WriteLine("  inspect-pcap <file.pcap>");
         Console.WriteLine("  stream-pcap <file.pcap> [--delay-ms N] [--limit N]");
         Console.WriteLine("  list-adapters");
+        Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
         Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
         Console.WriteLine();
@@ -878,6 +987,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-pcap out/processbus-demo.pcap");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap out/processbus-demo.pcap --delay-ms 50 --limit 12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.168.1.10 --port 102 --max-report-probes 16");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --continuous --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-goose-live samples/scl/minimal-station.scd --adapter 1 --stream-index 1 --duration-sec 10 --toggle-every-sec 2 --yes");

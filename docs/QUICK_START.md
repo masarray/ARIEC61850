@@ -91,6 +91,21 @@ The GOOSE command uses the selected SCL `GSEControl`, APPID, destination MAC,
 VLAN, `minTime`, and `maxTime`. Retransmissions increment `sqNum`; state
 changes increment `stNum` and reset the retransmission schedule.
 
+## Discover an MMS IED
+
+Run a read-only MMS discovery against a lab IED:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.16.1.157 --port 102 --timeout-ms 20000 --max-report-probes 16
+```
+
+Useful options:
+
+- `--no-report-probe` lists domains, variables, DataSets, and RCB candidates
+  without reading RCB attributes.
+- `--max-report-probes N` bounds how many RCBs receive attribute reads.
+- `--show-raw --raw-limit 0` prints all raw MMS names.
+
 ## Safety boundary
 
 Active publishing sends raw multicast Ethernet frames. Use only an isolated lab

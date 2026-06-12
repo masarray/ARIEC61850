@@ -72,17 +72,23 @@ Next implementation:
 
 ## Layer 3 - MMS transport foundation
 
-Planned build order:
+Client-side implementation now includes:
 
-1. TPKT.
-2. COTP.
-3. ISO Session.
-4. ISO Presentation.
-5. ACSE.
-6. MMS initiate.
+- TCP/TPKT connection.
+- COTP connection and data TPDU.
+- ACSE/MMS association profiles.
+- ISO Presentation P-DATA wrapping.
+- MMS `GetNameList`.
+- MMS Confirmed-Read.
+- DataSet inventory.
+- RCB inventory and bounded RCB attribute probing.
 
-MMS discovery, report-control client behavior, and server simulation should be
-built only after the lower transport layers are testable.
+Next implementation:
+
+- ACSE release/abort state model.
+- Report enable/disable and GI writes.
+- InformationReport receive/decode.
+- MMS server simulation.
 
 ## Design rule
 

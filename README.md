@@ -19,8 +19,8 @@ commissioning workbench applications.
 ARIEC61850 provides original source code for building IEC 61850 engineering
 software without depending on GPL protocol implementations. The current stack
 focuses on byte-accurate process-bus primitives, SCL import, deterministic test
-fixtures, and live Sampled Values publishing through a selected Ethernet
-adapter.
+fixtures, live Sampled Values and GOOSE publishing through a selected Ethernet
+adapter, and native MMS discovery against lab IEDs.
 
 Implemented now:
 
@@ -38,18 +38,19 @@ Implemented now:
 - **Npcap raw Ethernet transport** for live SV publish smoke testing.
 - **Live GOOSE publisher** with SCL-backed GSEControl selection, retransmission
   schedule, `stNum` and `sqNum` behavior, and optional state toggling.
+- **Native MMS client foundation** with TCP/TPKT/COTP, ACSE/MMS association,
+  `GetNameList` discovery, DataSet discovery, RCB inventory, bounded RCB
+  attribute probing, and Confirmed-Read decode for common MMS data values.
 - **CLI tester** for SCL inspection, PCAP generation, PCAP inspection, decoded
-  stream playback, adapter discovery, live SV publishing, and live GOOSE
-  publishing.
+  stream playback, adapter discovery, live SV publishing, live GOOSE publishing,
+  and MMS discovery.
 
 Planned next:
 
 - SCL-bound SV subscriber and GOOSE subscriber engines.
 - Typed SV engineering-value payload packing.
-- GOOSE retransmission schedule service.
-- Native MMS transport layers: TPKT, COTP, Session, Presentation, ACSE, and MMS
-  initiate.
-- MMS discovery client, report-control client, and MMS server simulator.
+- MMS report enable/disable and InformationReport receive path.
+- MMS server and IED simulator.
 - WPF station workbench built on top of the reusable stack.
 
 ## Why this repository exists
@@ -138,6 +139,12 @@ Publish GOOSE continuously until `Ctrl+C`:
 dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 5 --stream-index 1 --continuous --toggle-every-sec 2 --yes
 ```
 
+Discover an IEC 61850 MMS server or IED:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.16.1.157 --port 102 --timeout-ms 20000 --max-report-probes 16
+```
+
 ## Offline PCAP workflow
 
 Generate a PCAP containing SCL-backed SV and GOOSE frames:
@@ -192,13 +199,16 @@ Validated on 2026-06-12:
 
 - `dotnet build ARIEC61850.slnx -c Release`
 - `dotnet test ARIEC61850.slnx -c Release --no-build`
-- 23 automated tests passed.
+- 32 automated tests passed.
 - SCL import resolved three SV streams from the 9-2LE sample file.
 - Live SV publish through Npcap sent 20,000 frames over five seconds at roughly
   4,000 frames per second.
 - Live GOOSE publish through Npcap sent a bounded stream with SCL `minTime` and
   `maxTime`, `sqNum` retransmission increments, and `stNum` reset behavior on
   simulated state changes.
+- Native MMS discovery connected to lab IED `192.16.1.157:102`, completed
+  ACSE/MMS association, found 4 logical devices, 10,122 raw variables, 1
+  DataSet, and 286 report-control blocks.
 - Generated payload followed 4I+4V DataSet order with 64 bytes per SV sample.
 
 Important limitation: active SV publishing is a lab smoke path. It is
@@ -206,7 +216,8 @@ software-paced and should not be treated as protection-grade timing evidence.
 
 See [Validation](docs/VALIDATION.md) and
 [Live SV Publish Validation](docs/validation/live-sv-publish.md) or
-[Live GOOSE Publish Validation](docs/validation/live-goose-publish.md).
+[Live GOOSE Publish Validation](docs/validation/live-goose-publish.md), and
+[Live MMS Discovery Validation](docs/validation/live-mms-discovery.md).
 
 ## Safety notes
 

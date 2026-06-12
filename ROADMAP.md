@@ -78,7 +78,9 @@ Current repository status: the stack projects exist with BER, Ethernet
 process-bus frames, MMS data values, GOOSE frame builder and parser, SV frame
 builder and parser, SCL parsing, SCL-backed GOOSE/SV publisher profiles,
 in-memory publisher sessions, PCAP generation/inspection/replay, Npcap raw SV
-live publishing, and Npcap raw GOOSE live publishing.
+live publishing, Npcap raw GOOSE live publishing, and native MMS discovery with
+TPKT/COTP/ACSE/MMS association, `GetNameList`, DataSet inventory, RCB inventory,
+and bounded RCB attribute probing.
 
 ## Non-Negotiable Boundaries
 
@@ -442,6 +444,10 @@ target-aware stream health evidence independent of any UI.
 
 Goal: native MMS connection layers.
 
+Status: first usable pass implemented for client-side TCP/TPKT/COTP, ACSE/MMS
+association, ISO Presentation P-DATA wrapping, and confirmed request/response
+envelopes. Release/abort diagnostics still need a formal state model.
+
 Deliverables:
 
 - TPKT codec.
@@ -463,6 +469,11 @@ diagnostic trace for every negotiated layer.
 
 Goal: IEDScout-like read-only exploration.
 
+Status: first usable pass implemented. `mms-discover` connected to lab IED
+`192.16.1.157:102`, discovered 4 logical devices, 10,122 variables, 1 DataSet,
+and 286 RCBs. Generic model browsing and broader typed read coverage still need
+expansion.
+
 Deliverables:
 
 - Logical device discovery.
@@ -482,6 +493,9 @@ selected values with typed results and traceable MMS evidence.
 ### M7 - MMS Reports
 
 Goal: report-control testing.
+
+Status: started. RCB inventory and bounded attribute probing are implemented.
+Report activation and InformationReport receive/decode are next.
 
 Deliverables:
 

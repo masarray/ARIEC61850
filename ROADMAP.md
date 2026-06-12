@@ -731,3 +731,8 @@ The guarded `mms-report-monitor` workflow now supports long-run soak instrumenta
 - Snapshots capture elapsed time, reports/values, poll-read success/failure, pending confirmed operations, queued reports, and the last receive routing summary.
 
 This milestone is designed to prove that InformationReport routing and confirmed smart-read polling remain healthy during longer sessions before moving toward multi-IED monitoring or StationScout-style workflows.
+
+### Exact InformationReport decoder and report frame evidence
+
+Report evidence now includes `report-frames.json`, `report-streams.json`, and `report-values.csv` in addition to `report-timeline.json`. The mapper first attempts an OptFlds-driven IEC 61850 report decode before falling back to the legacy inclusion-bitstring scan. Each report frame records `DecoderMode`, stream key (`RptID + DataSet + ConfRev`), parse warnings, optional-field bits/raw value, included indexes, reasons, and member-value mapping. The CSV is intended for quick FAT/SAT review in spreadsheet tools.
+

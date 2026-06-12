@@ -2065,6 +2065,9 @@ internal static class Cli
 
         var summaryJsonPath = Path.Combine(directory, "summary.json");
         var reportsJsonPath = Path.Combine(directory, "reports.json");
+        var reportFramesJsonPath = Path.Combine(directory, "report-frames.json");
+        var reportStreamsJsonPath = Path.Combine(directory, "report-streams.json");
+        var reportValuesCsvPath = Path.Combine(directory, "report-values.csv");
         var reportTimelineJsonPath = Path.Combine(directory, "report-timeline.json");
         var pollReadsJsonPath = Path.Combine(directory, "poll-reads.json");
         var soakSnapshotsJsonPath = Path.Combine(directory, "soak-snapshots.json");
@@ -2076,6 +2079,9 @@ internal static class Cli
 
         await File.WriteAllTextAsync(summaryJsonPath, JsonSerializer.Serialize(context, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(reportsJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportEvidence), jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(reportFramesJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportFrameEvidence), jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(reportStreamsJsonPath, JsonSerializer.Serialize(ToReportStreamEvidence(result.Reports), jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(reportValuesCsvPath, BuildReportValuesCsv(result.Reports), System.Text.Encoding.UTF8).ConfigureAwait(false);
         await File.WriteAllTextAsync(reportTimelineJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportTimelineEvidence), jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(pollReadsJsonPath, JsonSerializer.Serialize(result.PollReads, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(soakSnapshotsJsonPath, JsonSerializer.Serialize(result.SoakSnapshots, jsonOptions)).ConfigureAwait(false);
@@ -2085,7 +2091,7 @@ internal static class Cli
         await File.WriteAllTextAsync(dataSetSnapshotsJsonPath, JsonSerializer.Serialize(result.Verification.DataSetSnapshots, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(summaryMdPath, BuildReportEvidenceMarkdown(context.generatedAt, target, mode, plan, result), System.Text.Encoding.UTF8).ConfigureAwait(false);
 
-        return [summaryJsonPath, reportsJsonPath, reportTimelineJsonPath, pollReadsJsonPath, soakSnapshotsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
+        return [summaryJsonPath, reportsJsonPath, reportFramesJsonPath, reportStreamsJsonPath, reportValuesCsvPath, reportTimelineJsonPath, pollReadsJsonPath, soakSnapshotsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
     }
 
     private static object ToReportEvidence(MmsReportFrame report)
@@ -2096,6 +2102,9 @@ internal static class Cli
             report.RawAccessResultCount,
             report.InclusionBitstringItemIndex,
             report.IncludedDataSetIndexes,
+            report.DecoderMode,
+            report.StreamKey,
+            report.ParseWarnings,
             header = report.Header,
             values = report.Values.Select(value => new
             {
@@ -2120,6 +2129,11 @@ internal static class Cli
             report.Header.BufferOverflow,
             EntryID = report.Header.EntryIdHex,
             OptionalFields = report.Header.OptionalFields.Names,
+            OptionalFieldBits = report.Header.OptionalFields.SetBitIndexes,
+            OptionalFieldsRaw = report.Header.OptionalFields.RawHex,
+            report.DecoderMode,
+            report.StreamKey,
+            report.ParseWarnings,
             report.IncludedDataSetIndexes,
             IncludedCount = report.IncludedDataSetIndexes.Count,
             MappedCount = report.Values.Count,
@@ -2133,6 +2147,111 @@ internal static class Cli
                 displayValue = value.DisplayValue
             })
         };
+
+    private static object ToReportFrameEvidence(MmsReportFrame report)
+        => new
+        {
+            report.ReceivedAt,
+            report.DecoderMode,
+            report.StreamKey,
+            report.Message,
+            report.ParseWarnings,
+            raw = new
+            {
+                report.RawAccessResultCount,
+                report.InclusionBitstringItemIndex,
+                report.ResponseHexPreview
+            },
+            header = new
+            {
+                RptID = report.Header.ReportId,
+                DataSet = report.Header.DataSetReference,
+                report.Header.ConfRev,
+                report.Header.SequenceNumber,
+                report.Header.SubSequenceNumber,
+                report.Header.MoreSegmentsFollow,
+                report.Header.TimeOfEntry,
+                report.Header.BufferOverflow,
+                EntryID = report.Header.EntryIdHex,
+                OptionalFields = report.Header.OptionalFields.Names,
+                OptionalFieldBits = report.Header.OptionalFields.SetBitIndexes,
+                OptionalFieldsRaw = report.Header.OptionalFields.RawHex
+            },
+            included = report.IncludedDataSetIndexes,
+            values = report.Values.Select(value => new
+            {
+                value.Index,
+                value.MemberReference,
+                value.DataReference,
+                value.ReasonForInclusion,
+                value.FailureCode,
+                displayValue = value.DisplayValue
+            })
+        };
+
+    private static object ToReportStreamEvidence(IReadOnlyList<MmsReportFrame> reports)
+        => reports
+            .GroupBy(report => report.StreamKey, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new
+            {
+                StreamKey = group.Key,
+                RptID = group.Select(x => x.Header.ReportId).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty,
+                DataSet = group.Select(x => x.Header.DataSetReference).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty,
+                ConfRev = group.Select(x => x.Header.ConfRev).FirstOrDefault(x => x.HasValue),
+                ReportCount = group.Count(),
+                FirstReceivedAt = group.Min(x => x.ReceivedAt),
+                LastReceivedAt = group.Max(x => x.ReceivedAt),
+                FirstEntryID = group.Select(x => x.Header.EntryIdHex).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty,
+                LastEntryID = group.Select(x => x.Header.EntryIdHex).LastOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty,
+                SequenceNumbers = group.Select(x => x.Header.SequenceNumber).Where(x => x.HasValue).Select(x => x!.Value).ToArray(),
+                BufferOverflowObserved = group.Any(x => x.Header.BufferOverflow == true),
+                DecoderModes = group.Select(x => x.DecoderMode).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                Warnings = group.SelectMany(x => x.ParseWarnings).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                Reasons = group.SelectMany(x => x.Values).SelectMany(x => x.ReasonForInclusion).GroupBy(x => x, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.Count(), StringComparer.OrdinalIgnoreCase)
+            })
+            .ToArray();
+
+    private static string BuildReportValuesCsv(IReadOnlyList<MmsReportFrame> reports)
+    {
+        var rows = new List<string>
+        {
+            "ReceivedAtUtc,RptID,DataSet,ConfRev,SqNum,EntryID,BufOvfl,DecoderMode,IncludedIndexes,Index,Reference,DataReference,Reason,Value,TimeOfEntry"
+        };
+
+        foreach (var report in reports)
+        {
+            var included = string.Join(";", report.IncludedDataSetIndexes);
+            foreach (var value in report.Values)
+            {
+                rows.Add(string.Join(",", new[]
+                {
+                    Csv(report.ReceivedAt.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)),
+                    Csv(report.Header.ReportId),
+                    Csv(report.Header.DataSetReference),
+                    Csv(report.Header.ConfRev?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
+                    Csv(report.Header.SequenceNumber?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
+                    Csv(report.Header.EntryIdHex),
+                    Csv(report.Header.BufferOverflow?.ToString().ToLowerInvariant() ?? string.Empty),
+                    Csv(report.DecoderMode),
+                    Csv(included),
+                    Csv(value.Index.ToString(CultureInfo.InvariantCulture)),
+                    Csv(value.MemberReference),
+                    Csv(value.DataReference),
+                    Csv(value.ReasonSummary),
+                    Csv(value.DisplayValue),
+                    Csv(report.Header.TimeOfEntry)
+                }));
+            }
+        }
+
+        return string.Join(Environment.NewLine, rows) + Environment.NewLine;
+    }
+
+    private static string Csv(string value)
+    {
+        value ??= string.Empty;
+        return '"' + value.Replace("\"", "\"\"") + '"';
+    }
 
     private static string BuildReportEvidenceMarkdown(
         DateTimeOffset generatedAt,
@@ -2232,13 +2351,23 @@ internal static class Cli
         {
             lines.Add("## Report Timeline");
             lines.Add(string.Empty);
-            lines.Add("| Received UTC | RptID | SqNum | EntryID | BufOvfl | Included | Mapped | Reasons | TimeOfEntry | DataSet |");
-            lines.Add("| --- | --- | ---: | --- | --- | --- | ---: | --- | --- | --- |");
+            lines.Add("| Received UTC | RptID | Decoder | SqNum | EntryID | BufOvfl | Included | Mapped | Reasons | TimeOfEntry | DataSet |");
+            lines.Add("| --- | --- | --- | ---: | --- | --- | --- | ---: | --- | --- | --- |");
             foreach (var report in result.Reports)
             {
                 var reasons = string.Join(",", report.Values.SelectMany(x => x.ReasonForInclusion).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
                 lines.Add($"| {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} | {TextOrDash(report.Header.ReportId).Replace("|", "\\|")} | {report.Header.SequenceNumber?.ToString() ?? "-"} | {TextOrDash(report.Header.EntryIdHex)} | {report.Header.BufferOverflow?.ToString().ToLowerInvariant() ?? "-"} | [{string.Join(",", report.IncludedDataSetIndexes)}] | {report.Values.Count} | {TextOrDash(reasons)} | {TextOrDash(report.Header.TimeOfEntry).Replace("|", "\\|")} | {TextOrDash(report.Header.DataSetReference).Replace("|", "\\|")} |");
             }
+            lines.Add(string.Empty);
+        }
+
+        var parseWarnings = result.Reports.SelectMany(x => x.ParseWarnings).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (parseWarnings.Length > 0)
+        {
+            lines.Add("## Report Parse Warnings");
+            lines.Add(string.Empty);
+            foreach (var warning in parseWarnings)
+                lines.Add($"- {warning}");
             lines.Add(string.Empty);
         }
 

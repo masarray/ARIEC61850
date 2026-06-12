@@ -364,3 +364,8 @@ Healthy end-state:
 - write failures: `0`
 - cleanup `RptEna=false`: verified
 - report diagnostics: `PASS` or `PASS_WITH_WARNING` when relay-side BRCB buffer/lease behavior is observed
+
+### Exact InformationReport decoder and report frame evidence
+
+Report evidence now includes `report-frames.json`, `report-streams.json`, and `report-values.csv` in addition to `report-timeline.json`. The mapper first attempts an OptFlds-driven IEC 61850 report decode before falling back to the legacy inclusion-bitstring scan. Each report frame records `DecoderMode`, stream key (`RptID + DataSet + ConfRev`), parse warnings, optional-field bits/raw value, included indexes, reasons, and member-value mapping. The CSV is intended for quick FAT/SAT review in spreadsheet tools.
+

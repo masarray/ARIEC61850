@@ -33,8 +33,21 @@ public sealed class MmsReportFrame
     public int RawAccessResultCount { get; init; }
     public int? InclusionBitstringItemIndex { get; init; }
     public IReadOnlyList<int> IncludedDataSetIndexes { get; init; } = Array.Empty<int>();
+    public string DecoderMode { get; init; } = string.Empty;
+    public IReadOnlyList<string> ParseWarnings { get; init; } = Array.Empty<string>();
     public string Message { get; init; } = string.Empty;
     public string ResponseHexPreview { get; init; } = string.Empty;
+
+    public string StreamKey
+    {
+        get
+        {
+            var rptId = string.IsNullOrWhiteSpace(Header.ReportId) ? "-" : Header.ReportId.Trim();
+            var dataSet = string.IsNullOrWhiteSpace(Header.DataSetReference) ? "-" : Header.DataSetReference.Trim();
+            var confRev = Header.ConfRev?.ToString() ?? "-";
+            return $"{rptId}|ds={dataSet}|conf={confRev}";
+        }
+    }
 }
 
 public sealed class MmsReportHeader
@@ -42,6 +55,8 @@ public sealed class MmsReportHeader
     public string ReportId { get; init; } = string.Empty;
     public MmsReportOptionalFields OptionalFields { get; init; } = new();
     public ulong? SequenceNumber { get; init; }
+    public ulong? SubSequenceNumber { get; init; }
+    public bool? MoreSegmentsFollow { get; init; }
     public string TimeOfEntry { get; init; } = string.Empty;
     public string DataSetReference { get; init; } = string.Empty;
     public bool? BufferOverflow { get; init; }
@@ -67,6 +82,10 @@ public sealed class MmsReportHeader
                 fields.Add($"RptID={ReportId}");
             if (SequenceNumber.HasValue)
                 fields.Add($"SqNum={SequenceNumber.Value}");
+            if (SubSequenceNumber.HasValue)
+                fields.Add($"SubSqNum={SubSequenceNumber.Value}");
+            if (MoreSegmentsFollow.HasValue)
+                fields.Add($"MoreSegmentsFollow={MoreSegmentsFollow.Value.ToString().ToLowerInvariant()}");
             if (!string.IsNullOrWhiteSpace(TimeOfEntry))
                 fields.Add($"TimeOfEntry={TimeOfEntry}");
             if (!string.IsNullOrWhiteSpace(DataSetReference))
@@ -290,6 +309,8 @@ public static class MmsReportFrameMapper
             RawAccessResultCount = decoded.Items.Count,
             InclusionBitstringItemIndex = mapped.InclusionBitstringItemIndex,
             IncludedDataSetIndexes = mapped.IncludedDataSetIndexes,
+            DecoderMode = mapped.DecoderMode,
+            ParseWarnings = mapped.ParseWarnings,
             Message = mapped.Message ?? decoded.Message,
             ResponseHexPreview = decoded.ResponseHexPreview
         };
@@ -301,6 +322,8 @@ public static class MmsReportFrameMapper
         IReadOnlyList<MmsReportValue> Values,
         IReadOnlyList<int> IncludedDataSetIndexes,
         int? InclusionBitstringItemIndex,
+        string DecoderMode,
+        IReadOnlyList<string> ParseWarnings,
         string? Message);
 
     private static bool TryMapIec61850ReportValues(
@@ -308,9 +331,12 @@ public static class MmsReportFrameMapper
         IReadOnlyList<MmsDataSetDirectoryMember> members,
         out ReportValueMapping mapping)
     {
-        mapping = new ReportValueMapping(false, new MmsReportHeader(), Array.Empty<MmsReportValue>(), Array.Empty<int>(), null, null);
+        mapping = new ReportValueMapping(false, new MmsReportHeader(), Array.Empty<MmsReportValue>(), Array.Empty<int>(), null, string.Empty, Array.Empty<string>(), null);
         if (items.Count == 0 || members.Count == 0)
             return false;
+
+        if (TryMapOptFldsDrivenReportValues(items, members, out mapping))
+            return true;
 
         for (var index = 5; index < items.Count; index++)
         {
@@ -353,11 +379,216 @@ public static class MmsReportFrameMapper
                 mapped,
                 includedMemberIndexes,
                 index,
+                "heuristic-scan",
+                new[] { "Report value mapping used legacy heuristic inclusion-bitstring scan; prefer OptFlds-driven decode for multi-vendor evidence." },
                 $"IEC 61850 InformationReport mapped {mapped.Count}/{members.Count} included DataSet value(s). inclusionItem={index}, included=[{string.Join(",", includedMemberIndexes)}], rawAccessResults={items.Count}, header={header.Summary}.");
             return true;
         }
 
         return false;
+    }
+
+    private static bool TryMapOptFldsDrivenReportValues(
+        IReadOnlyList<MmsInformationReportItem> items,
+        IReadOnlyList<MmsDataSetDirectoryMember> members,
+        out ReportValueMapping mapping)
+    {
+        mapping = new ReportValueMapping(false, new MmsReportHeader(), Array.Empty<MmsReportValue>(), Array.Empty<int>(), null, string.Empty, Array.Empty<string>(), null);
+        var warnings = new List<string>();
+        if (items.Count < 3 || members.Count == 0)
+            return false;
+
+        var cursor = 0;
+        if (!IsTextValue(items[cursor].Value))
+            return false;
+
+        var reportId = ToText(items[cursor].Value);
+        cursor++;
+
+        if (cursor >= items.Count || items[cursor].Value?.Kind != MmsDataKind.BitString)
+            return false;
+
+        var optionalFields = DecodeOptionalFields(items[cursor].Value!);
+        if (optionalFields.Names.Count == 0 && optionalFields.SetBitIndexes.Count == 0)
+            return false;
+
+        cursor++;
+        ulong? sequenceNumber = null;
+        ulong? subSequenceNumber = null;
+        bool? moreSegmentsFollow = null;
+        var timeOfEntry = string.Empty;
+        var dataSet = string.Empty;
+        bool? bufferOverflow = null;
+        var entryIdHex = string.Empty;
+        ulong? confRev = null;
+
+        if (optionalFields.HasSequenceNumber)
+        {
+            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var sequence))
+                sequenceNumber = sequence;
+            else
+                warnings.Add($"OptFlds expected SqNum at item {cursor}, but value was {DescribeReportItem(items, cursor)}.");
+            cursor++;
+        }
+
+        if (optionalFields.HasReportTimestamp)
+        {
+            if (cursor < items.Count && items[cursor].Value is { } timeValue && IsTimeValue(timeValue))
+                timeOfEntry = MmsDataValueRenderer.ToCompactString(timeValue);
+            else
+                warnings.Add($"OptFlds expected TimeOfEntry at item {cursor}, but value was {DescribeReportItem(items, cursor)}.");
+            cursor++;
+        }
+
+        if (optionalFields.HasDataSetName)
+        {
+            if (cursor < items.Count && IsTextValue(items[cursor].Value))
+                dataSet = ToText(items[cursor].Value);
+            else
+                warnings.Add($"OptFlds expected DatSet at item {cursor}, but value was {DescribeReportItem(items, cursor)}.");
+            cursor++;
+        }
+
+        if (optionalFields.HasBufferOverflow)
+        {
+            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.Boolean && items[cursor].Value?.Value is bool flag)
+                bufferOverflow = flag;
+            else
+                warnings.Add($"OptFlds expected BufOvfl at item {cursor}, but value was {DescribeReportItem(items, cursor)}.");
+            cursor++;
+        }
+
+        if (optionalFields.HasEntryId)
+        {
+            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.OctetString)
+                entryIdHex = Convert.ToHexString(items[cursor].Value!.RawValue.ToArray());
+            else
+                warnings.Add($"OptFlds expected EntryID at item {cursor}, but value was {DescribeReportItem(items, cursor)}.");
+            cursor++;
+        }
+
+        if (optionalFields.HasConfRevision)
+        {
+            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var revision))
+                confRev = revision;
+            else
+                warnings.Add($"OptFlds expected ConfRev at item {cursor}, but value was {DescribeReportItem(items, cursor)}.");
+            cursor++;
+        }
+
+        if (optionalFields.HasSegmentation)
+        {
+            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var subSequence))
+                subSequenceNumber = subSequence;
+            else
+                warnings.Add($"OptFlds expected SubSqNum at item {cursor}, but value was {DescribeReportItem(items, cursor)}.");
+            cursor++;
+
+            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.Boolean && items[cursor].Value?.Value is bool more)
+                moreSegmentsFollow = more;
+            else
+                warnings.Add($"OptFlds expected MoreSegmentsFollow at item {cursor}, but value was {DescribeReportItem(items, cursor)}.");
+            cursor++;
+        }
+
+        if (cursor >= items.Count || items[cursor].Value?.Kind != MmsDataKind.BitString)
+        {
+            warnings.Add($"OptFlds-driven decode could not find inclusion bitstring at item {cursor}; falling back to heuristic scan.");
+            return false;
+        }
+
+        var inclusionIndex = cursor;
+        if (!TryDecodeInclusionBits(items[cursor].Value!, members.Count, out var includedMemberIndexes) || includedMemberIndexes.Count == 0)
+        {
+            warnings.Add($"OptFlds-driven decode found inclusion item {cursor}, but no DataSet member bits were set.");
+            return false;
+        }
+
+        cursor++;
+        if (cursor + includedMemberIndexes.Count > items.Count)
+        {
+            warnings.Add($"OptFlds-driven decode expected {includedMemberIndexes.Count} report value item(s), but only {items.Count - cursor} remain.");
+            return false;
+        }
+
+        var valueItemsStart = cursor;
+        cursor += includedMemberIndexes.Count;
+
+        var dataReferences = new string[includedMemberIndexes.Count];
+        if (optionalFields.HasDataReference)
+        {
+            if (HasConsecutiveValues(items, cursor, includedMemberIndexes.Count, IsTextValue))
+            {
+                for (var offset = 0; offset < includedMemberIndexes.Count; offset++)
+                    dataReferences[offset] = ToText(items[cursor + offset].Value);
+                cursor += includedMemberIndexes.Count;
+            }
+            else
+            {
+                warnings.Add($"OptFlds indicates data-reference list, but {includedMemberIndexes.Count} text item(s) were not found after report values.");
+            }
+        }
+
+        var reasons = Enumerable.Range(0, includedMemberIndexes.Count)
+            .Select(_ => (IReadOnlyList<string>)Array.Empty<string>())
+            .ToArray();
+        if (optionalFields.HasReasonForInclusion)
+        {
+            if (HasConsecutiveValues(items, cursor, includedMemberIndexes.Count, IsBitStringValue))
+            {
+                for (var offset = 0; offset < includedMemberIndexes.Count; offset++)
+                    reasons[offset] = DecodeReasonForInclusion(items[cursor + offset].Value).Names;
+                cursor += includedMemberIndexes.Count;
+            }
+            else
+            {
+                warnings.Add($"OptFlds indicates reason-for-inclusion list, but {includedMemberIndexes.Count} bit-string item(s) were not found after report values/data-references.");
+            }
+        }
+
+        if (cursor < items.Count)
+            warnings.Add($"OptFlds-driven decode left {items.Count - cursor} trailing AccessResult item(s) unconsumed.");
+
+        var mapped = new List<MmsReportValue>();
+        for (var includedOffset = 0; includedOffset < includedMemberIndexes.Count; includedOffset++)
+        {
+            var memberIndex = includedMemberIndexes[includedOffset];
+            var valueItem = items[valueItemsStart + includedOffset];
+            mapped.Add(new MmsReportValue
+            {
+                Index = memberIndex,
+                Member = memberIndex >= 0 && memberIndex < members.Count ? members[memberIndex] : null,
+                Value = valueItem.Value,
+                FailureCode = valueItem.FailureCode,
+                DataReference = dataReferences[includedOffset] ?? string.Empty,
+                ReasonForInclusion = reasons[includedOffset]
+            });
+        }
+
+        var header = new MmsReportHeader
+        {
+            ReportId = reportId,
+            OptionalFields = optionalFields,
+            SequenceNumber = sequenceNumber,
+            SubSequenceNumber = subSequenceNumber,
+            MoreSegmentsFollow = moreSegmentsFollow,
+            TimeOfEntry = timeOfEntry,
+            DataSetReference = dataSet,
+            BufferOverflow = bufferOverflow,
+            EntryIdHex = entryIdHex,
+            ConfRev = confRev
+        };
+
+        mapping = new ReportValueMapping(
+            true,
+            header,
+            mapped,
+            includedMemberIndexes,
+            inclusionIndex,
+            "optflds-driven",
+            warnings,
+            $"IEC 61850 InformationReport OptFlds-driven decode mapped {mapped.Count}/{includedMemberIndexes.Count} included DataSet value(s). inclusionItem={inclusionIndex}, included=[{string.Join(",", includedMemberIndexes)}], rawAccessResults={items.Count}, header={header.Summary}.");
+        return true;
     }
 
     private sealed class ReportValueMetadata
@@ -621,6 +852,22 @@ public static class MmsReportFrameMapper
             5 => "application-trigger",
             _ => $"bit-{bitIndex}"
         };
+
+    private static bool IsTimeValue(MmsDataValue value)
+        => value.Kind is MmsDataKind.UtcTime or MmsDataKind.BinaryTime ||
+           (value.Kind == MmsDataKind.Unknown && value.UnknownTagNumber == 12);
+
+    private static string DescribeReportItem(IReadOnlyList<MmsInformationReportItem> items, int index)
+    {
+        if (index < 0 || index >= items.Count)
+            return "<missing>";
+
+        var item = items[index];
+        if (item.Value == null)
+            return item.FailureCode.HasValue ? $"failure={item.FailureCode.Value}" : "<null>";
+
+        return item.Value.Kind.ToString();
+    }
 
     private static bool IsTextValue(MmsDataValue? value)
         => value?.Kind is MmsDataKind.VisibleString or MmsDataKind.MmsString;

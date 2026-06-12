@@ -196,3 +196,8 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 -
 ```
 
 The evidence folder includes `soak-snapshots.json` and a **Soak Snapshots** table in `summary.md`.
+
+### Exact InformationReport decoder and report frame evidence
+
+Report evidence now includes `report-frames.json`, `report-streams.json`, and `report-values.csv` in addition to `report-timeline.json`. The mapper first attempts an OptFlds-driven IEC 61850 report decode before falling back to the legacy inclusion-bitstring scan. Each report frame records `DecoderMode`, stream key (`RptID + DataSet + ConfRev`), parse warnings, optional-field bits/raw value, included indexes, reasons, and member-value mapping. The CSV is intended for quick FAT/SAT review in spreadsheet tools.
+

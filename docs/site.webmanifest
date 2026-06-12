@@ -1,0 +1,16 @@
+{
+  "name": "ARIEC61850",
+  "short_name": "ARIEC61850",
+  "description": "Clean-room IEC 61850 native .NET stack for MMS, GOOSE, Sampled Values, SCL import, PCAP validation, and live SV publishing.",
+  "start_url": "/ARIEC61850/",
+  "display": "standalone",
+  "background_color": "#07111d",
+  "theme_color": "#07111d",
+  "icons": [
+    {
+      "src": "assets/favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">ARIEC61850 clean-room IEC 61850 native stack</title>
+  <desc id="desc">Dark technical landing image for a .NET IEC 61850 stack covering MMS, GOOSE, Sampled Values, SCL, PCAP, and live SV publishing.</desc>
+  <rect width="1200" height="630" fill="#07111d"/>
+  <path d="M0 94h1200M0 188h1200M0 282h1200M0 376h1200M0 470h1200M0 564h1200M96 0v630M240 0v630M384 0v630M528 0v630M672 0v630M816 0v630M960 0v630M1104 0v630" stroke="#14314f" stroke-width="1"/>
+  <rect x="64" y="64" width="1072" height="502" rx="18" fill="#0b1726" stroke="#203a57" stroke-width="2"/>
+  <rect x="92" y="92" width="86" height="86" rx="14" fill="#0f2b49" stroke="#1f8fff" stroke-width="3"/>
+  <text x="135" y="128" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="25" font-weight="800" fill="#eef6ff">AR</text>
+  <text x="135" y="157" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#66b7ff">61850</text>
+  <text x="210" y="124" font-family="Segoe UI, Arial, sans-serif" font-size="62" font-weight="800" fill="#eef6ff">ARIEC61850</text>
+  <text x="212" y="174" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="600" fill="#c8d7e6">Clean-room IEC 61850 native stack for .NET</text>
+  <text x="92" y="250" font-family="Consolas, Menlo, monospace" font-size="24" fill="#66b7ff">SCL -> SV publisher -> raw Ethernet adapter</text>
+  <text x="92" y="294" font-family="Consolas, Menlo, monospace" font-size="22" fill="#d5e9ff">MMS foundation | GOOSE codec | Sampled Values | PCAP validation</text>
+  <rect x="92" y="346" width="450" height="132" rx="10" fill="#06101c" stroke="#203a57"/>
+  <text x="120" y="392" font-family="Consolas, Menlo, monospace" font-size="20" fill="#9eb4ca">dotnet run --project apps/AR.Iec61850.Cli</text>
+  <text x="120" y="430" font-family="Consolas, Menlo, monospace" font-size="20" fill="#eef6ff">publish-sv-live --continuous --yes</text>
+  <text x="120" y="468" font-family="Consolas, Menlo, monospace" font-size="20" fill="#21c083">4000 fps target | 64 B payload</text>
+  <g transform="translate(610 326)">
+    <rect width="442" height="170" rx="10" fill="#061421" stroke="#203a57"/>
+    <path d="M20 85 C65 25 105 25 150 85 S235 145 280 85 365 25 422 85" fill="none" stroke="#ff4d6d" stroke-width="5"/>
+    <path d="M20 85 C65 145 105 145 150 85 S235 25 280 85 365 145 422 85" fill="none" stroke="#f5b83f" stroke-width="5"/>
+    <path d="M20 85 C65 55 105 55 150 85 S235 115 280 85 365 55 422 85" fill="none" stroke="#1f8fff" stroke-width="5"/>
+  </g>
+  <text x="92" y="530" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#eef6ff">SCL import. Process-bus frames. Live SV publish. MMS roadmap.</text>
+</svg>

@@ -83,8 +83,8 @@ Implemented and tested today:
   overflow evidence.
 - Guarded report commands can export evidence artifacts with `--evidence`,
   including `summary.json`, `reports.json`, `poll-reads.json`,
-  `write-steps.json`, and `summary.md`.
-- MMS `binary-time` values are preserved and rendered as raw evidence.
+  `write-steps.json`, `report-timeline.json`, and `summary.md`.
+- MMS `binary-time` values are preserved as raw evidence and decoded to UTC/time-of-day when the encoding is supported.
 - GOOSE frame builder/parser and SCL-backed live publisher.
 - Sampled Values frame builder/parser and SCL-backed live publisher.
 - PCAP writer, reader, inspector, and stream playback.
@@ -373,3 +373,8 @@ this stack as a public dependency or embedding it in downstream products.
 Report live commands now perform post-write readback verification and export the verification artifacts when `--evidence <dir>` is used. The evidence folder includes `verification.json`, `rcb-snapshots.json`, and `dataset-snapshots.json` in addition to the report, poll, write-step, and summary files. The verification layer checks RCB state before enable, after enable, and after cleanup; dynamic sessions also verify dynamic DataSet creation, RCB.DatSet binding, DataSet restore/clear, and delete readback.
 
 The evidence classifier now separates hard failures from relay-specific warning conditions. For example, a BRCB `ResvTms` lease timer that remains visible after `RptEna=false` is reported as `PASS_WITH_WARNING` when no explicit `Resv` flag is active. This captures relay ownership timeout behavior without mislabeling a successful cleanup as failed. Diagnostics also classify buffer overflow, sequence/EntryID heuristics, duplicate keys, and partial mappings as warning evidence instead of hiding them in raw counters.
+
+
+### Report forensic timeline evidence
+
+Guarded report evidence now includes `report-timeline.json` and a Report Timeline section in `summary.md`. The timeline flattens each report into received time, RptID, DataSet, ConfRev, SqNum, EntryID, BufOvfl, included indexes, mapped count, reason summary, and decoded TimeOfEntry. Sequence diagnostics now distinguish reset-to-zero events from true regressions, while EntryID numeric gaps remain heuristic warnings because EntryID is treated as opaque by default. MMS `binary-time` is decoded to UTC/time-of-day when possible while retaining the original raw hex.

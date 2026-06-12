@@ -181,3 +181,8 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 -
 ```
 
 Review `verification.json`, `rcb-snapshots.json`, `dataset-snapshots.json`, and `summary.md` to confirm the IED state before enable, after enable, after GI/report reception, and after cleanup. `PASS_WITH_WARNING` is expected on relays that keep a BRCB `ResvTms` lease timer visible after `RptEna=false`; inspect the final `RptEna`, `DatSet`, and explicit reservation flag before treating it as a failure.
+
+
+### Report forensic timeline evidence
+
+Guarded report evidence now includes `report-timeline.json` and a Report Timeline section in `summary.md`. The timeline flattens each report into received time, RptID, DataSet, ConfRev, SqNum, EntryID, BufOvfl, included indexes, mapped count, reason summary, and decoded TimeOfEntry. Sequence diagnostics now distinguish reset-to-zero events from true regressions, while EntryID numeric gaps remain heuristic warnings because EntryID is treated as opaque by default. MMS `binary-time` is decoded to UTC/time-of-day when possible while retaining the original raw hex.

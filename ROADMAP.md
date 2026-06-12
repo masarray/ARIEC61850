@@ -713,3 +713,8 @@ The report monitor now records explicit verification checks for RptEna, RCB.DatS
 The evidence classifier now distinguishes hard failures from warning evidence. BRCB `ResvTms` lease timers that remain visible after disable are treated as relay ownership lease behavior when `RptEna=false` and no explicit reservation flag is active. Buffer overflow, sequence/EntryID heuristics, duplicate keys, and partial mapping are surfaced as diagnostic warnings.
 
 Next hardening target: replace the current tolerant report value mapper with an OptFlds-driven InformationReport decoder and add long-run soak metrics.
+
+
+### Report forensic timeline evidence
+
+Guarded report evidence now includes `report-timeline.json` and a Report Timeline section in `summary.md`. The timeline flattens each report into received time, RptID, DataSet, ConfRev, SqNum, EntryID, BufOvfl, included indexes, mapped count, reason summary, and decoded TimeOfEntry. Sequence diagnostics now distinguish reset-to-zero events from true regressions, while EntryID numeric gaps remain heuristic warnings because EntryID is treated as opaque by default. MMS `binary-time` is decoded to UTC/time-of-day when possible while retaining the original raw hex.

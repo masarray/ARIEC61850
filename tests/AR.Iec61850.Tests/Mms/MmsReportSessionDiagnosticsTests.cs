@@ -67,4 +67,45 @@ public sealed class MmsReportSessionDiagnosticsTests
         Assert.Equal(1, diagnostics.PartialMappingFailureCount);
         Assert.Single(diagnostics.WarningMessages);
     }
+    [Fact]
+    public void Diagnostics_treats_sequence_zero_after_nonzero_as_reset_warning_not_regression()
+    {
+        var reports = new[]
+        {
+            new MmsReportFrame
+            {
+                Header = new MmsReportHeader
+                {
+                    ReportId = "LD0/LLN0$BR$brcbA01",
+                    DataSetReference = "LD0/LLN0$DataSet",
+                    ConfRev = 1,
+                    SequenceNumber = 1
+                },
+                InclusionBitstringItemIndex = 8,
+                IncludedDataSetIndexes = [0],
+                Values = [new MmsReportValue { Index = 0 }]
+            },
+            new MmsReportFrame
+            {
+                Header = new MmsReportHeader
+                {
+                    ReportId = "LD0/LLN0$BR$brcbA01",
+                    DataSetReference = "LD0/LLN0$DataSet",
+                    ConfRev = 1,
+                    SequenceNumber = 0
+                },
+                InclusionBitstringItemIndex = 8,
+                IncludedDataSetIndexes = [0],
+                Values = [new MmsReportValue { Index = 0 }]
+            }
+        };
+
+        var diagnostics = MmsReportSessionDiagnostics.Analyze(reports);
+
+        Assert.Equal("PASS_WITH_WARNING", diagnostics.OverallStatus);
+        Assert.Equal(1, diagnostics.SequenceResetCount);
+        Assert.Equal(0, diagnostics.SequenceRegressionCount);
+        Assert.Contains(diagnostics.WarningMessages, x => x.Contains("reset-to-zero", StringComparison.OrdinalIgnoreCase));
+    }
+
 }

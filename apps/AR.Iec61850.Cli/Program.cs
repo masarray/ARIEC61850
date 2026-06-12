@@ -2036,6 +2036,7 @@ internal static class Cli
 
         var summaryJsonPath = Path.Combine(directory, "summary.json");
         var reportsJsonPath = Path.Combine(directory, "reports.json");
+        var reportTimelineJsonPath = Path.Combine(directory, "report-timeline.json");
         var pollReadsJsonPath = Path.Combine(directory, "poll-reads.json");
         var writeStepsJsonPath = Path.Combine(directory, "write-steps.json");
         var verificationJsonPath = Path.Combine(directory, "verification.json");
@@ -2045,6 +2046,7 @@ internal static class Cli
 
         await File.WriteAllTextAsync(summaryJsonPath, JsonSerializer.Serialize(context, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(reportsJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportEvidence), jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(reportTimelineJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportTimelineEvidence), jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(pollReadsJsonPath, JsonSerializer.Serialize(result.PollReads, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(writeStepsJsonPath, JsonSerializer.Serialize(result.WriteSteps, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(verificationJsonPath, JsonSerializer.Serialize(result.Verification, jsonOptions)).ConfigureAwait(false);
@@ -2052,7 +2054,7 @@ internal static class Cli
         await File.WriteAllTextAsync(dataSetSnapshotsJsonPath, JsonSerializer.Serialize(result.Verification.DataSetSnapshots, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(summaryMdPath, BuildReportEvidenceMarkdown(context.generatedAt, target, mode, plan, result), System.Text.Encoding.UTF8).ConfigureAwait(false);
 
-        return [summaryJsonPath, reportsJsonPath, pollReadsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
+        return [summaryJsonPath, reportsJsonPath, reportTimelineJsonPath, pollReadsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
     }
 
     private static object ToReportEvidence(MmsReportFrame report)
@@ -2071,6 +2073,32 @@ internal static class Cli
                 value.DataReference,
                 value.ReasonForInclusion,
                 value.FailureCode,
+                displayValue = value.DisplayValue
+            })
+        };
+
+    private static object ToReportTimelineEvidence(MmsReportFrame report)
+        => new
+        {
+            report.ReceivedAt,
+            RptID = report.Header.ReportId,
+            DataSet = report.Header.DataSetReference,
+            report.Header.ConfRev,
+            report.Header.SequenceNumber,
+            report.Header.TimeOfEntry,
+            report.Header.BufferOverflow,
+            EntryID = report.Header.EntryIdHex,
+            OptionalFields = report.Header.OptionalFields.Names,
+            report.IncludedDataSetIndexes,
+            IncludedCount = report.IncludedDataSetIndexes.Count,
+            MappedCount = report.Values.Count,
+            Reasons = report.Values.SelectMany(x => x.ReasonForInclusion).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase),
+            Values = report.Values.Select(value => new
+            {
+                value.Index,
+                value.MemberReference,
+                value.DataReference,
+                Reason = value.ReasonSummary,
                 displayValue = value.DisplayValue
             })
         };
@@ -2109,6 +2137,7 @@ internal static class Cli
             $"| Write failures | {diagnostics.WriteFailureCount} |",
             $"| Duplicate report keys | {diagnostics.DuplicateReportKeyCount} |",
             $"| Sequence gaps | {diagnostics.SequenceGapCount} |",
+            $"| Sequence resets | {diagnostics.SequenceResetCount} |",
             $"| Sequence regressions | {diagnostics.SequenceRegressionCount} |",
             $"| EntryID gaps | {diagnostics.EntryIdGapCount} |",
             $"| EntryID regressions | {diagnostics.EntryIdRegressionCount} |",
@@ -2152,6 +2181,20 @@ internal static class Cli
             lines.Add(string.Empty);
             foreach (var snapshot in verification.DataSetSnapshots)
                 lines.Add($"- {snapshot.Summary.Replace("|", "\\|")}");
+            lines.Add(string.Empty);
+        }
+
+        if (result.Reports.Count > 0)
+        {
+            lines.Add("## Report Timeline");
+            lines.Add(string.Empty);
+            lines.Add("| Received UTC | RptID | SqNum | EntryID | BufOvfl | Included | Mapped | Reasons | TimeOfEntry | DataSet |");
+            lines.Add("| --- | --- | ---: | --- | --- | --- | ---: | --- | --- | --- |");
+            foreach (var report in result.Reports)
+            {
+                var reasons = string.Join(",", report.Values.SelectMany(x => x.ReasonForInclusion).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+                lines.Add($"| {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} | {TextOrDash(report.Header.ReportId).Replace("|", "\\|")} | {report.Header.SequenceNumber?.ToString() ?? "-"} | {TextOrDash(report.Header.EntryIdHex)} | {report.Header.BufferOverflow?.ToString().ToLowerInvariant() ?? "-"} | [{string.Join(",", report.IncludedDataSetIndexes)}] | {report.Values.Count} | {TextOrDash(reasons)} | {TextOrDash(report.Header.TimeOfEntry).Replace("|", "\\|")} | {TextOrDash(report.Header.DataSetReference).Replace("|", "\\|")} |");
+            }
             lines.Add(string.Empty);
         }
 

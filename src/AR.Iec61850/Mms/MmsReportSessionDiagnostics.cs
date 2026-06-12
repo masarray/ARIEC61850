@@ -19,6 +19,7 @@ public sealed class MmsReportSessionDiagnostics
     public string LastEntryIdHex { get; init; } = string.Empty;
     public int DuplicateReportKeyCount { get; init; }
     public int SequenceGapCount { get; init; }
+    public int SequenceResetCount { get; init; }
     public int SequenceRegressionCount { get; init; }
     public int EntryIdGapCount { get; init; }
     public int EntryIdRegressionCount { get; init; }
@@ -32,7 +33,7 @@ public sealed class MmsReportSessionDiagnostics
                 return "FAIL";
 
             if (BufferOverflowObserved || PartialMappingFailureCount > 0 || DuplicateReportKeyCount > 0 ||
-                SequenceGapCount > 0 || SequenceRegressionCount > 0 || EntryIdGapCount > 0 || EntryIdRegressionCount > 0)
+                SequenceGapCount > 0 || SequenceResetCount > 0 || SequenceRegressionCount > 0 || EntryIdGapCount > 0 || EntryIdRegressionCount > 0)
                 return "PASS_WITH_WARNING";
 
             return "PASS";
@@ -52,8 +53,10 @@ public sealed class MmsReportSessionDiagnostics
                 warnings.Add($"{DuplicateReportKeyCount} duplicate report key(s) were observed; inspect whether these are retransmissions or true duplicates.");
             if (SequenceGapCount > 0)
                 warnings.Add($"{SequenceGapCount} sequence gap(s) were observed per report stream.");
+            if (SequenceResetCount > 0)
+                warnings.Add($"{SequenceResetCount} sequence reset-to-zero event(s) were observed per report stream. This is usually a report burst/GI or vendor sequence reset warning, not a hard failure by itself.");
             if (SequenceRegressionCount > 0)
-                warnings.Add($"{SequenceRegressionCount} sequence regression/reset(s) were observed per report stream.");
+                warnings.Add($"{SequenceRegressionCount} sequence regression(s) were observed per report stream after excluding reset-to-zero events.");
             if (EntryIdGapCount > 0)
                 warnings.Add($"{EntryIdGapCount} numeric EntryID gap(s) were observed. EntryID is treated as opaque by default; numeric gap is a heuristic warning, not a hard failure.");
             if (EntryIdRegressionCount > 0)
@@ -65,7 +68,7 @@ public sealed class MmsReportSessionDiagnostics
     public string Summary =>
         $"diagnostics={OverallStatus}, reports={ReportCount}, values={ValueCount}, mappedFailures={MappingFailureCount}, partialMappings={PartialMappingFailureCount}, " +
         $"pollReads={PollReadSuccessCount}/{PollReadCount}, writeFailures={WriteFailureCount}, " +
-        $"seqGaps={SequenceGapCount}, seqRegressions={SequenceRegressionCount}, " +
+        $"seqGaps={SequenceGapCount}, seqResets={SequenceResetCount}, seqRegressions={SequenceRegressionCount}, " +
         $"entryIdGaps={EntryIdGapCount}, entryIdRegressions={EntryIdRegressionCount}, " +
         $"duplicates={DuplicateReportKeyCount}, bufOvfl={BufferOverflowObserved.ToString().ToLowerInvariant()}";
 
@@ -95,6 +98,7 @@ public sealed class MmsReportSessionDiagnostics
         }
 
         var sequenceGaps = 0;
+        var sequenceResets = 0;
         var sequenceRegressions = 0;
         foreach (var stream in reports
                      .Where(r => r.Header.SequenceNumber.HasValue)
@@ -108,34 +112,40 @@ public sealed class MmsReportSessionDiagnostics
                     if (sequence > previousSequence.Value + 1)
                         sequenceGaps++;
                     else if (sequence < previousSequence.Value)
-                        sequenceRegressions++;
+                    {
+                        if (sequence == 0)
+                            sequenceResets++;
+                        else
+                            sequenceRegressions++;
+                    }
                 }
 
                 previousSequence = sequence;
             }
         }
 
-        var parsedEntryIds = reports
-            .Select(x => x.Header.EntryIdHex)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => new { Hex = x, Parsed = TryParseHex(x, out var parsed), Value = parsed })
-            .Where(x => x.Parsed)
-            .ToArray();
-
         var entryIdGaps = 0;
         var entryIdRegressions = 0;
-        BigInteger? previousEntryId = null;
-        foreach (var item in parsedEntryIds)
+        foreach (var stream in reports
+                     .Where(r => !string.IsNullOrWhiteSpace(r.Header.EntryIdHex))
+                     .GroupBy(BuildReportStreamKey, StringComparer.OrdinalIgnoreCase))
         {
-            if (previousEntryId.HasValue)
+            BigInteger? previousEntryId = null;
+            foreach (var item in stream
+                         .Select(x => x.Header.EntryIdHex)
+                         .Select(x => new { Hex = x, Parsed = TryParseHex(x, out var parsed), Value = parsed })
+                         .Where(x => x.Parsed))
             {
-                if (item.Value > previousEntryId.Value + BigInteger.One)
-                    entryIdGaps++;
-                else if (item.Value <= previousEntryId.Value)
-                    entryIdRegressions++;
-            }
+                if (previousEntryId.HasValue)
+                {
+                    if (item.Value > previousEntryId.Value + BigInteger.One)
+                        entryIdGaps++;
+                    else if (item.Value <= previousEntryId.Value)
+                        entryIdRegressions++;
+                }
 
-            previousEntryId = item.Value;
+                previousEntryId = item.Value;
+            }
         }
 
         var mappingFailures = 0;
@@ -175,6 +185,7 @@ public sealed class MmsReportSessionDiagnostics
             LastEntryIdHex = reports.Select(x => x.Header.EntryIdHex).LastOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty,
             DuplicateReportKeyCount = duplicateKeys,
             SequenceGapCount = sequenceGaps,
+            SequenceResetCount = sequenceResets,
             SequenceRegressionCount = sequenceRegressions,
             EntryIdGapCount = entryIdGaps,
             EntryIdRegressionCount = entryIdRegressions,

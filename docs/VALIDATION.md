@@ -338,3 +338,8 @@ Use `--evidence <dir>` on `mms-report-static-live`, `mms-report-monitor`, or `mm
 A clean evidence-grade session should show RptEna=false before enable, RptEna=true after enable where readback is supported, at least one InformationReport after GI or during monitor, and RptEna=false after cleanup. Dynamic sessions should additionally show DataSet member order verified after create/bind and the temporary DataSet not readable after delete.
 
 Some BRCBs keep `ResvTms` visible for a lease/timeout interval after `RptEna=false`. Treat this as `PASS_WITH_WARNING` when the explicit reservation flag is not active and the report was disabled successfully. Treat it as failure only when `RptEna` remains true, an explicit `Resv` flag is active, or cleanup/readback cannot prove a safe final state.
+
+
+### Report forensic timeline evidence
+
+Guarded report evidence now includes `report-timeline.json` and a Report Timeline section in `summary.md`. The timeline flattens each report into received time, RptID, DataSet, ConfRev, SqNum, EntryID, BufOvfl, included indexes, mapped count, reason summary, and decoded TimeOfEntry. Sequence diagnostics now distinguish reset-to-zero events from true regressions, while EntryID numeric gaps remain heuristic warnings because EntryID is treated as opaque by default. MMS `binary-time` is decoded to UTC/time-of-day when possible while retaining the original raw hex.

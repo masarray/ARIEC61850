@@ -345,7 +345,7 @@ Progress:
   keys, EntryID gaps/regressions, write failures, poll status, reason counts,
   and buffer-overflow evidence;
 - done: JSON/Markdown evidence export for guarded report commands;
-- remaining: post-write readback verification, EntryID persistence, PurgeBuf,
+- remaining: OptFlds-driven report decoder, EntryID persistence, PurgeBuf,
   reconnect recovery, and longer multi-vendor evidence export runs.
 
 Deliverables:
@@ -705,3 +705,11 @@ status.
 - No WPF screen before the stack API it needs exists.
 - No deleting tests to make a build pass.
 - No silently choosing one interpretation when SCL/live model conflicts.
+
+### Completed: Post-write readback, evidence integrity, and relay lease classification
+
+The report monitor now records explicit verification checks for RptEna, RCB.DatSet, static DataSet directory readability, dynamic DataSet creation, cleanup restore/clear, and delete readback. Evidence exports include `verification.json`, `rcb-snapshots.json`, and `dataset-snapshots.json`, making report sessions auditable as state-transition evidence rather than only write-response logs.
+
+The evidence classifier now distinguishes hard failures from warning evidence. BRCB `ResvTms` lease timers that remain visible after disable are treated as relay ownership lease behavior when `RptEna=false` and no explicit reservation flag is active. Buffer overflow, sequence/EntryID heuristics, duplicate keys, and partial mapping are surfaced as diagnostic warnings.
+
+Next hardening target: replace the current tolerant report value mapper with an OptFlds-driven InformationReport decoder and add long-run soak metrics.

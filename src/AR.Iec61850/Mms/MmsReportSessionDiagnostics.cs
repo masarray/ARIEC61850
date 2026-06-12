@@ -7,6 +7,7 @@ public sealed class MmsReportSessionDiagnostics
     public int ReportCount { get; init; }
     public int HeaderDecodedCount { get; init; }
     public int MappingFailureCount { get; init; }
+    public int PartialMappingFailureCount { get; init; }
     public int ValueCount { get; init; }
     public int WriteStepCount { get; init; }
     public int WriteFailureCount { get; init; }
@@ -23,8 +24,46 @@ public sealed class MmsReportSessionDiagnostics
     public int EntryIdRegressionCount { get; init; }
     public IReadOnlyDictionary<string, int> ReasonCounts { get; init; } = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+    public string OverallStatus
+    {
+        get
+        {
+            if (WriteFailureCount > 0 || MappingFailureCount > 0 || PollReadFailureCount > 0)
+                return "FAIL";
+
+            if (BufferOverflowObserved || PartialMappingFailureCount > 0 || DuplicateReportKeyCount > 0 ||
+                SequenceGapCount > 0 || SequenceRegressionCount > 0 || EntryIdGapCount > 0 || EntryIdRegressionCount > 0)
+                return "PASS_WITH_WARNING";
+
+            return "PASS";
+        }
+    }
+
+    public IReadOnlyList<string> WarningMessages
+    {
+        get
+        {
+            var warnings = new List<string>();
+            if (BufferOverflowObserved)
+                warnings.Add("BRCB buffer-overflow flag was observed. Treat the session as usable evidence with a warning; check EntryID continuity and relay buffered-report history.");
+            if (PartialMappingFailureCount > 0)
+                warnings.Add($"{PartialMappingFailureCount} report(s) had fewer mapped values than included DataSet indexes.");
+            if (DuplicateReportKeyCount > 0)
+                warnings.Add($"{DuplicateReportKeyCount} duplicate report key(s) were observed; inspect whether these are retransmissions or true duplicates.");
+            if (SequenceGapCount > 0)
+                warnings.Add($"{SequenceGapCount} sequence gap(s) were observed per report stream.");
+            if (SequenceRegressionCount > 0)
+                warnings.Add($"{SequenceRegressionCount} sequence regression/reset(s) were observed per report stream.");
+            if (EntryIdGapCount > 0)
+                warnings.Add($"{EntryIdGapCount} numeric EntryID gap(s) were observed. EntryID is treated as opaque by default; numeric gap is a heuristic warning, not a hard failure.");
+            if (EntryIdRegressionCount > 0)
+                warnings.Add($"{EntryIdRegressionCount} numeric EntryID regression/repeat(s) were observed. EntryID is treated as opaque by default; inspect raw reports before declaring data loss.");
+            return warnings;
+        }
+    }
+
     public string Summary =>
-        $"reports={ReportCount}, values={ValueCount}, mappedFailures={MappingFailureCount}, " +
+        $"diagnostics={OverallStatus}, reports={ReportCount}, values={ValueCount}, mappedFailures={MappingFailureCount}, partialMappings={PartialMappingFailureCount}, " +
         $"pollReads={PollReadSuccessCount}/{PollReadCount}, writeFailures={WriteFailureCount}, " +
         $"seqGaps={SequenceGapCount}, seqRegressions={SequenceRegressionCount}, " +
         $"entryIdGaps={EntryIdGapCount}, entryIdRegressions={EntryIdRegressionCount}, " +
@@ -57,18 +96,23 @@ public sealed class MmsReportSessionDiagnostics
 
         var sequenceGaps = 0;
         var sequenceRegressions = 0;
-        ulong? previousSequence = null;
-        foreach (var sequence in reports.Select(x => x.Header.SequenceNumber).Where(x => x.HasValue).Select(x => x!.Value))
+        foreach (var stream in reports
+                     .Where(r => r.Header.SequenceNumber.HasValue)
+                     .GroupBy(BuildReportStreamKey, StringComparer.OrdinalIgnoreCase))
         {
-            if (previousSequence.HasValue)
+            ulong? previousSequence = null;
+            foreach (var sequence in stream.Select(x => x.Header.SequenceNumber!.Value))
             {
-                if (sequence > previousSequence.Value + 1)
-                    sequenceGaps++;
-                else if (sequence < previousSequence.Value)
-                    sequenceRegressions++;
-            }
+                if (previousSequence.HasValue)
+                {
+                    if (sequence > previousSequence.Value + 1)
+                        sequenceGaps++;
+                    else if (sequence < previousSequence.Value)
+                        sequenceRegressions++;
+                }
 
-            previousSequence = sequence;
+                previousSequence = sequence;
+            }
         }
 
         var parsedEntryIds = reports
@@ -94,11 +138,32 @@ public sealed class MmsReportSessionDiagnostics
             previousEntryId = item.Value;
         }
 
+        var mappingFailures = 0;
+        var partialMappingFailures = 0;
+        foreach (var report in reports)
+        {
+            if (!report.InclusionBitstringItemIndex.HasValue || report.IncludedDataSetIndexes.Count == 0)
+            {
+                mappingFailures++;
+                continue;
+            }
+
+            if (report.Values.Count == 0)
+            {
+                mappingFailures++;
+                continue;
+            }
+
+            if (report.Values.Count < report.IncludedDataSetIndexes.Count)
+                partialMappingFailures++;
+        }
+
         return new MmsReportSessionDiagnostics
         {
             ReportCount = reports.Count,
             HeaderDecodedCount = reports.Count(x => x.Header.HasAny),
-            MappingFailureCount = reports.Count(x => !x.InclusionBitstringItemIndex.HasValue || x.Values.Count == 0),
+            MappingFailureCount = mappingFailures,
+            PartialMappingFailureCount = partialMappingFailures,
             ValueCount = reports.Sum(x => x.Values.Count),
             WriteStepCount = writeSteps.Count,
             WriteFailureCount = writeSteps.Count(x => !x.IsSuccess),
@@ -119,14 +184,22 @@ public sealed class MmsReportSessionDiagnostics
 
     private static string BuildReportKey(MmsReportFrame report)
     {
-        var reportId = report.Header.ReportId;
+        var streamKey = BuildReportStreamKey(report);
         if (!string.IsNullOrWhiteSpace(report.Header.EntryIdHex))
-            return $"{reportId}|entry={report.Header.EntryIdHex}";
+            return $"{streamKey}|entry={report.Header.EntryIdHex}";
 
         if (report.Header.SequenceNumber.HasValue)
-            return $"{reportId}|sq={report.Header.SequenceNumber.Value}|time={report.Header.TimeOfEntry}";
+            return $"{streamKey}|sq={report.Header.SequenceNumber.Value}|time={report.Header.TimeOfEntry}";
 
         return string.Empty;
+    }
+
+    private static string BuildReportStreamKey(MmsReportFrame report)
+    {
+        var reportId = string.IsNullOrWhiteSpace(report.Header.ReportId) ? "-" : report.Header.ReportId.Trim();
+        var dataSet = string.IsNullOrWhiteSpace(report.Header.DataSetReference) ? "-" : report.Header.DataSetReference.Trim();
+        var confRev = report.Header.ConfRev?.ToString() ?? "-";
+        return $"{reportId}|ds={dataSet}|conf={confRev}";
     }
 
     private static bool TryParseHex(string value, out BigInteger parsed)

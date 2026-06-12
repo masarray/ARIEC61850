@@ -173,3 +173,11 @@ NIC, TAP, or test switch. Do not use a production substation network.
 
 Live report commands write RCB/DataSet attributes. Use them only against lab
 equipment and only after planning commands show a safe target.
+
+### Evidence-grade report monitor
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --evidence out/report-evidence --yes
+```
+
+Review `verification.json`, `rcb-snapshots.json`, `dataset-snapshots.json`, and `summary.md` to confirm the IED state before enable, after enable, after GI/report reception, and after cleanup. `PASS_WITH_WARNING` is expected on relays that keep a BRCB `ResvTms` lease timer visible after `RptEna=false`; inspect the final `RptEna`, `DatSet`, and explicit reservation flag before treating it as a failure.

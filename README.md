@@ -367,3 +367,9 @@ fat-testing, sat-testing, dotnet, csharp, npcap, pcap, clean-room
 
 No open-source license has been declared yet. Add a license before distributing
 this stack as a public dependency or embedding it in downstream products.
+
+## Evidence integrity milestone
+
+Report live commands now perform post-write readback verification and export the verification artifacts when `--evidence <dir>` is used. The evidence folder includes `verification.json`, `rcb-snapshots.json`, and `dataset-snapshots.json` in addition to the report, poll, write-step, and summary files. The verification layer checks RCB state before enable, after enable, and after cleanup; dynamic sessions also verify dynamic DataSet creation, RCB.DatSet binding, DataSet restore/clear, and delete readback.
+
+The evidence classifier now separates hard failures from relay-specific warning conditions. For example, a BRCB `ResvTms` lease timer that remains visible after `RptEna=false` is reported as `PASS_WITH_WARNING` when no explicit `Resv` flag is active. This captures relay ownership timeout behavior without mislabeling a successful cleanup as failed. Diagnostics also classify buffer overflow, sequence/EntryID heuristics, duplicate keys, and partial mappings as warning evidence instead of hiding them in raw counters.

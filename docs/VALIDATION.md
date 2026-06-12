@@ -322,3 +322,19 @@ DeleteDataSet=deleted 1/1 OK
 post-check RptEna=false DatSet=empty
 note=relay holds ResvTms after disable until its timer expires
 ```
+
+## Post-write readback evidence
+
+Use `--evidence <dir>` on `mms-report-static-live`, `mms-report-monitor`, or `mms-report-dynamic-live` to capture the full evidence bundle. The bundle now includes:
+
+- `summary.json` and `summary.md` for session context and result status.
+- `reports.json` for decoded InformationReport frames and mapped values.
+- `poll-reads.json` for confirmed read operations that run while report monitoring is active.
+- `write-steps.json` for every write/create/delete operation.
+- `verification.json` for PASS/WARNING/FAIL readback checks.
+- `rcb-snapshots.json` for RCB state before enable, after enable, and after cleanup.
+- `dataset-snapshots.json` for static/dynamic DataSet directory readback and delete verification.
+
+A clean evidence-grade session should show RptEna=false before enable, RptEna=true after enable where readback is supported, at least one InformationReport after GI or during monitor, and RptEna=false after cleanup. Dynamic sessions should additionally show DataSet member order verified after create/bind and the temporary DataSet not readable after delete.
+
+Some BRCBs keep `ResvTms` visible for a lease/timeout interval after `RptEna=false`. Treat this as `PASS_WITH_WARNING` when the explicit reservation flag is not active and the report was disabled successfully. Treat it as failure only when `RptEna` remains true, an explicit `Resv` flag is active, or cleanup/readback cannot prove a safe final state.

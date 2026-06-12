@@ -137,7 +137,109 @@ public sealed class MmsStaticReportSessionResult
     public IReadOnlyList<MmsReportPollRead> PollReads { get; init; } = Array.Empty<MmsReportPollRead>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public MmsReportSessionDiagnostics Diagnostics { get; init; } = new();
+    public MmsReportSessionVerification Verification { get; init; } = new();
     public string Message { get; init; } = string.Empty;
+}
+
+public enum MmsReportVerificationSeverity
+{
+    Pass,
+    Warning,
+    Fail
+}
+
+public sealed class MmsReportVerificationCheck
+{
+    public string Stage { get; init; } = string.Empty;
+    public string Target { get; init; } = string.Empty;
+    public string Expected { get; init; } = string.Empty;
+    public string Observed { get; init; } = string.Empty;
+    public MmsReportVerificationSeverity Severity { get; init; }
+    public string Message { get; init; } = string.Empty;
+
+    public bool IsPass => Severity == MmsReportVerificationSeverity.Pass;
+    public bool IsWarning => Severity == MmsReportVerificationSeverity.Warning;
+    public bool IsFail => Severity == MmsReportVerificationSeverity.Fail;
+}
+
+public sealed class MmsReportRcbSnapshot
+{
+    public string Stage { get; init; } = string.Empty;
+    public DateTimeOffset CapturedAt { get; init; }
+    public bool IsSuccess { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public string Reference { get; init; } = string.Empty;
+    public string Mode { get; init; } = string.Empty;
+    public string DataSetReference { get; init; } = string.Empty;
+    public string ReportId { get; init; } = string.Empty;
+    public string ConfRev { get; init; } = string.Empty;
+    public string EnabledState { get; init; } = string.Empty;
+    public string ReservationState { get; init; } = string.Empty;
+    public string ReservationTimeSeconds { get; init; } = string.Empty;
+    public string BufferTimeMs { get; init; } = string.Empty;
+    public string IntegrityPeriodMs { get; init; } = string.Empty;
+    public string TriggerOptions { get; init; } = string.Empty;
+    public string OptionalFields { get; init; } = string.Empty;
+    public IReadOnlyList<string> ProbeDiagnostics { get; init; } = Array.Empty<string>();
+
+    public string Summary => IsSuccess
+        ? $"{Stage}: {Reference} RptEna={TextOrDash(EnabledState)} DatSet={TextOrDash(DataSetReference)} Resv={TextOrDash(ReservationState)} ResvTms={TextOrDash(ReservationTimeSeconds)} ConfRev={TextOrDash(ConfRev)}"
+        : $"{Stage}: snapshot failed for {Reference}: {Message}";
+
+    internal static MmsReportRcbSnapshot FromCandidate(string stage, MmsReportControlCandidate candidate, bool success, string message)
+        => new()
+        {
+            Stage = stage,
+            CapturedAt = DateTimeOffset.UtcNow,
+            IsSuccess = success,
+            Message = message,
+            Reference = candidate.Reference,
+            Mode = candidate.Mode,
+            DataSetReference = candidate.DataSetReference,
+            ReportId = candidate.ReportId,
+            ConfRev = candidate.ConfRev,
+            EnabledState = candidate.EnabledState,
+            ReservationState = candidate.ReservationState,
+            ReservationTimeSeconds = candidate.ReservationTimeSeconds,
+            BufferTimeMs = candidate.BufferTimeMs,
+            IntegrityPeriodMs = candidate.IntegrityPeriodMs,
+            TriggerOptions = candidate.TriggerOptions,
+            OptionalFields = candidate.OptionalFields,
+            ProbeDiagnostics = candidate.ProbeDiagnostics.ToArray()
+        };
+
+    private static string TextOrDash(string value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+}
+
+public sealed class MmsReportDataSetSnapshot
+{
+    public string Stage { get; init; } = string.Empty;
+    public DateTimeOffset CapturedAt { get; init; }
+    public bool IsSuccess { get; init; }
+    public bool Exists { get; init; }
+    public string DataSetReference { get; init; } = string.Empty;
+    public int MemberCount { get; init; }
+    public bool? IsDeletable { get; init; }
+    public IReadOnlyList<string> MemberReferences { get; init; } = Array.Empty<string>();
+    public string Message { get; init; } = string.Empty;
+
+    public string Summary => Exists
+        ? $"{Stage}: {DataSetReference} exists members={MemberCount} deletable={IsDeletable?.ToString().ToLowerInvariant() ?? "unknown"}"
+        : $"{Stage}: {DataSetReference} not readable/deleted: {Message}";
+}
+
+public sealed class MmsReportSessionVerification
+{
+    public IReadOnlyList<MmsReportVerificationCheck> Checks { get; init; } = Array.Empty<MmsReportVerificationCheck>();
+    public IReadOnlyList<MmsReportRcbSnapshot> RcbSnapshots { get; init; } = Array.Empty<MmsReportRcbSnapshot>();
+    public IReadOnlyList<MmsReportDataSetSnapshot> DataSetSnapshots { get; init; } = Array.Empty<MmsReportDataSetSnapshot>();
+
+    public int PassCount => Checks.Count(x => x.IsPass);
+    public int WarningCount => Checks.Count(x => x.IsWarning);
+    public int FailureCount => Checks.Count(x => x.IsFail);
+    public string OverallStatus => FailureCount > 0 ? "FAIL" : WarningCount > 0 ? "PASS_WITH_WARNING" : "PASS";
+    public string Summary => $"verification={OverallStatus}, pass={PassCount}, warnings={WarningCount}, failures={FailureCount}, rcbSnapshots={RcbSnapshots.Count}, dataSetSnapshots={DataSetSnapshots.Count}";
 }
 
 public static class MmsReportFrameMapper
@@ -562,11 +664,25 @@ public sealed partial class MmsClientSession
         var warnings = new List<string>();
         var reports = new List<MmsReportFrame>();
         var pollReads = new List<MmsReportPollRead>();
+        var verificationChecks = new List<MmsReportVerificationCheck>();
+        var rcbSnapshots = new List<MmsReportRcbSnapshot>();
+        var dataSetSnapshots = new List<MmsReportDataSetSnapshot>();
         var reservationTouched = false;
         var enabledByThisClient = false;
 
         try
         {
+            var beforeSnapshot = await CaptureReportControlSnapshotAsync(rcb, "before", cancellationToken).ConfigureAwait(false);
+            rcbSnapshots.Add(beforeSnapshot);
+            AddRcbStateChecks(verificationChecks, beforeSnapshot, expectedRptEna: false, expectedDataSet: plan.DataSetReference, stage: "before");
+
+            if (!string.IsNullOrWhiteSpace(plan.DataSetReference))
+            {
+                var dataSetBefore = await CaptureDataSetSnapshotAsync(plan.DataSetReference, plan.Members, "before", null, cancellationToken).ConfigureAwait(false);
+                dataSetSnapshots.Add(dataSetBefore);
+                AddDataSetExistsCheck(verificationChecks, dataSetBefore, expectedMembers: plan.Members, stage: "before");
+            }
+
             if (rcb.Buffered && rcb.Attributes.Contains("ResvTms", StringComparer.OrdinalIgnoreCase))
             {
                 warnings.Add("BRCB ResvTms pre-reserve was skipped. This relay accepts ownership through RptEna=true and rejects or side-effects explicit ResvTms writes.");
@@ -585,14 +701,20 @@ public sealed partial class MmsClientSession
             enabledByThisClient = enable.IsSuccess;
             if (!enable.IsSuccess)
             {
+                verificationChecks.Add(FailCheck("after-enable", $"{rcb.Reference}.RptEna", "write accepted", enable.Message, "RptEna=true write failed."));
                 return new MmsStaticReportSessionResult
                 {
                     IsSuccess = false,
                     WriteSteps = writes,
                     Warnings = warnings,
+                    Verification = BuildVerification(verificationChecks, rcbSnapshots, dataSetSnapshots),
                     Message = "RptEna=true failed; report session was not started."
                 };
             }
+
+            var afterEnableSnapshot = await CaptureReportControlSnapshotAsync(rcb, "after-enable", cancellationToken).ConfigureAwait(false);
+            rcbSnapshots.Add(afterEnableSnapshot);
+            AddRcbStateChecks(verificationChecks, afterEnableSnapshot, expectedRptEna: true, expectedDataSet: plan.DataSetReference, stage: "after-enable");
 
             if (triggerGeneralInterrogation && rcb.Attributes.Contains("GI", StringComparer.OrdinalIgnoreCase))
             {
@@ -611,6 +733,7 @@ public sealed partial class MmsClientSession
                 pollReads,
                 cancellationToken).ConfigureAwait(false);
             reports.AddRange(received);
+            AddReportReceptionCheck(verificationChecks, reports, triggerGeneralInterrogation ? "after-gi" : "during-monitor");
         }
         finally
         {
@@ -618,6 +741,12 @@ public sealed partial class MmsClientSession
             {
                 var disable = await TryWriteReportAttributeForCleanupAsync(rcb, "RptEna", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
                 writes.Add(disable);
+                if (!disable.IsSuccess)
+                    verificationChecks.Add(FailCheck("after-cleanup", $"{rcb.Reference}.RptEna", "write false accepted", disable.Message, "RptEna=false cleanup write failed."));
+
+                var afterCleanupSnapshot = await CaptureReportControlSnapshotAsync(rcb, "after-cleanup", CancellationToken.None).ConfigureAwait(false);
+                rcbSnapshots.Add(afterCleanupSnapshot);
+                AddRcbStateChecks(verificationChecks, afterCleanupSnapshot, expectedRptEna: false, expectedDataSet: plan.DataSetReference, stage: "after-cleanup");
             }
 
             if (reservationTouched)
@@ -629,14 +758,17 @@ public sealed partial class MmsClientSession
             }
         }
 
+        var diagnostics = MmsReportSessionDiagnostics.Analyze(reports, pollReads, writes);
+        var verification = BuildVerification(verificationChecks, rcbSnapshots, dataSetSnapshots);
         return new MmsStaticReportSessionResult
         {
-            IsSuccess = enabledByThisClient,
+            IsSuccess = enabledByThisClient && diagnostics.OverallStatus != "FAIL" && verification.FailureCount == 0,
             WriteSteps = writes,
             Reports = reports,
             PollReads = pollReads,
             Warnings = warnings,
-            Diagnostics = MmsReportSessionDiagnostics.Analyze(reports, pollReads, writes),
+            Diagnostics = diagnostics,
+            Verification = verification,
             Message = $"Static report guarded session complete: writes={writes.Count}, reports={reports.Count}, pollReads={pollReads.Count}."
         };
     }
@@ -647,7 +779,8 @@ public sealed partial class MmsClientSession
         int reserveSeconds = 30,
         bool triggerGeneralInterrogation = true,
         bool deleteDataSetOnCleanup = true,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        MmsIedModelDirectory? directory = null)
     {
         EnsureMmsReady();
         ArgumentNullException.ThrowIfNull(plan);
@@ -669,6 +802,9 @@ public sealed partial class MmsClientSession
         var writes = new List<MmsReportAttributeWriteStep>();
         var warnings = new List<string>();
         var reports = new List<MmsReportFrame>();
+        var verificationChecks = new List<MmsReportVerificationCheck>();
+        var rcbSnapshots = new List<MmsReportRcbSnapshot>();
+        var dataSetSnapshots = new List<MmsReportDataSetSnapshot>();
         var dataSetCreated = false;
         var reservationTouched = false;
         var enabledByThisClient = false;
@@ -676,6 +812,10 @@ public sealed partial class MmsClientSession
 
         try
         {
+            var beforeSnapshot = await CaptureReportControlSnapshotAsync(rcb, "before", cancellationToken).ConfigureAwait(false);
+            rcbSnapshots.Add(beforeSnapshot);
+            AddRcbStateChecks(verificationChecks, beforeSnapshot, expectedRptEna: false, expectedDataSet: originalDataSetReference, stage: "before");
+
             var define = await DefineNamedVariableListAsync(
                 plan.DataSetReference,
                 plan.DynamicPoints.Select(x => x.ToObjectReference()),
@@ -684,14 +824,20 @@ public sealed partial class MmsClientSession
             dataSetCreated = define.IsSuccess;
             if (!define.IsSuccess)
             {
+                verificationChecks.Add(FailCheck("after-create", plan.DataSetReference, "DefineNamedVariableList OK", define.Message, "Dynamic DataSet create failed."));
                 return new MmsStaticReportSessionResult
                 {
                     IsSuccess = false,
                     WriteSteps = writes,
                     Warnings = warnings,
+                    Verification = BuildVerification(verificationChecks, rcbSnapshots, dataSetSnapshots),
                     Message = "Dynamic DataSet create failed; report session was not started."
                 };
             }
+
+            var afterCreateDataSet = await CaptureDataSetSnapshotAsync(plan.DataSetReference, plan.Members, "after-create", directory, cancellationToken).ConfigureAwait(false);
+            dataSetSnapshots.Add(afterCreateDataSet);
+            AddDataSetExistsCheck(verificationChecks, afterCreateDataSet, expectedMembers: plan.Members, stage: "after-create");
 
             if (rcb.Buffered && rcb.Attributes.Contains("ResvTms", StringComparer.OrdinalIgnoreCase))
             {
@@ -711,28 +857,40 @@ public sealed partial class MmsClientSession
             writes.Add(dataSetWrite);
             if (!dataSetWrite.IsSuccess)
             {
+                verificationChecks.Add(FailCheck("after-bind", $"{rcb.Reference}.DatSet", plan.DataSetReference, dataSetWrite.Message, "RCB.DatSet write failed."));
                 return new MmsStaticReportSessionResult
                 {
                     IsSuccess = false,
                     WriteSteps = writes,
                     Warnings = warnings,
+                    Verification = BuildVerification(verificationChecks, rcbSnapshots, dataSetSnapshots),
                     Message = "RCB.DatSet write failed; report session was not started."
                 };
             }
+
+            var afterBindSnapshot = await CaptureReportControlSnapshotAsync(rcb, "after-bind", cancellationToken).ConfigureAwait(false);
+            rcbSnapshots.Add(afterBindSnapshot);
+            AddRcbStateChecks(verificationChecks, afterBindSnapshot, expectedRptEna: false, expectedDataSet: plan.DataSetReference, stage: "after-bind");
 
             var enable = await WriteReportAttributeAsync(rcb, "RptEna", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
             writes.Add(enable);
             enabledByThisClient = enable.IsSuccess;
             if (!enable.IsSuccess)
             {
+                verificationChecks.Add(FailCheck("after-enable", $"{rcb.Reference}.RptEna", "write accepted", enable.Message, "RptEna=true write failed."));
                 return new MmsStaticReportSessionResult
                 {
                     IsSuccess = false,
                     WriteSteps = writes,
                     Warnings = warnings,
+                    Verification = BuildVerification(verificationChecks, rcbSnapshots, dataSetSnapshots),
                     Message = "RptEna=true failed; dynamic report session was not started."
                 };
             }
+
+            var afterEnableSnapshot = await CaptureReportControlSnapshotAsync(rcb, "after-enable", cancellationToken).ConfigureAwait(false);
+            rcbSnapshots.Add(afterEnableSnapshot);
+            AddRcbStateChecks(verificationChecks, afterEnableSnapshot, expectedRptEna: true, expectedDataSet: plan.DataSetReference, stage: "after-enable");
 
             if (triggerGeneralInterrogation && rcb.Attributes.Contains("GI", StringComparer.OrdinalIgnoreCase))
             {
@@ -744,6 +902,7 @@ public sealed partial class MmsClientSession
 
             var received = await ReceiveInformationReportsAsync(plan.Members, listenDuration, cancellationToken).ConfigureAwait(false);
             reports.AddRange(received);
+            AddReportReceptionCheck(verificationChecks, reports, triggerGeneralInterrogation ? "after-gi" : "during-monitor");
         }
         finally
         {
@@ -751,6 +910,8 @@ public sealed partial class MmsClientSession
             {
                 var disable = await TryWriteReportAttributeForCleanupAsync(rcb, "RptEna", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
                 writes.Add(disable);
+                if (!disable.IsSuccess)
+                    verificationChecks.Add(FailCheck("after-cleanup", $"{rcb.Reference}.RptEna", "write false accepted", disable.Message, "RptEna=false cleanup write failed."));
             }
 
             if (dataSetCreated)
@@ -760,6 +921,12 @@ public sealed partial class MmsClientSession
                     : ToReportDataSetAttributeValue(originalDataSetReference);
                 var restore = await TryWriteReportAttributeForCleanupAsync(rcb, "DatSet", MmsDataValue.VisibleString(restoreValue), CancellationToken.None).ConfigureAwait(false);
                 writes.Add(restore);
+                if (!restore.IsSuccess)
+                    verificationChecks.Add(FailCheck("after-cleanup", $"{rcb.Reference}.DatSet", TextOrDash(originalDataSetReference), restore.Message, "RCB.DatSet restore/clear write failed."));
+
+                var afterCleanupSnapshot = await CaptureReportControlSnapshotAsync(rcb, "after-cleanup", CancellationToken.None).ConfigureAwait(false);
+                rcbSnapshots.Add(afterCleanupSnapshot);
+                AddRcbStateChecks(verificationChecks, afterCleanupSnapshot, expectedRptEna: false, expectedDataSet: originalDataSetReference, stage: "after-cleanup");
             }
 
             if (reservationTouched)
@@ -776,21 +943,31 @@ public sealed partial class MmsClientSession
                 {
                     var delete = await DeleteNamedVariableListAsync(plan.DataSetReference, CancellationToken.None).ConfigureAwait(false);
                     writes.Add(ToWriteStep("DeleteNamedVariableList", plan.DataSetReference, delete.IsSuccess, delete.Message));
+                    if (!delete.IsSuccess)
+                        verificationChecks.Add(FailCheck("after-delete", plan.DataSetReference, "DeleteNamedVariableList OK", delete.Message, "Dynamic DataSet delete failed."));
                 }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
                 {
                     writes.Add(ToWriteStep("DeleteNamedVariableList", plan.DataSetReference, false, $"cleanup delete failed: {ex.GetType().Name}: {ex.Message}"));
+                    verificationChecks.Add(FailCheck("after-delete", plan.DataSetReference, "DeleteNamedVariableList OK", ex.Message, "Dynamic DataSet delete threw an exception."));
                 }
+
+                var afterDeleteDataSet = await CaptureDataSetSnapshotAsync(plan.DataSetReference, plan.Members, "after-delete", directory, CancellationToken.None).ConfigureAwait(false);
+                dataSetSnapshots.Add(afterDeleteDataSet);
+                AddDataSetDeletedCheck(verificationChecks, afterDeleteDataSet, "after-delete");
             }
         }
 
+        var diagnostics = MmsReportSessionDiagnostics.Analyze(reports, Array.Empty<MmsReportPollRead>(), writes);
+        var verification = BuildVerification(verificationChecks, rcbSnapshots, dataSetSnapshots);
         return new MmsStaticReportSessionResult
         {
-            IsSuccess = enabledByThisClient,
+            IsSuccess = enabledByThisClient && diagnostics.OverallStatus != "FAIL" && verification.FailureCount == 0,
             WriteSteps = writes,
             Reports = reports,
             Warnings = warnings,
-            Diagnostics = MmsReportSessionDiagnostics.Analyze(reports, Array.Empty<MmsReportPollRead>(), writes),
+            Diagnostics = diagnostics,
+            Verification = verification,
             Message = $"Dynamic report guarded session complete: writes={writes.Count}, reports={reports.Count}."
         };
     }
@@ -947,6 +1124,313 @@ public sealed partial class MmsClientSession
         var decoded = MmsInformationReportDecoder.Decode(payload);
         reports.Add(MmsReportFrameMapper.Map(decoded, members, DateTimeOffset.UtcNow));
     }
+
+    private async Task<MmsReportRcbSnapshot> CaptureReportControlSnapshotAsync(
+        MmsReportControlCandidate source,
+        string stage,
+        CancellationToken cancellationToken)
+    {
+        var clone = CloneReportControlCandidate(source);
+        try
+        {
+            await ProbeReportControlAttributesAsync(clone, cancellationToken).ConfigureAwait(false);
+            return MmsReportRcbSnapshot.FromCandidate(stage, clone, success: true, "RCB readback snapshot captured.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return MmsReportRcbSnapshot.FromCandidate(stage, source, success: false, $"RCB readback failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private async Task<MmsReportDataSetSnapshot> CaptureDataSetSnapshotAsync(
+        string dataSetReference,
+        IReadOnlyList<MmsDataSetDirectoryMember> expectedMembers,
+        string stage,
+        MmsIedModelDirectory? directory,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(dataSetReference))
+        {
+            return new MmsReportDataSetSnapshot
+            {
+                Stage = stage,
+                CapturedAt = DateTimeOffset.UtcNow,
+                IsSuccess = false,
+                Exists = false,
+                Message = "No DataSet reference was provided for verification."
+            };
+        }
+
+        try
+        {
+            var result = await GetDataSetDirectoryAsync(dataSetReference, directory, cancellationToken).ConfigureAwait(false);
+            return new MmsReportDataSetSnapshot
+            {
+                Stage = stage,
+                CapturedAt = DateTimeOffset.UtcNow,
+                IsSuccess = result.IsSuccess,
+                Exists = result.IsSuccess,
+                DataSetReference = dataSetReference,
+                MemberCount = result.Members.Count,
+                IsDeletable = result.IsDeletable,
+                MemberReferences = result.Members.Select(x => x.UserReference).ToArray(),
+                Message = result.Message
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new MmsReportDataSetSnapshot
+            {
+                Stage = stage,
+                CapturedAt = DateTimeOffset.UtcNow,
+                IsSuccess = false,
+                Exists = false,
+                DataSetReference = dataSetReference,
+                Message = $"DataSet readback failed: {ex.GetType().Name}: {ex.Message}"
+            };
+        }
+    }
+
+    private static MmsReportControlCandidate CloneReportControlCandidate(MmsReportControlCandidate source)
+        => new()
+        {
+            Domain = source.Domain,
+            LogicalNode = source.LogicalNode,
+            FunctionalConstraint = source.FunctionalConstraint,
+            Name = source.Name,
+            Reference = source.Reference,
+            Buffered = source.Buffered,
+            DataSetReference = source.DataSetReference,
+            ReportId = source.ReportId,
+            ConfRev = source.ConfRev,
+            IntegrityPeriodMs = source.IntegrityPeriodMs,
+            EnabledState = source.EnabledState,
+            ReservationState = source.ReservationState,
+            ReservationTimeSeconds = source.ReservationTimeSeconds,
+            BufferTimeMs = source.BufferTimeMs,
+            TriggerOptions = source.TriggerOptions,
+            OptionalFields = source.OptionalFields,
+            Status = source.Status,
+            Attributes = source.Attributes.ToList()
+        };
+
+    private static MmsReportSessionVerification BuildVerification(
+        IReadOnlyList<MmsReportVerificationCheck> checks,
+        IReadOnlyList<MmsReportRcbSnapshot> rcbSnapshots,
+        IReadOnlyList<MmsReportDataSetSnapshot> dataSetSnapshots)
+        => new()
+        {
+            Checks = checks.ToArray(),
+            RcbSnapshots = rcbSnapshots.ToArray(),
+            DataSetSnapshots = dataSetSnapshots.ToArray()
+        };
+
+    private static void AddRcbStateChecks(
+        List<MmsReportVerificationCheck> checks,
+        MmsReportRcbSnapshot snapshot,
+        bool? expectedRptEna,
+        string? expectedDataSet,
+        string stage)
+    {
+        if (!snapshot.IsSuccess)
+        {
+            checks.Add(WarningCheck(stage, snapshot.Reference, "RCB snapshot readable", snapshot.Message, "RCB state could not be read back; write response remains unverified."));
+            return;
+        }
+
+        if (expectedRptEna.HasValue)
+        {
+            var observed = ParseReportBool(snapshot.EnabledState);
+            if (!observed.HasValue)
+            {
+                checks.Add(WarningCheck(stage, $"{snapshot.Reference}.RptEna", expectedRptEna.Value.ToString().ToLowerInvariant(), TextOrDash(snapshot.EnabledState), "RptEna readback is not explicit."));
+            }
+            else if (observed.Value != expectedRptEna.Value)
+            {
+                checks.Add(FailCheck(stage, $"{snapshot.Reference}.RptEna", expectedRptEna.Value.ToString().ToLowerInvariant(), observed.Value.ToString().ToLowerInvariant(), "RptEna readback did not match expected state."));
+            }
+            else
+            {
+                checks.Add(PassCheck(stage, $"{snapshot.Reference}.RptEna", expectedRptEna.Value.ToString().ToLowerInvariant(), observed.Value.ToString().ToLowerInvariant(), "RptEna readback verified."));
+            }
+        }
+
+        if (expectedDataSet != null)
+        {
+            var expected = NormalizeReportReference(expectedDataSet);
+            var observed = NormalizeReportReference(snapshot.DataSetReference);
+            if (string.IsNullOrWhiteSpace(expected))
+            {
+                if (string.IsNullOrWhiteSpace(observed))
+                    checks.Add(PassCheck(stage, $"{snapshot.Reference}.DatSet", "empty", TextOrDash(snapshot.DataSetReference), "RCB.DatSet is empty/restored."));
+                else
+                    checks.Add(FailCheck(stage, $"{snapshot.Reference}.DatSet", "empty", snapshot.DataSetReference, "RCB.DatSet was not cleared/restored."));
+            }
+            else if (string.IsNullOrWhiteSpace(observed))
+            {
+                checks.Add(WarningCheck(stage, $"{snapshot.Reference}.DatSet", expectedDataSet ?? string.Empty, TextOrDash(snapshot.DataSetReference), "RCB.DatSet readback is empty or unsupported."));
+            }
+            else if (!observed.Equals(expected, StringComparison.OrdinalIgnoreCase))
+            {
+                checks.Add(FailCheck(stage, $"{snapshot.Reference}.DatSet", expectedDataSet ?? string.Empty, snapshot.DataSetReference, "RCB.DatSet readback did not match expected DataSet."));
+            }
+            else
+            {
+                checks.Add(PassCheck(stage, $"{snapshot.Reference}.DatSet", expectedDataSet ?? string.Empty, snapshot.DataSetReference, "RCB.DatSet readback verified."));
+            }
+        }
+
+        if (stage.Equals("before", StringComparison.OrdinalIgnoreCase) || stage.Equals("after-cleanup", StringComparison.OrdinalIgnoreCase))
+            AddReservationVerificationCheck(checks, snapshot, stage);
+    }
+
+    private static void AddDataSetExistsCheck(
+        List<MmsReportVerificationCheck> checks,
+        MmsReportDataSetSnapshot snapshot,
+        IReadOnlyList<MmsDataSetDirectoryMember> expectedMembers,
+        string stage)
+    {
+        if (!snapshot.Exists)
+        {
+            checks.Add(FailCheck(stage, snapshot.DataSetReference, $"DataSet readable with {expectedMembers.Count} member(s)", snapshot.Message, "DataSet directory readback failed."));
+            return;
+        }
+
+        var expected = expectedMembers.Select(x => NormalizeReportReference(x.UserReference)).ToArray();
+        var observed = snapshot.MemberReferences.Select(NormalizeReportReference).ToArray();
+        var countMatches = snapshot.MemberCount == expectedMembers.Count;
+        var orderMatches = countMatches && expected.SequenceEqual(observed, StringComparer.OrdinalIgnoreCase);
+        if (orderMatches)
+        {
+            checks.Add(PassCheck(stage, snapshot.DataSetReference, $"{expectedMembers.Count} member(s) in requested order", $"{snapshot.MemberCount} member(s)", "DataSet directory readback verified."));
+        }
+        else
+        {
+            checks.Add(FailCheck(stage, snapshot.DataSetReference, $"{expectedMembers.Count} member(s) in requested order", $"{snapshot.MemberCount} member(s): {string.Join(",", snapshot.MemberReferences)}", "DataSet member count/order mismatch."));
+        }
+    }
+
+    private static void AddDataSetDeletedCheck(
+        List<MmsReportVerificationCheck> checks,
+        MmsReportDataSetSnapshot snapshot,
+        string stage)
+    {
+        if (!snapshot.Exists)
+        {
+            checks.Add(PassCheck(stage, snapshot.DataSetReference, "not readable after delete", snapshot.Message, "Dynamic DataSet delete verified by readback."));
+            return;
+        }
+
+        checks.Add(FailCheck(stage, snapshot.DataSetReference, "not readable after delete", snapshot.Summary, "Dynamic DataSet is still readable after delete."));
+    }
+
+    private static void AddReportReceptionCheck(List<MmsReportVerificationCheck> checks, IReadOnlyList<MmsReportFrame> reports, string stage)
+    {
+        if (reports.Count > 0)
+            checks.Add(PassCheck(stage, "InformationReport", "at least 1 report", reports.Count.ToString(), "InformationReport received."));
+        else
+            checks.Add(FailCheck(stage, "InformationReport", "at least 1 report", "0", "No InformationReport was received during the guarded session."));
+    }
+
+    private static MmsReportVerificationCheck PassCheck(string stage, string target, string expected, string observed, string message)
+        => new() { Stage = stage, Target = target, Expected = expected, Observed = observed, Severity = MmsReportVerificationSeverity.Pass, Message = message };
+
+    private static MmsReportVerificationCheck WarningCheck(string stage, string target, string expected, string observed, string message)
+        => new() { Stage = stage, Target = target, Expected = expected, Observed = observed, Severity = MmsReportVerificationSeverity.Warning, Message = message };
+
+    private static MmsReportVerificationCheck FailCheck(string stage, string target, string expected, string observed, string message)
+        => new() { Stage = stage, Target = target, Expected = expected, Observed = observed, Severity = MmsReportVerificationSeverity.Fail, Message = message };
+
+    private static bool? ParseReportBool(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(text) || text == "-")
+            return null;
+
+        if (bool.TryParse(text, out var parsed))
+            return parsed;
+
+        if (text.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("on", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (text.Equals("0", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("no", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("off", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return null;
+    }
+
+    private static void AddReservationVerificationCheck(
+        List<MmsReportVerificationCheck> checks,
+        MmsReportRcbSnapshot snapshot,
+        string stage)
+    {
+        var resvFlag = ParseReportBool(snapshot.ReservationState);
+        var resvTimer = ParsePositiveInteger(snapshot.ReservationTimeSeconds);
+        var rptEna = ParseReportBool(snapshot.EnabledState);
+        var observed = $"Resv={TextOrDash(snapshot.ReservationState)} ResvTms={TextOrDash(snapshot.ReservationTimeSeconds)}";
+
+        if (resvFlag == true)
+        {
+            checks.Add(FailCheck(
+                stage,
+                $"{snapshot.Reference}.reservation",
+                "not active",
+                observed,
+                "RCB reservation flag is active before selection or after cleanup."));
+            return;
+        }
+
+        if (resvTimer == true)
+        {
+            if (snapshot.Mode.Equals("BRCB", StringComparison.OrdinalIgnoreCase) && rptEna == false)
+            {
+                checks.Add(WarningCheck(
+                    stage,
+                    $"{snapshot.Reference}.reservation",
+                    "not active or lease-only",
+                    observed,
+                    "BRCB ResvTms lease timer is still visible while RptEna=false. Treat as relay ownership lease/timeout behavior, not cleanup failure."));
+                return;
+            }
+
+            checks.Add(FailCheck(
+                stage,
+                $"{snapshot.Reference}.reservation",
+                "not active",
+                observed,
+                "RCB reservation timer is active before selection or after cleanup."));
+            return;
+        }
+
+        if (resvFlag.HasValue || resvTimer.HasValue)
+        {
+            checks.Add(PassCheck(
+                stage,
+                $"{snapshot.Reference}.reservation",
+                "not active",
+                observed,
+                "RCB reservation readback verified as inactive."));
+        }
+    }
+
+    private static bool? ParsePositiveInteger(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(text) || text == "-")
+            return null;
+
+        return ulong.TryParse(text, out var number) ? number > 0 : null;
+    }
+
+    private static string NormalizeReportReference(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.');
+
+    private static string TextOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 
     private async Task<MmsReportAttributeWriteStep> WriteReportAttributeAsync(
         MmsReportControlCandidate rcb,

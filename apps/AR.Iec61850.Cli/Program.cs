@@ -885,6 +885,7 @@ internal static class Cli
         Console.WriteLine(live.Message);
         Console.WriteLine($"Receive routing: {TextOrDash(session.LastReceiveRoutingSummary)} pending={session.PendingConfirmedOperationCount} queuedReports={session.QueuedInformationReportCount}");
         WriteReportDiagnostics(live.Diagnostics);
+        WriteReportVerification(live.Verification);
 
         if (live.Warnings.Count > 0)
         {
@@ -1090,12 +1091,14 @@ internal static class Cli
             reserveSec,
             triggerGi,
             deleteDataSet,
-            timeout.Token).ConfigureAwait(false);
+            timeout.Token,
+            discovery.IedDirectory).ConfigureAwait(false);
 
         Console.WriteLine();
         Console.WriteLine(live.Message);
         Console.WriteLine($"Receive routing: {TextOrDash(session.LastReceiveRoutingSummary)} pending={session.PendingConfirmedOperationCount} queuedReports={session.QueuedInformationReportCount}");
         WriteReportDiagnostics(live.Diagnostics);
+        WriteReportVerification(live.Verification);
 
         if (live.Warnings.Count > 0)
         {
@@ -1931,8 +1934,47 @@ internal static class Cli
         Console.WriteLine($"  {diagnostics.Summary}");
         if (!string.IsNullOrWhiteSpace(diagnostics.FirstEntryIdHex) || !string.IsNullOrWhiteSpace(diagnostics.LastEntryIdHex))
             Console.WriteLine($"  EntryID: {TextOrDash(diagnostics.FirstEntryIdHex)} -> {TextOrDash(diagnostics.LastEntryIdHex)}");
+        if (diagnostics.WarningMessages.Count > 0)
+        {
+            Console.WriteLine("  Diagnostic warnings:");
+            foreach (var warning in diagnostics.WarningMessages.Take(8))
+                Console.WriteLine($"    - {warning}");
+            if (diagnostics.WarningMessages.Count > 8)
+                Console.WriteLine($"    ... +{diagnostics.WarningMessages.Count - 8} more diagnostic warning(s)");
+        }
         if (diagnostics.ReasonCounts.Count > 0)
             Console.WriteLine($"  Reasons: {string.Join(", ", diagnostics.ReasonCounts.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}={x.Value}"))}");
+    }
+
+    private static void WriteReportVerification(MmsReportSessionVerification verification)
+    {
+        Console.WriteLine("Verification:");
+        Console.WriteLine($"  {verification.Summary}");
+        foreach (var check in verification.Checks.Take(20))
+        {
+            var status = check.Severity.ToString().ToUpperInvariant();
+            Console.WriteLine($"  {status} {check.Stage} {check.Target}: expected={TextOrDash(check.Expected)} observed={TextOrDash(check.Observed)} - {check.Message}");
+        }
+        if (verification.Checks.Count > 20)
+            Console.WriteLine($"  ... +{verification.Checks.Count - 20} more verification check(s)");
+
+        if (verification.RcbSnapshots.Count > 0)
+        {
+            Console.WriteLine("  RCB snapshots:");
+            foreach (var snapshot in verification.RcbSnapshots.Take(8))
+                Console.WriteLine($"    - {snapshot.Summary}");
+            if (verification.RcbSnapshots.Count > 8)
+                Console.WriteLine($"    ... +{verification.RcbSnapshots.Count - 8} more RCB snapshot(s)");
+        }
+
+        if (verification.DataSetSnapshots.Count > 0)
+        {
+            Console.WriteLine("  DataSet snapshots:");
+            foreach (var snapshot in verification.DataSetSnapshots.Take(8))
+                Console.WriteLine($"    - {snapshot.Summary}");
+            if (verification.DataSetSnapshots.Count > 8)
+                Console.WriteLine($"    ... +{verification.DataSetSnapshots.Count - 8} more DataSet snapshot(s)");
+        }
     }
 
     private static async Task<IReadOnlyList<string>> WriteReportEvidenceAsync(
@@ -1988,6 +2030,7 @@ internal static class Cli
             result.IsSuccess,
             result.Message,
             result.Diagnostics,
+            verification = result.Verification,
             warnings = result.Warnings
         };
 
@@ -1995,15 +2038,21 @@ internal static class Cli
         var reportsJsonPath = Path.Combine(directory, "reports.json");
         var pollReadsJsonPath = Path.Combine(directory, "poll-reads.json");
         var writeStepsJsonPath = Path.Combine(directory, "write-steps.json");
+        var verificationJsonPath = Path.Combine(directory, "verification.json");
+        var rcbSnapshotsJsonPath = Path.Combine(directory, "rcb-snapshots.json");
+        var dataSetSnapshotsJsonPath = Path.Combine(directory, "dataset-snapshots.json");
         var summaryMdPath = Path.Combine(directory, "summary.md");
 
         await File.WriteAllTextAsync(summaryJsonPath, JsonSerializer.Serialize(context, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(reportsJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportEvidence), jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(pollReadsJsonPath, JsonSerializer.Serialize(result.PollReads, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(writeStepsJsonPath, JsonSerializer.Serialize(result.WriteSteps, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(verificationJsonPath, JsonSerializer.Serialize(result.Verification, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(rcbSnapshotsJsonPath, JsonSerializer.Serialize(result.Verification.RcbSnapshots, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(dataSetSnapshotsJsonPath, JsonSerializer.Serialize(result.Verification.DataSetSnapshots, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(summaryMdPath, BuildReportEvidenceMarkdown(context.generatedAt, target, mode, plan, result), System.Text.Encoding.UTF8).ConfigureAwait(false);
 
-        return [summaryJsonPath, reportsJsonPath, pollReadsJsonPath, writeStepsJsonPath, summaryMdPath];
+        return [summaryJsonPath, reportsJsonPath, pollReadsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
     }
 
     private static object ToReportEvidence(MmsReportFrame report)
@@ -2043,7 +2092,9 @@ internal static class Cli
             $"- Mode: {mode}",
             $"- Plan: {plan.Summary}",
             $"- Result: {(result.IsSuccess ? "PASS" : "FAIL")} - {result.Message}",
+            $"- Verification: {result.Verification.OverallStatus} - {result.Verification.Summary}",
             $"- Diagnostics: {diagnostics.Summary}",
+            $"- Diagnostic status: {diagnostics.OverallStatus}",
             $"- EntryID: {TextOrDash(diagnostics.FirstEntryIdHex)} -> {TextOrDash(diagnostics.LastEntryIdHex)}",
             string.Empty,
             "## Counts",
@@ -2053,6 +2104,7 @@ internal static class Cli
             $"| Reports | {diagnostics.ReportCount} |",
             $"| Report values | {diagnostics.ValueCount} |",
             $"| Mapping failures | {diagnostics.MappingFailureCount} |",
+            $"| Partial mappings | {diagnostics.PartialMappingFailureCount} |",
             $"| Poll reads OK | {diagnostics.PollReadSuccessCount}/{diagnostics.PollReadCount} |",
             $"| Write failures | {diagnostics.WriteFailureCount} |",
             $"| Duplicate report keys | {diagnostics.DuplicateReportKeyCount} |",
@@ -2063,6 +2115,45 @@ internal static class Cli
             $"| Buffer overflow observed | {diagnostics.BufferOverflowObserved.ToString().ToLowerInvariant()} |",
             string.Empty
         };
+
+        if (diagnostics.WarningMessages.Count > 0)
+        {
+            lines.Add("## Diagnostic Warnings");
+            lines.Add(string.Empty);
+            foreach (var warning in diagnostics.WarningMessages)
+                lines.Add($"- {warning}");
+            lines.Add(string.Empty);
+        }
+
+        var verification = result.Verification;
+        lines.Add("## Verification");
+        lines.Add(string.Empty);
+        lines.Add($"- Status: {verification.OverallStatus}");
+        lines.Add($"- Summary: {verification.Summary}");
+        lines.Add(string.Empty);
+        lines.Add("| Severity | Stage | Target | Expected | Observed | Message |");
+        lines.Add("| --- | --- | --- | --- | --- | --- |");
+        foreach (var check in verification.Checks)
+            lines.Add($"| {check.Severity} | {check.Stage} | {check.Target} | {check.Expected.Replace("|", "\\|")} | {check.Observed.Replace("|", "\\|")} | {check.Message.Replace("|", "\\|")} |");
+        lines.Add(string.Empty);
+
+        if (verification.RcbSnapshots.Count > 0)
+        {
+            lines.Add("### RCB Snapshots");
+            lines.Add(string.Empty);
+            foreach (var snapshot in verification.RcbSnapshots)
+                lines.Add($"- {snapshot.Summary.Replace("|", "\\|")}");
+            lines.Add(string.Empty);
+        }
+
+        if (verification.DataSetSnapshots.Count > 0)
+        {
+            lines.Add("### DataSet Snapshots");
+            lines.Add(string.Empty);
+            foreach (var snapshot in verification.DataSetSnapshots)
+                lines.Add($"- {snapshot.Summary.Replace("|", "\\|")}");
+            lines.Add(string.Empty);
+        }
 
         if (diagnostics.ReasonCounts.Count > 0)
         {

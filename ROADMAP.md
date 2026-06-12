@@ -136,8 +136,13 @@ Latest verified local status:
   BRCB.
 - Guarded dynamic report create DataSet, bind RCB.DatSet, enable/GI/receive,
   cleanup, and delete DataSet is validated against a lab BRCB.
+- MMS PDU envelope classification and receive routing now queues
+  invoke-matched confirmed responses/errors separately from unconfirmed
+  InformationReports.
+- Report frame mapping now preserves raw access-result count, inclusion
+  bitstring position, and included DataSet member indexes.
 - Latest automated validation: `dotnet test .\ARIEC61850.slnx -c Release
-  --no-build` passed with 60 tests.
+  --no-build` passed with 66 tests.
 
 Latest live MMS evidence against lab IED `192.16.1.157:102`:
 
@@ -175,7 +180,8 @@ dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanu
 | Confirmed write foundation | Partial | Used for guarded report/DataSet flows; generic write API remains guarded. |
 | Static reporting | Guarded lab MVP | Enable, GI, receive, map, disable validated. |
 | Dynamic reporting | Guarded lab MVP | Create/bind/enable/GI/receive/cleanup/delete validated. |
-| Full MMS receive pump | Planned next | Current receive queue is short-session guarded implementation. |
+| MMS receive routing | Partial | PDU classifier and invoke-aware queue are implemented; background pump is next. |
+| Full MMS receive pump | Planned next | Needs one reader loop, pending operation tasks, and long-running monitor. |
 | BRCB recovery | Planned | Needs EntryID, PurgeBuf, reconnect, duplicate/loss diagnostics. |
 | MMS file transfer | Planned | Browse/get/set/delete/rename file services. |
 | MMS log service | Planned | Needed for full ACSI coverage. |
@@ -241,6 +247,17 @@ dependencies are stable.
 ### Phase 1 - Full MMS Receive Pump and Report Monitor
 
 Goal: make reporting robust while arbitrary confirmed requests are in flight.
+
+Progress:
+
+- done: MMS PDU envelope classifier for confirmed response, confirmed error,
+  reject, and unconfirmed InformationReport;
+- done: in-memory receive router that queues confirmed results by invoke ID and
+  queues InformationReports separately;
+- done: guarded report receive path uses the router and preserves inclusion-bit
+  diagnostics;
+- remaining: background association reader loop and task-based pending operation
+  registry.
 
 Deliverables:
 

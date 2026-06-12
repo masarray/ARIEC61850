@@ -63,16 +63,20 @@ Implemented and tested today:
 - Smart FC resolver and smart read CLI.
 - DataSet directory using MMS named variable list attributes.
 - Confirmed write foundation used by guarded report/DataSet workflows.
+- MMS PDU envelope classification and receive router for invoke-matched
+  confirmed responses/errors and queued unconfirmed InformationReports.
 - RCB discovery, report readiness planning, static report planning, and dynamic
   report planning.
 - Guarded static report enable, GI, receive, value mapping, and cleanup.
 - Guarded dynamic DataSet create, RCB bind, report enable, GI, receive, cleanup,
   and DataSet delete.
+- Report frames now preserve raw access-result count, inclusion bitstring index,
+  and included DataSet member indexes for diagnostics.
 - GOOSE frame builder/parser and SCL-backed live publisher.
 - Sampled Values frame builder/parser and SCL-backed live publisher.
 - PCAP writer, reader, inspector, and stream playback.
 - Npcap raw Ethernet transport for live process-bus lab publishing.
-- 60 automated tests passing in the latest local validation run.
+- 66 automated tests passing in the latest local validation run.
 
 Still experimental or not implemented yet:
 
@@ -207,7 +211,7 @@ against production equipment or RCBs used by another client.
 Latest local validation evidence:
 
 - `dotnet build .\ARIEC61850.slnx -c Release` passed.
-- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 60 tests.
+- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 66 tests.
 - Live MMS association to lab IED `192.16.1.157:102` reached `MmsInitiated`.
 - Live directory evidence: 4 logical devices, 123 logical nodes, 9,464
   FC-aware points, 3,456 report attributes, and 457 control attributes.

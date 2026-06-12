@@ -135,7 +135,7 @@ public sealed class MmsInformationReportDecoderTests
                 new MmsInformationReportItem { Index = 0, Value = MmsDataValue.VisibleString("rpt") },
                 new MmsInformationReportItem { Index = 1, Value = MmsDataValue.BitString(0, [0x00]) },
                 new MmsInformationReportItem { Index = 2, Value = MmsDataValue.Unsigned(1) },
-                new MmsInformationReportItem { Index = 3, Value = MmsDataValue.UtcTime(new Iec61850UtcTime(new byte[8])) },
+                new MmsInformationReportItem { Index = 3, Value = MmsDataValue.UtcTime(new Iec61850UtcTime(DateTimeOffset.UnixEpoch, 0)) },
                 new MmsInformationReportItem { Index = 4, Value = MmsDataValue.VisibleString("LD0/LLN0.DataSet") },
                 new MmsInformationReportItem { Index = 5, Value = MmsDataValue.BitString(4, [0b1010_0000]) },
                 new MmsInformationReportItem { Index = 6, Value = MmsDataValue.Boolean(true) },

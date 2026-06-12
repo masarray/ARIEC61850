@@ -154,21 +154,20 @@ Current status observed in this repository and the latest lab run:
 - Latest lab result discovered 4 logical devices, 10,122 raw variables, 1
   DataSet, and 286 RCBs on a real IED.
 - RCB inventory and bounded attribute probing exist for selected attributes.
+- Live smart read is validated against the lab IED without manually supplied FC.
+- Static report enable/GI/receive/disable is validated against a static BRCB.
+- Dynamic report create DataSet, bind RCB.DatSet, enable/GI/receive/disable,
+  clear DatSet, and delete DataSet is validated against a dynamic BRCB.
 
 Current MMS gaps:
 
-- No full FC-aware IED directory model yet.
-- No complete DataSet member directory yet.
 - No robust `GetVariableAccessAttributes` / variable specification model yet.
-- No `GetNamedVariableListAttributes` DataSet member read yet.
-- No generic smart FC resolver yet.
-- No confirmed-write service yet.
-- No create/delete dynamic DataSet service yet.
-- No RCB reservation/configuration state machine yet.
-- No `RptEna` / `GI` write path yet.
-- No asynchronous receive pump for unconfirmed `InformationReport` yet.
-- No report decoder and DataSet-member mapping yet.
+- No full long-running async receive pump for arbitrary concurrent confirmed
+  requests and reports yet.
+- No full RCB reservation/configuration state machine across vendor variations
+  yet.
 - No BRCB recovery using `EntryID` yet.
+- No reason-for-inclusion names or full report optional-field object model yet.
 - No control model abstraction yet.
 - No server simulator yet.
 
@@ -1011,15 +1010,27 @@ status.
 - No deleting tests to make a build pass.
 - No silently choosing one interpretation when SCL/live model conflicts.
 
-## Current implementation checkpoint: report static/dynamic planning
+## Current implementation checkpoint: guarded static/dynamic reporting
 
-The stack now validates the complete pre-reporting chain without writing to the IED:
+The stack now validates the complete first live reporting chain against the lab
+IED at `192.16.1.157`:
 
 1. Live MMS directory discovery builds FC-aware points from the IED model.
 2. DataSet directory reads `GetNamedVariableListAttributes` and maps members to `LD/LN.DO.da [FC]`.
 3. Report readiness classifies RCBs into static-ready, dynamic empty slot, occupied, reserved, or incomplete.
-4. Static report planner selects a safe static RCB and binds it to a verified DataSet value map.
-5. Dynamic report planner resolves user-selected points and selects a free RCB slot for a future dynamic DataSet.
-6. MMS write and DefineNamedVariableList codec foundations exist, but live write workflows remain gated until the receive pump and cleanup state machine are implemented.
+4. Static reporting can enable a safe static BRCB, trigger GI, receive reports,
+   map included values to DataSet members, and disable the RCB.
+5. Dynamic reporting can create a dynamic DataSet, write `RCB.DatSet`, enable,
+   trigger GI, receive reports, clear `DatSet`, and delete the dynamic DataSet.
+6. Confirmed request handling queues unsolicited `InformationReport` frames that
+   arrive while waiting for the expected invoke response.
 
-Next phase must implement the asynchronous MMS receive pump and InformationReport decoder before exposing any live `RptEna=true` command.
+Remaining next phase:
+
+1. Promote the guarded receive queue into a full association receive pump.
+2. Decode report optional fields into typed names: RptID, OptFlds, SqNum,
+   TimeOfEntry, DatSet, BufOvfl, EntryID, ConfRev, inclusion bits, and
+   reason-for-inclusion.
+3. Add BRCB recovery with `EntryID`, `PurgeBuf`, duplicate handling, and
+   reconnect diagnostics.
+4. Add multi-vendor simulator and long-run report soak validation.

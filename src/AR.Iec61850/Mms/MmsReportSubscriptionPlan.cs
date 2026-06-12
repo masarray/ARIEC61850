@@ -187,7 +187,10 @@ public static class MmsReportSubscriptionPlanner
             blockers.Add("No free dynamic RCB slot matched the requested filter.");
 
         var dsName = string.IsNullOrWhiteSpace(dataSetName) ? "AR_DYN_DS01" : SanitizeDataSetName(dataSetName);
-        var dsReference = selected == null ? string.Empty : $"{selected.Domain}/LLN0.{dsName}";
+        var dsLogicalNode = selected == null || string.IsNullOrWhiteSpace(selected.LogicalNode)
+            ? "LLN0"
+            : selected.LogicalNode;
+        var dsReference = selected == null ? string.Empty : $"{selected.Domain}/{dsLogicalNode}.{dsName}";
 
         if (points.Any(x => x.FunctionalConstraint.Equals("CO", StringComparison.OrdinalIgnoreCase)))
             warnings.Add("A dynamic report DataSet includes CO/control data. This is unusual for monitoring; verify the use case before creating the DataSet.");
@@ -212,7 +215,7 @@ public static class MmsReportSubscriptionPlanner
     private static IReadOnlyList<string> BuildStaticSteps(MmsReportControlCandidate rcb, IReadOnlyList<MmsDataSetDirectoryMember> members)
     {
         var reserveStep = rcb.Buffered
-            ? "Reserve selected BRCB with ResvTms when supported, otherwise keep existing free state."
+            ? "Do not pre-write BRCB ResvTms for first live tests; enable RptEna only after the receiver is ready."
             : "Reserve selected URCB with Resv=true when supported.";
 
         return
@@ -235,7 +238,7 @@ public static class MmsReportSubscriptionPlanner
             $"Create dynamic DataSet {dataSetReference} with {points.Count} resolved member(s).",
             $"Write RCB.DatSet={dataSetReference} on free RCB {rcb.Reference}.",
             "Keep current OptFlds/TrgOps for first dynamic test unless the IED requires explicit configuration.",
-            rcb.Buffered ? "Reserve BRCB with ResvTms when supported." : "Reserve URCB with Resv=true when supported.",
+            rcb.Buffered ? "Do not pre-write BRCB ResvTms for first live tests; enable RptEna after DatSet is configured." : "Reserve URCB with Resv=true when supported.",
             "Install report receiver/dispatcher before enabling RptEna.",
             "Write RptEna=true, then write GI=true for first full refresh.",
             "On stop, write RptEna=false, release reservation, and delete dynamic DataSet only if it was created by this client and is deletable."

@@ -18,6 +18,8 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 {
     private readonly TpktClient _tpkt = new();
     private readonly CotpClient _cotp;
+    private readonly Queue<byte[]> _pendingInformationReports = new();
+    private readonly object _pendingInformationReportsLock = new();
     private string _lastHost = string.Empty;
     private int _lastPort = 102;
     private TimeSpan _lastTimeout = TimeSpan.FromSeconds(5);
@@ -194,7 +196,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 
             try
             {
-                var response = await SendPresentationPayloadAsync(request, cancellationToken).ConfigureAwait(false);
+                var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
                 last = MmsGetNameListResponseDecoder.Decode(response, invokeId);
                 LastDiscoveryResponseHex = last.ResponseHexPreview;
 
@@ -270,7 +272,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
                 MmsReadResult result;
                 try
                 {
-                    var response = await SendPresentationPayloadAsync(request, cancellationToken).ConfigureAwait(false);
+                    var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
                     result = MmsReadResponseDecoder.DecodeSingleVariable(response, invokeId);
                     LastReadResponseHex = result.ResponseHexPreview;
                 }
@@ -362,7 +364,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 
         try
         {
-            var response = await SendPresentationPayloadAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
             var result = MmsDataSetDirectoryResponseDecoder.Decode(response, invokeId, dataSetReference, directory);
             LastDiscoveryResponseHex = result.ResponseHexPreview;
             LastDiscoveryAttemptSummary = result.Summary;
@@ -425,7 +427,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 
         try
         {
-            var response = await SendPresentationPayloadAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
             var result = MmsWriteResponseDecoder.Decode(response, invokeId);
             LastReadResponseHex = result.ResponseHexPreview;
             return result;
@@ -457,7 +459,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 
         try
         {
-            var response = await SendPresentationPayloadAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
             var result = MmsDefineNamedVariableListResponseDecoder.Decode(response, invokeId, dataSetReference);
             LastDiscoveryResponseHex = result.ResponseHexPreview;
             LastDiscoveryAttemptSummary = result.Message;
@@ -476,6 +478,38 @@ public sealed partial class MmsClientSession : IAsyncDisposable
         }
     }
 
+    public async Task<MmsDeleteNamedVariableListResult> DeleteNamedVariableListAsync(
+        string dataSetReference,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataSetReference);
+
+        var invokeId = NextInvokeId();
+        var request = MmsDeleteNamedVariableListRequest.Build(invokeId, dataSetReference);
+        LastDiscoveryRequestHex = HexDump.ToCompactString(request);
+
+        try
+        {
+            var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
+            var result = MmsDeleteNamedVariableListResponseDecoder.Decode(response, invokeId, dataSetReference);
+            LastDiscoveryResponseHex = result.ResponseHexPreview;
+            LastDiscoveryAttemptSummary = result.Message;
+            return result;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
+        {
+            await MarkProtocolFaultAsync().ConfigureAwait(false);
+            return new MmsDeleteNamedVariableListResult
+            {
+                IsSuccess = false,
+                DataSetReference = dataSetReference,
+                Message = $"DeleteNamedVariableList transport fault: {ex.GetType().Name}: {ex.Message}",
+                ResponseHexPreview = LastDiscoveryResponseHex
+            };
+        }
+    }
+
     public async Task<byte[]> SendPresentationPayloadAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken = default)
     {
         if (!IsTransportConnected)
@@ -483,6 +517,93 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 
         await _cotp.SendDataAsync(payload, cancellationToken).ConfigureAwait(false);
         return await _cotp.ReceiveDataAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<byte[]> SendConfirmedPresentationPayloadAsync(
+        ReadOnlyMemory<byte> payload,
+        int expectedInvokeId,
+        CancellationToken cancellationToken)
+    {
+        if (!IsTransportConnected)
+            throw new InvalidOperationException("Native IEC 61850 transport is not connected.");
+
+        await _cotp.SendDataAsync(payload, cancellationToken).ConfigureAwait(false);
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var response = await _cotp.ReceiveDataAsync(cancellationToken).ConfigureAwait(false);
+            var mms = MmsPresentation.StripPresentationPrefix(response);
+
+            if (mms.Length > 0 && mms[0] == 0xA3)
+            {
+                EnqueueInformationReport(response);
+                continue;
+            }
+
+            if (IsConfirmedMmsPduForInvoke(mms, expectedInvokeId) || mms.Length == 0)
+                return response;
+
+            // Keep strict invoke ownership visible.  There is still no full receive
+            // pump, but this prevents unsolicited reports from corrupting the next
+            // confirmed operation in guarded report workflows.
+            return response;
+        }
+    }
+
+    private void EnqueueInformationReport(byte[] payload)
+    {
+        lock (_pendingInformationReportsLock)
+            _pendingInformationReports.Enqueue(payload);
+    }
+
+    private bool TryDequeueInformationReport(out byte[] payload)
+    {
+        lock (_pendingInformationReportsLock)
+        {
+            if (_pendingInformationReports.Count > 0)
+            {
+                payload = _pendingInformationReports.Dequeue();
+                return true;
+            }
+        }
+
+        payload = Array.Empty<byte>();
+        return false;
+    }
+
+    private static bool IsConfirmedMmsPduForInvoke(ReadOnlyMemory<byte> mms, int expectedInvokeId)
+    {
+        if (mms.Length == 0)
+            return false;
+
+        if (mms.Span[0] is not (0xA1 or 0xA2))
+            return false;
+
+        try
+        {
+            var offset = 0;
+            if (!AR.Iec61850.Asn1.BerReader.TryReadTlv(mms, ref offset, out var outer))
+                return false;
+
+            var children = AR.Iec61850.Asn1.BerReader.ReadChildren(outer.Value);
+            if (children.Count == 0)
+                return false;
+
+            var invoke = mms.Span[0] == 0xA2 && children[0].Class == AR.Iec61850.Asn1.BerClass.ContextSpecific && children[0].TagNumber == 0
+                ? children[0]
+                : children[0].EncodedTag == 0x02 ? children[0] : default;
+
+            if (invoke.EncodedTag == 0)
+                return false;
+
+            var actual = AR.Iec61850.Asn1.BerReader.ReadUnsignedInteger(invoke);
+            return actual == (ulong)expectedInvokeId;
+        }
+        catch (AR.Iec61850.Asn1.BerFormatException)
+        {
+            return false;
+        }
     }
 
     public async ValueTask DisposeAsync()

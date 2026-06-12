@@ -15,6 +15,7 @@ public sealed class MmsReadResult
 {
     public bool IsSuccess { get; init; }
     public MmsDataValue? Value { get; init; }
+    public int? FailureCode { get; init; }
     public string Message { get; init; } = string.Empty;
     public string ResponseHexPreview { get; init; } = string.Empty;
 }
@@ -100,7 +101,7 @@ public static class MmsReadResponseDecoder
             if (!TryValidateConfirmedResponse(mms, expectedInvokeId, out var message))
                 return Fail(message, hex);
 
-            if (TryDecodeConfirmedReadAccessResult(mms, out var accessValue, out var accessMessage))
+            if (TryDecodeConfirmedReadAccessResult(mms, out var accessValue, out var accessMessage, out var failureCode))
             {
                 return new MmsReadResult
                 {
@@ -112,15 +113,18 @@ public static class MmsReadResponseDecoder
             }
 
             if (!string.IsNullOrWhiteSpace(accessMessage))
-                return Fail(accessMessage, hex);
+                return Fail(accessMessage, hex, failureCode);
 
             // Legacy fallback for tolerant decoding of non-standard/short responses.
             var values = new List<BerTlv>();
             CollectTlv(mms, values, depth: 0);
 
-            var failure = values.LastOrDefault(v => v.EncodedTag == 0x81 && v.Value.Length is > 0 and <= 4);
-            if (failure.EncodedTag == 0x81)
-                return Fail($"MMS read returned AccessResult.failure code {BerReader.ReadUnsignedInteger(failure)}.", hex);
+            var failure = values.LastOrDefault(v => v.EncodedTag == 0x80 && v.Value.Length is > 0 and <= 4);
+            if (failure.EncodedTag == 0x80)
+            {
+                var code = BerReader.ReadUnsignedInteger(failure);
+                return Fail(FormatDataAccessFailure(code), hex, code.HasValue ? (int)code.Value : null);
+            }
 
             foreach (var tlv in values.AsEnumerable().Reverse())
             {
@@ -145,10 +149,15 @@ public static class MmsReadResponseDecoder
     }
 
 
-    private static bool TryDecodeConfirmedReadAccessResult(ReadOnlyMemory<byte> mms, out MmsDataValue value, out string message)
+    private static bool TryDecodeConfirmedReadAccessResult(
+        ReadOnlyMemory<byte> mms,
+        out MmsDataValue value,
+        out string message,
+        out int? failureCode)
     {
         value = default!;
         message = string.Empty;
+        failureCode = null;
 
         var offset = 0;
         if (!BerReader.TryReadTlv(mms, ref offset, out var outer))
@@ -165,19 +174,18 @@ public static class MmsReadResponseDecoder
             return false;
         }
 
-        var accessResults = new List<BerTlv>();
-        CollectAccessResults(readService, accessResults, depth: 0);
-        if (accessResults.Count == 0)
+        if (!TryGetReadAccessResults(readService, out var accessResults))
         {
             message = "MMS read response has no AccessResult nodes.";
             return false;
         }
 
         var first = accessResults[0];
-        if (first.Class == BerClass.ContextSpecific && first.TagNumber == 1)
+        if (IsAccessResultFailure(first))
         {
             var code = BerReader.ReadUnsignedInteger(first);
-            message = $"MMS read returned AccessResult.failure code {code}.";
+            failureCode = code.HasValue ? (int)code.Value : null;
+            message = FormatDataAccessFailure(code);
             return false;
         }
 
@@ -209,35 +217,46 @@ public static class MmsReadResponseDecoder
         return false;
     }
 
-    private static void CollectAccessResults(BerTlv tlv, ICollection<BerTlv> output, int depth)
+    private static bool TryGetReadAccessResults(BerTlv readService, out IReadOnlyList<BerTlv> accessResults)
     {
-        if (depth > 16)
-            return;
+        accessResults = Array.Empty<BerTlv>();
+        if (!readService.Constructed)
+            return false;
 
-        // AccessResult.failure is [1] primitive.  It conflicts numerically with
-        // MMS Data.array [1], but array is constructed, so the distinction is safe.
-        if (tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 1 && !tlv.Constructed)
+        var children = BerReader.ReadChildren(readService.Value);
+
+        // Read-Response ::= SEQUENCE {
+        //   variableAccessSpecification [0] OPTIONAL,
+        //   listOfAccessResult [1] IMPLICIT SEQUENCE OF AccessResult
+        // }
+        //
+        // The [1] wrapper is not an MMS Data.array.  Older tolerant decoding treated
+        // it as a data value or failure and produced large bogus failure codes such
+        // as 0x80010A.  Decode the wrapper first, then interpret each AccessResult.
+        var list = children.LastOrDefault(x =>
+            x.Class == BerClass.ContextSpecific &&
+            x.TagNumber == 1 &&
+            x.Constructed);
+
+        if (list.EncodedTag != 0)
         {
-            output.Add(tlv);
-            return;
+            accessResults = BerReader.ReadChildren(list.Value);
+            return accessResults.Count > 0;
         }
 
-        // AccessResult.success is the Data value itself: [1] array, [2] structure,
-        // [3] boolean, [4] bit-string, [5] integer, [6] unsigned, [10] string,
-        // [17] UTC time, etc.  Only accept primitive tags for 3..17 so service
-        // wrappers such as readResponse [4] constructed are not mistaken as Data.
-        if (IsMmsDataTlv(tlv))
-        {
-            output.Add(tlv);
-            return;
-        }
-
-        if (!tlv.Constructed)
-            return;
-
-        foreach (var child in BerReader.ReadChildren(tlv.Value))
-            CollectAccessResults(child, output, depth + 1);
+        // Legacy fallback for older tests/non-standard responses where the read
+        // service directly contains access result TLVs without the [1] list wrapper.
+        accessResults = children
+            .Where(x => IsAccessResultFailure(x) || IsMmsDataTlv(x) || IsLegacySuccessWrapper(x))
+            .ToArray();
+        return accessResults.Count > 0;
     }
+
+    private static bool IsAccessResultFailure(BerTlv tlv)
+        => tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 0 && !tlv.Constructed;
+
+    private static bool IsLegacySuccessWrapper(BerTlv tlv)
+        => tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 0 && tlv.Constructed;
 
     private static bool IsMmsDataTlv(BerTlv tlv)
     {
@@ -324,11 +343,34 @@ public static class MmsReadResponseDecoder
         return value.Kind != MmsDataKind.Unknown;
     }
 
-    private static MmsReadResult Fail(string message, string hex)
+    private static string FormatDataAccessFailure(ulong? code)
+        => code.HasValue
+            ? $"MMS read returned AccessResult.failure code {code.Value} ({DataAccessErrorName(code.Value)})."
+            : "MMS read returned AccessResult.failure code <undecodable>.";
+
+    private static string DataAccessErrorName(ulong code)
+        => code switch
+        {
+            0 => "object-invalidated",
+            1 => "hardware-fault",
+            2 => "temporarily-unavailable",
+            3 => "object-access-denied",
+            4 => "object-undefined",
+            5 => "invalid-address",
+            6 => "type-unsupported",
+            7 => "type-inconsistent",
+            8 => "object-attribute-inconsistent",
+            9 => "object-access-unsupported",
+            10 => "object-non-existent",
+            _ => "unknown"
+        };
+
+    private static MmsReadResult Fail(string message, string hex, int? failureCode = null)
     {
         return new MmsReadResult
         {
             IsSuccess = false,
+            FailureCode = failureCode,
             Message = message,
             ResponseHexPreview = hex
         };

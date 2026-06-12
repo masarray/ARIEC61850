@@ -10,6 +10,7 @@ public sealed class CotpClient
     }
 
     public bool IsConnected { get; private set; }
+    public bool HasDataAvailable => IsConnected && _tpkt.HasDataAvailable;
     public CotpConnectionConfirm? LastConnectionConfirm { get; private set; }
 
     public void Reset()

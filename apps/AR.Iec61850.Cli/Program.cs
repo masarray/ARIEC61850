@@ -41,6 +41,7 @@ internal static class Cli
                 "mms-report-dynamic-plan" => await MmsReportDynamicPlanAsync(args[1..]).ConfigureAwait(false),
                 "mms-rcb-probe" => await MmsRcbProbeAsync(args[1..]).ConfigureAwait(false),
                 "mms-report-static-live" => await MmsReportStaticLiveAsync(args[1..]).ConfigureAwait(false),
+                "mms-report-dynamic-live" => await MmsReportDynamicLiveAsync(args[1..]).ConfigureAwait(false),
                 "mms-dataset-directory" => await MmsDataSetDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "publish-sv-live" => await PublishSvLiveAsync(args[1..]).ConfigureAwait(false),
                 "publish-goose-live" => await PublishGooseLiveAsync(args[1..]).ConfigureAwait(false),
@@ -944,6 +945,125 @@ internal static class Cli
         return plan.IsReady ? 0 : 1;
     }
 
+    private static async Task<int> MmsReportDynamicLiveAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-report-dynamic-live requires <host-or-ip> --points <point1,point2,...>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 120000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var rawLimit = options.GetInt("raw-limit", 80);
+        var requestedPoints = SplitCsv(options.Get("points", string.Empty));
+        if (requestedPoints.Count == 0)
+            throw new ArgumentException("--points must contain at least one IEC 61850 point reference separated by comma.");
+
+        var preferredLd = options.Get("ld", string.Empty);
+        var preferredRcb = options.Get("rcb", string.Empty);
+        var dataSetName = options.Get("dataset-name", "AR_DYN_DS01");
+        var durationSec = options.GetInt("duration-sec", 15);
+        if (durationSec < 1)
+            throw new ArgumentException("--duration-sec must be at least 1.");
+
+        var reserveSec = options.GetInt("reserve-sec", 30);
+        if (reserveSec < 1)
+            throw new ArgumentException("--reserve-sec must be at least 1.");
+
+        var triggerGi = options.GetBool("gi", fallback: true);
+        var deleteDataSet = options.GetBool("delete-dataset", fallback: true);
+        var confirmed = options.GetBool("yes", fallback: false);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: guarded dynamic report live session (creates DataSet, writes DatSet/RptEna/GI only when --yes is provided).");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 286), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+
+        Console.WriteLine();
+        Console.WriteLine("Requested dynamic DataSet points:");
+        foreach (var point in requestedPoints)
+        {
+            var resolve = MmsFcResolver.Resolve(discovery.IedDirectory, point);
+            Console.WriteLine($"  {point}: {resolve.Message}");
+            if (resolve.BestCandidate != null)
+                Console.WriteLine($"      -> {resolve.BestCandidate.UserReference} [{resolve.BestCandidate.FunctionalConstraint}] mms={resolve.BestCandidate.MmsReference}");
+        }
+
+        var plan = MmsReportSubscriptionPlanner.BuildDynamicPlan(discovery.ReportInventory, discovery.IedDirectory, requestedPoints, preferredLd, preferredRcb, dataSetName);
+
+        Console.WriteLine();
+        WriteReportSubscriptionPlan(plan, rawLimit);
+
+        if (!plan.IsReady || plan.ReportControl == null)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Live dynamic report is blocked. Fix the plan first.");
+            return 1;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Safety gate:");
+        Console.WriteLine("  This command creates a dynamic DataSet, points the selected free RCB at it, enables reporting, optionally sends GI, then disables and cleans up.");
+        Console.WriteLine("  Use only on an isolated FAT/test IED or a confirmed unused dynamic RCB slot. The command will not proceed without --yes.");
+        if (!confirmed)
+        {
+            Console.WriteLine("  Dry-run only. Re-run with --yes to execute the guarded live session.");
+            return 0;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Starting guarded dynamic report session for {durationSec}s...");
+        var live = await session.RunGuardedDynamicReportSessionAsync(
+            plan,
+            TimeSpan.FromSeconds(durationSec),
+            reserveSec,
+            triggerGi,
+            deleteDataSet,
+            timeout.Token).ConfigureAwait(false);
+
+        Console.WriteLine();
+        Console.WriteLine(live.Message);
+
+        if (live.Warnings.Count > 0)
+        {
+            Console.WriteLine("Warnings:");
+            foreach (var warning in live.Warnings)
+                Console.WriteLine($"  - {warning}");
+        }
+
+        Console.WriteLine("Write steps:");
+        foreach (var step in live.WriteSteps)
+            Console.WriteLine($"  {(step.IsSuccess ? "OK" : "FAIL")} {step.Attribute} {step.Reference}: {step.Message}");
+
+        Console.WriteLine($"Reports received: {live.Reports.Count}");
+        foreach (var report in TakeWithLimit(live.Reports, rawLimit))
+        {
+            Console.WriteLine($"  {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} UTC - {report.Message}");
+            foreach (var value in TakeWithLimit(report.Values, 32))
+            {
+                Console.WriteLine($"      [{value.Index}] {value.MemberReference}: {value.DisplayValue}");
+            }
+            WriteLimitNotice(report.Values.Count, 32, "report value(s)");
+        }
+        WriteLimitNotice(live.Reports.Count, rawLimit, "report frame(s)");
+
+        return live.IsSuccess ? 0 : 1;
+    }
+
     private static async Task<int> MmsReportPlanAsync(string[] args)
     {
         if (args.Length < 1)
@@ -1741,6 +1861,7 @@ internal static class Cli
         Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01]");
         Console.WriteLine("  mms-rcb-probe <host-or-ip> <LD/LN.BR.name|LD/LN.RP.name> [--port 102] [--timeout-ms 120000]");
         Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--yes]");
+        Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--yes]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
         Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
@@ -1760,6 +1881,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-plan 192.168.1.10 --read-values");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-plan 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-live 192.168.1.10 --duration-sec 15 --yes");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-live 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-dataset-directory 192.168.1.10 OCR7SR12PROT/LLN0.DataSet --raw-limit 80");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --continuous --yes");

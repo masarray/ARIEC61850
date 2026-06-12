@@ -8,6 +8,7 @@ public sealed class TpktClient : IAsyncDisposable
     private NetworkStream? _stream;
 
     public bool IsConnected => _tcpClient?.Connected == true;
+    public bool HasDataAvailable => _stream?.DataAvailable == true;
 
     public async Task ConnectAsync(string host, int port, TimeSpan timeout, CancellationToken cancellationToken)
     {

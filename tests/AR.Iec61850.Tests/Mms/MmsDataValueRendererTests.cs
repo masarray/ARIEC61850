@@ -31,7 +31,7 @@ public sealed class MmsDataValueRendererTests
             MmsDataValue.UtcTime(new Iec61850UtcTime(new DateTimeOffset(2026, 6, 12, 12, 0, 24, TimeSpan.Zero), 0))
         ]));
         var success = BerWriter.EncodeTlv(0xA0, structure);
-        var listOfAccessResult = BerWriter.EncodeTlv(0xA0, success);
+        var listOfAccessResult = BerWriter.EncodeTlv(0xA1, success);
         var readResponse = BerWriter.EncodeTlv(0xA4, listOfAccessResult);
         var invoke = new byte[] { 0x02, 0x01, 0x0C };
         var mms = BerWriter.EncodeTlv(0xA1, invoke.Concat(readResponse).ToArray());

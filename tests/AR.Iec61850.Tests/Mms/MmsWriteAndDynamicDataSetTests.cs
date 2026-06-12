@@ -1,3 +1,4 @@
+using AR.Iec61850.Asn1;
 using AR.Iec61850.Mms;
 
 namespace AR.Iec61850.Tests.Mms;
@@ -61,6 +62,38 @@ public sealed class MmsWriteAndDynamicDataSetTests
 
         Assert.True(result.IsSuccess);
     }
+
+    [Fact]
+    public void BuildDeleteNamedVariableList_EncodesDeleteServiceAndListName()
+    {
+        var request = MmsDeleteNamedVariableListRequest.Build(11, "LD0/GGIO1.AR_DYN_DS01");
+        var hex = Convert.ToHexString(request);
+
+        Assert.True(hex.Contains("AD", StringComparison.OrdinalIgnoreCase));
+        Assert.True(hex.Contains("4747494F312441525F44594E5F44533031", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void DecodeDeleteNamedVariableListResponse_ReadsMatchedAndDeletedCounts()
+    {
+        var service = BerWriter.EncodeTlv(
+            0xAD,
+            BerWriter.EncodeTlv(0x80, [0x01])
+                .Concat(BerWriter.EncodeTlv(0x81, [0x01]))
+                .ToArray());
+        var mms = BerWriter.EncodeTlv(
+            0xA1,
+            new byte[] { 0x02, 0x01, 0x0B }
+                .Concat(service)
+                .ToArray());
+        var payload = MmsPresentation.WrapIsoPresentationPData(mms);
+
+        var result = MmsDeleteNamedVariableListResponseDecoder.Decode(payload, 11, "LD0/GGIO1.AR_DYN_DS01");
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal((uint)1, result.NumberMatched);
+        Assert.Equal((uint)1, result.NumberDeleted);
+    }
 }
 
 public sealed class MmsInformationReportDecoderTests
@@ -68,7 +101,18 @@ public sealed class MmsInformationReportDecoderTests
     [Fact]
     public void DecodeInformationReport_DecodesAccessResults()
     {
-        var mms = Convert.FromHexString("A305A003830101");
+        var variableAccessSpecification = BerWriter.EncodeTlv(
+            0xA1,
+            BerWriter.EncodeTlv(0x1A, BerWriter.EncodeAscii("LD0"))
+                .Concat(BerWriter.EncodeTlv(0x1A, BerWriter.EncodeAscii("LLN0$Events")))
+                .ToArray());
+        var listOfAccessResult = BerWriter.EncodeTlv(0xA0, MmsDataCodec.Encode(MmsDataValue.Boolean(true)));
+        var informationReport = BerWriter.EncodeTlv(
+            0xA0,
+            variableAccessSpecification
+                .Concat(listOfAccessResult)
+                .ToArray());
+        var mms = BerWriter.EncodeTlv(0xA3, informationReport);
         var payload = MmsPresentation.WrapIsoPresentationPData(mms);
 
         Assert.True(MmsInformationReportDecoder.IsInformationReport(payload));

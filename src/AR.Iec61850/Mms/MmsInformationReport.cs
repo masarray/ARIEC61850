@@ -49,16 +49,14 @@ public static class MmsInformationReportDecoder
             if (info.EncodedTag == 0)
                 return Fail("MMS Unconfirmed-PDU has no informationReport service node [0].", hex);
 
-            var accessResults = new List<MmsInformationReportItem>();
-            foreach (var child in BerReader.ReadChildren(info.Value))
-                CollectAccessResults(child, accessResults, depth: 0);
+            var accessResults = DecodeInformationReportAccessResults(info).ToArray();
 
             return new MmsInformationReport
             {
-                IsSuccess = accessResults.Count > 0,
+                IsSuccess = accessResults.Length > 0,
                 Items = accessResults,
-                Message = accessResults.Count > 0
-                    ? $"MMS InformationReport decoded {accessResults.Count} access result(s)."
+                Message = accessResults.Length > 0
+                    ? $"MMS InformationReport decoded {accessResults.Length} access result(s)."
                     : "MMS InformationReport was decoded, but no access results were found.",
                 ResponseHexPreview = hex
             };
@@ -69,65 +67,70 @@ public static class MmsInformationReportDecoder
         }
     }
 
-    private static void CollectAccessResults(BerTlv tlv, List<MmsInformationReportItem> output, int depth)
+    private static IEnumerable<MmsInformationReportItem> DecodeInformationReportAccessResults(BerTlv informationReport)
     {
-        if (depth > 32)
-            return;
+        if (!informationReport.Constructed)
+            yield break;
 
-        if (tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 1 && !tlv.Constructed)
+        var children = BerReader.ReadChildren(informationReport.Value);
+
+        // InformationReport ::= SEQUENCE {
+        //   variableAccessSpecification VariableAccessSpecification,
+        //   listOfAccessResult [0] IMPLICIT SEQUENCE OF AccessResult
+        // }
+        //
+        // Both variableAccessSpecification.listOfVariable and listOfAccessResult can
+        // use tag [0].  The access-result list is the trailing service field, so take
+        // the last constructed [0] child instead of recursively decoding object-name
+        // metadata as reported values.
+        var list = children.LastOrDefault(x =>
+            x.Class == BerClass.ContextSpecific &&
+            x.TagNumber == 0 &&
+            x.Constructed);
+
+        if (list.EncodedTag == 0)
+            yield break;
+
+        var index = 0;
+        foreach (var accessResult in BerReader.ReadChildren(list.Value))
         {
-            var code = BerReader.ReadUnsignedInteger(tlv);
-            output.Add(new MmsInformationReportItem
+            if (IsAccessResultFailure(accessResult))
             {
-                Index = output.Count,
-                FailureCode = code.HasValue ? (int)code.Value : null
-            });
-            return;
-        }
-
-        if (tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 0 && tlv.Constructed)
-        {
-            IReadOnlyList<BerTlv> children;
-            try
-            {
-                children = BerReader.ReadChildren(tlv.Value);
-            }
-            catch (BerFormatException)
-            {
-                return;
-            }
-
-            if (children.Count == 1 && children[0].Class == BerClass.ContextSpecific && children[0].TagNumber is >= 1 and <= 17)
-            {
-                output.Add(new MmsInformationReportItem
+                var code = BerReader.ReadUnsignedInteger(accessResult);
+                yield return new MmsInformationReportItem
                 {
-                    Index = output.Count,
-                    Value = MmsDataCodec.Decode(children[0])
-                });
-                return;
+                    Index = index++,
+                    FailureCode = code.HasValue ? (int)code.Value : null
+                };
+                continue;
             }
 
-            foreach (var child in children)
-                CollectAccessResults(child, output, depth + 1);
-
-            return;
-        }
-
-        if (tlv.Class == BerClass.ContextSpecific && tlv.TagNumber is >= 1 and <= 17 && tlv.EncodedTag != 0xA0)
-        {
-            output.Add(new MmsInformationReportItem
+            if (IsMmsDataTlv(accessResult))
             {
-                Index = output.Count,
-                Value = MmsDataCodec.Decode(tlv)
-            });
-            return;
+                yield return new MmsInformationReportItem
+                {
+                    Index = index++,
+                    Value = MmsDataCodec.Decode(accessResult)
+                };
+                continue;
+            }
         }
+    }
 
-        if (!tlv.Constructed)
-            return;
+    private static bool IsAccessResultFailure(BerTlv tlv)
+        => tlv.Class == BerClass.ContextSpecific && tlv.TagNumber == 0 && !tlv.Constructed;
 
-        foreach (var child in BerReader.ReadChildren(tlv.Value))
-            CollectAccessResults(child, output, depth + 1);
+    private static bool IsMmsDataTlv(BerTlv tlv)
+    {
+        if (tlv.Class != BerClass.ContextSpecific)
+            return false;
+
+        return tlv.TagNumber switch
+        {
+            1 or 2 => tlv.Constructed,
+            >= 3 and <= 17 => !tlv.Constructed,
+            _ => false
+        };
     }
 
     private static MmsInformationReport Fail(string message, string hex)

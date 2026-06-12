@@ -16,6 +16,22 @@ public class MmsClientCodecTests
     }
 
     [Fact]
+    public void ReadRequest_EncodesReadVariableAccessSpecificationWrapper()
+    {
+        var request = MmsReadRequest.BuildConfirmedReadPdu(
+            5,
+            new MmsObjectReference("LD0", "LLN0$ST$Mod$stVal", "ST"));
+
+        var hex = Convert.ToHexString(request);
+
+        Assert.Contains("A4", hex, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("A1", hex, StringComparison.OrdinalIgnoreCase); // Read-Request variableAccessSpecification [1].
+        Assert.Contains("A0", hex, StringComparison.OrdinalIgnoreCase); // VariableAccessSpecification.listOfVariable [0].
+        Assert.Contains("4C4430", hex, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("4C4C4E30245354244D6F6424737456616C", hex, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void GetNameListResponseDecoderReadsNamesAndMoreFollows()
     {
         var response = BuildGetNameListResponse(
@@ -50,7 +66,8 @@ public class MmsClientCodecTests
     public void ReadResponseDecoderAcceptsDirectMmsDataAccessResult()
     {
         // Real MMS ReadResponse encodes AccessResult.success as the Data value itself,
-        // not as an additional [0] success wrapper.  This is required for primitive
+        // inside listOfAccessResult [1], not as an additional [0] success wrapper.
+        // This is required for primitive
         // RCB attributes such as RptEna(boolean), ConfRev(unsigned), and TrgOps(bit-string).
         var response = BuildDirectReadResponse(invokeId: 24, MmsDataValue.Boolean(false));
 
@@ -60,6 +77,19 @@ public class MmsClientCodecTests
         Assert.NotNull(result.Value);
         Assert.Equal(MmsDataKind.Boolean, result.Value.Kind);
         Assert.False((bool)result.Value.Value!);
+    }
+
+    [Fact]
+    public void ReadResponseDecoder_DecodesAccessResultFailureWithoutTreatingListAsData()
+    {
+        var response = BuildReadFailureResponse(invokeId: 25, code: 10);
+
+        var result = MmsReadResponseDecoder.DecodeSingleVariable(response, expectedInvokeId: 25);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(10, result.FailureCode);
+        Assert.Contains("code 10", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("8388874", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private static byte[] BuildGetNameListResponse(int invokeId, IReadOnlyList<string> names, bool moreFollows)
@@ -85,7 +115,7 @@ public class MmsClientCodecTests
     private static byte[] BuildDirectReadResponse(int invokeId, MmsDataValue value)
     {
         var data = MmsDataCodec.Encode(value);
-        var listOfAccessResult = BerWriter.EncodeTlv(0xA0, data);
+        var listOfAccessResult = BerWriter.EncodeTlv(0xA1, data);
         var readService = BerWriter.EncodeTlv(0xA4, listOfAccessResult);
         var mms = BerWriter.EncodeTlv(
             0xA1,
@@ -98,7 +128,19 @@ public class MmsClientCodecTests
     {
         var data = MmsDataCodec.Encode(value);
         var accessResultSuccess = BerWriter.EncodeTlv(0xA0, data);
-        var listOfAccessResult = BerWriter.EncodeTlv(0xA0, accessResultSuccess);
+        var listOfAccessResult = BerWriter.EncodeTlv(0xA1, accessResultSuccess);
+        var readService = BerWriter.EncodeTlv(0xA4, listOfAccessResult);
+        var mms = BerWriter.EncodeTlv(
+            0xA1,
+            Concat(Integer(invokeId), readService));
+
+        return MmsPresentation.WrapIsoPresentationPData(mms);
+    }
+
+    private static byte[] BuildReadFailureResponse(int invokeId, byte code)
+    {
+        var failure = BerWriter.EncodeTlv(0x80, [code]);
+        var listOfAccessResult = BerWriter.EncodeTlv(0xA1, failure);
         var readService = BerWriter.EncodeTlv(0xA4, listOfAccessResult);
         var mms = BerWriter.EncodeTlv(
             0xA1,

@@ -119,8 +119,9 @@ Smart read=OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] => OK value=0
 - Current live publisher sends one selected SV stream per command.
 - Current live GOOSE publisher sends one selected GOOSE stream per command.
 - Typed engineering-value-to-SV payload binding is still evolving.
-- MMS discovery is read-only; report enable/disable and InformationReport
-  monitoring are not implemented yet.
+- MMS static and dynamic reporting have a guarded lab smoke path. The current
+  receiver is suitable for short CLI sessions; a full long-running async receive
+  pump, BRCB recovery, and multi-vendor soak evidence are still pending.
 - There is no conformance certification claim.
 
 ## Interoperability checklist
@@ -191,7 +192,11 @@ Expected result:
 - the proposed dynamic DataSet reference is shown;
 - the execution steps explicitly list `CreateDataSet`, `Write RCB.DatSet`, reservation, `RptEna`, `GI`, and cleanup.
 
-Do not run live report-enable code until the report receiver/dispatcher exists. Reporting is unsolicited, so the receive pump has to be active before `RptEna=true`; otherwise the first GI/report message can be missed or misrouted as a normal confirmed response.
+Live report-enable commands are guarded with `--yes`. Reporting is unsolicited,
+so the stack queues `InformationReport` frames that arrive while a confirmed
+response is pending. The remaining production hardening item is a full
+association receive pump that can monitor reports while arbitrary confirmed
+requests are in flight.
 
 ## Static report live smoke test (guarded)
 
@@ -205,7 +210,51 @@ Expected behavior:
 
 1. The command discovers the live IED directory and report inventory.
 2. It selects a static-ready RCB with a valid DataSet.
-3. It writes reservation when supported, writes `RptEna=true`, optionally writes `GI=true`, listens for InformationReport frames, then cleans up with `RptEna=false` and releases reservation.
+3. It writes `RptEna=true`, optionally writes `GI=true`, listens for
+   InformationReport frames, then cleans up with `RptEna=false`. On the tested
+   relay, explicit BRCB `ResvTms` pre-write is skipped because the relay accepts
+   ownership through `RptEna=true` and rejects or side-effects explicit
+   `ResvTms` writes.
 4. Report values are mapped by DataSet member index and rendered with structured MMS values when available.
 
 If no report is received, the write steps are still valuable evidence. Check `RptEna`, GI support, trigger options, RCB ownership, and whether the selected DataSet points are currently changing.
+
+Recorded live static report result against `192.16.1.157`:
+
+```text
+RCB=OCR7SR12PROT/LLN0.BR.brcbA01
+DataSet=OCR7SR12PROT/LLN0.DataSet
+RptEna=true OK
+GI=true OK
+InformationReport frames=2
+mapped DataSet values=2/2
+cleanup RptEna=false OK
+post-check RptEna=false
+note=relay holds ResvTms after disable until its timer expires
+```
+
+## Dynamic report live smoke test (guarded)
+
+Use the guarded dynamic report command only on an isolated test IED or a
+confirmed unused dynamic RCB slot:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-dynamic-live 192.16.1.157 --port 102 --timeout-ms 120000 --rcb OCR7SR12MEAS/LLN0.BR.brcbA01 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12MEAS/MMXU1.A.phsA.cVal.mag.f --dataset-name AR_DYN_DS01 --duration-sec 5 --gi true --yes
+```
+
+Recorded live dynamic report result:
+
+```text
+RCB=OCR7SR12MEAS/LLN0.BR.brcbA01
+CreateDataSet=OCR7SR12MEAS/LLN0.AR_DYN_DS01 OK
+Write RCB.DatSet OK
+RptEna=true OK
+GI=true OK
+InformationReport frames=1
+mapped DataSet values=2/2
+cleanup RptEna=false OK
+cleanup DatSet empty OK
+DeleteDataSet=deleted 1/1 OK
+post-check RptEna=false DatSet=empty
+note=relay holds ResvTms after disable until its timer expires
+```

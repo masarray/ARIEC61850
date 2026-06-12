@@ -196,4 +196,44 @@ public sealed class MmsReportSubscriptionPlannerTests
         Assert.Equal(2, plan.DynamicPoints.Count);
         Assert.Contains(plan.Steps, x => x.Contains("Create dynamic DataSet", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void BuildDynamicPlan_CreatesDataSetInSameLogicalNodeAsSelectedRcb()
+    {
+        var inventory = new MmsReportInventory();
+        inventory.ReportControls.Add(new MmsReportControlCandidate
+        {
+            Domain = "LD0",
+            LogicalNode = "GGIO1",
+            FunctionalConstraint = "RP",
+            Name = "urcbA01",
+            Reference = "LD0/GGIO1.RP.urcbA01",
+            Buffered = false,
+            EnabledState = "false",
+            ReservationState = "false",
+            ReportId = "LD0/GGIO1$RP$urcbA01",
+            ConfRev = "1",
+            Status = "Attribute-probed"
+        });
+
+        var directory = new MmsIedModelDirectory(
+        [
+            new MmsFcResolvedPoint
+            {
+                Domain = "LD0",
+                LogicalNode = "GGIO1",
+                FunctionalConstraint = "ST",
+                DataObjectPath = "Ind1.stVal",
+                MmsItemName = "GGIO1$ST$Ind1$stVal"
+            }
+        ]);
+
+        var plan = MmsReportSubscriptionPlanner.BuildDynamicPlan(
+            inventory,
+            directory,
+            ["LD0/GGIO1.Ind1.stVal"],
+            dataSetName: "AR_TEST");
+
+        Assert.Equal("LD0/GGIO1.AR_TEST", plan.DataSetReference);
+    }
 }

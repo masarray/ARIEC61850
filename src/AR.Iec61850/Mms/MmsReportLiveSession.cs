@@ -129,12 +129,32 @@ public sealed class MmsReportPollRead
     public string Message { get; init; } = string.Empty;
 }
 
+public sealed class MmsReportSoakSnapshot
+{
+    public DateTimeOffset CapturedAt { get; init; }
+    public double ElapsedSeconds { get; init; }
+    public int ReportCount { get; init; }
+    public int ValueCount { get; init; }
+    public int PollReadCount { get; init; }
+    public int PollReadSuccessCount { get; init; }
+    public int PollReadFailureCount { get; init; }
+    public int PendingConfirmedOperationCount { get; init; }
+    public int QueuedInformationReportCount { get; init; }
+    public string LastReceiveRoutingSummary { get; init; } = string.Empty;
+
+    public string Summary =>
+        $"{CapturedAt:yyyy-MM-dd HH:mm:ss.fff} UTC elapsed={ElapsedSeconds:0.###}s reports={ReportCount} values={ValueCount} poll={PollReadSuccessCount}/{PollReadCount} pending={PendingConfirmedOperationCount} queuedReports={QueuedInformationReportCount}";
+}
+
 public sealed class MmsStaticReportSessionResult
 {
     public bool IsSuccess { get; init; }
     public IReadOnlyList<MmsReportAttributeWriteStep> WriteSteps { get; init; } = Array.Empty<MmsReportAttributeWriteStep>();
     public IReadOnlyList<MmsReportFrame> Reports { get; init; } = Array.Empty<MmsReportFrame>();
     public IReadOnlyList<MmsReportPollRead> PollReads { get; init; } = Array.Empty<MmsReportPollRead>();
+    public IReadOnlyList<MmsReportSoakSnapshot> SoakSnapshots { get; init; } = Array.Empty<MmsReportSoakSnapshot>();
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset CompletedAt { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public MmsReportSessionDiagnostics Diagnostics { get; init; } = new();
     public MmsReportSessionVerification Verification { get; init; } = new();
@@ -645,7 +665,9 @@ public sealed partial class MmsClientSession
         CancellationToken cancellationToken = default,
         MmsIedModelDirectory? pollDirectory = null,
         IReadOnlyList<string>? pollReferences = null,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        TimeSpan? periodicGeneralInterrogationInterval = null,
+        TimeSpan? soakSnapshotInterval = null)
     {
         EnsureMmsReady();
         ArgumentNullException.ThrowIfNull(plan);
@@ -664,6 +686,9 @@ public sealed partial class MmsClientSession
         var warnings = new List<string>();
         var reports = new List<MmsReportFrame>();
         var pollReads = new List<MmsReportPollRead>();
+        var soakSnapshots = new List<MmsReportSoakSnapshot>();
+        var startedAt = DateTimeOffset.UtcNow;
+        var completedAt = startedAt;
         var verificationChecks = new List<MmsReportVerificationCheck>();
         var rcbSnapshots = new List<MmsReportRcbSnapshot>();
         var dataSetSnapshots = new List<MmsReportDataSetSnapshot>();
@@ -724,6 +749,26 @@ public sealed partial class MmsClientSession
                     warnings.Add("GI=true write failed. Waiting for spontaneous/integrity reports only.");
             }
 
+            Func<CancellationToken, Task<MmsReportAttributeWriteStep>>? periodicGiWriter = null;
+            if (triggerGeneralInterrogation &&
+                periodicGeneralInterrogationInterval.HasValue &&
+                periodicGeneralInterrogationInterval.Value > TimeSpan.Zero &&
+                rcb.Attributes.Contains("GI", StringComparer.OrdinalIgnoreCase))
+            {
+                periodicGiWriter = async token =>
+                {
+                    var step = await WriteReportAttributeAsync(rcb, "GI", MmsDataValue.Boolean(true), token).ConfigureAwait(false);
+                    return new MmsReportAttributeWriteStep
+                    {
+                        Attribute = "GI(periodic)",
+                        Reference = step.Reference,
+                        Attempted = step.Attempted,
+                        IsSuccess = step.IsSuccess,
+                        Message = step.Message
+                    };
+                };
+            }
+
             var received = await ReceiveInformationReportsAsync(
                 plan.Members,
                 listenDuration,
@@ -731,6 +776,11 @@ public sealed partial class MmsClientSession
                 pollReferences,
                 pollInterval,
                 pollReads,
+                soakSnapshots,
+                soakSnapshotInterval,
+                periodicGiWriter,
+                periodicGeneralInterrogationInterval,
+                writes,
                 cancellationToken).ConfigureAwait(false);
             reports.AddRange(received);
             AddReportReceptionCheck(verificationChecks, reports, triggerGeneralInterrogation ? "after-gi" : "during-monitor");
@@ -758,6 +808,10 @@ public sealed partial class MmsClientSession
             }
         }
 
+        completedAt = DateTimeOffset.UtcNow;
+        if (soakSnapshots.Count == 0 || soakSnapshots[^1].ReportCount != reports.Count || soakSnapshots[^1].PollReadCount != pollReads.Count)
+            soakSnapshots.Add(CreateSoakSnapshot(startedAt, reports, pollReads));
+
         var diagnostics = MmsReportSessionDiagnostics.Analyze(reports, pollReads, writes);
         var verification = BuildVerification(verificationChecks, rcbSnapshots, dataSetSnapshots);
         return new MmsStaticReportSessionResult
@@ -766,6 +820,9 @@ public sealed partial class MmsClientSession
             WriteSteps = writes,
             Reports = reports,
             PollReads = pollReads,
+            SoakSnapshots = soakSnapshots,
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
             Warnings = warnings,
             Diagnostics = diagnostics,
             Verification = verification,
@@ -802,6 +859,8 @@ public sealed partial class MmsClientSession
         var writes = new List<MmsReportAttributeWriteStep>();
         var warnings = new List<string>();
         var reports = new List<MmsReportFrame>();
+        var startedAt = DateTimeOffset.UtcNow;
+        var completedAt = startedAt;
         var verificationChecks = new List<MmsReportVerificationCheck>();
         var rcbSnapshots = new List<MmsReportRcbSnapshot>();
         var dataSetSnapshots = new List<MmsReportDataSetSnapshot>();
@@ -958,6 +1017,7 @@ public sealed partial class MmsClientSession
             }
         }
 
+        completedAt = DateTimeOffset.UtcNow;
         var diagnostics = MmsReportSessionDiagnostics.Analyze(reports, Array.Empty<MmsReportPollRead>(), writes);
         var verification = BuildVerification(verificationChecks, rcbSnapshots, dataSetSnapshots);
         return new MmsStaticReportSessionResult
@@ -965,6 +1025,9 @@ public sealed partial class MmsClientSession
             IsSuccess = enabledByThisClient && diagnostics.OverallStatus != "FAIL" && verification.FailureCount == 0,
             WriteSteps = writes,
             Reports = reports,
+            SoakSnapshots = Array.Empty<MmsReportSoakSnapshot>(),
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
             Warnings = warnings,
             Diagnostics = diagnostics,
             Verification = verification,
@@ -983,6 +1046,11 @@ public sealed partial class MmsClientSession
             pollReferences: null,
             pollInterval: null,
             pollReads: null,
+            soakSnapshots: null,
+            soakSnapshotInterval: null,
+            periodicGeneralInterrogationWriter: null,
+            periodicGeneralInterrogationInterval: null,
+            writeSteps: null,
             cancellationToken).ConfigureAwait(false);
 
     private async Task<IReadOnlyList<MmsReportFrame>> ReceiveInformationReportsAsync(
@@ -992,6 +1060,11 @@ public sealed partial class MmsClientSession
         IReadOnlyList<string>? pollReferences,
         TimeSpan? pollInterval,
         List<MmsReportPollRead>? pollReads,
+        List<MmsReportSoakSnapshot>? soakSnapshots,
+        TimeSpan? soakSnapshotInterval,
+        Func<CancellationToken, Task<MmsReportAttributeWriteStep>>? periodicGeneralInterrogationWriter,
+        TimeSpan? periodicGeneralInterrogationInterval,
+        List<MmsReportAttributeWriteStep>? writeSteps,
         CancellationToken cancellationToken = default)
     {
         EnsureMmsReady();
@@ -1007,14 +1080,33 @@ public sealed partial class MmsClientSession
         if (effectivePollInterval <= TimeSpan.Zero)
             effectivePollInterval = TimeSpan.FromSeconds(1);
 
-        var nextPollAt = DateTimeOffset.UtcNow;
+        var startedAt = DateTimeOffset.UtcNow;
+        var nextPollAt = startedAt;
+        var effectiveSnapshotInterval = soakSnapshotInterval.GetValueOrDefault(TimeSpan.Zero);
+        var nextSnapshotAt = effectiveSnapshotInterval > TimeSpan.Zero ? startedAt : DateTimeOffset.MaxValue;
+        var effectiveGiInterval = periodicGeneralInterrogationInterval.GetValueOrDefault(TimeSpan.Zero);
+        var nextPeriodicGiAt = effectiveGiInterval > TimeSpan.Zero ? startedAt + effectiveGiInterval : DateTimeOffset.MaxValue;
 
         while (DateTimeOffset.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var remaining = deadline - DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.UtcNow;
+            var remaining = deadline - now;
             if (remaining <= TimeSpan.Zero)
                 break;
+
+            if (soakSnapshots != null && effectiveSnapshotInterval > TimeSpan.Zero && now >= nextSnapshotAt)
+            {
+                soakSnapshots.Add(CreateSoakSnapshot(startedAt, reports, pollReads is null ? Array.Empty<MmsReportPollRead>() : pollReads));
+                nextSnapshotAt = now + effectiveSnapshotInterval;
+            }
+
+            if (periodicGeneralInterrogationWriter != null && effectiveGiInterval > TimeSpan.Zero && now >= nextPeriodicGiAt)
+            {
+                var giStep = await periodicGeneralInterrogationWriter(cancellationToken).ConfigureAwait(false);
+                writeSteps?.Add(giStep);
+                nextPeriodicGiAt = now + effectiveGiInterval;
+            }
 
             var drainedQueuedReport = false;
             if (TryDequeueInformationReport(out var queuedPayload))
@@ -1081,6 +1173,24 @@ public sealed partial class MmsClientSession
 
         return reports;
     }
+
+    private MmsReportSoakSnapshot CreateSoakSnapshot(
+        DateTimeOffset startedAt,
+        IReadOnlyList<MmsReportFrame> reports,
+        IReadOnlyList<MmsReportPollRead> pollReads)
+        => new()
+        {
+            CapturedAt = DateTimeOffset.UtcNow,
+            ElapsedSeconds = Math.Max(0, (DateTimeOffset.UtcNow - startedAt).TotalSeconds),
+            ReportCount = reports.Count,
+            ValueCount = reports.Sum(x => x.Values.Count),
+            PollReadCount = pollReads.Count,
+            PollReadSuccessCount = pollReads.Count(x => x.IsSuccess),
+            PollReadFailureCount = pollReads.Count(x => !x.IsSuccess),
+            PendingConfirmedOperationCount = PendingConfirmedOperationCount,
+            QueuedInformationReportCount = QueuedInformationReportCount,
+            LastReceiveRoutingSummary = LastReceiveRoutingSummary
+        };
 
     private async Task<MmsReportPollRead> ReadReportPollReferenceAsync(
         MmsIedModelDirectory directory,

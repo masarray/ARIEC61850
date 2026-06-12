@@ -718,3 +718,16 @@ Next hardening target: replace the current tolerant report value mapper with an 
 ### Report forensic timeline evidence
 
 Guarded report evidence now includes `report-timeline.json` and a Report Timeline section in `summary.md`. The timeline flattens each report into received time, RptID, DataSet, ConfRev, SqNum, EntryID, BufOvfl, included indexes, mapped count, reason summary, and decoded TimeOfEntry. Sequence diagnostics now distinguish reset-to-zero events from true regressions, while EntryID numeric gaps remain heuristic warnings because EntryID is treated as opaque by default. MMS `binary-time` is decoded to UTC/time-of-day when possible while retaining the original raw hex.
+
+### Evidence-grade report monitor: long-run soak v1
+
+Status: implemented in this working package.
+
+The guarded `mms-report-monitor` workflow now supports long-run soak instrumentation on top of the same receive pump:
+
+- `--soak-snapshot-sec N` writes periodic runtime snapshots during a monitor session.
+- `--gi-interval-sec N` can periodically retrigger GI after the initial enable/GI sequence.
+- Evidence bundles include `soak-snapshots.json` and a **Soak Snapshots** table in `summary.md`.
+- Snapshots capture elapsed time, reports/values, poll-read success/failure, pending confirmed operations, queued reports, and the last receive routing summary.
+
+This milestone is designed to prove that InformationReport routing and confirmed smart-read polling remain healthy during longer sessions before moving toward multi-IED monitoring or StationScout-style workflows.

@@ -378,3 +378,13 @@ The evidence classifier now separates hard failures from relay-specific warning 
 ### Report forensic timeline evidence
 
 Guarded report evidence now includes `report-timeline.json` and a Report Timeline section in `summary.md`. The timeline flattens each report into received time, RptID, DataSet, ConfRev, SqNum, EntryID, BufOvfl, included indexes, mapped count, reason summary, and decoded TimeOfEntry. Sequence diagnostics now distinguish reset-to-zero events from true regressions, while EntryID numeric gaps remain heuristic warnings because EntryID is treated as opaque by default. MMS `binary-time` is decoded to UTC/time-of-day when possible while retaining the original raw hex.
+
+### Long-run report soak evidence
+
+`mms-report-monitor` supports longer runtime validation with periodic smart-read polling, optional periodic GI, and periodic soak snapshots:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 900000 --duration-sec 600 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --gi-interval-sec 120 --soak-snapshot-sec 60 --evidence out/report-soak-10m --yes
+```
+
+The evidence bundle includes `soak-snapshots.json` and a **Soak Snapshots** table in `summary.md`. This is intended to validate that the receive pump can keep routing unsolicited reports while confirmed smart-read polling remains active.

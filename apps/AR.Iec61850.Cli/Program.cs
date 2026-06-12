@@ -784,6 +784,14 @@ internal static class Cli
         if (pollPoints.Count > 0 && pollIntervalMs < 100)
             throw new ArgumentException("--poll-interval-ms must be at least 100 when --poll-points is used.");
 
+        var giIntervalSec = options.GetInt("gi-interval-sec", 0);
+        if (giIntervalSec < 0)
+            throw new ArgumentException("--gi-interval-sec must be greater than or equal to 0.");
+
+        var soakSnapshotSec = options.GetInt("soak-snapshot-sec", monitorMode ? 60 : 0);
+        if (soakSnapshotSec < 0)
+            throw new ArgumentException("--soak-snapshot-sec must be greater than or equal to 0.");
+
         var reserveSec = options.GetInt("reserve-sec", 30);
         if (reserveSec < 1)
             throw new ArgumentException("--reserve-sec must be at least 1.");
@@ -870,6 +878,10 @@ internal static class Cli
             : $"Starting guarded static report session for {durationSec}s...");
         if (pollPoints.Count > 0)
             Console.WriteLine($"Poll reads: {pollPoints.Count} point(s), interval={pollIntervalMs}ms.");
+        if (giIntervalSec > 0)
+            Console.WriteLine($"Periodic GI: every {giIntervalSec}s after initial GI.");
+        if (soakSnapshotSec > 0)
+            Console.WriteLine($"Soak snapshots: every {soakSnapshotSec}s.");
 
         var live = await session.RunGuardedStaticReportSessionAsync(
             plan,
@@ -879,13 +891,16 @@ internal static class Cli
             timeout.Token,
             pollDirectory: pollPoints.Count > 0 ? discovery.IedDirectory : null,
             pollReferences: pollPoints,
-            pollInterval: TimeSpan.FromMilliseconds(pollIntervalMs)).ConfigureAwait(false);
+            pollInterval: TimeSpan.FromMilliseconds(pollIntervalMs),
+            periodicGeneralInterrogationInterval: giIntervalSec > 0 ? TimeSpan.FromSeconds(giIntervalSec) : null,
+            soakSnapshotInterval: soakSnapshotSec > 0 ? TimeSpan.FromSeconds(soakSnapshotSec) : null).ConfigureAwait(false);
 
         Console.WriteLine();
         Console.WriteLine(live.Message);
         Console.WriteLine($"Receive routing: {TextOrDash(session.LastReceiveRoutingSummary)} pending={session.PendingConfirmedOperationCount} queuedReports={session.QueuedInformationReportCount}");
         WriteReportDiagnostics(live.Diagnostics);
         WriteReportVerification(live.Verification);
+        WriteSoakSnapshots(live.SoakSnapshots);
 
         if (live.Warnings.Count > 0)
         {
@@ -1928,6 +1943,18 @@ internal static class Cli
         WriteLimitNotice(report.Values.Count, 32, "report value(s)");
     }
 
+    private static void WriteSoakSnapshots(IReadOnlyList<MmsReportSoakSnapshot> snapshots)
+    {
+        if (snapshots.Count == 0)
+            return;
+
+        Console.WriteLine($"Soak snapshots: {snapshots.Count}");
+        foreach (var snapshot in snapshots.Take(8))
+            Console.WriteLine($"  - {snapshot.Summary}");
+        if (snapshots.Count > 8)
+            Console.WriteLine($"  ... +{snapshots.Count - 8} more soak snapshot(s)");
+    }
+
     private static void WriteReportDiagnostics(MmsReportSessionDiagnostics diagnostics)
     {
         Console.WriteLine("Diagnostics:");
@@ -2029,6 +2056,8 @@ internal static class Cli
             },
             result.IsSuccess,
             result.Message,
+            durationSeconds = result.StartedAt == default || result.CompletedAt == default ? 0 : (result.CompletedAt - result.StartedAt).TotalSeconds,
+            soakSnapshots = result.SoakSnapshots.Count,
             result.Diagnostics,
             verification = result.Verification,
             warnings = result.Warnings
@@ -2038,6 +2067,7 @@ internal static class Cli
         var reportsJsonPath = Path.Combine(directory, "reports.json");
         var reportTimelineJsonPath = Path.Combine(directory, "report-timeline.json");
         var pollReadsJsonPath = Path.Combine(directory, "poll-reads.json");
+        var soakSnapshotsJsonPath = Path.Combine(directory, "soak-snapshots.json");
         var writeStepsJsonPath = Path.Combine(directory, "write-steps.json");
         var verificationJsonPath = Path.Combine(directory, "verification.json");
         var rcbSnapshotsJsonPath = Path.Combine(directory, "rcb-snapshots.json");
@@ -2048,13 +2078,14 @@ internal static class Cli
         await File.WriteAllTextAsync(reportsJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportEvidence), jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(reportTimelineJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportTimelineEvidence), jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(pollReadsJsonPath, JsonSerializer.Serialize(result.PollReads, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(soakSnapshotsJsonPath, JsonSerializer.Serialize(result.SoakSnapshots, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(writeStepsJsonPath, JsonSerializer.Serialize(result.WriteSteps, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(verificationJsonPath, JsonSerializer.Serialize(result.Verification, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(rcbSnapshotsJsonPath, JsonSerializer.Serialize(result.Verification.RcbSnapshots, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(dataSetSnapshotsJsonPath, JsonSerializer.Serialize(result.Verification.DataSetSnapshots, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(summaryMdPath, BuildReportEvidenceMarkdown(context.generatedAt, target, mode, plan, result), System.Text.Encoding.UTF8).ConfigureAwait(false);
 
-        return [summaryJsonPath, reportsJsonPath, reportTimelineJsonPath, pollReadsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
+        return [summaryJsonPath, reportsJsonPath, reportTimelineJsonPath, pollReadsJsonPath, soakSnapshotsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
     }
 
     private static object ToReportEvidence(MmsReportFrame report)
@@ -2124,6 +2155,8 @@ internal static class Cli
             $"- Diagnostics: {diagnostics.Summary}",
             $"- Diagnostic status: {diagnostics.OverallStatus}",
             $"- EntryID: {TextOrDash(diagnostics.FirstEntryIdHex)} -> {TextOrDash(diagnostics.LastEntryIdHex)}",
+            $"- Duration: {(result.StartedAt == default || result.CompletedAt == default ? 0 : (result.CompletedAt - result.StartedAt).TotalSeconds):0.###} s",
+            $"- Soak snapshots: {result.SoakSnapshots.Count}",
             string.Empty,
             "## Counts",
             string.Empty,
@@ -2181,6 +2214,17 @@ internal static class Cli
             lines.Add(string.Empty);
             foreach (var snapshot in verification.DataSetSnapshots)
                 lines.Add($"- {snapshot.Summary.Replace("|", "\\|")}");
+            lines.Add(string.Empty);
+        }
+
+        if (result.SoakSnapshots.Count > 0)
+        {
+            lines.Add("## Soak Snapshots");
+            lines.Add(string.Empty);
+            lines.Add("| Captured UTC | Elapsed s | Reports | Values | Poll OK | Pending | Queued reports | Routing | ");
+            lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ");
+            foreach (var snapshot in result.SoakSnapshots)
+                lines.Add($"| {snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss.fff} | {snapshot.ElapsedSeconds:0.###} | {snapshot.ReportCount} | {snapshot.ValueCount} | {snapshot.PollReadSuccessCount}/{snapshot.PollReadCount} | {snapshot.PendingConfirmedOperationCount} | {snapshot.QueuedInformationReportCount} | {TextOrDash(snapshot.LastReceiveRoutingSummary).Replace("|", "\\|")} |");
             lines.Add(string.Empty);
         }
 
@@ -2246,7 +2290,7 @@ internal static class Cli
         Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01]");
         Console.WriteLine("  mms-rcb-probe <host-or-ip> <LD/LN.BR.name|LD/LN.RP.name> [--port 102] [--timeout-ms 120000]");
         Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--evidence out/session] [--yes]");
-        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 60] [--gi true|false] [--poll-points LD/LN.DO.da,...] [--poll-interval-ms 1000] [--evidence out/session] [--yes]");
+        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 60] [--gi true|false] [--gi-interval-sec 0] [--poll-points LD/LN.DO.da,...] [--poll-interval-ms 1000] [--soak-snapshot-sec 60] [--evidence out/session] [--yes]");
         Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--evidence out/session] [--yes]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");

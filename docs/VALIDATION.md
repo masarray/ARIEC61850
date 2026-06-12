@@ -343,3 +343,24 @@ Some BRCBs keep `ResvTms` visible for a lease/timeout interval after `RptEna=fal
 ### Report forensic timeline evidence
 
 Guarded report evidence now includes `report-timeline.json` and a Report Timeline section in `summary.md`. The timeline flattens each report into received time, RptID, DataSet, ConfRev, SqNum, EntryID, BufOvfl, included indexes, mapped count, reason summary, and decoded TimeOfEntry. Sequence diagnostics now distinguish reset-to-zero events from true regressions, while EntryID numeric gaps remain heuristic warnings because EntryID is treated as opaque by default. MMS `binary-time` is decoded to UTC/time-of-day when possible while retaining the original raw hex.
+
+## Long-run report soak monitor
+
+Use this command to run a longer evidence-grade report monitor with periodic smart-read polling, optional periodic GI, and runtime soak snapshots:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 3900000 --duration-sec 3600 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --gi-interval-sec 300 --soak-snapshot-sec 60 --evidence out/report-soak-1h --yes
+```
+
+Expected evidence additions:
+
+- `soak-snapshots.json`
+- `summary.md` / **Soak Snapshots** table
+
+Healthy end-state:
+
+- pending confirmed operations: `0`
+- poll-read failures: `0`
+- write failures: `0`
+- cleanup `RptEna=false`: verified
+- report diagnostics: `PASS` or `PASS_WITH_WARNING` when relay-side BRCB buffer/lease behavior is observed

@@ -1,500 +1,428 @@
 # ARIEC61850 Roadmap
 
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 
-This file is the single source of truth for the technical direction of
-`ARIEC61850`. If a feature, task, or product idea conflicts with this roadmap,
-this roadmap wins until it is deliberately changed.
+This file is the technical source of truth for `ARIEC61850`. Keep public claims
+honest: implemented, lab-validated, partial, experimental, planned, or
+unsupported.
 
 ## 1. North Star
 
-Build a clean-room, reusable, field-useful IEC 61850 native stack for .NET and
-then build commissioning tools on top of it.
+Build a clean-room, reusable, field-useful IEC 61850 native stack for .NET, then
+build engineering tools on top of it.
 
-The stack must become useful for:
+The mature stack must support:
 
-- MMS client discovery, read, write, reporting, control, file and log services.
-- MMS server and IED simulation.
+- MMS client discovery, read, write, reporting, control, file transfer, logs,
+  and setting groups.
+- MMS server and IED simulator.
 - GOOSE publisher and subscriber.
 - Sampled Values publisher and subscriber.
 - SCL-driven station validation.
-- CLI, WPF, and future automation tools for FAT, SAT, lab, troubleshooting, and
-  protocol education.
+- PCAP capture/replay/evidence workflows.
+- CLI, WPF, and future automation tools for FAT, SAT, lab, troubleshooting,
+  protocol education, and commissioning support.
 
-The product goal is not to clone an existing tool. The product goal is to build
-an original, clean-room engineering instrument in the same problem class as
-professional IEC 61850 tools: IED exploration, SCL validation, report testing,
-GOOSE/SV analysis, simulation, and repeatable evidence generation.
+The product goal is not to clone any existing tool. The product goal is an
+original clean-room engineering instrument: easier to use than raw IEC 61850
+APIs, strict about evidence, and safe around live writes/control/publishing.
 
-## 2. Core Product Doctrine
+## 2. Product Doctrine
 
-### 2.1 The stack must be easier to use than raw IEC 61850 APIs
+### 2.1 Smart stack first
 
-IEC 61850 is strongly typed and model driven. A raw client often requires the
-caller to know the logical device, logical node, data object, data attribute,
-functional constraint, MMS variable naming format, DataSet structure, RCB
-ownership, and control model before a useful read or report can happen.
+The stack must hide avoidable IEC 61850 friction:
 
-`ARIEC61850` must hide that friction behind a smart model layer.
+- discover the live IED directory before asking the user to guess references;
+- resolve Functional Constraints from evidence instead of requiring manual
+  `ST`, `MX`, `CO`, `RP`, or `BR` input;
+- preserve DataSet order exactly;
+- classify RCB readiness before enabling reports;
+- expose raw diagnostics when the stack is uncertain;
+- return ambiguity candidates instead of silently picking a risky path.
 
-Target user-facing behavior:
+Target user behavior:
 
 ```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-read 192.16.1.157 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-read-smart 192.16.1.157 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f
 ```
 
-The user should not have to provide `MX` manually. The stack must discover the
-correct functional constraint from the live IED model and cache the result.
+The user should not need to know that this resolves to `MX` and a raw MMS item
+such as `MMXU1$MX$PhV$phsA$cVal$mag$f`.
 
-### 2.2 Live IED directory first, SCL second, heuristics last
+### 2.2 Live model first, SCL second
 
-The primary source of truth for online workflows is the live IED self-description
-obtained through MMS services.
+Online workflows should trust evidence in this order:
 
-Priority order:
+1. live MMS model directory from the IED;
+2. live DataSet directory and DataSet member order;
+3. live RCB attributes and runtime state;
+4. SCL/CID/ICD/SCD engineering file;
+5. cached successful resolutions;
+6. explicit bounded heuristic fallback.
 
-1. Live MMS model directory from the IED.
-2. Live DataSet directory and DataSet member information.
-3. Live RCB attributes and runtime state.
-4. SCL/CID/ICD/SCD engineering file.
-5. Cached previous successful resolution.
-6. Explicit, bounded heuristic fallback.
+SCL is essential for engineering validation, GOOSE/SV semantics, and station
+consistency checks. It must enrich and verify the live model, not replace live
+evidence.
 
-SCL is critical for engineering validation, but a commissioning client must not
-fail just because the user does not have a perfect CID file. The live IED model
-must be enough for basic browse/read/report workflows.
+### 2.3 Reporting is a state machine
 
-### 2.3 Directory before polling, model before UI
+Reporting is not a button. A safe report workflow must model:
 
-The application workflow becomes lighter when the stack first builds a complete
-IED directory. Do not make the UI repeatedly guess FC, raw MMS path, RCB state,
-or DataSet order.
+- URCB/RP versus BRCB/BR;
+- static versus configurable DataSet binding;
+- `RptEna`, `Resv`, `ResvTms`, `Owner`, `DatSet`, `RptID`, `ConfRev`;
+- `OptFlds`, `TrgOps`, `BufTm`, `IntgPd`, `GI`, `PurgeBuf`;
+- `EntryID`, `SqNum`, `TimeOfEntry`, `BufOvfl`;
+- unconfirmed `InformationReport` arrival;
+- DataSet-member-to-value mapping;
+- reason-for-inclusion and optional field decode;
+- disable, cleanup, recovery, and conflict diagnostics.
 
-Correct workflow:
+### 2.4 Better than raw protocol libraries means better workflow
 
-```text
-Connect
-  -> MMS association
-  -> full domain/name directory
-  -> FC-aware IED model index
-  -> DataSet directory and member index
-  -> RCB inventory and readiness classification
-  -> smart read/report/control workflows
-```
+Mature public IEC 61850 stacks already cover broad protocol scope: MMS
+client/server, GOOSE, SV, reports, DataSets, logs, file services, and setting
+groups. `ARIEC61850` must catch up on protocol coverage, but the differentiator
+should be workflow quality:
 
-Wrong workflow:
+- .NET-first typed APIs;
+- smart FC resolution;
+- live/SCL conflict evidence;
+- guardrails around report writes and control;
+- PCAP and validation artifacts as first-class outputs;
+- CLI and future WPF tools that are usable by commissioning engineers, not only
+  protocol developers.
 
-```text
-User clicks one item
-  -> app tries random FC values
-  -> app reads partial model repeatedly
-  -> report workflow guesses DataSet order
-  -> UI becomes slow and unreliable
-```
+Clean-room rule: public capability descriptions may guide planning; no
+restrictive-license implementation code may be copied, translated, or
+structurally ported.
 
-### 2.4 Reporting must be a state machine, not a button
+## 3. Standard Scope
 
-A report workflow is not just `RptEna=true`. A usable client must understand:
+The stack direction follows the public IEC 61850 architecture:
 
-- RCB type: URCB/RP or BRCB/BR.
-- Static versus configurable/dynamic DataSet binding.
-- `RptEna`, `Resv`, `ResvTms`, and owner behavior.
-- `DatSet`, `RptID`, `ConfRev`, `OptFlds`, `TrgOps`, `BufTm`, `IntgPd`.
-- `GI`, `PurgeBuf`, `EntryID`, `TimeOfEntry`, `SqNum`, `BufOvfl`.
-- Report arrival as unconfirmed/unsolicited MMS PDU.
-- Report item mapping by DataSet member order.
-- Sequence, buffer, overflow, mismatch, and recovery diagnostics.
-
-## 3. Standard Scope and Reference Anchors
-
-This roadmap is based on public standard descriptions, public documentation,
-black-box interoperability behavior, and original implementation work. Do not
-copy restrictive-license or proprietary implementation code.
-
-Main IEC 61850 areas that define the stack direction:
-
-- IEC 61850-6: SCL configuration description language.
-- IEC 61850-7-2: ACSI services such as client/server communication, reporting,
-  logging, control, setting group, and self-description.
+- IEC 61850-6: SCL configuration language.
+- IEC 61850-7-2: ACSI services such as client/server, reporting, logging,
+  control, setting groups, and self-description.
 - IEC 61850-7-3: common data classes and attribute typing.
 - IEC 61850-7-4: logical nodes and data object semantics.
-- IEC 61850-8-1: mapping of ACSI to MMS and Ethernet frames.
-- IEC 61850-9-2 / related sampled value profiles: Sampled Values payloads and
-  stream behavior.
-- UCA/IUG interoperability practice, TISSUE learnings, vendor variations, and
-  black-box lab testing with real IEDs.
-
-Public capability references may be used for planning:
-
-- third-party IEC 61850 stack documentation: protocol capability reference only. restrictive-license code must
-  not be copied, translated, or structurally ported.
-- Vendor tools such as IEDScout, StationScout, SVScout, and relay engineering
-  tools: workflow inspiration only, not UI or code templates.
-- Wireshark decoded PCAPs: interoperability evidence and byte-level inspection.
+- IEC 61850-8-1: MMS and GOOSE mapping.
+- IEC 61850-9-2 and related profiles: Sampled Values mapping.
+- IEC 61850-10 path later: formal conformance evidence, not current status.
 
 ## 4. Current Repository Evidence
 
-Current status observed in this repository and the latest lab run:
+Latest verified local status:
 
-- .NET stack scaffold exists.
+- .NET solution, library, CLI, tests, sample SCL, docs, and GitHub Pages surface
+  exist.
 - ASN.1 BER reader/writer exists.
 - MMS data value codec exists for common values.
-- Ethernet/VLAN/process-bus frame codecs exist.
-- GOOSE frame builder/parser exists.
-- Sampled Values frame builder/parser exists.
-- SCL parser exists for core objects needed by current publisher profiles.
-- GOOSE/SV publisher profiles and sessions exist.
-- PCAP reader/writer/stream monitor exists.
-- Npcap transport exists for live process-bus publishing.
-- CLI exists.
-- Native MMS client can establish TCP/TPKT/COTP/ACSE/MMS association with a lab
-  IED.
+- Ethernet, VLAN, GOOSE, SV, and PCAP primitives exist.
+- SCL parser extracts the core objects needed by current publisher profiles.
+- GOOSE/SV publisher profiles and live Npcap publish sessions exist.
+- Native MMS client can establish TCP/TPKT/COTP/ACSE/MMS association.
 - Native MMS discovery can call `GetNameList` for domains, named variables, and
   named variable lists.
-- Latest lab result discovered 4 logical devices, 10,122 raw variables, 1
-  DataSet, and 286 RCBs on a real IED.
-- RCB inventory and bounded attribute probing exist for selected attributes.
-- Live smart read is validated against the lab IED without manually supplied FC.
-- Static report enable/GI/receive/disable is validated against a static BRCB.
-- Dynamic report create DataSet, bind RCB.DatSet, enable/GI/receive/disable,
-  clear DatSet, and delete DataSet is validated against a dynamic BRCB.
+- Live IED model directory builds FC-aware points from raw MMS names.
+- Smart FC resolver and smart read are validated against a live lab IED.
+- DataSet directory reads MMS named variable list attributes and preserves
+  member order.
+- Confirmed write foundation exists and is used by guarded RCB/DataSet flows.
+- Report inventory, static planning, dynamic planning, and readiness
+  classification exist.
+- Guarded static report enable/GI/receive/disable is validated against a lab
+  BRCB.
+- Guarded dynamic report create DataSet, bind RCB.DatSet, enable/GI/receive,
+  cleanup, and delete DataSet is validated against a lab BRCB.
+- Latest automated validation: `dotnet test .\ARIEC61850.slnx -c Release
+  --no-build` passed with 60 tests.
 
-Current MMS gaps:
-
-- No robust `GetVariableAccessAttributes` / variable specification model yet.
-- No full long-running async receive pump for arbitrary concurrent confirmed
-  requests and reports yet.
-- No full RCB reservation/configuration state machine across vendor variations
-  yet.
-- No BRCB recovery using `EntryID` yet.
-- No reason-for-inclusion names or full report optional-field object model yet.
-- No control model abstraction yet.
-- No server simulator yet.
-
-## 5. Final Project Structure
-
-The current repository can continue with the existing projects while the stack is
-still compact. Split projects only when module boundaries become stable. The
-final mature structure should look like this:
+Latest live MMS evidence against lab IED `192.16.1.157:102`:
 
 ```text
-ARIEC61850/
-  src/
-    AR.Iec61850/                         current core package until split is needed
-      Asn1/
-      Ethernet/
-      Goose/
-      Mms/
-      Model/
-      Reporting/
-      SampledValues/
-      Scl/
-      Transports/
-
-    AR.Iec61850.Core/                    future split: primitives, BER, common types
-    AR.Iec61850.Mms/                     future split: MMS/ACSE/client/server services
-    AR.Iec61850.Model/                   future split: IED directory, FC resolver, SCL model
-    AR.Iec61850.Reporting/               future split: RCB state machine and report decoder
-    AR.Iec61850.ProcessBus/              future split: GOOSE and SV services
-    AR.Iec61850.Server/                  future split: MMS server and simulator model
-    AR.Iec61850.Transports.Npcap/         raw Ethernet adapter
-    AR.Iec61850.Transports.Pcap/          PCAP replay/capture transport if needed
-    AR.Iec61850.TestKit/                 fixtures, golden bytes, fake IED, interop harness
-
-  apps/
-    AR.Iec61850.Cli/                     automation, smoke tests, lab commands
-    AR.Iec61850.Workbench.Wpf/           future engineering workbench
-    AR.Iec61850.Simulator.Cli/           future headless simulator if needed
-
-  tests/
-    AR.Iec61850.Tests/                   unit and golden tests
-    AR.Iec61850.InterOpTests/            opt-in tests against simulators/real IEDs
-    AR.Iec61850.LongRunTests/            opt-in stability and report soak tests
-
-  samples/
-    scl/
-    pcap/
-    reports/
-    scripts/
-
-  docs/
-    architecture/
-    validation/
-    interop/
-    ux/
-    protocol-notes/
+Association=MmsInitiated
+logicalDevices=4
+logicalNodes=123
+FC-points=9464
+reportAttrs=3456
+controlAttrs=457
+DataSets=1
+RCB=286
+BRCB=8
+URCB=278
+static report=enable, GI, receive, map 2/2 values, disable OK
+dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanup OK
 ```
 
-Split rule:
+## 5. Feature Status Matrix
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| BER/MMS value codec | Implemented | Needs broader type corpus over time. |
+| Ethernet/VLAN/GOOSE/SV codecs | Implemented | Round-trip tests exist. |
+| SCL core parser | Partial | Enough for current publishers; needs richer DataTypeTemplates and multi-file context. |
+| PCAP writer/reader/monitor | Implemented | Useful for offline validation. |
+| GOOSE publisher | Lab MVP | Needs subscriber, more semantics, and longer validation. |
+| SV publisher | Lab MVP | Windows/Npcap timing is screening-level only. |
+| GOOSE subscriber | Planned | Needs TTL, stNum/sqNum supervision, SCL binding. |
+| SV subscriber | Planned | Needs sample counter supervision and channel mapping. |
+| MMS association/discovery | Lab MVP | Works against current IED; needs multi-vendor matrix. |
+| Live IED directory | Lab MVP | FC-aware index exists; variable access attributes still incomplete. |
+| Smart FC resolver/read | Lab MVP | Validated on live point; needs more ambiguity tests and vendors. |
+| DataSet directory | Lab MVP | Live member order mapping exists. |
+| Confirmed write foundation | Partial | Used for guarded report/DataSet flows; generic write API remains guarded. |
+| Static reporting | Guarded lab MVP | Enable, GI, receive, map, disable validated. |
+| Dynamic reporting | Guarded lab MVP | Create/bind/enable/GI/receive/cleanup/delete validated. |
+| Full MMS receive pump | Planned next | Current receive queue is short-session guarded implementation. |
+| BRCB recovery | Planned | Needs EntryID, PurgeBuf, reconnect, duplicate/loss diagnostics. |
+| MMS file transfer | Planned | Browse/get/set/delete/rename file services. |
+| MMS log service | Planned | Needed for full ACSI coverage. |
+| Setting group service | Planned | Needed for full ACSI coverage. |
+| Control service | Planned | Must not be implemented as generic write. |
+| MMS server/IED simulator | Planned | Required for repeatable interop tests and demos. |
+| TLS/IEC 62351 | Planned later | Not part of current MVP. |
+| Formal conformance | Not claimed | No formal conformance route yet. |
+
+## 6. Architecture Direction
+
+Keep the stack layered:
 
 ```text
-Do not split early just to look professional.
-Split when a boundary has stable public types, tests, and no circular dependency.
+TCP
+  -> TPKT
+  -> COTP
+  -> ISO Session
+  -> ISO Presentation
+  -> ACSE
+  -> MMS
+
+Ethernet
+  -> VLAN
+  -> GOOSE / Sampled Values
+
+SCL
+  -> engineering model
+  -> DataSet order
+  -> report/control/process-bus validation
 ```
 
-## 6. Layered Architecture
+Boundaries:
 
-### Layer 0 - Byte and Type Primitives
+- Codecs do not depend on transports.
+- Stack projects do not depend on CLI, WPF, app settings, or UI state.
+- Apps call stack services; apps must not parse protocol bytes directly.
+- Transport projects depend on stack abstractions only.
+- TestKit/interoperability helpers may be split later when boundaries stabilize.
 
-Purpose: deterministic building blocks.
-
-Includes:
-
-- BER TLV reader/writer.
-- MMS data value codec.
-- Ethernet/VLAN/process-bus frame codec.
-- MAC, APPID, VLAN, quality, timestamp, object reference, bit-string helpers.
-
-Rules:
-
-- No network IO.
-- No UI.
-- No SCL assumptions.
-- Every codec needs golden byte tests and malformed input tests.
-
-### Layer 1 - OSI/MMS Transport Foundation
-
-Purpose: reliable native MMS association.
-
-Includes:
-
-- TCP socket handling.
-- TPKT.
-- COTP connection and data TPDU.
-- ISO session.
-- ISO presentation.
-- ACSE associate/release/abort.
-- MMS initiate.
-- confirmed request/response envelope.
-- invoke ID handling.
-
-Rules:
-
-- Do not skip layers to make a demo work.
-- Expose negotiated parameters and trace events.
-- Support timeout, cancellation, reconnect, release, and abort diagnostics.
-- Confirmed responses must be matched by invoke ID.
-
-### Layer 2 - Live IED Directory Engine
-
-Purpose: make the IED self-describing and easy to use.
-
-Includes:
-
-- Domain discovery.
-- Named variable discovery.
-- Named variable list discovery.
-- FC extraction from MMS names such as `LN$ST$DO$DA`.
-- Logical device/logical node/data object/data attribute tree.
-- `GetVariableAccessAttributes` / variable specification when implemented.
-- `GetNamedVariableListAttributes` for DataSet member directory.
-- Data type hints and value kind mapping.
-- confidence/source tracking: LiveMms, DataSet, Scl, Cached, Heuristic.
-
-Output type direction:
-
-```csharp
-public sealed class IedModelIndex
-{
-    public IReadOnlyDictionary<string, LogicalDeviceIndex> LogicalDevices { get; init; }
-    public IReadOnlyDictionary<string, FcResolvedPoint> PointsByUserReference { get; init; }
-    public IReadOnlyDictionary<string, FcResolvedPoint> PointsByMmsReference { get; init; }
-    public IReadOnlyDictionary<string, DataSetDirectory> DataSets { get; init; }
-    public IReadOnlyDictionary<string, ReportControlDirectory> ReportControls { get; init; }
-}
-```
-
-Done means:
+Future structure, only when justified:
 
 ```text
-After connect, the stack can show a stable FC-aware IED tree without asking the
-user to know ST/MX/CO/CF/RP/BR.
+src/AR.Iec61850.Core/
+src/AR.Iec61850.Mms/
+src/AR.Iec61850.Model/
+src/AR.Iec61850.Reporting/
+src/AR.Iec61850.ProcessBus/
+src/AR.Iec61850.Server/
+src/AR.Iec61850.Transports.Npcap/
+src/AR.Iec61850.TestKit/
+apps/AR.Iec61850.Cli/
+apps/AR.Iec61850.Workbench.Wpf/
+tests/AR.Iec61850.InterOpTests/
+tests/AR.Iec61850.LongRunTests/
 ```
 
-### Layer 3 - Smart FC Resolver
+Do not split projects just to look mature. Split only when public types and
+dependencies are stable.
 
-Purpose: remove lib-style FC friction from user workflows.
+## 7. Next Phase Roadmap
 
-Includes:
+### Phase 1 - Full MMS Receive Pump and Report Monitor
 
-- exact live MMS match.
-- normalized user reference match.
-- SCL match.
-- DataSet member match.
-- cached successful read match.
-- bounded heuristic fallback.
-- ambiguity reporting.
-- controlled trial read only as last resort.
+Goal: make reporting robust while arbitrary confirmed requests are in flight.
 
-Target API:
+Deliverables:
 
-```csharp
-await client.ReadSmartAsync("OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
-await client.ResolveAsync("OCR7SR12CTRL/XCBR1.Pos");
-```
+- one reader loop per MMS association;
+- invoke-ID router for confirmed responses;
+- routing for confirmed errors, rejects, aborts, and releases;
+- unconfirmed `InformationReport` dispatcher;
+- non-blocking report handler pipeline;
+- cancellation, timeout, and release handling;
+- CLI `mms-report-monitor` for longer report sessions.
 
-Rules:
-
-- Never brute-force control/write FC values.
-- Never hide ambiguity.
-- Cache proven resolutions.
-- Show the source and confidence of every resolved FC.
-
-### Layer 4 - MMS Client Service Surface
-
-Purpose: expose ACSI-like client functions with friendly diagnostics.
-
-Includes:
-
-- connect/release/abort.
-- model directory.
-- smart read.
-- explicit read by resolved MMS reference.
-- confirmed write.
-- DataSet directory.
-- create/delete dynamic DataSet.
-- RCB read/configure.
-- log/file/setting group later.
-- control services later.
-
-Rules:
-
-- Read-only services first.
-- Write services must be explicit and traceable.
-- CLI and UI must show exact target and risk before writes.
-
-### Layer 5 - Reporting Engine
-
-Purpose: full buffered/unbuffered report operation.
-
-Includes:
-
-- RCB directory.
-- RCB readiness classification.
-- reservation state machine.
-- configurable/static/dynamic DataSet handling.
-- RCB write sequence.
-- enable/disable.
-- GI trigger.
-- async receive pump.
-- unconfirmed `InformationReport` decode.
-- DataSet member mapping.
-- reason-for-inclusion mapping.
-- sequence and buffer diagnostics.
-- BRCB `EntryID` recovery.
-
-RCB readiness states:
+Acceptance:
 
 ```text
-Unknown
-EmptyDynamicSlot
-StaticBoundAvailable
-EnabledByOtherClient
-ReservedByOtherClient
-AvailableForReservation
-ReservedByMe
-EnabledByMe
-AccessDenied
-ConfigurationRejected
-Unsupported
+The client can keep a report subscription alive while reads/writes occur, and
+unsolicited reports cannot corrupt pending confirmed requests.
 ```
 
-Done means:
+### Phase 2 - Report Object Model and BRCB Recovery
+
+Goal: move from short smoke reporting to useful commissioning reporting.
+
+Deliverables:
+
+- typed optional-field model: RptID, OptFlds, SqNum, TimeOfEntry, DatSet,
+  BufOvfl, EntryID, ConfRev, inclusion bits, and reason-for-inclusion;
+- sequence diagnostics;
+- duplicate report detection;
+- `EntryID` persistence in session;
+- `PurgeBuf` support;
+- reconnect/re-enable strategy;
+- long-run report soak command and validation note.
+
+Acceptance:
 
 ```text
-The stack can select a free usable RCB, configure it safely, enable it, trigger
-GI, receive reports, map values to DataSet members, and explain state/sequence
-problems.
+The stack can explain what report was received, why each value was included,
+what sequence state changed, and what was recovered or lost after reconnect.
 ```
 
-### Layer 6 - Control Model
+### Phase 3 - MMS File Transfer
 
-Purpose: safe operation of controllable objects.
+Goal: support common relay file workflows.
 
-Includes:
+Deliverables:
 
-- `ctlModel` discovery.
-- direct operate.
-- select-before-operate.
-- enhanced security control flow.
-- `Oper`, `SBO`, `Cancel` path handling.
-- origin, check, test, interlock/synchrocheck fields.
-- command termination/report correlation when possible.
+- file directory browse;
+- get file;
+- set file where safe and supported;
+- delete/rename where safe and supported;
+- chunked transfer handling;
+- progress and retry diagnostics;
+- guarded CLI commands:
+  - `mms-file-list`
+  - `mms-file-get`
+  - `mms-file-put`
+  - `mms-file-delete`
+  - `mms-file-rename`
 
-Rules:
+Acceptance:
 
-- Never treat control as a generic write.
-- Control must require explicit API and UI confirmation.
-- Control defaults to disabled in generic tools unless user enables lab mode.
+```text
+The stack can list and download files from at least one lab IED with clear
+errors for access denied, missing file, timeout, and unsupported service.
+```
 
-### Layer 7 - Process Bus Engine
+### Phase 4 - Control Model
 
-Purpose: mature GOOSE/SV publisher/subscriber capabilities.
+Goal: implement IEC 61850 control as a safe workflow, not as generic write.
 
-Includes:
+Deliverables:
 
-- GOOSE publisher and subscriber.
-- SV publisher and subscriber.
-- SCL semantic binding.
-- TTL/sequence supervision.
-- stream health.
-- PCAP replay and evidence export.
-- waveform/phasor helper services as optional analysis modules.
+- controllable object discovery;
+- `ctlModel` discovery;
+- direct operate;
+- select-before-operate;
+- enhanced security flow;
+- `Oper`, `SBO`, and `Cancel` path handling;
+- origin/check/test/interlock/synchrocheck handling where applicable;
+- command lifecycle diagnostics;
+- lab-mode-only CLI at first.
 
-Rules:
+Acceptance:
 
-- In-memory first.
-- PCAP replay before live NIC when practical.
-- Npcap timing is lab/screening grade unless proven otherwise.
+```text
+The stack can perform a controlled operation in a lab with explicit safety,
+traceability, and no fallback to brute-force writes.
+```
 
-### Layer 8 - MMS Server and IED Simulator
+### Phase 5 - GOOSE Subscriber
 
-Purpose: repeatable station testing and development.
+Goal: decode and supervise live GOOSE streams.
 
-Includes:
+Deliverables:
 
-- SCL-backed IED model.
-- read/write behavior.
-- DataSet service.
-- RCB behavior.
-- reporting behavior.
-- control behavior in safe simulation mode.
-- GOOSE/SV integration.
-- scenario scripts.
+- raw Ethernet receive through transport abstraction;
+- APPID, source, destination, VLAN filtering;
+- TTL supervision;
+- `stNum`/`sqNum` state tracking;
+- SCL DataSet binding;
+- value rendering by member order;
+- mismatch diagnostics;
+- PCAP replay and live CLI monitor.
 
-Rules:
+Acceptance:
 
-- Simulation state must be deterministic and inspectable.
-- Unsafe control behavior is disabled by default.
-- Simulator must be useful for automated tests before UI polish.
+```text
+The stack can subscribe to GOOSE traffic, bind it to SCL when available, and
+report stream health instead of only dumping frames.
+```
 
-### Layer 9 - Tester Applications
+### Phase 6 - Sampled Values Subscriber
 
-Purpose: product workflows built on stack APIs.
+Goal: decode and supervise live SV streams.
 
-Applications:
+Deliverables:
 
-- CLI: smoke tests, automation, protocol diagnostics.
-- WPF Workbench: station/MMS/GOOSE/SV/capture/report workbench.
-- Future headless simulator service if needed.
+- APPID, source, destination, VLAN filtering;
+- ASDU decode and stream identity;
+- `smpCnt` wrap handling;
+- sample loss/jump diagnostics;
+- SCL channel binding;
+- raw sample payload and typed engineering value mapping;
+- PCAP replay and live CLI monitor.
 
-WPF workspaces:
+Acceptance:
+
+```text
+The stack can subscribe to SV traffic, detect counter anomalies, and map channel
+order from SCL or label data as semantically anonymous when SCL is missing.
+```
+
+### Phase 7 - MMS Server and IED Simulator
+
+Goal: make development and demos repeatable without hardware.
+
+Deliverables:
+
+- SCL-backed model;
+- read/write behavior;
+- DataSet services;
+- report services;
+- control simulation in safe mode;
+- file/log/setting group stubs or implementations as capability grows;
+- deterministic scenario scripts;
+- interop tests against the stack client.
+
+Acceptance:
+
+```text
+The repository can run a deterministic IED simulator useful for automated tests,
+examples, and engineering demonstrations.
+```
+
+### Phase 8 - WPF Engineering Workbench
+
+Goal: productize proven stack workflows.
+
+Build only after stack APIs are stable.
+
+Workspaces:
 
 - Station: SCL import, live-vs-SCL comparison, topology, validation.
 - MMS Client: connect, browse, smart read/write, report wizard, report monitor.
 - MMS Server: simulate IED and scenarios.
 - GOOSE: subscribe, inspect, publish, replay.
-- Sampled Values: subscribe, waveform/phasor, publish, replay.
+- Sampled Values: subscribe, inspect, publish, replay.
 - Capture: PCAP scan/replay/evidence.
-- Reports: commissioning evidence and mismatch reports.
+- Reports: exportable commissioning evidence.
 
-## 7. Milestone Roadmap
+Acceptance:
+
+```text
+A commissioning engineer can use the app without reading source code or knowing
+raw MMS naming rules.
+```
+
+## 8. Milestone History
 
 ### M0 - Clean Stack Seed
 
 Status: implemented.
-
-Done:
 
 - .NET solution and library scaffold.
 - BER reader/writer.
@@ -502,463 +430,143 @@ Done:
 - Ethernet/VLAN/process-bus codec.
 - GOOSE frame builder/parser.
 - SV frame builder/parser.
-- Unit tests for BER, MMS data, GOOSE, and SV round-trips.
+- Initial unit tests.
 
 ### M1 - SCL Core
 
 Status: first usable pass implemented.
 
-Done:
-
 - SCL load support for sample engineering files.
-- IED, DataSet, GSEControl, SampledValueControl, ReportControl extraction.
+- IED, DataSet, GSEControl, SampledValueControl, and ReportControl extraction.
 - DataSet order preservation.
-- Basic conflict/warning model.
 - SCL-backed GOOSE/SV publisher profiles.
 
 Remaining:
 
-- more vendor fixtures.
-- fuller DataTypeTemplates resolution.
-- multi-file engineering context.
+- more vendor fixtures;
+- fuller DataTypeTemplates resolution;
+- multi-file engineering context;
 - richer SCL-vs-live validation.
 
 ### M2 - Process-Bus Publish MVP
 
 Status: first usable pass implemented.
 
-Done:
-
-- in-memory publisher sessions.
-- PCAP generation and inspection.
-- Npcap live SV publish smoke.
-- Npcap live GOOSE publish smoke.
+- in-memory publisher sessions;
+- PCAP generation and inspection;
+- Npcap live SV publish smoke;
+- Npcap live GOOSE publish smoke;
 - GOOSE retransmission behavior started.
 
 Remaining:
 
-- GOOSE subscriber.
-- SV subscriber.
-- typed SV engineering-value packing.
+- GOOSE subscriber;
+- SV subscriber;
+- typed SV engineering-value packing;
 - long-run sequence/timing validation.
 
-### M3 - MMS Association and Discovery MVP
+### M3 - MMS Association and Discovery
 
-Status: first usable pass implemented.
+Status: lab MVP implemented.
 
-Done:
+- TCP/TPKT/COTP/ACSE/MMS association;
+- MMS initiate handling;
+- `GetNameList` for domain/named variable/named variable list;
+- DataSet inventory;
+- RCB inventory;
+- bounded RCB attribute probing;
+- CLI `mms-discover`.
 
-- TCP/TPKT/COTP/ACSE/MMS association.
-- MMS initiate handling.
-- `GetNameList` for domain/named variable/named variable list.
-- DataSet inventory by named variable list.
-- RCB inventory by `RP`/`BR` names.
-- bounded RCB attribute probing.
-- CLI command: `mms-discover`.
+### M4 - Live IED Directory and Smart FC Resolver
 
-Done evidence:
+Status: lab MVP implemented.
 
-```text
-mms-discover against lab IED reached MMS initiated state and discovered 4 LDs,
-10,122 raw variables, 1 DataSet, and 286 RCBs.
-```
+- FC enum/parser;
+- raw MMS variable name parsing;
+- user reference normalization;
+- FC-aware IED model directory;
+- `mms-directory`, `mms-find`, `mms-resolve`, and `mms-read-smart`;
+- live validation against lab IED.
 
-### M4 - Full Live IED Directory and Smart FC Resolver
+Remaining:
 
-Status: next priority.
-
-Goal: make the IED browse/read workflow light and user-friendly.
-
-Deliverables:
-
-- `IedModelIndex`.
-- `FunctionalConstraint` enum and parser.
-- MMS variable name parser: `LN$FC$DO$DA$BDA`.
-- user reference normalizer: `LD/LN.DO.da.bda`.
-- live FC-aware tree builder.
-- `mms-model` CLI command.
-- `mms-resolve` CLI command.
-- `mms-read` CLI command that does not require user-provided FC.
-- confidence/source labels for LiveMms, Scl, DataSet, Cached, Heuristic.
-- ambiguity diagnostics.
-- cache proven resolutions during session.
-
-Done means:
-
-```text
-A user can browse and read values without manually entering ST/MX/CO/CF/RP/BR,
-and the stack can explain how it resolved each reference.
-```
-
-Validation:
-
-- unit tests for MMS variable name parsing.
-- unit tests for reference normalization.
-- tests for ambiguous DO references.
-- tests for ST/MX/CO/CF/RP/BR extraction.
-- lab validation against at least one real IED and one simulator.
+- `GetVariableAccessAttributes` variable specification model;
+- richer ambiguity scoring;
+- more multi-vendor evidence.
 
 ### M5 - DataSet Directory and Dynamic DataSet Services
 
-Goal: know exactly what every DataSet contains and prepare report binding.
+Status: lab MVP implemented.
 
-Deliverables:
+- `GetNamedVariableListAttributes`;
+- DataSet member directory with order preserved;
+- member mapping to FC-resolved points;
+- dynamic DataSet create/delete used by guarded reporting.
 
-- `GetNamedVariableListAttributes` request/response.
-- DataSet member directory with order preserved.
-- member mapping to FC-resolved points.
-- DataSet value read.
-- capability detection for create/delete DataSet.
-- `CreateNamedVariableList` and `DeleteNamedVariableList` later.
-- CLI commands:
-  - `mms-datasets`
-  - `mms-dataset-members`
-  - `mms-create-dataset` guarded and lab-mode only at first
-  - `mms-delete-dataset` guarded and lab-mode only at first
+Remaining:
 
-Done means:
-
-```text
-The stack can list DataSet members with FC and read/report mapping order without
-requiring SCL.
-```
+- public generic DataSet CLI commands beyond guarded workflows;
+- broader vendor behavior matrix;
+- more negative tests for service rejection and access denied.
 
 ### M6 - Confirmed Write Foundation
 
-Goal: enable safe configuration of MMS objects and RCBs.
+Status: partial implementation.
 
-Deliverables:
+- confirmed write PDU builder/decoder;
+- value encoding used for booleans, strings, bit strings, and dynamic DataSet
+  references needed by reporting;
+- write diagnostics for guarded report/DataSet flows.
 
-- confirmed-write PDU builder.
-- write response decoder.
-- type-aware value encoder for booleans, integers, unsigned, bit strings,
-  visible strings, octet strings, UTC time, structures, and arrays where needed.
-- write diagnostics with access result.
-- explicit `WritePlan` object before executing writes.
-- CLI command `mms-write` in guarded mode.
+Remaining:
 
-Rules:
-
-- No hidden writes during discovery.
-- No trial writes.
-- No control writes through generic write workflow.
-- Every write must identify target, resolved FC, raw MMS path, value type, and
-  expected risk.
+- generic guarded `mms-write` public workflow;
+- broader value encoder coverage;
+- access-result decoding matrix;
+- simulator-backed tests.
 
 ### M7 - RCB Readiness and Report Configuration
 
-Goal: classify RCBs and configure only safe candidates.
-
-Deliverables:
-
-- full RCB attribute read.
-- URCB/BRCB model.
-- static-bound versus empty dynamic slot classification.
-- owner/reservation detection.
-- `Resv` and `ResvTms` handling.
-- `RptEna=false` precondition checks.
-- write sequence for RCB settings.
-- `OptFlds`, `TrgOps`, `BufTm`, `IntgPd`, `RptID`, `DatSet` handling.
-- CLI command `mms-rcb-list`.
-- CLI command `mms-rcb-plan`.
-- CLI command `mms-report-enable` guarded.
-- CLI command `mms-report-disable` guarded.
-
-Done means:
-
-```text
-The stack can tell which RCB is safe to use, which is occupied by another
-client, which is an empty dynamic slot, and why.
-```
-
-### M8 - Async Receive Pump and InformationReport Decoder
-
-Goal: receive reports correctly while other confirmed requests are in flight.
-
-Deliverables:
-
-- one network reader loop per MMS association.
-- confirmed response router by invoke ID.
-- unconfirmed PDU dispatcher.
-- `InformationReport` decoder.
-- report object model.
-- DataSet member-to-value mapping.
-- reason-for-inclusion decode.
-- report handler subscription API.
-- CLI command `mms-report-monitor`.
-
-Done means:
-
-```text
-The client can keep a report subscription alive and decode unsolicited reports
-without corrupting confirmed request/response handling.
-```
-
-### M9 - Buffered Report Recovery
-
-Goal: make BRCB useful for real commissioning.
-
-Deliverables:
-
-- `EntryID` read/write support where applicable.
-- `PurgeBuf` support.
-- `BufOvfl` diagnostics.
-- `SqNum` jump detection.
-- reconnect/re-enable strategy.
-- duplicate report handling.
-- last-seen report state persistence in session.
-
-Done means:
-
-```text
-The stack can reconnect to a BRCB and explain what was recovered, duplicated,
-or lost.
-```
-
-### M10 - Control Model
-
-Goal: safe control testing.
-
-Deliverables:
-
-- discover controllable objects.
-- read `ctlModel` and related attributes.
-- direct operate.
-- SBO.
-- enhanced security flow.
-- command termination/report correlation.
-- guardrails and confirmation UX.
-
-Done means:
-
-```text
-The stack can perform controlled operations in a lab with explicit safety,
-traceability, and diagnostics.
-```
-
-### M11 - GOOSE/SV Subscriber Maturity
-
-Goal: complete process-bus receive side.
-
-Deliverables:
-
-- GOOSE subscriber with TTL, stNum/sqNum supervision, DataSet decode.
-- SV subscriber with stream identity, sample counter supervision, channel mapping.
-- SCL binding and live-vs-SCL mismatch diagnostics.
-- PCAP replay fixtures.
-- CLI monitor commands.
-
-Done means:
-
-```text
-The stack can subscribe to GOOSE/SV traffic and produce station-useful evidence,
-not only raw frame dumps.
-```
-
-### M12 - MMS Server and IED Simulator
-
-Goal: enable repeatable testing without hardware.
-
-Deliverables:
-
-- SCL-backed server model.
-- read/write support.
-- DataSet service.
-- report service.
-- control simulation.
-- GOOSE/SV integration.
-- scenario scripts.
-- interop tests against the stack client.
-
-Done means:
-
-```text
-The stack can run a deterministic IED simulator useful for automated tests and
-engineering demonstrations.
-```
-
-### M13 - WPF Engineering Workbench
-
-Goal: productize the stack.
-
-Deliverables:
-
-- connection/session manager.
-- station/SCL import.
-- MMS model browser.
-- smart read/write panel.
-- report wizard and monitor.
-- GOOSE/SV monitor.
-- PCAP replay/evidence.
-- exportable test report.
-
-Done means:
-
-```text
-A commissioning engineer can use the app without reading code or understanding
-raw MMS naming rules.
-```
-
-### M14 - Interoperability and Release Hardening
-
-Goal: make releases credible.
-
-Deliverables:
-
-- hardware matrix.
-- simulator matrix.
-- PCAP golden corpus.
-- long-run report soak test.
-- malformed packet tests.
-- documented limitations.
-- public release notes.
-
-Done means:
-
-```text
-The repository can publish tagged releases with a defensible validation story.
-```
-
-## 8. Current Next Patch Order
-
-Do these in order. Do not jump to WPF before these stack APIs exist.
-
-### Patch 1 - Live MMS Model Index
-
-Implement:
-
-- `FunctionalConstraint` enum.
-- `MmsVariableName` parser.
-- `Iec61850UserReference` normalizer.
-- `IedModelIndexBuilder` from current `GetNameList` results.
-- CLI `mms-model` to print LD/LN/FC tree summary.
-
-Acceptance:
-
-```text
-The lab IED result can be converted from 10,122 raw variable names into a
-logical FC-aware tree.
-```
-
-### Patch 2 - Smart FC Resolver and Smart Read
-
-Implement:
-
-- `FcResolver`.
-- `ResolveAsync`.
-- `ReadSmartAsync`.
-- CLI `mms-resolve`.
-- CLI `mms-read`.
-
-Acceptance:
-
-```text
-User can read ST/MX/DC/RP/BR attributes without manually entering FC.
-Ambiguous references return candidates, not random failure.
-```
-
-### Patch 3 - DataSet Member Directory
-
-Implement:
-
-- `GetNamedVariableListAttributes` request/response.
-- `DataSetDirectory` model.
-- member-to-FC-resolved point mapping.
-- CLI `mms-dataset-members`.
-
-Acceptance:
-
-```text
-The stack can list members of OCR7SR12PROT/LLN0.DataSet with order and resolved
-FC source.
-```
-
-### Patch 4 - Full RCB Probe and Readiness Classification
-
-Implement:
-
-- full RCB attribute read.
-- RCB readiness classifier.
-- CLI `mms-rcb-list --classify`.
-
-Acceptance:
-
-```text
-The 286 discovered RCBs are grouped into usable static-bound RCBs, empty dynamic
-slots, occupied RCBs, access-denied RCBs, and unknown/partial RCBs.
-```
-
-### Patch 5 - Confirmed Write Foundation
-
-Implement:
-
-- write PDU builder/decoder.
-- type-aware value encoder.
-- guarded CLI `mms-write`.
-
-Acceptance:
-
-```text
-A harmless writable test attribute or lab simulator attribute can be written and
-verified by read-back.
-```
-
-### Patch 6 - Report Enable/GI MVP
-
-Implement:
-
-- RCB write sequence.
-- report handler registration API placeholder.
-- guarded `mms-report-enable`.
-- `GI=true` trigger.
-
-Acceptance:
-
-```text
-The stack can enable a safe free RCB in lab and trigger GI without taking over
-an RCB already enabled/reserved by another client.
-```
-
-### Patch 7 - Async Report Receive
-
-Implement:
-
-- receive pump.
-- confirmed response router.
-- unconfirmed InformationReport decoder.
-- CLI `mms-report-monitor`.
-
-Acceptance:
-
-```text
-Report values appear with RptID, DataSet, SqNum, optional fields, and mapped
-DataSet member names.
-```
-
-## 9. Validation Requirements
+Status: lab MVP implemented.
+
+- RCB inventory and readiness classification;
+- static report planner;
+- dynamic report planner;
+- guarded static report live command;
+- guarded dynamic report live command;
+- cleanup checks.
+
+Remaining:
+
+- broader reservation/owner vendor variations;
+- typed optional fields;
+- full receive pump;
+- long-run monitor.
+
+## 9. Validation Rules
 
 A feature is not done until it has:
 
-- deterministic unit tests,
-- at least one malformed input test,
-- documented limitations,
-- CLI or test harness usage,
-- validation note under `docs/validation/` when hardware or interop is involved,
+- deterministic unit tests;
+- malformed input or unsupported-case tests where practical;
+- documented limitations;
+- CLI or test harness usage;
+- validation note under `docs/validation/` when hardware or interop is involved;
 - clear evidence of what was tested and what remains unproven.
 
 Validation levels:
 
-1. Unit tests.
-2. Golden byte tests.
-3. Round-trip tests.
-4. Negative/malformed tests.
-5. PCAP replay tests.
-6. Simulator interop tests.
-7. Real IED lab tests.
-8. Long-run stability tests.
-9. Formal conformance path later.
+1. unit tests;
+2. golden byte tests;
+3. round-trip tests;
+4. negative/malformed tests;
+5. PCAP replay tests;
+6. simulator interop tests;
+7. real IED lab tests;
+8. long-run stability tests;
+9. formal conformance path later.
 
-Do not use the word `conformant` unless a formal conformance route exists. Use
+Do not use `conformant` unless formal conformance evidence exists. Use
 `interop-tested`, `lab-validated`, or `screening-level` when that is the honest
 status.
 
@@ -968,22 +576,24 @@ status.
 
 - Build and tests pass.
 - CLI can inspect SCL, generate/inspect PCAP, publish bounded GOOSE/SV smoke,
-  connect MMS, discover IED model, smart-read values.
+  connect MMS, discover IED model, smart-read values, and run guarded report
+  smoke tests.
 - Known limitations documented.
 
 ### Beta
 
-- Full live IED directory.
-- Smart FC resolver.
-- DataSet directory.
-- RCB classification.
-- Report enable/GI/monitor MVP.
-- At least two simulator profiles and one real IED lab validation.
+- Full receive pump.
+- Report monitor.
+- BRCB recovery MVP.
+- MMS file transfer.
+- GOOSE/SV subscriber MVP.
+- At least two simulator profiles and two real IED/vendor validation notes.
 
 ### Release Candidate
 
 - Buffered and unbuffered reporting stable.
 - Subscriber side GOOSE/SV stable.
+- MMS server/simulator useful for repeatable tests.
 - WPF workbench usable for real workflows.
 - Interop matrix documented.
 - Long-run report/subscriber tests completed.
@@ -991,10 +601,10 @@ status.
 ### Public 1.0
 
 - Clean-room license hygiene complete.
-- API surface stable enough for users.
+- API surface stable enough for external users.
 - Tagged release.
 - User documentation and validation evidence complete.
-- No marketing overclaim beyond proven capabilities.
+- No marketing overclaim beyond proven capability.
 
 ## 11. Non-Negotiable Boundaries
 
@@ -1002,35 +612,10 @@ status.
 - No UI logic in protocol stack.
 - No network publishing without explicit adapter selection and confirmation.
 - No write/control operation hidden inside discovery.
-- No report enable on an occupied/reserved RCB unless the user explicitly forces
-  it in lab mode.
+- No report enable on occupied/reserved RCBs unless an explicit lab-force mode
+  is implemented and confirmed.
 - No brute-force control/write attempts.
 - No claiming timing precision from normal Windows/Npcap behavior.
-- No making a WPF screen before the stack API it needs exists.
+- No WPF screen before the stack API it needs exists.
 - No deleting tests to make a build pass.
 - No silently choosing one interpretation when SCL/live model conflicts.
-
-## Current implementation checkpoint: guarded static/dynamic reporting
-
-The stack now validates the complete first live reporting chain against the lab
-IED at `192.16.1.157`:
-
-1. Live MMS directory discovery builds FC-aware points from the IED model.
-2. DataSet directory reads `GetNamedVariableListAttributes` and maps members to `LD/LN.DO.da [FC]`.
-3. Report readiness classifies RCBs into static-ready, dynamic empty slot, occupied, reserved, or incomplete.
-4. Static reporting can enable a safe static BRCB, trigger GI, receive reports,
-   map included values to DataSet members, and disable the RCB.
-5. Dynamic reporting can create a dynamic DataSet, write `RCB.DatSet`, enable,
-   trigger GI, receive reports, clear `DatSet`, and delete the dynamic DataSet.
-6. Confirmed request handling queues unsolicited `InformationReport` frames that
-   arrive while waiting for the expected invoke response.
-
-Remaining next phase:
-
-1. Promote the guarded receive queue into a full association receive pump.
-2. Decode report optional fields into typed names: RptID, OptFlds, SqNum,
-   TimeOfEntry, DatSet, BufOvfl, EntryID, ConfRev, inclusion bits, and
-   reason-for-inclusion.
-3. Add BRCB recovery with `EntryID`, `PurgeBuf`, duplicate handling, and
-   reconnect diagnostics.
-4. Add multi-vendor simulator and long-run report soak validation.

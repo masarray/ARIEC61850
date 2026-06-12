@@ -26,6 +26,9 @@ public sealed class MmsReportFrame
 {
     public DateTimeOffset ReceivedAt { get; init; }
     public IReadOnlyList<MmsReportValue> Values { get; init; } = Array.Empty<MmsReportValue>();
+    public int RawAccessResultCount { get; init; }
+    public int? InclusionBitstringItemIndex { get; init; }
+    public IReadOnlyList<int> IncludedDataSetIndexes { get; init; } = Array.Empty<int>();
     public string Message { get; init; } = string.Empty;
     public string ResponseHexPreview { get; init; } = string.Empty;
 }
@@ -37,6 +40,122 @@ public sealed class MmsStaticReportSessionResult
     public IReadOnlyList<MmsReportFrame> Reports { get; init; } = Array.Empty<MmsReportFrame>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public string Message { get; init; } = string.Empty;
+}
+
+public static class MmsReportFrameMapper
+{
+    public static MmsReportFrame Map(
+        MmsInformationReport decoded,
+        IReadOnlyList<MmsDataSetDirectoryMember> members,
+        DateTimeOffset receivedAt)
+    {
+        ArgumentNullException.ThrowIfNull(decoded);
+        members ??= Array.Empty<MmsDataSetDirectoryMember>();
+
+        var values = TryMapIec61850ReportValues(decoded.Items, members, out var mapped)
+            ? mapped.Values
+            : decoded.Items.Select(item => new MmsReportValue
+            {
+                Index = item.Index,
+                Member = item.Index >= 0 && item.Index < members.Count ? members[item.Index] : null,
+                Value = item.Value,
+                FailureCode = item.FailureCode
+            }).ToArray();
+
+        return new MmsReportFrame
+        {
+            ReceivedAt = receivedAt,
+            Values = values,
+            RawAccessResultCount = decoded.Items.Count,
+            InclusionBitstringItemIndex = mapped.InclusionBitstringItemIndex,
+            IncludedDataSetIndexes = mapped.IncludedDataSetIndexes,
+            Message = mapped.Message ?? decoded.Message,
+            ResponseHexPreview = decoded.ResponseHexPreview
+        };
+    }
+
+    private readonly record struct ReportValueMapping(
+        bool IsMapped,
+        IReadOnlyList<MmsReportValue> Values,
+        IReadOnlyList<int> IncludedDataSetIndexes,
+        int? InclusionBitstringItemIndex,
+        string? Message);
+
+    private static bool TryMapIec61850ReportValues(
+        IReadOnlyList<MmsInformationReportItem> items,
+        IReadOnlyList<MmsDataSetDirectoryMember> members,
+        out ReportValueMapping mapping)
+    {
+        mapping = new ReportValueMapping(false, Array.Empty<MmsReportValue>(), Array.Empty<int>(), null, null);
+        if (items.Count == 0 || members.Count == 0)
+            return false;
+
+        for (var index = 5; index < items.Count; index++)
+        {
+            var item = items[index];
+            if (item.Value?.Kind != MmsDataKind.BitString)
+                continue;
+
+            if (!TryDecodeInclusionBits(item.Value, members.Count, out var includedMemberIndexes))
+                continue;
+
+            if (includedMemberIndexes.Count == 0)
+                continue;
+
+            var valuesStart = index + 1;
+            if (valuesStart + includedMemberIndexes.Count > items.Count)
+                continue;
+
+            var mapped = new List<MmsReportValue>();
+            for (var includedOffset = 0; includedOffset < includedMemberIndexes.Count; includedOffset++)
+            {
+                var memberIndex = includedMemberIndexes[includedOffset];
+                var valueItem = items[valuesStart + includedOffset];
+                mapped.Add(new MmsReportValue
+                {
+                    Index = memberIndex,
+                    Member = memberIndex >= 0 && memberIndex < members.Count ? members[memberIndex] : null,
+                    Value = valueItem.Value,
+                    FailureCode = valueItem.FailureCode
+                });
+            }
+
+            mapping = new ReportValueMapping(
+                true,
+                mapped,
+                includedMemberIndexes,
+                index,
+                $"IEC 61850 InformationReport mapped {mapped.Count}/{members.Count} included DataSet value(s). inclusionItem={index}, included=[{string.Join(",", includedMemberIndexes)}], rawAccessResults={items.Count}.");
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryDecodeInclusionBits(MmsDataValue bitString, int memberCount, out IReadOnlyList<int> includedIndexes)
+    {
+        includedIndexes = Array.Empty<int>();
+        if (memberCount <= 0 || bitString.Kind != MmsDataKind.BitString || bitString.RawValue.Count < 2)
+            return false;
+
+        var unusedBits = bitString.RawValue[0];
+        var dataBytes = bitString.RawValue.Skip(1).ToArray();
+        var totalBits = dataBytes.Length * 8 - unusedBits;
+        if (totalBits < memberCount)
+            return false;
+
+        var included = new List<int>();
+        for (var memberIndex = 0; memberIndex < memberCount; memberIndex++)
+        {
+            var byteIndex = memberIndex / 8;
+            var bitIndex = 7 - (memberIndex % 8);
+            if (((dataBytes[byteIndex] >> bitIndex) & 0x01) != 0)
+                included.Add(memberIndex);
+        }
+
+        includedIndexes = included;
+        return true;
+    }
 }
 
 public sealed partial class MmsClientSession
@@ -328,10 +447,13 @@ public sealed partial class MmsClientSession
                 continue;
             }
 
-            if (!MmsInformationReportDecoder.IsInformationReport(payload))
+            var route = _receiveRouter.Route(payload);
+            LastReceiveRoutingSummary = route.Message;
+            if (route.Action != MmsReceiveRouteAction.QueuedInformationReport)
                 continue;
 
-            TryAppendInformationReport(payload, members, reports);
+            if (TryDequeueInformationReport(out var routedPayload))
+                TryAppendInformationReport(routedPayload, members, reports);
         }
 
         return reports;
@@ -346,99 +468,7 @@ public sealed partial class MmsClientSession
             return;
 
         var decoded = MmsInformationReportDecoder.Decode(payload);
-        var values = TryMapIec61850ReportValues(decoded.Items, members, out var mappedMessage)
-            ? mappedMessage.Values
-            : decoded.Items.Select(item => new MmsReportValue
-            {
-                Index = item.Index,
-                Member = item.Index >= 0 && item.Index < members.Count ? members[item.Index] : null,
-                Value = item.Value,
-                FailureCode = item.FailureCode
-            }).ToArray();
-
-        reports.Add(new MmsReportFrame
-        {
-            ReceivedAt = DateTimeOffset.UtcNow,
-            Values = values,
-            Message = mappedMessage.Message ?? decoded.Message,
-            ResponseHexPreview = decoded.ResponseHexPreview
-        });
-    }
-
-    private readonly record struct ReportValueMapping(bool IsMapped, IReadOnlyList<MmsReportValue> Values, string? Message);
-
-    private static bool TryMapIec61850ReportValues(
-        IReadOnlyList<MmsInformationReportItem> items,
-        IReadOnlyList<MmsDataSetDirectoryMember> members,
-        out ReportValueMapping mapping)
-    {
-        mapping = new ReportValueMapping(false, Array.Empty<MmsReportValue>(), null);
-        if (items.Count == 0 || members.Count == 0)
-            return false;
-
-        for (var index = 5; index < items.Count; index++)
-        {
-            var item = items[index];
-            if (item.Value?.Kind != MmsDataKind.BitString)
-                continue;
-
-            if (!TryDecodeInclusionBits(item.Value, members.Count, out var includedMemberIndexes))
-                continue;
-
-            if (includedMemberIndexes.Count == 0)
-                continue;
-
-            var valuesStart = index + 1;
-            if (valuesStart + includedMemberIndexes.Count > items.Count)
-                continue;
-
-            var mapped = new List<MmsReportValue>();
-            for (var includedOffset = 0; includedOffset < includedMemberIndexes.Count; includedOffset++)
-            {
-                var memberIndex = includedMemberIndexes[includedOffset];
-                var valueItem = items[valuesStart + includedOffset];
-                mapped.Add(new MmsReportValue
-                {
-                    Index = memberIndex,
-                    Member = memberIndex >= 0 && memberIndex < members.Count ? members[memberIndex] : null,
-                    Value = valueItem.Value,
-                    FailureCode = valueItem.FailureCode
-                });
-            }
-
-            mapping = new ReportValueMapping(
-                true,
-                mapped,
-                $"IEC 61850 InformationReport mapped {mapped.Count}/{members.Count} included DataSet value(s). Raw accessResults={items.Count}.");
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryDecodeInclusionBits(MmsDataValue bitString, int memberCount, out IReadOnlyList<int> includedIndexes)
-    {
-        includedIndexes = Array.Empty<int>();
-        if (memberCount <= 0 || bitString.Kind != MmsDataKind.BitString || bitString.RawValue.Count < 2)
-            return false;
-
-        var unusedBits = bitString.RawValue[0];
-        var dataBytes = bitString.RawValue.Skip(1).ToArray();
-        var totalBits = dataBytes.Length * 8 - unusedBits;
-        if (totalBits < memberCount)
-            return false;
-
-        var included = new List<int>();
-        for (var memberIndex = 0; memberIndex < memberCount; memberIndex++)
-        {
-            var byteIndex = memberIndex / 8;
-            var bitIndex = 7 - (memberIndex % 8);
-            if (((dataBytes[byteIndex] >> bitIndex) & 0x01) != 0)
-                included.Add(memberIndex);
-        }
-
-        includedIndexes = included;
-        return true;
+        reports.Add(MmsReportFrameMapper.Map(decoded, members, DateTimeOffset.UtcNow));
     }
 
     private async Task<MmsReportAttributeWriteStep> WriteReportAttributeAsync(

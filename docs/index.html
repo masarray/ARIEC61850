@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ARIEC61850 - Clean-Room IEC 61850 Native Stack for .NET</title>
-    <meta name="description" content="Clean-room IEC 61850 native .NET stack for MMS discovery, GOOSE, Sampled Values, SCL import, PCAP validation, and live publishing.">
+    <meta name="description" content="Clean-room IEC 61850 native .NET stack for MMS discovery, smart read, guarded reporting, GOOSE, Sampled Values, SCL, and PCAP validation.">
     <meta name="keywords" content="IEC 61850, MMS, GOOSE, Sampled Values, SV publisher, SCL, SCD, SCADA, substation automation, process bus, protection relay, .NET, C#, Npcap, PCAP">
     <meta name="author" content="masarray">
     <meta name="robots" content="index, follow">
@@ -15,12 +15,12 @@
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="ARIEC61850 - Clean-Room IEC 61850 Native Stack">
-    <meta property="og:description" content="Reusable .NET engine for IEC 61850 MMS discovery, GOOSE, Sampled Values, SCL import, PCAP validation, and live lab workflows.">
+    <meta property="og:description" content="Reusable .NET engine for IEC 61850 MMS discovery, smart read, guarded reporting, GOOSE, Sampled Values, SCL, PCAP, and live lab workflows.">
     <meta property="og:url" content="https://masarray.github.io/ARIEC61850/">
     <meta property="og:image" content="https://masarray.github.io/ARIEC61850/assets/og-preview.svg">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="ARIEC61850 - IEC 61850 Native .NET Stack">
-    <meta name="twitter:description" content="Clean-room IEC 61850 stack for MMS discovery, GOOSE, Sampled Values, SCL, PCAP, and live publishing.">
+    <meta name="twitter:description" content="Clean-room IEC 61850 stack for MMS discovery, smart read, guarded reporting, GOOSE, Sampled Values, SCL, and PCAP.">
     <meta name="twitter:image" content="https://masarray.github.io/ARIEC61850/assets/og-preview.svg">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "ARIEC61850",
-        "description": "Clean-room IEC 61850 native .NET stack for MMS discovery, GOOSE, Sampled Values, SCL import, PCAP validation, and live publishing.",
+        "description": "Clean-room IEC 61850 native .NET stack for MMS discovery, smart read, guarded reporting, GOOSE, Sampled Values, SCL import, and PCAP validation.",
         "codeRepository": "https://github.com/masarray/ARIEC61850",
         "programmingLanguage": "C#",
         "runtimePlatform": ".NET 8",
@@ -68,9 +68,9 @@
           <p class="section-kicker">IEC 61850 / MMS / GOOSE / Sampled Values / SCL</p>
           <h1>Clean-room IEC 61850 stack for C# engineering tools.</h1>
           <p class="hero-lede">
-            Build reusable protocol engines for MMS discovery, GOOSE traffic,
-            Sampled Values publishing, SCL-driven validation, and future station
-            testing workbenches.
+            Build reusable protocol engines for MMS discovery, smart reads,
+            guarded reporting, GOOSE traffic, Sampled Values publishing,
+            SCL-driven validation, and future station testing workbenches.
           </p>
           <div class="hero-actions" aria-label="Primary actions">
             <a class="button primary" href="https://github.com/masarray/ARIEC61850">View Repository</a>
@@ -79,11 +79,11 @@
           <dl class="hero-facts" aria-label="Current validation facts">
             <div>
               <dt>Current milestone</dt>
-              <dd>SCL to live SV publish</dd>
+              <dd>MMS reporting lab MVP</dd>
             </div>
             <div>
               <dt>Validation</dt>
-              <dd>23 tests passed</dd>
+              <dd>60 tests passed</dd>
             </div>
             <div>
               <dt>Runtime</dt>
@@ -144,7 +144,7 @@
         </article>
         <article>
           <strong>MMS</strong>
-          <span>Discovery, DataSet and RCB inventory</span>
+          <span>Discovery, smart read, DataSet and reports</span>
         </article>
       </section>
 
@@ -176,8 +176,8 @@
           <article>
             <h3>Validation-first CLI</h3>
             <p>Inspect SCL, generate PCAP, inspect PCAP, stream decoded events,
-            list adapters, publish SV/GOOSE from SCL profiles, and discover MMS
-            IED models.</p>
+            list adapters, publish SV/GOOSE from SCL profiles, discover MMS IED
+            models, and run guarded report smoke tests.</p>
           </article>
         </div>
       </section>
@@ -187,8 +187,9 @@
           <p class="section-kicker">Validation evidence</p>
           <h2>Live protocol proof, not only offline bytes.</h2>
           <p>
-            The stack now has live SV publishing, live GOOSE publishing, and
-            native MMS discovery evidence against a lab IED.
+            The stack now has live SV publishing, live GOOSE publishing, smart
+            MMS reads, and guarded static/dynamic reporting evidence against a
+            lab IED.
           </p>
         </div>
         <div class="evidence-grid">
@@ -214,7 +215,7 @@
           </div>
           <div class="stat">
             <span>Tests</span>
-            <strong>32 passed</strong>
+            <strong>60 passed</strong>
             <small>unit and round-trip coverage</small>
           </div>
         </div>
@@ -244,7 +245,7 @@
           <article>
             <span>Layer 3+</span>
             <h3>MMS stack</h3>
-            <p>TPKT, COTP, ACSE, discovery, reads, reports next.</p>
+            <p>TPKT, COTP, ACSE, discovery, smart reads, guarded reports.</p>
           </article>
         </div>
       </section>
@@ -257,16 +258,16 @@
         <div class="command-tabs" role="tablist" aria-label="Quick start commands">
           <button class="tab is-active" type="button" data-command="inspect">Inspect SCL</button>
           <button class="tab" type="button" data-command="dryrun">Dry run SV</button>
-          <button class="tab" type="button" data-command="live">Live SV</button>
-          <button class="tab" type="button" data-command="mms">MMS discover</button>
+          <button class="tab" type="button" data-command="live">Live GOOSE</button>
+          <button class="tab" type="button" data-command="mms">MMS report</button>
         </div>
         <pre class="command-block" data-command-panel="inspect"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-scl .\samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd</code></pre>
         <pre class="command-block is-hidden" data-command-panel="dryrun"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- publish-sv-live ".\samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd" --adapter 5 --stream-index 1 --frames 4000 --dry-run</code></pre>
-        <pre class="command-block is-hidden" data-command-panel="live"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- publish-sv-live ".\samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd" --adapter 5 --stream-index 1 --continuous --yes</code></pre>
-        <pre class="command-block is-hidden" data-command-panel="mms"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.16.1.157 --port 102 --timeout-ms 20000 --max-report-probes 16</code></pre>
+        <pre class="command-block is-hidden" data-command-panel="live"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 5 --stream-index 1 --duration-sec 10 --toggle-every-sec 2 --yes</code></pre>
+        <pre class="command-block is-hidden" data-command-panel="mms"><code>dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-live 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 15 --yes</code></pre>
         <p class="safety-note">
-          Active publishing sends raw multicast Ethernet frames. Use an isolated
-          lab NIC, TAP, or test switch.
+          Active publishing sends raw multicast Ethernet frames. Live report
+          commands write RCB attributes. Use only isolated lab equipment.
         </p>
       </section>
     </main>

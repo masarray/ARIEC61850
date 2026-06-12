@@ -123,4 +123,41 @@ public sealed class MmsInformationReportDecoderTests
         var item = Assert.Single(report.Items);
         Assert.Equal(MmsDataKind.Boolean, item.Value?.Kind);
     }
+
+    [Fact]
+    public void ReportFrameMapper_MapsIncludedValuesByDataSetIndex()
+    {
+        var decoded = new MmsInformationReport
+        {
+            IsSuccess = true,
+            Items =
+            [
+                new MmsInformationReportItem { Index = 0, Value = MmsDataValue.VisibleString("rpt") },
+                new MmsInformationReportItem { Index = 1, Value = MmsDataValue.BitString(0, [0x00]) },
+                new MmsInformationReportItem { Index = 2, Value = MmsDataValue.Unsigned(1) },
+                new MmsInformationReportItem { Index = 3, Value = MmsDataValue.UtcTime(new Iec61850UtcTime(new byte[8])) },
+                new MmsInformationReportItem { Index = 4, Value = MmsDataValue.VisibleString("LD0/LLN0.DataSet") },
+                new MmsInformationReportItem { Index = 5, Value = MmsDataValue.BitString(4, [0b1010_0000]) },
+                new MmsInformationReportItem { Index = 6, Value = MmsDataValue.Boolean(true) },
+                new MmsInformationReportItem { Index = 7, Value = MmsDataValue.Boolean(false) }
+            ],
+            Message = "decoded"
+        };
+        var members = new[]
+        {
+            new MmsDataSetDirectoryMember { UserReference = "LD0/GGIO1.Ind1.stVal", FunctionalConstraint = "ST" },
+            new MmsDataSetDirectoryMember { UserReference = "LD0/GGIO1.Ind2.stVal", FunctionalConstraint = "ST" },
+            new MmsDataSetDirectoryMember { UserReference = "LD0/GGIO1.Ind3.stVal", FunctionalConstraint = "ST" },
+            new MmsDataSetDirectoryMember { UserReference = "LD0/GGIO1.Ind4.stVal", FunctionalConstraint = "ST" }
+        };
+
+        var frame = MmsReportFrameMapper.Map(decoded, members, DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(8, frame.RawAccessResultCount);
+        Assert.Equal(5, frame.InclusionBitstringItemIndex);
+        Assert.Equal([0, 2], frame.IncludedDataSetIndexes);
+        Assert.Equal(2, frame.Values.Count);
+        Assert.Equal("LD0/GGIO1.Ind1.stVal", frame.Values[0].MemberReference);
+        Assert.Equal("LD0/GGIO1.Ind3.stVal", frame.Values[1].MemberReference);
+    }
 }

@@ -874,6 +874,7 @@ internal static class Cli
         foreach (var report in TakeWithLimit(live.Reports, rawLimit))
         {
             Console.WriteLine($"  {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} UTC - {report.Message}");
+            Console.WriteLine($"      rawAccessResults={report.RawAccessResultCount} inclusionItem={FormatNullableInt(report.InclusionBitstringItemIndex)} included=[{string.Join(",", report.IncludedDataSetIndexes)}]");
             foreach (var value in TakeWithLimit(report.Values, 32))
             {
                 Console.WriteLine($"      [{value.Index}] {value.MemberReference}: {value.DisplayValue}");
@@ -1053,6 +1054,7 @@ internal static class Cli
         foreach (var report in TakeWithLimit(live.Reports, rawLimit))
         {
             Console.WriteLine($"  {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} UTC - {report.Message}");
+            Console.WriteLine($"      rawAccessResults={report.RawAccessResultCount} inclusionItem={FormatNullableInt(report.InclusionBitstringItemIndex)} included=[{string.Join(",", report.IncludedDataSetIndexes)}]");
             foreach (var value in TakeWithLimit(report.Values, 32))
             {
                 Console.WriteLine($"      [{value.Index}] {value.MemberReference}: {value.DisplayValue}");
@@ -1898,6 +1900,9 @@ internal static class Cli
 
     private static string TextOrDash(string value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatNullableInt(int? value)
+        => value.HasValue ? value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-";
 
     private static string FormatAppId(ushort? appId)
         => appId.HasValue ? $"0x{appId.Value:X4}" : "-";

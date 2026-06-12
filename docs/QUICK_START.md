@@ -5,9 +5,11 @@ This quick start validates the current clean-room IEC 61850 stack from source.
 ## Requirements
 
 - .NET 8 SDK.
-- Windows for live Npcap publishing.
+- Windows for live Npcap publishing with the current transport.
 - Npcap installed when using raw Ethernet commands.
-- An isolated Ethernet adapter, TAP, or lab switch for active SV publishing.
+- An isolated Ethernet adapter, TAP, or lab switch for active GOOSE/SV
+  publishing.
+- A lab IED or simulator for live MMS commands.
 
 ## Build and test
 
@@ -126,7 +128,30 @@ Plan report readiness before enabling any RCB workflow:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-plan 192.16.1.157 --port 102 --timeout-ms 60000 --max-report-probes 64 --only-safe
 ```
 
+Inspect a live DataSet directory:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-dataset-directory 192.16.1.157 OCR7SR12PROT/LLN0.DataSet --port 102 --timeout-ms 60000 --raw-limit 80
+```
+
+Run a guarded static report smoke test only on an isolated lab IED or unused
+RCB:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-live 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 15 --yes
+```
+
+Run a guarded dynamic report smoke test only on a confirmed unused dynamic RCB
+slot:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-dynamic-live 192.16.1.157 --port 102 --timeout-ms 120000 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12MEAS/MMXU1.A.phsA.cVal.mag.f --dataset-name AR_DYN_DS01 --duration-sec 5 --gi true --delete-dataset true --yes
+```
+
 ## Safety boundary
 
 Active publishing sends raw multicast Ethernet frames. Use only an isolated lab
 NIC, TAP, or test switch. Do not use a production substation network.
+
+Live report commands write RCB/DataSet attributes. Use them only against lab
+equipment and only after planning commands show a safe target.

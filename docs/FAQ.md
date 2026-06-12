@@ -17,15 +17,31 @@ selected Npcap adapter.
 No. The current publisher is software-paced and intended for lab validation,
 tool development, and interoperability smoke tests.
 
-## Does the stack support MMS client discovery?
+## Does the stack support MMS client workflows?
 
-Not yet. MMS transport layers are on the roadmap after process-bus publisher and
-subscriber services are stable.
+Yes, partially. The current MMS client can associate with a lab IED, discover
+domains, variables, DataSets, and RCBs, build an FC-aware live directory,
+resolve and smart-read values, inspect DataSet members, plan report usage, and
+run guarded static/dynamic report smoke tests.
+
+It is not a complete MMS stack yet. File transfer, log services, setting groups,
+control services, MMS server behavior, full long-running receive pump, and BRCB
+recovery are still planned.
 
 ## Does it support GOOSE publishing?
 
-The stack can build GOOSE frames and SCL-backed GOOSE publisher profiles. The
-next step is a reusable retransmission schedule and live publish command.
+Yes. The stack can build GOOSE frames, parse GOOSE frames, build SCL-backed
+publisher profiles, and publish bounded or continuous GOOSE traffic through a
+selected lab adapter. GOOSE subscriber support is still planned.
+
+## Does it support IEC 61850 reporting?
+
+Partially. Static and dynamic report workflows now have guarded lab smoke
+commands. The stack can plan a safe report target, enable reporting, trigger GI,
+receive `InformationReport` frames, map values by DataSet order, and clean up.
+
+The remaining work is the production-grade receive pump, full optional-field
+decode, BRCB recovery, long-run monitor, and multi-vendor validation.
 
 ## Can this be used in a WPF tester?
 
@@ -34,5 +50,6 @@ stack, while protocol logic remains reusable in `src/`.
 
 ## Why is there no NuGet package yet?
 
-The API is still moving. A package should wait until SCL, SV/GOOSE publisher and
-subscriber boundaries, and MMS transport foundations are stable.
+The API is still moving. A package should wait until the MMS receive pump,
+report monitor, file transfer, and GOOSE/SV subscriber boundaries are more
+stable.

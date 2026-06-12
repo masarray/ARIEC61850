@@ -18,8 +18,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 {
     private readonly TpktClient _tpkt = new();
     private readonly CotpClient _cotp;
-    private readonly Queue<byte[]> _pendingInformationReports = new();
-    private readonly object _pendingInformationReportsLock = new();
+    private readonly MmsReceiveRouter _receiveRouter = new();
     private string _lastHost = string.Empty;
     private int _lastPort = 102;
     private TimeSpan _lastTimeout = TimeSpan.FromSeconds(5);
@@ -49,6 +48,9 @@ public sealed partial class MmsClientSession : IAsyncDisposable
     public string LastReadAttemptSummary => LastReadAttempts.Count == 0
         ? string.Empty
         : string.Join(" | ", LastReadAttempts.Select(a => a.Summary));
+    public string LastReceiveRoutingSummary { get; private set; } = string.Empty;
+    public int QueuedInformationReportCount => _receiveRouter.QueuedInformationReportCount;
+    public int QueuedConfirmedResultCount => _receiveRouter.QueuedConfirmedResultCount;
 
     public Task ConnectAsync(string host, int port = 102, CancellationToken cancellationToken = default)
         => ConnectAsync(host, port, TimeSpan.FromSeconds(5), cancellationToken);
@@ -65,6 +67,8 @@ public sealed partial class MmsClientSession : IAsyncDisposable
         LastDiscoveryRequestHex = string.Empty;
         LastDiscoveryResponseHex = string.Empty;
         LastDiscoveryAttemptSummary = string.Empty;
+        LastReceiveRoutingSummary = string.Empty;
+        _receiveRouter.Clear();
 
         await AssociateAsync(resetAssociationDiagnostics: true, cancellationToken).ConfigureAwait(false);
 
@@ -532,78 +536,44 @@ public sealed partial class MmsClientSession : IAsyncDisposable
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var response = await _cotp.ReceiveDataAsync(cancellationToken).ConfigureAwait(false);
-            var mms = MmsPresentation.StripPresentationPrefix(response);
 
-            if (mms.Length > 0 && mms[0] == 0xA3)
+            if (_receiveRouter.TryDequeueConfirmedResult(expectedInvokeId, out var queued))
             {
-                EnqueueInformationReport(response);
+                LastReceiveRoutingSummary = $"Dequeued queued {queued.Kind} for invokeID={expectedInvokeId}.";
+                return queued.PresentationPayload;
+            }
+
+            var response = await _cotp.ReceiveDataAsync(cancellationToken).ConfigureAwait(false);
+            var route = _receiveRouter.Route(response);
+            LastReceiveRoutingSummary = route.Message;
+
+            if (route.Action == MmsReceiveRouteAction.QueuedInformationReport ||
+                route.Action == MmsReceiveRouteAction.QueuedUnconfirmed)
+                continue;
+
+            if (route.Action == MmsReceiveRouteAction.QueuedConfirmedResult)
+            {
+                if (_receiveRouter.TryDequeueConfirmedResult(expectedInvokeId, out var matched))
+                    return matched.PresentationPayload;
+
                 continue;
             }
 
-            if (IsConfirmedMmsPduForInvoke(mms, expectedInvokeId) || mms.Length == 0)
-                return response;
-
-            // Keep strict invoke ownership visible.  There is still no full receive
-            // pump, but this prevents unsolicited reports from corrupting the next
-            // confirmed operation in guarded report workflows.
-            return response;
+            return route.Envelope.PresentationPayload;
         }
-    }
-
-    private void EnqueueInformationReport(byte[] payload)
-    {
-        lock (_pendingInformationReportsLock)
-            _pendingInformationReports.Enqueue(payload);
     }
 
     private bool TryDequeueInformationReport(out byte[] payload)
     {
-        lock (_pendingInformationReportsLock)
+        if (_receiveRouter.TryDequeueInformationReport(out var envelope))
         {
-            if (_pendingInformationReports.Count > 0)
-            {
-                payload = _pendingInformationReports.Dequeue();
-                return true;
-            }
+            payload = envelope.PresentationPayload;
+            LastReceiveRoutingSummary = $"Dequeued queued InformationReport. queuedReports={_receiveRouter.QueuedInformationReportCount}.";
+            return true;
         }
 
         payload = Array.Empty<byte>();
         return false;
-    }
-
-    private static bool IsConfirmedMmsPduForInvoke(ReadOnlyMemory<byte> mms, int expectedInvokeId)
-    {
-        if (mms.Length == 0)
-            return false;
-
-        if (mms.Span[0] is not (0xA1 or 0xA2))
-            return false;
-
-        try
-        {
-            var offset = 0;
-            if (!AR.Iec61850.Asn1.BerReader.TryReadTlv(mms, ref offset, out var outer))
-                return false;
-
-            var children = AR.Iec61850.Asn1.BerReader.ReadChildren(outer.Value);
-            if (children.Count == 0)
-                return false;
-
-            var invoke = mms.Span[0] == 0xA2 && children[0].Class == AR.Iec61850.Asn1.BerClass.ContextSpecific && children[0].TagNumber == 0
-                ? children[0]
-                : children[0].EncodedTag == 0x02 ? children[0] : default;
-
-            if (invoke.EncodedTag == 0)
-                return false;
-
-            var actual = AR.Iec61850.Asn1.BerReader.ReadUnsignedInteger(invoke);
-            return actual == (ulong)expectedInvokeId;
-        }
-        catch (AR.Iec61850.Asn1.BerFormatException)
-        {
-            return false;
-        }
     }
 
     public async ValueTask DisposeAsync()

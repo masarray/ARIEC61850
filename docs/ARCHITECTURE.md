@@ -60,14 +60,14 @@ Current implementation:
 - SV publisher profile from SCL.
 - SV publisher session with `smpCnt` wrap behavior.
 - In-memory transport for deterministic tests.
-- Npcap transport for live SV publishing.
+- Npcap transport for live GOOSE/SV publishing.
 - PCAP writer, reader, and monitor.
+- GOOSE retransmission schedule.
 
 Next implementation:
 
-- SCL-bound SV subscriber.
 - SCL-bound GOOSE subscriber.
-- GOOSE retransmission schedule.
+- SCL-bound SV subscriber.
 - General typed SV payload packing.
 
 ## Layer 3 - MMS transport foundation
@@ -80,14 +80,23 @@ Client-side implementation now includes:
 - ISO Presentation P-DATA wrapping.
 - MMS `GetNameList`.
 - MMS Confirmed-Read.
-- DataSet inventory.
-- RCB inventory and bounded RCB attribute probing.
+- FC-aware live IED directory.
+- Smart FC resolver and smart read.
+- DataSet inventory and DataSet member directory.
+- RCB inventory, bounded RCB attribute probing, and readiness planning.
+- Confirmed write foundation for guarded report/DataSet workflows.
+- Guarded static report enable, GI, receive, map, and cleanup.
+- Guarded dynamic DataSet create, RCB bind, report enable, GI, receive, cleanup,
+  and DataSet delete.
 
 Next implementation:
 
 - ACSE release/abort state model.
-- Report enable/disable and GI writes.
-- InformationReport receive/decode.
+- full association receive pump.
+- typed report optional-field model.
+- BRCB recovery.
+- MMS file transfer.
+- IEC 61850 control services.
 - MMS server simulation.
 
 ## Design rule

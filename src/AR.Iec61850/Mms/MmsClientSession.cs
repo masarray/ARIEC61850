@@ -86,6 +86,7 @@ public sealed class MmsClientSession : IAsyncDisposable
         };
 
         var inventory = MmsReportDiscoveryMapper.BuildInventory(snapshot);
+        var iedDirectory = MmsIedModelDirectoryBuilder.Build(snapshot);
         if (probeReportAttributes)
             await EnrichReportInventoryAsync(inventory, Math.Max(0, maxReportAttributeProbes), cancellationToken).ConfigureAwait(false);
 
@@ -93,7 +94,8 @@ public sealed class MmsClientSession : IAsyncDisposable
         {
             Snapshot = snapshot,
             ReportInventory = inventory,
-            Summary = $"Native MMS GetNameList discovery: LD={snapshot.DomainCount}, raw variables={snapshot.RawVariableCount}, datasets={inventory.DataSets.Count}, RCB={inventory.ReportControls.Count} (BRCB={inventory.BufferedCount}, URCB={inventory.UnbufferedCount}). {LastDiscoveryAttemptSummary}"
+            IedDirectory = iedDirectory,
+            Summary = $"Native MMS GetNameList discovery: LD={snapshot.DomainCount}, raw variables={snapshot.RawVariableCount}, FC-points={iedDirectory.PointCount}, datasets={inventory.DataSets.Count}, RCB={inventory.ReportControls.Count} (BRCB={inventory.BufferedCount}, URCB={inventory.UnbufferedCount}). {LastDiscoveryAttemptSummary}"
         };
     }
 
@@ -314,6 +316,95 @@ public sealed class MmsClientSession : IAsyncDisposable
         return last;
     }
 
+
+    public async Task<MmsSmartReadResult> ReadSmartAsync(
+        MmsIedModelDirectory directory,
+        string reference,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+        ArgumentNullException.ThrowIfNull(directory);
+
+        var resolve = MmsFcResolver.Resolve(directory, reference);
+        var selected = resolve.BestCandidate;
+        if (selected == null)
+        {
+            return new MmsSmartReadResult
+            {
+                ResolveResult = resolve,
+                ReadResult = new MmsReadResult
+                {
+                    IsSuccess = false,
+                    Message = resolve.Message
+                }
+            };
+        }
+
+        var read = await ReadSingleVariableAsync(selected.ToObjectReference(), cancellationToken).ConfigureAwait(false);
+        return new MmsSmartReadResult
+        {
+            ResolveResult = resolve,
+            SelectedPoint = selected,
+            ReadResult = read
+        };
+    }
+
+    public async Task<MmsDataSetDirectoryResult> GetDataSetDirectoryAsync(
+        string dataSetReference,
+        MmsIedModelDirectory? directory = null,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+
+        var invokeId = NextInvokeId();
+        var request = MmsDataSetDirectoryRequest.Build(invokeId, dataSetReference);
+        LastDiscoveryRequestHex = HexDump.ToCompactString(request);
+
+        try
+        {
+            var response = await SendPresentationPayloadAsync(request, cancellationToken).ConfigureAwait(false);
+            var result = MmsDataSetDirectoryResponseDecoder.Decode(response, invokeId, dataSetReference, directory);
+            LastDiscoveryResponseHex = result.ResponseHexPreview;
+            LastDiscoveryAttemptSummary = result.Summary;
+            return result;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
+        {
+            await MarkProtocolFaultAsync().ConfigureAwait(false);
+            var result = new MmsDataSetDirectoryResult
+            {
+                IsSuccess = false,
+                DataSetReference = dataSetReference,
+                Message = $"DataSet directory transport fault: {ex.GetType().Name}: {ex.Message}",
+                ResponseHexPreview = LastDiscoveryResponseHex
+            };
+            LastDiscoveryAttemptSummary = result.Summary;
+            return result;
+        }
+    }
+
+    public async Task<IReadOnlyList<MmsDataSetDirectoryResult>> GetDataSetDirectoriesAsync(
+        IEnumerable<string> dataSetReferences,
+        MmsIedModelDirectory? directory = null,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+        ArgumentNullException.ThrowIfNull(dataSetReferences);
+
+        var results = new List<MmsDataSetDirectoryResult>();
+        foreach (var dataSetReference in dataSetReferences.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await GetDataSetDirectoryAsync(dataSetReference, directory, cancellationToken).ConfigureAwait(false);
+            results.Add(result);
+
+            if (!IsMmsInitiated)
+                break;
+        }
+
+        return results;
+    }
+
     public async Task<byte[]> SendPresentationPayloadAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken = default)
     {
         if (!IsTransportConnected)
@@ -433,12 +524,33 @@ public sealed class MmsClientSession : IAsyncDisposable
                     reportControl.DataSetReference = NormalizeReportedDataSetReference(reportControl.Domain, text);
             }, cancellationToken).ConfigureAwait(false);
 
-            await TryReadReportAttributeAsync(reportControl, "RptID", value => reportControl.ReportId = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
-            await TryReadReportAttributeAsync(reportControl, "ConfRev", value => reportControl.ConfRev = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
-            await TryReadReportAttributeAsync(reportControl, "IntgPd", value => reportControl.IntegrityPeriodMs = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
-            await TryReadReportAttributeAsync(reportControl, "RptEna", value => reportControl.EnabledState = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
-            reportControl.Status = string.IsNullOrWhiteSpace(reportControl.DataSetReference) ? "Discovered" : "Attribute-probed";
+            await TryReadReportAttributeIfPresentAsync(reportControl, "RptID", value => reportControl.ReportId = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+            await TryReadReportAttributeIfPresentAsync(reportControl, "ConfRev", value => reportControl.ConfRev = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+            await TryReadReportAttributeIfPresentAsync(reportControl, "IntgPd", value => reportControl.IntegrityPeriodMs = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+            await TryReadReportAttributeIfPresentAsync(reportControl, "RptEna", value => reportControl.EnabledState = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+            await TryReadReportAttributeIfPresentAsync(reportControl, "BufTm", value => reportControl.BufferTimeMs = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+            await TryReadReportAttributeIfPresentAsync(reportControl, "TrgOps", value => reportControl.TriggerOptions = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+            await TryReadReportAttributeIfPresentAsync(reportControl, "OptFlds", value => reportControl.OptionalFields = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+
+            if (reportControl.Buffered)
+                await TryReadReportAttributeIfPresentAsync(reportControl, "ResvTms", value => reportControl.ReservationTimeSeconds = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+            else
+                await TryReadReportAttributeIfPresentAsync(reportControl, "Resv", value => reportControl.ReservationState = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
+
+            reportControl.Status = HasUsefulReportProbeData(reportControl) ? "Attribute-probed" : reportControl.Status;
         }
+    }
+
+    private async Task TryReadReportAttributeIfPresentAsync(
+        MmsReportControlCandidate reportControl,
+        string attribute,
+        Action<MmsDataValue?> apply,
+        CancellationToken cancellationToken)
+    {
+        if (!reportControl.Attributes.Contains(attribute, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        await TryReadReportAttributeAsync(reportControl, attribute, apply, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task TryReadReportAttributeAsync(
@@ -462,6 +574,15 @@ public sealed class MmsClientSession : IAsyncDisposable
                 reportControl.Status = $"Attribute probe partial: {attribute} {ex.GetType().Name}";
         }
     }
+
+
+    private static bool HasUsefulReportProbeData(MmsReportControlCandidate reportControl)
+        => !string.IsNullOrWhiteSpace(reportControl.DataSetReference) ||
+           !string.IsNullOrWhiteSpace(reportControl.ReportId) ||
+           !string.IsNullOrWhiteSpace(reportControl.ConfRev) ||
+           !string.IsNullOrWhiteSpace(reportControl.EnabledState) ||
+           !string.IsNullOrWhiteSpace(reportControl.ReservationState) ||
+           !string.IsNullOrWhiteSpace(reportControl.ReservationTimeSeconds);
 
     private void EnsureMmsReady()
     {

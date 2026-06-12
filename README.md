@@ -17,7 +17,7 @@ commissioning workbench applications.
 ## What this stack does
 
 ARIEC61850 provides original source code for building IEC 61850 engineering
-software without depending on GPL protocol implementations. The current stack
+software without depending on restrictive-license protocol implementations. The current stack
 focuses on byte-accurate process-bus primitives, SCL import, deterministic test
 fixtures, live Sampled Values and GOOSE publishing through a selected Ethernet
 adapter, and native MMS discovery against lab IEDs.
@@ -77,7 +77,7 @@ pointers, or interoperability peers.
 
 Rules:
 
-- Do not copy or translate GPL implementation code into this repository.
+- Do not copy or translate restrictive-license implementation code into this repository.
 - Keep protocol logic in `src/`, not in tester UI projects.
 - Keep transports replaceable.
 - Keep every publisher testable through in-memory transport before live network
@@ -143,6 +143,26 @@ Discover an IEC 61850 MMS server or IED:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.16.1.157 --port 102 --timeout-ms 20000 --max-report-probes 16
+```
+
+Build the live IED directory and let the stack parse Functional Constraints from raw MMS names:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-directory 192.16.1.157 --port 102 --timeout-ms 20000 --show-points --raw-limit 40
+```
+
+Search, resolve, or read a signal without typing `ST`, `MX`, `CO`, or another FC manually:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-find 192.16.1.157 MMXU --fc MX --raw-limit 40
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-resolve 192.16.1.157 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-read-smart 192.16.1.157 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f
+```
+
+Build a read-only report readiness plan before implementing any RCB write/enable workflow:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-plan 192.16.1.157 --port 102 --timeout-ms 60000 --max-report-probes 64 --only-safe
 ```
 
 ## Offline PCAP workflow
@@ -254,3 +274,14 @@ Recommended repository metadata for discoverability:
 
 License has not been declared yet. Add a license before distributing this stack
 as an open-source dependency.
+
+
+### DataSet directory / report member map
+
+Before enabling any report, build the DataSet member map from the live IED model:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-dataset-directory 192.16.1.157 OCR7SR12PROT/LLN0.DataSet --port 102 --timeout-ms 120000 --raw-limit 120
+```
+
+This command uses native MMS `GetNamedVariableListAttributes` (IEC 61850 DataSet directory) to resolve DataSet members back into user-friendly references with FC, for example `LD/LN.DO.da [ST|MX|CO]`. It is intentionally read-only and should be run before any future RCB enable/GI workflow.

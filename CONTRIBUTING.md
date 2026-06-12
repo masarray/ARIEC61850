@@ -5,7 +5,7 @@ boundary.
 
 ## Clean-room rules
 
-- Do not copy or translate GPL source code into this repository.
+- Do not copy or translate restrictive-license source code into this repository.
 - Do not paste source from commercial tools or decompiled binaries.
 - Use external projects only as behavioral references, documentation pointers,
   or interoperability peers.

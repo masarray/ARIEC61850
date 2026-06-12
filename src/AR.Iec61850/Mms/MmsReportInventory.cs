@@ -22,6 +22,11 @@ public sealed class MmsReportControlCandidate
     public string ConfRev { get; set; } = string.Empty;
     public string IntegrityPeriodMs { get; set; } = string.Empty;
     public string EnabledState { get; set; } = string.Empty;
+    public string ReservationState { get; set; } = string.Empty;
+    public string ReservationTimeSeconds { get; set; } = string.Empty;
+    public string BufferTimeMs { get; set; } = string.Empty;
+    public string TriggerOptions { get; set; } = string.Empty;
+    public string OptionalFields { get; set; } = string.Empty;
     public string Status { get; set; } = "Discovered";
     public List<string> Attributes { get; set; } = new();
 

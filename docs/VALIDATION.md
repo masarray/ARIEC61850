@@ -15,11 +15,12 @@ dotnet test .\ARIEC61850.slnx -c Release --no-build
 
 Current evidence from the local validation run:
 
-- 32 tests passed.
+- Automated test suite is expected to pass before release packaging.
 - BER reader/writer tests.
 - MMS data value codec tests.
 - MMS GetNameList and Confirmed-Read response decoder tests.
 - MMS report inventory mapper tests.
+- Live MMS directory, Smart FC resolver, and report readiness planner tests.
 - COTP connection confirm parser tests.
 - GOOSE frame round-trip tests.
 - SV frame round-trip tests.
@@ -85,6 +86,25 @@ BRCB=8
 URCB=278
 ```
 
+The first live MMS directory and Smart FC read path has been validated with:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-directory 192.16.1.157 --port 102 --timeout-ms 60000 --show-points --raw-limit 120
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-resolve 192.16.1.157 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-read-smart 192.16.1.157 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f
+```
+
+Recorded result:
+
+```text
+Association=MmsInitiated
+liveDirectory=LD:4 LN:123 FC-points:9464
+reportAttrs=3456
+controlAttrs=457
+FC index=BR:120 CF:935 CO:457 DC:629 EX:14 MX:716 RP:3336 SP:6 ST:3251
+Smart read=OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] => OK value=0
+```
+
 ## Validation notes
 
 - [SCL Publish MVP](validation/scl-publish-mvp.md)
@@ -115,3 +135,27 @@ Before claiming wider interoperability:
 - Add negative tests for malformed frames.
 - Add PCAP corpus tests.
 - Add hardware lab notes for adapter, driver, switch, and OS timing conditions.
+
+
+## Live MMS DataSet directory validation
+
+Run this after `mms-report-plan` shows at least one `ReadyStaticDataSet` candidate. The command is read-only and validates the DataSet member map required by report decoding:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-dataset-directory 192.16.1.157 OCR7SR12PROT/LLN0.DataSet --port 102 --timeout-ms 120000 --raw-limit 0
+```
+
+Expected result:
+
+- Association reaches `MmsInitiated`.
+- The command prints `DataSet directory: <dataset> members=<N>`.
+- Each member is mapped to a live directory reference with FC when the IED exposes it through `GetNameList`, for example `OCR7SR12PROT/PTOC1.Str.general [ST]`.
+- If the service is rejected by a device, keep the DataSet as `DirectoryUnavailable` and do not enable reporting automatically.
+
+Optional sampled reads:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-dataset-directory 192.16.1.157 OCR7SR12PROT/LLN0.DataSet --read-values --raw-limit 16
+```
+
+Use `--read-values` only on test/engineering networks because it performs extra MMS read requests for selected DataSet members.

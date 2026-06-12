@@ -1,9 +1,9 @@
 # FAQ
 
-## Is ARIEC61850 based on libIEC61850?
+## Is ARIEC61850 based on third-party IEC 61850 stack?
 
 No. ARIEC61850 is intended as a clean-room implementation. External projects may
-be studied as behavioral references or interoperability peers, but GPL source
+be studied as behavioral references or interoperability peers, but restrictive-license source
 code must not be copied or translated into this repository.
 
 ## Does the stack support live Sampled Values publishing?

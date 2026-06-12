@@ -32,6 +32,12 @@ internal static class Cli
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
                 "list-adapters" => ListAdapters(),
                 "mms-discover" => await MmsDiscoverAsync(args[1..]).ConfigureAwait(false),
+                "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
+                "mms-find" => await MmsFindAsync(args[1..]).ConfigureAwait(false),
+                "mms-resolve" => await MmsResolveAsync(args[1..]).ConfigureAwait(false),
+                "mms-read-smart" => await MmsReadSmartAsync(args[1..]).ConfigureAwait(false),
+                "mms-report-plan" => await MmsReportPlanAsync(args[1..]).ConfigureAwait(false),
+                "mms-dataset-directory" => await MmsDataSetDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "publish-sv-live" => await PublishSvLiveAsync(args[1..]).ConfigureAwait(false),
                 "publish-goose-live" => await PublishGooseLiveAsync(args[1..]).ConfigureAwait(false),
                 _ => UnknownCommand(args[0])
@@ -259,6 +265,8 @@ internal static class Cli
 
         Console.WriteLine();
         Console.WriteLine(discovery.ReportInventory.Summary);
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine($"FC index: {FormatFcCounts(discovery.IedDirectory.CountByFunctionalConstraint())}");
 
         if (discovery.ReportInventory.DataSets.Count > 0)
         {
@@ -274,7 +282,7 @@ internal static class Cli
             foreach (var report in TakeWithLimit(discovery.ReportInventory.ReportControls, rawLimit))
             {
                 Console.WriteLine(
-                    $"  {report.Mode} {report.Reference} datSet={TextOrDash(report.DataSetReference)} rptID={TextOrDash(report.ReportId)} confRev={TextOrDash(report.ConfRev)} intgPd={TextOrDash(report.IntegrityPeriodMs)} rptEna={TextOrDash(report.EnabledState)} status={report.Status}");
+                    $"  {report.Mode} {report.Reference} datSet={TextOrDash(report.DataSetReference)} rptID={TextOrDash(report.ReportId)} confRev={TextOrDash(report.ConfRev)} intgPd={TextOrDash(report.IntegrityPeriodMs)} rptEna={TextOrDash(report.EnabledState)} resv={TextOrDash(report.Buffered ? report.ReservationTimeSeconds : report.ReservationState)} bufTm={TextOrDash(report.BufferTimeMs)} trgOps={TextOrDash(report.TriggerOptions)} status={report.Status}");
 
                 if (report.Attributes.Count > 0)
                     Console.WriteLine($"      attrs={string.Join(",", report.Attributes)}");
@@ -311,6 +319,346 @@ internal static class Cli
         }
 
         return 0;
+    }
+
+
+    private static async Task<int> MmsDirectoryAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-directory requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 30000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var rawLimit = options.GetInt("raw-limit", 80);
+        var showPoints = options.GetBool("show-points", fallback: false);
+        var lnLimit = options.GetInt("ln-limit", 20);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: full live IED directory; FC is parsed from raw MMS names.");
+
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReportAttributes: false, maxReportAttributeProbes: 0, timeout.Token).ConfigureAwait(false);
+        var directory = discovery.IedDirectory;
+        Console.WriteLine(directory.Summary);
+        Console.WriteLine($"FC index: {FormatFcCounts(directory.CountByFunctionalConstraint())}");
+        Console.WriteLine($"DataSets={discovery.ReportInventory.DataSets.Count}, RCB={discovery.ReportInventory.ReportControls.Count} (BRCB={discovery.ReportInventory.BufferedCount}, URCB={discovery.ReportInventory.UnbufferedCount})");
+
+        Console.WriteLine();
+        Console.WriteLine("Logical devices / logical nodes:");
+        foreach (var ld in directory.LogicalDevices.Values.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"  {ld.Name}: LN={ld.LogicalNodes.Count}, points={ld.Points.Count}, FC={FormatFcCounts(ld.Points.GroupBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.Count(), StringComparer.OrdinalIgnoreCase))}");
+            foreach (var ln in TakeWithLimit(ld.LogicalNodes.Values.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase), lnLimit))
+                Console.WriteLine($"      {ln.Name}: points={ln.Points.Count}, FC={FormatFcCounts(ln.CountByFunctionalConstraint())}");
+            WriteLimitNotice(ld.LogicalNodes.Count, lnLimit, $"logical nodes in {ld.Name}");
+        }
+
+        if (showPoints)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Resolved FC points:");
+            foreach (var point in TakeWithLimit(directory.Points, rawLimit))
+                Console.WriteLine($"  {point.UserReference} [{point.FunctionalConstraint}] mms={point.MmsItemName}");
+            WriteLimitNotice(directory.Points.Count, rawLimit, "FC points");
+        }
+
+        return 0;
+    }
+
+
+    private static async Task<int> MmsFindAsync(string[] args)
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("mms-find requires <host-or-ip> <query>.");
+
+        var host = args[0];
+        var query = args[1];
+        var options = CliOptions.Parse(args[2..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 30000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var rawLimit = options.GetInt("raw-limit", 80);
+        var fc = options.Get("fc", string.Empty).Trim();
+        var ld = options.Get("ld", string.Empty).Trim();
+        var ln = options.Get("ln", string.Empty).Trim();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine($"Find: {query}");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        var discovery = await session.DiscoverAsync(probeReportAttributes: false, maxReportAttributeProbes: 0, timeout.Token).ConfigureAwait(false);
+        var points = discovery.IedDirectory.Points.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(fc))
+            points = points.Where(x => x.FunctionalConstraint.Equals(fc, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(ld))
+            points = points.Where(x => x.Domain.Equals(ld, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(ln))
+            points = points.Where(x => x.LogicalNode.Equals(ln, StringComparison.OrdinalIgnoreCase));
+
+        var matches = points
+            .Where(x => x.UserReference.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        x.MmsReference.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        x.LogicalNode.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        x.DataObjectPath.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.LogicalNode, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.DataObjectPath, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine($"Matches: {matches.Length}");
+        foreach (var point in TakeWithLimit(matches, rawLimit))
+            Console.WriteLine($"  {point.UserReference} [{point.FunctionalConstraint}] mms={point.MmsReference}");
+        WriteLimitNotice(matches.Length, rawLimit, "matches");
+
+        return matches.Length > 0 ? 0 : 1;
+    }
+
+    private static async Task<int> MmsResolveAsync(string[] args)
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("mms-resolve requires <host-or-ip> <object-reference>.");
+
+        var host = args[0];
+        var reference = args[1];
+        var options = CliOptions.Parse(args[2..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 30000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var rawLimit = options.GetInt("raw-limit", 20);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine($"Resolve: {reference}");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        var discovery = await session.DiscoverAsync(probeReportAttributes: false, maxReportAttributeProbes: 0, timeout.Token).ConfigureAwait(false);
+        var result = MmsFcResolver.Resolve(discovery.IedDirectory, reference);
+
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(result.Message);
+        if (result.Candidates.Count > 0)
+        {
+            Console.WriteLine("Candidates:");
+            foreach (var candidate in TakeWithLimit(result.Candidates, rawLimit))
+                Console.WriteLine($"  {candidate.UserReference} [{candidate.FunctionalConstraint}] source={candidate.Source} confidence={candidate.Confidence} mms={candidate.MmsReference}");
+            WriteLimitNotice(result.Candidates.Count, rawLimit, "candidates");
+        }
+        else if (result.HeuristicFunctionalConstraints.Count > 0)
+        {
+            Console.WriteLine($"Heuristic FC: {string.Join(", ", result.HeuristicFunctionalConstraints)}");
+        }
+
+        return result.IsResolved ? 0 : 1;
+    }
+
+    private static async Task<int> MmsReadSmartAsync(string[] args)
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("mms-read-smart requires <host-or-ip> <object-reference>.");
+
+        var host = args[0];
+        var reference = args[1];
+        var options = CliOptions.Parse(args[2..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 30000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine($"Smart read: {reference}");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        var discovery = await session.DiscoverAsync(probeReportAttributes: false, maxReportAttributeProbes: 0, timeout.Token).ConfigureAwait(false);
+        var result = await session.ReadSmartAsync(discovery.IedDirectory, reference, timeout.Token).ConfigureAwait(false);
+
+        Console.WriteLine(result.ResolveResult.Message);
+        if (result.SelectedPoint != null)
+            Console.WriteLine($"Selected: {result.SelectedPoint.UserReference} [{result.SelectedPoint.FunctionalConstraint}] mms={result.SelectedPoint.MmsReference}");
+
+        Console.WriteLine(result.Message);
+        if (!string.IsNullOrWhiteSpace(session.LastReadAttemptSummary))
+            Console.WriteLine($"Read attempts: {session.LastReadAttemptSummary}");
+
+        return result.IsSuccess ? 0 : 1;
+    }
+
+
+    private static async Task<int> MmsDataSetDirectoryAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-dataset-directory requires <host-or-ip> [dataset-reference].");
+
+        var host = args[0];
+        var explicitDataSet = args.Length >= 2 && !args[1].StartsWith("--", StringComparison.Ordinal) ? args[1] : string.Empty;
+        var optionStart = string.IsNullOrWhiteSpace(explicitDataSet) ? 1 : 2;
+        var options = CliOptions.Parse(args[optionStart..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 60000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var rawLimit = options.GetInt("raw-limit", 80);
+        var showMembers = options.GetBool("show-members", fallback: true);
+        var readValues = options.GetBool("read-values", fallback: false);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: DataSet directory / member planner (read-only).");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportAttributeProbes: options.GetInt("max-report-probes", 64), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+
+        var references = string.IsNullOrWhiteSpace(explicitDataSet)
+            ? discovery.ReportInventory.DataSets.Select(x => x.Reference).ToArray()
+            : [explicitDataSet];
+
+        if (references.Length == 0)
+        {
+            Console.WriteLine("No DataSet was discovered via MMS NamedVariableList.");
+            return 1;
+        }
+
+        var results = await session.GetDataSetDirectoriesAsync(references, discovery.IedDirectory, timeout.Token).ConfigureAwait(false);
+        Console.WriteLine();
+        Console.WriteLine($"DataSet directories: {results.Count}");
+        foreach (var result in results)
+        {
+            Console.WriteLine($"  {result.Summary}");
+            if (!result.IsSuccess)
+            {
+                Console.WriteLine($"      {result.Message}");
+                continue;
+            }
+
+            Console.WriteLine($"      FC={FormatFcCounts(result.Members.Where(x => !string.IsNullOrWhiteSpace(x.FunctionalConstraint)).GroupBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.Count(), StringComparer.OrdinalIgnoreCase))}");
+
+            if (showMembers)
+            {
+                foreach (var member in TakeWithLimit(result.Members, rawLimit))
+                    Console.WriteLine($"      {member.UserReference} [{TextOrDash(member.FunctionalConstraint)}] mms={member.MmsReference}");
+                WriteLimitNotice(result.Members.Count, rawLimit, $"members in {result.DataSetReference}");
+            }
+
+            if (readValues && result.Members.Count > 0)
+            {
+                Console.WriteLine("      Sample member reads:");
+                foreach (var member in TakeWithLimit(result.Members.Where(x => !string.IsNullOrWhiteSpace(x.UserReference)), Math.Min(rawLimit <= 0 ? result.Members.Count : rawLimit, 16)))
+                {
+                    var read = await session.ReadSmartAsync(discovery.IedDirectory, member.UserReference, timeout.Token).ConfigureAwait(false);
+                    Console.WriteLine($"        {member.UserReference}: {(read.IsSuccess && read.ReadResult.Value != null ? MmsDataCodec.ToDisplayString(read.ReadResult.Value) : read.Message)}");
+                }
+            }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Recommended next safe path:");
+        Console.WriteLine("  1. Use this DataSet directory as the report value map before enabling RptEna.");
+        Console.WriteLine("  2. Prefer one BRCB/URCB that references this DataSet and is not enabled/reserved.");
+        Console.WriteLine("  3. Only proceed to write/reserve/report enable after member mapping is stable.");
+
+        return results.Any(x => x.IsSuccess && x.Members.Count > 0) ? 0 : 1;
+    }
+
+
+    private static async Task<int> MmsReportPlanAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-report-plan requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 60000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var maxReportProbes = options.GetInt("max-report-probes", 64);
+        var rawLimit = options.GetInt("raw-limit", 80);
+        var kindFilter = options.Get("kind", string.Empty).Trim();
+        var onlySafe = options.GetBool("only-safe", fallback: false);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var session = new MmsClientSession();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine($"Mode: report readiness planner; maxReportProbes={maxReportProbes}");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), timeout.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(probeReportAttributes: true, maxReportProbes, timeout.Token).ConfigureAwait(false);
+        var plan = MmsReportReadinessPlanner.Build(discovery.ReportInventory);
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+        Console.WriteLine(plan.Summary);
+
+        IEnumerable<MmsReportReadiness> items = plan.Items;
+        if (onlySafe)
+            items = items.Where(x => x.IsReadyForSafeSubscription);
+        if (!string.IsNullOrWhiteSpace(kindFilter))
+            items = items.Where(x => x.Label.Equals(kindFilter, StringComparison.OrdinalIgnoreCase));
+
+        var filtered = items.ToArray();
+        Console.WriteLine();
+        Console.WriteLine($"RCB candidates shown: {Math.Min(rawLimit <= 0 ? filtered.Length : rawLimit, filtered.Length)} of {filtered.Length}");
+        foreach (var item in TakeWithLimit(filtered, rawLimit))
+            Console.WriteLine(FormatReportReadiness(item));
+        WriteLimitNotice(filtered.Length, rawLimit, "RCB readiness item(s)");
+
+        Console.WriteLine();
+        Console.WriteLine("Recommended next safe path:");
+        Console.WriteLine("  1. Prefer ReadyStaticDataSet BRCB for first subscription test.");
+        Console.WriteLine("  2. Treat EmptyDynamicSlotNeedsDataSet as future dynamic DataSet workflow, not immediate RptEna target.");
+        Console.WriteLine("  3. Do not touch OccupiedEnabled or ReservedByOtherClient automatically.");
+
+        return plan.SafeCandidates.Count > 0 ? 0 : 1;
     }
 
     private static async Task<int> PublishSvLiveAsync(string[] args)
@@ -960,6 +1308,14 @@ internal static class Cli
             Console.WriteLine($"  ... {total - limit} more {label}; use --raw-limit 0 to show all.");
     }
 
+
+    private static string FormatReportReadiness(MmsReportReadiness item)
+    {
+        var r = item.ReportControl;
+        var reservation = r.Buffered ? TextOrDash(r.ReservationTimeSeconds) : TextOrDash(r.ReservationState);
+        return $"  {item.Label,-30} {r.Mode} {r.Reference} datSet={TextOrDash(r.DataSetReference)} rptEna={TextOrDash(r.EnabledState)} resv={reservation} rptID={TextOrDash(r.ReportId)} reason={item.Reason}";
+    }
+
     private static int UnknownCommand(string command)
     {
         Console.Error.WriteLine($"ERROR: unknown command '{command}'.");
@@ -978,6 +1334,12 @@ internal static class Cli
         Console.WriteLine("  stream-pcap <file.pcap> [--delay-ms N] [--limit N]");
         Console.WriteLine("  list-adapters");
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
+        Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
+        Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
+        Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
+        Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");
+        Console.WriteLine("  mms-report-plan <host-or-ip> [--port 102] [--timeout-ms 60000] [--max-report-probes N] [--only-safe] [--kind ReadyStaticDataSet]");
+        Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
         Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
         Console.WriteLine();
@@ -988,6 +1350,12 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap out/processbus-demo.pcap --delay-ms 50 --limit 12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.168.1.10 --port 102 --max-report-probes 16");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.168.1.10 --show-points --raw-limit 40");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-find 192.168.1.10 XCBR --fc ST --raw-limit 40");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-read-smart 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-plan 192.168.1.10 --max-report-probes 64 --only-safe");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-dataset-directory 192.168.1.10 OCR7SR12PROT/LLN0.DataSet --raw-limit 80");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --continuous --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-goose-live samples/scl/minimal-station.scd --adapter 1 --stream-index 1 --duration-sec 10 --toggle-every-sec 2 --yes");
@@ -995,6 +1363,11 @@ internal static class Cli
 
     private static bool IsHelp(string value)
         => value is "-h" or "--help" or "help";
+
+    private static string FormatFcCounts(IReadOnlyDictionary<string, int> counts)
+        => counts.Count == 0
+            ? "-"
+            : string.Join(", ", counts.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
 
     private static string TextOrDash(string value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;

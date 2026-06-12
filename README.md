@@ -68,7 +68,8 @@ Implemented and tested today:
 - RCB discovery, report readiness planning, static report planning, and dynamic
   report planning.
 - Guarded static report enable, GI, receive, value mapping, and cleanup.
-- Guarded static `mms-report-monitor` command on top of the receive pump.
+- Guarded static `mms-report-monitor` command on top of the receive pump,
+  including optional smart-read polling while reports are active.
 - Guarded dynamic DataSet create, RCB bind, report enable, GI, receive, cleanup,
   and DataSet delete.
 - Report frames now preserve raw access-result count, inclusion bitstring index,
@@ -77,12 +78,12 @@ Implemented and tested today:
 - Sampled Values frame builder/parser and SCL-backed live publisher.
 - PCAP writer, reader, inspector, and stream playback.
 - Npcap raw Ethernet transport for live process-bus lab publishing.
-- 68 automated tests passing in the latest local validation run.
+- 69 automated tests passing in the latest local validation run.
 
 Still experimental or not implemented yet:
 
-- multi-vendor receive-pump soak evidence while reads/writes occur during a
-  report session;
+- long multi-vendor receive-pump soak evidence while reports, reads, and writes
+  interleave during a report session;
 - complete report optional-field model and reason-for-inclusion names;
 - BRCB recovery with `EntryID`, `PurgeBuf`, duplicate handling, and reconnect
   diagnostics;
@@ -190,6 +191,13 @@ Run a guarded static report monitor:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --yes
 ```
 
+Run a guarded report monitor and poll smart-read values while the report
+subscription is active:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --yes
+```
+
 Run a guarded dynamic report smoke test:
 
 ```powershell
@@ -218,13 +226,16 @@ against production equipment or RCBs used by another client.
 Latest local validation evidence:
 
 - `dotnet build .\ARIEC61850.slnx -c Release` passed.
-- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 68 tests.
+- `dotnet test .\ARIEC61850.slnx -c Release --no-build` passed with 69 tests.
 - Live MMS association to lab IED `192.16.1.157:102` reached `MmsInitiated`.
 - Live directory evidence: 4 logical devices, 123 logical nodes, 9,464
   FC-aware points, 3,456 report attributes, and 457 control attributes.
 - Report inventory evidence: 286 RCBs, including 8 BRCBs and 278 URCBs.
 - Static BRCB smoke test received InformationReport frames and mapped 2 of 2
   DataSet values.
+- Static BRCB monitor kept the receive pump active while smart-read polling ran
+  during the report session: 2 report frames received and 8/8 poll reads
+  succeeded.
 - Dynamic report smoke test created a DataSet, bound an RCB, enabled reporting,
   triggered GI, received a report, cleared the RCB DataSet, and deleted the
   dynamic DataSet.

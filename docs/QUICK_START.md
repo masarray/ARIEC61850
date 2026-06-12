@@ -147,6 +147,12 @@ Run a guarded static report monitor on a selected RCB:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --yes
 ```
 
+Poll smart-read values while the report monitor is active:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --yes
+```
+
 Run a guarded dynamic report smoke test only on a confirmed unused dynamic RCB
 slot:
 

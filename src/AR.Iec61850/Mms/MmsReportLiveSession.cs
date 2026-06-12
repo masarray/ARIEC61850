@@ -33,11 +33,23 @@ public sealed class MmsReportFrame
     public string ResponseHexPreview { get; init; } = string.Empty;
 }
 
+public sealed class MmsReportPollRead
+{
+    public DateTimeOffset ReadAt { get; init; }
+    public string Reference { get; init; } = string.Empty;
+    public string SelectedReference { get; init; } = string.Empty;
+    public string FunctionalConstraint { get; init; } = string.Empty;
+    public bool IsSuccess { get; init; }
+    public string DisplayValue { get; init; } = "-";
+    public string Message { get; init; } = string.Empty;
+}
+
 public sealed class MmsStaticReportSessionResult
 {
     public bool IsSuccess { get; init; }
     public IReadOnlyList<MmsReportAttributeWriteStep> WriteSteps { get; init; } = Array.Empty<MmsReportAttributeWriteStep>();
     public IReadOnlyList<MmsReportFrame> Reports { get; init; } = Array.Empty<MmsReportFrame>();
+    public IReadOnlyList<MmsReportPollRead> PollReads { get; init; } = Array.Empty<MmsReportPollRead>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public string Message { get; init; } = string.Empty;
 }
@@ -165,7 +177,10 @@ public sealed partial class MmsClientSession
         TimeSpan listenDuration,
         int reserveSeconds = 30,
         bool triggerGeneralInterrogation = true,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        MmsIedModelDirectory? pollDirectory = null,
+        IReadOnlyList<string>? pollReferences = null,
+        TimeSpan? pollInterval = null)
     {
         EnsureMmsReady();
         ArgumentNullException.ThrowIfNull(plan);
@@ -183,6 +198,7 @@ public sealed partial class MmsClientSession
         var writes = new List<MmsReportAttributeWriteStep>();
         var warnings = new List<string>();
         var reports = new List<MmsReportFrame>();
+        var pollReads = new List<MmsReportPollRead>();
         var reservationTouched = false;
         var enabledByThisClient = false;
 
@@ -223,7 +239,14 @@ public sealed partial class MmsClientSession
                     warnings.Add("GI=true write failed. Waiting for spontaneous/integrity reports only.");
             }
 
-            var received = await ReceiveInformationReportsAsync(plan.Members, listenDuration, cancellationToken).ConfigureAwait(false);
+            var received = await ReceiveInformationReportsAsync(
+                plan.Members,
+                listenDuration,
+                pollDirectory,
+                pollReferences,
+                pollInterval,
+                pollReads,
+                cancellationToken).ConfigureAwait(false);
             reports.AddRange(received);
         }
         finally
@@ -248,8 +271,9 @@ public sealed partial class MmsClientSession
             IsSuccess = enabledByThisClient,
             WriteSteps = writes,
             Reports = reports,
+            PollReads = pollReads,
             Warnings = warnings,
-            Message = $"Static report guarded session complete: writes={writes.Count}, reports={reports.Count}."
+            Message = $"Static report guarded session complete: writes={writes.Count}, reports={reports.Count}, pollReads={pollReads.Count}."
         };
     }
 
@@ -410,11 +434,38 @@ public sealed partial class MmsClientSession
         IReadOnlyList<MmsDataSetDirectoryMember> members,
         TimeSpan duration,
         CancellationToken cancellationToken = default)
+        => await ReceiveInformationReportsAsync(
+            members,
+            duration,
+            pollDirectory: null,
+            pollReferences: null,
+            pollInterval: null,
+            pollReads: null,
+            cancellationToken).ConfigureAwait(false);
+
+    private async Task<IReadOnlyList<MmsReportFrame>> ReceiveInformationReportsAsync(
+        IReadOnlyList<MmsDataSetDirectoryMember> members,
+        TimeSpan duration,
+        MmsIedModelDirectory? pollDirectory,
+        IReadOnlyList<string>? pollReferences,
+        TimeSpan? pollInterval,
+        List<MmsReportPollRead>? pollReads,
+        CancellationToken cancellationToken = default)
     {
         EnsureMmsReady();
         members ??= Array.Empty<MmsDataSetDirectoryMember>();
+        pollReferences = pollReferences?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? Array.Empty<string>();
+
         var reports = new List<MmsReportFrame>();
         var deadline = DateTimeOffset.UtcNow + (duration <= TimeSpan.Zero ? TimeSpan.FromSeconds(10) : duration);
+        var effectivePollInterval = pollInterval.GetValueOrDefault(TimeSpan.FromSeconds(1));
+        if (effectivePollInterval <= TimeSpan.Zero)
+            effectivePollInterval = TimeSpan.FromSeconds(1);
+
+        var nextPollAt = DateTimeOffset.UtcNow;
 
         while (DateTimeOffset.UtcNow < deadline)
         {
@@ -423,9 +474,31 @@ public sealed partial class MmsClientSession
             if (remaining <= TimeSpan.Zero)
                 break;
 
+            var drainedQueuedReport = false;
             if (TryDequeueInformationReport(out var queuedPayload))
             {
                 TryAppendInformationReport(queuedPayload, members, reports);
+                drainedQueuedReport = true;
+            }
+
+            if (drainedQueuedReport)
+                continue;
+
+            if (pollDirectory != null &&
+                pollReads != null &&
+                pollReferences.Count > 0 &&
+                DateTimeOffset.UtcNow >= nextPollAt)
+            {
+                foreach (var reference in pollReferences)
+                {
+                    if (DateTimeOffset.UtcNow >= deadline)
+                        break;
+
+                    var read = await ReadReportPollReferenceAsync(pollDirectory, reference, cancellationToken).ConfigureAwait(false);
+                    pollReads.Add(read);
+                }
+
+                nextPollAt = DateTimeOffset.UtcNow + effectivePollInterval;
                 continue;
             }
 
@@ -465,6 +538,37 @@ public sealed partial class MmsClientSession
         }
 
         return reports;
+    }
+
+    private async Task<MmsReportPollRead> ReadReportPollReferenceAsync(
+        MmsIedModelDirectory directory,
+        string reference,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var read = await ReadSmartAsync(directory, reference, cancellationToken).ConfigureAwait(false);
+            return new MmsReportPollRead
+            {
+                ReadAt = DateTimeOffset.UtcNow,
+                Reference = reference,
+                SelectedReference = read.SelectedPoint?.UserReference ?? string.Empty,
+                FunctionalConstraint = read.SelectedPoint?.FunctionalConstraint ?? string.Empty,
+                IsSuccess = read.IsSuccess,
+                DisplayValue = read.ReadResult.Value == null ? "-" : MmsDataValueRenderer.ToCompactString(read.ReadResult.Value, read.SelectedPoint?.UserReference),
+                Message = read.Message
+            };
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
+        {
+            return new MmsReportPollRead
+            {
+                ReadAt = DateTimeOffset.UtcNow,
+                Reference = reference,
+                IsSuccess = false,
+                Message = $"poll read failed: {ex.GetType().Name}: {ex.Message}"
+            };
+        }
     }
 
     private static void TryAppendInformationReport(

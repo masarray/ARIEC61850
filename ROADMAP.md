@@ -98,6 +98,32 @@ Clean-room rule: public capability descriptions may guide planning; no
 restrictive-license implementation code may be copied, translated, or
 structurally ported.
 
+### 2.5 Tool-class benchmark
+
+Public product descriptions for OMICRON IEDScout and StationScout are useful as
+workflow benchmarks, not implementation sources.
+
+IEDScout-level workflows to build toward:
+
+- browse and understand any IEC 61850 IED model with descriptions and evidence;
+- supervise reports, GOOSE messages, and data objects in an activity monitor;
+- inspect communication between clients and servers;
+- simulate IEDs from SCL with server, reports, GOOSE, and control behavior;
+- browse and download IED files such as disturbance recordings and event logs.
+
+StationScout-level workflows to build toward:
+
+- visualize SCL engineering and station topology;
+- trace live signals and show differences between SCL and the substation;
+- test GOOSE, HMI/SCADA, RTU/gateway mappings, and IEC 61850 signal flow;
+- simulate missing IEDs and repeat FAT/SAT test cases;
+- keep control operations deliberate and disableable in live test modes.
+
+`ARIEC61850` should reach those product classes by exposing a safer smart stack:
+live model evidence first, SCL validation second, typed report/control/file
+state machines, deterministic process-bus codecs, reusable test artifacts, and
+clear safety gates around every active operation.
+
 ## 3. Standard Scope
 
 The stack direction follows the public IEC 61850 architecture:
@@ -144,10 +170,12 @@ Latest verified local status:
   operations on reader failure.
 - CLI now exposes guarded static `mms-report-monitor` on top of the receive
   pump.
+- Static report monitor can run smart-read polling while reports are active,
+  exercising confirmed request routing during a report session.
 - Report frame mapping now preserves raw access-result count, inclusion
   bitstring position, and included DataSet member indexes.
 - Latest automated validation: `dotnet test .\ARIEC61850.slnx -c Release
-  --no-build` passed with 68 tests.
+  --no-build` passed with 69 tests.
 
 Latest live MMS evidence against lab IED `192.16.1.157:102`:
 
@@ -163,6 +191,7 @@ RCB=286
 BRCB=8
 URCB=278
 static report=enable, GI, receive, map 2/2 values, disable OK
+static report monitor=poll smart-read during active report, 8/8 poll reads OK, 2 reports mapped
 dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanup OK
 ```
 
@@ -186,7 +215,7 @@ dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanu
 | Static reporting | Guarded lab MVP | Enable, GI, receive, map, disable validated. |
 | Dynamic reporting | Guarded lab MVP | Create/bind/enable/GI/receive/cleanup/delete validated. |
 | MMS receive routing | Unit-tested MVP | PDU classifier, invoke-aware queue, background pump, and pending registry are implemented. |
-| Full MMS receive pump | In progress | Background pump and static monitor command exist; live soak across request/report concurrency is next. |
+| Full MMS receive pump | In progress | Background pump and static monitor polling exist; longer multi-vendor report/read/write soak is next. |
 | BRCB recovery | Planned | Needs EntryID, PurgeBuf, reconnect, duplicate/loss diagnostics. |
 | MMS file transfer | Planned | Browse/get/set/delete/rename file services. |
 | MMS log service | Planned | Needed for full ACSI coverage. |
@@ -266,8 +295,10 @@ Progress:
 - done: pending operation registry completes confirmed responses by invoke ID
   and faults pending operations on reader failure;
 - done: guarded static `mms-report-monitor` command uses the receive pump;
-- remaining: live soak validation while reads/writes occur during a report
-  session.
+- done: guarded static monitor can poll smart-read values while a report session
+  is active;
+- remaining: longer live soak validation while reports, reads, and guarded
+  writes occur during a report session.
 
 Deliverables:
 
@@ -277,13 +308,15 @@ Deliverables:
 - unconfirmed `InformationReport` dispatcher;
 - non-blocking report handler pipeline;
 - cancellation, timeout, and release handling;
-- CLI `mms-report-monitor` for longer report sessions.
+- CLI `mms-report-monitor` for longer report sessions and optional
+  `--poll-points` smart-read polling.
 
 Acceptance:
 
 ```text
-The client can keep a report subscription alive while reads/writes occur, and
-unsolicited reports cannot corrupt pending confirmed requests.
+The client can keep a report subscription alive while reads occur, and
+unsolicited reports cannot corrupt pending confirmed requests. The remaining
+acceptance work is long-duration read/write soak across more vendors.
 ```
 
 ### Phase 2 - Report Object Model and BRCB Recovery

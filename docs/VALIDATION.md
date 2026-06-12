@@ -195,9 +195,11 @@ Expected result:
 Live report-enable commands are guarded with `--yes`. Reporting is unsolicited,
 so the stack uses the MMS receive pump to route confirmed responses by invoke ID
 and queue `InformationReport` frames separately. The `mms-report-monitor`
-command exposes this path for selected static RCBs. The remaining production
-hardening item is soak validation while arbitrary reads/writes occur during a
-report session.
+command exposes this path for selected static RCBs. It can also poll smart-read
+values during an active report session with `--poll-points`, which exercises
+confirmed request routing while reports are being queued. The remaining
+production hardening item is longer multi-vendor soak validation while reports,
+reads, and guarded writes interleave.
 
 ## Static report live smoke test (guarded)
 
@@ -205,6 +207,13 @@ After static planning and DataSet directory mapping are stable, use the guarded 
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-static-live 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 15 --yes
+```
+
+To validate report receive plus concurrent confirmed reads through the receive
+pump:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 10 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --gi true --yes
 ```
 
 Expected behavior:
@@ -231,6 +240,7 @@ InformationReport frames=2
 mapped DataSet values=2/2
 receivePump=running
 includedDataSetIndexes=[0,1]
+pollReads=8/8 OK while report session active
 cleanup RptEna=false OK
 post-check RptEna=false
 note=relay holds ResvTms after disable until its timer expires

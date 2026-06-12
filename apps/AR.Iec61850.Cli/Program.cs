@@ -775,6 +775,13 @@ internal static class Cli
         if (durationSec < 1)
             throw new ArgumentException("--duration-sec must be at least 1.");
 
+        var pollPoints = monitorMode
+            ? SplitCsv(options.Get("poll-points", string.Empty))
+            : Array.Empty<string>();
+        var pollIntervalMs = options.GetInt("poll-interval-ms", 1000);
+        if (pollPoints.Count > 0 && pollIntervalMs < 100)
+            throw new ArgumentException("--poll-interval-ms must be at least 100 when --poll-points is used.");
+
         var reserveSec = options.GetInt("reserve-sec", 30);
         if (reserveSec < 1)
             throw new ArgumentException("--reserve-sec must be at least 1.");
@@ -857,12 +864,18 @@ internal static class Cli
         Console.WriteLine(monitorMode
             ? $"Starting guarded report monitor for {durationSec}s..."
             : $"Starting guarded static report session for {durationSec}s...");
+        if (pollPoints.Count > 0)
+            Console.WriteLine($"Poll reads: {pollPoints.Count} point(s), interval={pollIntervalMs}ms.");
+
         var live = await session.RunGuardedStaticReportSessionAsync(
             plan,
             TimeSpan.FromSeconds(durationSec),
             reserveSec,
             triggerGi,
-            timeout.Token).ConfigureAwait(false);
+            timeout.Token,
+            pollDirectory: pollPoints.Count > 0 ? discovery.IedDirectory : null,
+            pollReferences: pollPoints,
+            pollInterval: TimeSpan.FromMilliseconds(pollIntervalMs)).ConfigureAwait(false);
 
         Console.WriteLine();
         Console.WriteLine(live.Message);
@@ -878,6 +891,20 @@ internal static class Cli
         Console.WriteLine("Write steps:");
         foreach (var step in live.WriteSteps)
             Console.WriteLine($"  {(step.IsSuccess ? "OK" : "FAIL")} {step.Attribute} {step.Reference}: {step.Message}");
+
+        if (live.PollReads.Count > 0)
+        {
+            var ok = live.PollReads.Count(x => x.IsSuccess);
+            Console.WriteLine($"Poll reads: {ok}/{live.PollReads.Count} succeeded");
+            foreach (var poll in TakeWithLimit(live.PollReads, rawLimit))
+            {
+                var selected = string.IsNullOrWhiteSpace(poll.SelectedReference)
+                    ? poll.Reference
+                    : $"{poll.SelectedReference} [{poll.FunctionalConstraint}]";
+                Console.WriteLine($"  {(poll.IsSuccess ? "OK" : "FAIL")} {poll.ReadAt:yyyy-MM-dd HH:mm:ss.fff} UTC {selected}: {poll.DisplayValue} - {poll.Message}");
+            }
+            WriteLimitNotice(live.PollReads.Count, rawLimit, "poll read(s)");
+        }
 
         Console.WriteLine($"Reports received: {live.Reports.Count}");
         foreach (var report in TakeWithLimit(live.Reports, rawLimit))
@@ -1874,7 +1901,7 @@ internal static class Cli
         Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01]");
         Console.WriteLine("  mms-rcb-probe <host-or-ip> <LD/LN.BR.name|LD/LN.RP.name> [--port 102] [--timeout-ms 120000]");
         Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--yes]");
-        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 60] [--gi true|false] [--yes]");
+        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 60] [--gi true|false] [--poll-points LD/LN.DO.da,...] [--poll-interval-ms 1000] [--yes]");
         Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--yes]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
@@ -1895,7 +1922,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-plan 192.168.1.10 --read-values");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-plan 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-live 192.168.1.10 --duration-sec 15 --yes");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --yes");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-live 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-dataset-directory 192.168.1.10 OCR7SR12PROT/LLN0.DataSet --raw-limit 80");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");

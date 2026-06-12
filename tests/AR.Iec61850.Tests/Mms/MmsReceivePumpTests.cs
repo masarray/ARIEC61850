@@ -33,6 +33,40 @@ public sealed class MmsReceivePumpTests
     }
 
     [Fact]
+    public async Task Pump_RoutesMultipleConfirmedOperationsAroundReports()
+    {
+        var channel = Channel.CreateUnbounded<byte[]>();
+        await channel.Writer.WriteAsync(BuildInformationReport());
+        await channel.Writer.WriteAsync(BuildConfirmedReadResponse(invokeId: 10));
+        await channel.Writer.WriteAsync(BuildInformationReport());
+        await channel.Writer.WriteAsync(BuildConfirmedReadResponse(invokeId: 11));
+
+        var router = new MmsReceiveRouter();
+        var pump = new MmsReceivePump(router, cancellationToken => channel.Reader.ReadAsync(cancellationToken).AsTask());
+
+        using var first = pump.RegisterConfirmedOperation(10);
+        using var second = pump.RegisterConfirmedOperation(11);
+        pump.Start();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var firstResponse = await first.WaitAsync(timeout.Token);
+        var secondResponse = await second.WaitAsync(timeout.Token);
+        await pump.StopAsync();
+
+        Assert.Equal(MmsPduKind.ConfirmedResponse, firstResponse.Kind);
+        Assert.Equal(10, firstResponse.InvokeId);
+        Assert.Equal(MmsPduKind.ConfirmedResponse, secondResponse.Kind);
+        Assert.Equal(11, secondResponse.InvokeId);
+        Assert.Equal(4, pump.RoutedPduCount);
+        Assert.Equal(2, pump.CompletedConfirmedCount);
+        Assert.Equal(2, pump.QueuedInformationReportCount);
+        Assert.True(router.TryDequeueInformationReport(out var firstReport));
+        Assert.True(router.TryDequeueInformationReport(out var secondReport));
+        Assert.True(firstReport.IsInformationReport);
+        Assert.True(secondReport.IsInformationReport);
+    }
+
+    [Fact]
     public async Task Pump_FaultsPendingInvokeWhenReaderFails()
     {
         var router = new MmsReceiveRouter();

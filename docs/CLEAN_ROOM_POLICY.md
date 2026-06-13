@@ -1,51 +1,30 @@
 # Clean-Room Policy
 
-ARIEC60870 is intended to be legally clean and corporate-friendly under Apache-2.0.
+ARIEC61850 is maintained as an independent clean-room IEC 61850 implementation.
 
-## Allowed Inputs
+## Repository boundaries
 
-- Public protocol behavior descriptions
-- User-provided traces
-- User-created sanitized test vectors
-- Independently written code
-- Public product pages for feature benchmarking
-- Official standards purchased/owned by the user, used for understanding, not copied into the repo
+Allowed:
 
-## Forbidden Inputs
+- implementation based on public standards understanding, interoperability behavior, and independently written code;
+- self-authored protocol codecs, models, diagnostics, CLI tools, UI code, docs, and tests;
+- public sample SCL files created for demonstration or anonymized validation.
 
-- Copying source from external protocol stacks, dissectors, unclear-license sources, commercial stacks, or vendor tools
-- Porting class structure/state machine from third-party code
-- Copying vendor manual tables into repo without explicit legal clearance
-- Shipping customer relay database or private project mapping as samples
-- Embedding GPL/commercial protocol stack code
+Not allowed:
 
-## How to Use External Projects Safely
+- copying source code from external IEC 61850 protocol stacks;
+- committing proprietary customer captures or confidential engineering data;
+- committing generated build output, IDE state, release artifacts, or runtime evidence;
+- adding documents that make the project appear dependent on another IEC 61850 implementation.
 
-External projects may be used only for market/feature awareness, not as source code.
+## Public wording rule
 
-Examples:
+Public documentation should describe ARIEC61850 as:
 
-```text
-Allowed: “Public protocol references expose fields such as FCB, ACD, FUN, INF; ARIEC60870 should expose equivalent evidence.”
-Forbidden: copy external dissector code, table names, or implementation logic directly.
-```
+- clean-room;
+- native C#/.NET;
+- lab-oriented;
+- Apache-2.0 licensed;
+- not formally conformance certified unless that becomes true for a specific release.
 
-## File Header
-
-New source files should include:
-
-```csharp
-// Copyright 2026 Ari Sulistiono
-// SPDX-License-Identifier: Apache-2.0
-```
-
-## Third-Party Dependencies
-
-Keep dependencies minimal. If added, document in `THIRD_PARTY_NOTICES.md`:
-
-- package name
-- license
-- purpose
-- whether it touches protocol logic
-
-Protocol stack dependencies are not allowed unless the user explicitly changes the project policy.
+Avoid internal audit language, competitor comparisons, or wording that creates unnecessary legal ambiguity.

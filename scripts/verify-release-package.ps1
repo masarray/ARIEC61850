@@ -2,34 +2,33 @@
 # SPDX-License-Identifier: Apache-2.0
 <#
 .SYNOPSIS
-  Performs a lightweight structural check on an ARIEC60870 portable release ZIP.
+  Performs a lightweight structural check on an ARIEC61850 WPF single-file release ZIP.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
-    [string]$PackagePath
+    [string]$PackagePath,
+    [string]$Version = "0.1.0"
 )
 
 $ErrorActionPreference = "Stop"
 $ResolvedPackage = (Resolve-Path $PackagePath).Path
-$TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ariec60870-package-check-" + [System.Guid]::NewGuid().ToString("N"))
+$TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ariec61850-package-check-" + [System.Guid]::NewGuid().ToString("N"))
 
 try {
     New-Item -ItemType Directory -Force -Path $TempRoot | Out-Null
     Expand-Archive -Path $ResolvedPackage -DestinationPath $TempRoot -Force
 
     $Required = @(
-        "Start-ARIEC60870.bat",
+        "AR.Iec61850.SvPublisher.exe",
         "README-PORTABLE.txt",
         "LICENSE",
         "NOTICE",
         "THIRD_PARTY_NOTICES.md",
-        "app/ARIEC60870.Desktop.exe",
-        "cli/ARIEC60870.Cli.exe",
+        "README.md",
         "docs/QUICK_START.md",
         "docs/TROUBLESHOOTING.md",
-        "docs/VALIDATION_MATRIX.md",
-        "samples/mapping-profiles/example-user-mapping.profile.json"
+        "docs/RELEASE_PACKAGING.md"
     )
 
     $Missing = @()
@@ -40,8 +39,16 @@ try {
         }
     }
 
+    $NestedBuildOutput = Get-ChildItem -Path $TempRoot -Recurse -Directory | Where-Object {
+        $_.Name -in @("bin", "obj", ".vs", "out", "artifacts")
+    }
+
     if ($Missing.Count -gt 0) {
-        Write-Error ("Package is missing required files:`n" + ($Missing -join "`n"))
+        throw ("Package is missing required files:`n" + ($Missing -join "`n"))
+    }
+
+    if ($NestedBuildOutput.Count -gt 0) {
+        throw ("Package contains forbidden generated folders:`n" + (($NestedBuildOutput | ForEach-Object FullName) -join "`n"))
     }
 
     Write-Host "Release package structure OK:" -ForegroundColor Green

@@ -1,4 +1,3 @@
 User-agent: *
 Allow: /
-
-Sitemap: https://masarray.github.io/ARIEC60870/sitemap.xml
+Sitemap: https://masarray.github.io/ARIEC61850/sitemap.xml

@@ -1,5 +1,5 @@
 ﻿AR.Iec61850.SvPublisher
-
+1.0.0.0
 
 winexe
 C#
@@ -12,9 +12,9 @@ TRACE;DEBUG;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR
 D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\App.xaml
 41111125331
 
-151678751627
+171201716720
 202-1774007264
 MainWindow.xaml;RampSetupWindow.xaml;StateSequencerWindow.xaml;SvConfigWindow.xaml;
 
-False
+True
 

@@ -1,91 +1,42 @@
-# ARIEC60870 Release Assets
+# Release Packaging
 
-This document explains the release assets available for users and the packaging automation available for contributors.
+ARIEC61850 includes a Windows single-file packaging script for the WPF Sampled Values publisher.
 
-## Assets users should download
-
-For normal use, download the Windows portable ZIP from GitHub Releases:
-
-```text
-ARIEC60870-vX.Y.Z-win-x64-portable.zip
-SHA256SUMS.txt
-```
-
-The portable ZIP contains the desktop app, CLI tools, sample files, documentation, and license files. It is intended for users who want to try ARIEC60870 without opening Visual Studio.
-
-## How to run the portable package
-
-1. Download the ZIP from GitHub Releases.
-2. Extract it to a local folder.
-3. Run `Start-ARIEC60870.bat`.
-4. Configure the relay communication settings in **Setup**.
-5. Start the session and review the evidence screens.
-
-## Verifying the download
-
-`SHA256SUMS.txt` is included with each package build so the downloaded ZIP can be verified against its checksum.
-
-## Building a package locally
-
-From repository root:
+## Local packaging
 
 ```powershell
-pwsh ./scripts/publish-windows-portable.ps1 -Version 1.3.0
+pwsh .\scripts\publish-windows-singlefile.ps1 -Version 0.1.0
 ```
 
-Expected output:
+Output location:
 
 ```text
-artifacts/release/ARIEC60870-v1.3.0-win-x64-portable.zip
-artifacts/release/SHA256SUMS.txt
+artifacts/release/
+├─ ARIEC61850-SvPublisher-v0.1.0-win-x64-single-exe.zip
+├─ AR.Iec61850.SvPublisher-v0.1.0-win-x64.exe
+└─ SHA256SUMS.txt
 ```
 
-Verify package structure:
+`artifacts/` is ignored by Git.
 
-```powershell
-pwsh ./scripts/verify-release-package.ps1 -PackagePath artifacts/release/ARIEC60870-v1.3.0-win-x64-portable.zip
-```
+## GitHub Actions packaging
 
-## GitHub Actions package flow
-
-The repository includes this workflow:
+Use `.github/workflows/release-package.yml` manually from GitHub Actions or by pushing a tag:
 
 ```text
-.github/workflows/release-package.yml
+v0.1.0
 ```
 
-Manual release run:
+The workflow:
 
-1. Open **Actions**.
-2. Select **Build Windows portable package**.
-3. Click **Run workflow**.
-4. Set `version`, for example `1.3.0`.
-5. Keep **Create or update GitHub Release** enabled when the package should appear on the Releases page.
-6. Select pre-release or draft status as needed for the package maturity.
-7. Click **Run workflow**.
+1. checks out the repository;
+2. installs .NET 8;
+3. restores, builds, and tests `ARIEC61850.slnx`;
+4. publishes `apps/AR.Iec61850.SvPublisher` as a self-contained Windows x64 single EXE;
+5. verifies the package structure;
+6. uploads the EXE, ZIP, and SHA256 file as workflow artifacts;
+7. optionally creates or updates a GitHub Release.
 
-The workflow builds the portable ZIP, verifies package structure, uploads a workflow artifact, creates tag `vX.Y.Z` when needed, and publishes these assets to GitHub Releases:
+## Runtime note
 
-```text
-ARIEC60870-vX.Y.Z-win-x64-portable.zip
-SHA256SUMS.txt
-```
-
-Tag release run is also supported:
-
-```bash
-git tag v1.3.0
-git push origin v1.3.0
-```
-
-## Package contents checklist
-
-A complete portable package includes:
-
-- desktop app executable and runtime files;
-- command-line tools;
-- `Start-ARIEC60870.bat`;
-- quick-start and troubleshooting documents;
-- samples and mapping profile example;
-- `LICENSE`, `NOTICE`, and third-party notice file;
-- release notes and checksum file.
+The WPF app is published as a single EXE, but live raw Ethernet traffic still requires Npcap on the target Windows machine. Npcap is not bundled by this repository.

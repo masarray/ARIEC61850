@@ -1,107 +1,60 @@
-# ARIEC61850 Architecture
+# Architecture
 
-ARIEC61850 is organized as a reusable protocol stack with tester applications on
-top. Protocol logic must stay in libraries under `src/`.
-
-## Project layers
+ARIEC61850 is organized as a reusable protocol stack plus thin user-facing tools.
 
 ```text
-apps/
-  AR.Iec61850.Cli/                  CLI tester and automation surface
-
-src/
-  AR.Iec61850/                      protocol primitives and engineering model
-  AR.Iec61850.Transports.Npcap/     raw Ethernet transport adapter
-
-tests/
-  AR.Iec61850.Tests/                unit and round-trip validation
+ARIEC61850
+├─ src
+│  ├─ AR.Iec61850
+│  │  ├─ Asn1 / BER codec
+│  │  ├─ Osi / TPKT + COTP
+│  │  ├─ Acse / MMS association helpers
+│  │  ├─ Mms / discovery, read, write, datasets, RCBs, reporting
+│  │  ├─ Goose / GOOSE frame builder/parser/session helpers
+│  │  ├─ SampledValues / SV frame builder/parser/payload model
+│  │  ├─ Scl / SCL parser and publisher profiles
+│  │  ├─ Capture / PCAP writer/reader
+│  │  └─ Monitoring / stream diagnostics
+│  └─ AR.Iec61850.Transports.Npcap
+│     └─ Npcap-backed raw Ethernet transport
+├─ apps
+│  ├─ AR.Iec61850.Cli
+│  └─ AR.Iec61850.SvPublisher
+├─ tests
+│  └─ AR.Iec61850.Tests
+├─ samples
+│  └─ scl
+├─ docs
+└─ landing
 ```
 
-## Layer 0 - byte primitives
+## Design principles
 
-Purpose: deterministic protocol building blocks.
+- Keep the core library independent from UI concerns.
+- Keep raw Ethernet transport optional and Windows-lab specific.
+- Treat report enable, dynamic DataSet binding, and GI as guarded state-machine operations.
+- Preserve raw protocol evidence when decoded shape is incomplete.
+- Keep generated evidence outside source control.
+- Keep public docs focused on users, not internal audit history.
 
-Includes:
+## Main layers
 
-- ASN.1 BER reader and writer.
-- MMS common data values.
-- Ethernet and VLAN frame codecs.
-- MAC address, APPID, UTC time, and quality helpers.
+### Core protocol layer
 
-Rules:
+`src/AR.Iec61850` contains the reusable implementation: BER, MMS, GOOSE, SV, PCAP, SCL, and diagnostics.
 
-- No UI.
-- No network IO.
-- No SCL assumptions.
-- Every codec needs byte-level tests.
+### Transport layer
 
-## Layer 1 - SCL engineering model
+`src/AR.Iec61850.Transports.Npcap` contains live raw Ethernet integration. It is intentionally separate so the core library remains usable without installing Npcap.
 
-Purpose: import SCL into a strongly typed engineering context.
+### CLI layer
 
-Current model covers:
+`apps/AR.Iec61850.Cli` exposes reproducible engineering commands for SCL, PCAP, MMS discovery, reads, report planning, and guarded report sessions.
 
-- IEDs.
-- DataSets and FCDA order.
-- GOOSE streams.
-- Sampled Values streams.
-- ReportControl blocks.
-- Communication APPID, destination MAC, VLAN ID, and VLAN priority.
-- Basic conflicts and warnings.
+### Desktop layer
 
-## Layer 2 - process bus services
+`apps/AR.Iec61850.SvPublisher` is the current WPF desktop workspace for Sampled Values publishing.
 
-Purpose: reusable GOOSE and Sampled Values publisher/subscriber logic.
+### Test layer
 
-Current implementation:
-
-- GOOSE publisher profile from SCL.
-- GOOSE publisher session with state and sequence behavior.
-- SV publisher profile from SCL.
-- SV publisher session with `smpCnt` wrap behavior.
-- In-memory transport for deterministic tests.
-- Npcap transport for live GOOSE/SV publishing.
-- PCAP writer, reader, and monitor.
-- GOOSE retransmission schedule.
-
-Next implementation:
-
-- SCL-bound GOOSE subscriber.
-- SCL-bound SV subscriber.
-- General typed SV payload packing.
-
-## Layer 3 - MMS transport foundation
-
-Client-side implementation now includes:
-
-- TCP/TPKT connection.
-- COTP connection and data TPDU.
-- ACSE/MMS association profiles.
-- ISO Presentation P-DATA wrapping.
-- MMS `GetNameList`.
-- MMS Confirmed-Read.
-- FC-aware live IED directory.
-- Smart FC resolver and smart read.
-- DataSet inventory and DataSet member directory.
-- RCB inventory, bounded RCB attribute probing, and readiness planning.
-- Confirmed write foundation for guarded report/DataSet workflows.
-- MMS receive pump with pending invoke registry and queued InformationReports.
-- Guarded static report enable, GI, receive, map, and cleanup.
-- Guarded static report monitor command using the receive pump.
-- Guarded dynamic DataSet create, RCB bind, report enable, GI, receive, cleanup,
-  and DataSet delete.
-
-Next implementation:
-
-- ACSE release/abort state model.
-- receive-pump soak validation while reads/writes occur during report sessions.
-- typed report optional-field model.
-- BRCB recovery.
-- MMS file transfer.
-- IEC 61850 control services.
-- MMS server simulation.
-
-## Design rule
-
-The same publisher session should run against memory, PCAP test workflows, or a
-selected raw Ethernet adapter without changing protocol logic.
+`tests/AR.Iec61850.Tests` validates codecs, protocol shape, reporting planners, PCAP helpers, SCL parsing, and stream diagnostics.

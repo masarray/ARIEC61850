@@ -75,6 +75,7 @@ src/AR.Iec61850/                      reusable protocol stack
 src/AR.Iec61850.Transports.Npcap/     raw Ethernet adapter
 tests/AR.Iec61850.Tests/              unit and golden tests
 apps/AR.Iec61850.Cli/                 CLI tester and smoke-test surface
+apps/AR.Iec61850.SvPublisher/         WPF Sampled Values publisher workspace
 ```
 
 Future projects may be split when stable:

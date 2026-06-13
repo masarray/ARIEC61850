@@ -812,7 +812,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
             await ProbeReportControlAttributeAsync(reportControl, "Resv", value => reportControl.ReservationState = NormalizeReportAttributeText(value), cancellationToken).ConfigureAwait(false);
 
         // Many IEDs are more reliable when the complete RCB structure is read and
-        // then unpacked client-side. libiec61850's GetRCBValues follows this mental
+        // then unpacked client-side. This follows the common client-side RCB read pattern
         // model: refresh a client-side RCB representation from the server before
         // writing RptEna/GI. If individual attribute reads are rejected or partial,
         // fall back to the base RCB object.

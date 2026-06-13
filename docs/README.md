@@ -1,17 +1,14 @@
 # ARIEC61850 Documentation
 
-ARIEC61850 is a clean-room IEC 61850 native stack for .NET engineering tools.
+This folder contains the public engineering documentation for ARIEC61850.
 
-Documentation entry points:
+## Start here
 
-- [Quick Start](QUICK_START.md)
-- [Architecture](ARCHITECTURE.md)
-- [Validation](VALIDATION.md)
-- [Professional Use](PROFESSIONAL_USE.md)
-- [FAQ](FAQ.md)
-- [Repository Setup](REPOSITORY_SETUP.md)
-- [Roadmap](../ROADMAP.md)
-
-Website:
-
-- <https://masarray.github.io/ARIEC61850/>
+- [Quick Start](QUICK_START.md) — build, test, run CLI examples, and package the WPF publisher.
+- [Architecture](ARCHITECTURE.md) — repository layout and main runtime layers.
+- [MMS Reporting Workflow](REPORTING_WORKFLOW.md) — safe RCB/DataSet/reporting flow.
+- [Release Packaging](RELEASE_PACKAGING.md) — Windows single-file WPF release workflow.
+- [Validation](VALIDATION.md) — current validation scope and local checks.
+- [Troubleshooting](TROUBLESHOOTING.md) — common build/runtime issues.
+- [Clean-room Policy](CLEAN_ROOM_POLICY.md) — public-source hygiene and implementation boundaries.
+- [Public Release Checklist](PUBLIC_RELEASE_CHECKLIST.md) — pre-push checklist for GitHub release readiness.

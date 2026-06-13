@@ -1,22 +1,18 @@
 # GitHub Pages Deployment
 
-ARIEC60870 includes a static landing page under `landing/`.
+The GitHub Pages workflow publishes a static website from the `landing` folder and copies `docs` into the published artifact.
 
-Recommended setup:
+Workflow file:
 
-1. Open the repository on GitHub.
-2. Go to **Settings → Pages**.
-3. Set **Source** to **GitHub Actions**.
-4. Push to `main` or `master`, or run the **Deploy landing page** workflow manually.
+```text
+.github/workflows/pages.yml
+```
 
-Compatibility options are also included:
+Published content:
 
-- If Pages is set to **Deploy from branch → root**, the root `index.html` redirects to `landing/`.
-- If Pages is set to **Deploy from branch → docs**, `docs/index.html` serves the same landing page.
+```text
+landing/        → website root
+docs/           → website documentation files
+```
 
-If the site still shows 404:
-
-- Confirm the selected branch is the branch that contains the files.
-- Confirm the Pages build/deploy action completed successfully.
-- Wait a few minutes after the first deployment.
-- Open the repository URL without adding `/landing` when using GitHub Actions mode.
+The workflow runs on pushes to `main` that change `landing`, `docs`, or the workflow itself. It can also be started manually from the Actions tab.

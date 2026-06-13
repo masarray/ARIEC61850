@@ -1,9 +1,0 @@
-[
-  {
-    "Attribute": "RptEna",
-    "Reference": "OCR7SR12PROT/LLN0.BR.brcbB01.RptEna [BR]",
-    "Attempted": true,
-    "IsSuccess": false,
-    "Message": "MMS Confirmed-Write returned 1 failure(s)."
-  }
-]

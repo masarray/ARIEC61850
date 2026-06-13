@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/apps/">
     <Project Path="apps/AR.Iec61850.Cli/AR.Iec61850.Cli.csproj" />
+    <Project Path="apps/AR.Iec61850.SvPublisher/AR.Iec61850.SvPublisher.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AR.Iec61850.Transports.Npcap/AR.Iec61850.Transports.Npcap.csproj" />

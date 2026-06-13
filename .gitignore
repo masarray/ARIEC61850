@@ -518,3 +518,15 @@ coverage/
 *.local.xml
 *.session.json
 *.adapter.json
+
+# ARIEC61850 generated runtime/release output
+out/
+evidence/
+captures/
+pcaps/
+reports/
+artifacts/
+*.pcap
+*.pcapng
+*.etl
+*.dmp

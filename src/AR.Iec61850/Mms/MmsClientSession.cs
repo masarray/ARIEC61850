@@ -415,6 +415,68 @@ public sealed partial class MmsClientSession : IAsyncDisposable
         return results;
     }
 
+    public async Task<IReadOnlyList<MmsFileDirectoryResult>> GetFileDirectoryPagedAsync(
+        string? directoryName = null,
+        int maxPages = 16,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+
+        var results = new List<MmsFileDirectoryResult>();
+        var continueAfter = string.Empty;
+        var pages = Math.Max(1, maxPages);
+
+        for (var page = 0; page < pages; page++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await GetFileDirectoryAsync(directoryName, continueAfter, cancellationToken).ConfigureAwait(false);
+            results.Add(result);
+
+            if (!result.IsSuccess || !result.MoreFollows || result.Entries.Count == 0 || !IsMmsInitiated)
+                break;
+
+            continueAfter = result.Entries.Last().Name;
+            if (string.IsNullOrWhiteSpace(continueAfter))
+                break;
+        }
+
+        return results;
+    }
+
+    public async Task<MmsFileDirectoryResult> GetFileDirectoryAsync(
+        string? directoryName = null,
+        string? continueAfter = null,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+
+        var invokeId = NextInvokeId();
+        var request = MmsFileDirectoryRequest.Build(invokeId, directoryName, continueAfter);
+        LastDiscoveryRequestHex = HexDump.ToCompactString(request);
+
+        try
+        {
+            var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
+            var result = MmsFileDirectoryResponseDecoder.Decode(response, invokeId, directoryName, continueAfter);
+            LastDiscoveryResponseHex = result.ResponseHexPreview;
+            LastDiscoveryAttemptSummary = result.Message;
+            return result;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
+        {
+            await MarkProtocolFaultAsync().ConfigureAwait(false);
+            return new MmsFileDirectoryResult
+            {
+                IsSuccess = false,
+                DirectoryName = directoryName ?? string.Empty,
+                ContinueAfter = continueAfter ?? string.Empty,
+                Entries = Array.Empty<MmsFileDirectoryEntry>(),
+                Message = $"FileDirectory transport fault: {ex.GetType().Name}: {ex.Message}",
+                ResponseHexPreview = LastDiscoveryResponseHex
+            };
+        }
+    }
+
     public async Task<MmsWriteResult> WriteSingleVariableAsync(
         MmsObjectReference reference,
         MmsDataValue value,

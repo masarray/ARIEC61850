@@ -480,6 +480,12 @@ internal static class Cli
         var readTypes = options.GetBool("read-types", false);
         var maxTypeReads = options.GetInt("max-type-reads", 128);
         var typeReadSource = options.Get("type-read-source", "datasets");
+        var typeReadStrategy = options.Get("type-read-strategy", "safe");
+        var typeReadDelayMs = options.GetInt("type-read-delay-ms", 20);
+        var readFiles = options.GetBool("read-files", true);
+        var fileDirectory = options.Get("file-directory", string.Empty);
+        var maxFilePages = options.GetInt("max-file-pages", 8);
+        var readSettingGroups = options.GetBool("read-setting-groups", true);
         var iedName = options.Get("ied-name", string.Empty);
         var apName = options.Get("ap-name", "AP1");
         var output = options.Get("output", Path.Combine("out", "service-discovery"));
@@ -517,14 +523,23 @@ internal static class Cli
                 Console.WriteLine($"  ... {dataSetDirectories.Count - 10} more DataSet result(s).");
         }
 
+        LiveIedFileServiceEvidence fileEvidence = new();
+        if (readFiles)
+        {
+            Console.WriteLine($"Reading MMS FileDirectory: dir='{(string.IsNullOrWhiteSpace(fileDirectory) ? "/" : fileDirectory)}', maxPages={maxFilePages}.");
+            var fileResults = await session.GetFileDirectoryPagedAsync(fileDirectory, maxFilePages, cts.Token).ConfigureAwait(false);
+            fileEvidence = BuildFileServiceEvidence(fileDirectory, fileResults);
+            Console.WriteLine($"  {(fileEvidence.IsSuccess ? "OK" : "FAIL")} FileDirectory entries={fileEvidence.Entries.Count}, pages={fileEvidence.PageCount}: {fileEvidence.Message}");
+        }
+
         IReadOnlyList<MmsVariableAccessAttributesResult> variableTypes = Array.Empty<MmsVariableAccessAttributesResult>();
         if (readTypes)
         {
-            var typeCandidates = BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource)
+            var typeCandidates = ApplyTypeReadStrategy(BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource), typeReadStrategy)
                 .Take(maxTypeReads <= 0 ? int.MaxValue : maxTypeReads)
                 .ToArray();
-            Console.WriteLine($"Reading MMS variable access attributes: {typeCandidates.Length} candidate(s), source={typeReadSource}, max={maxTypeReads}.");
-            variableTypes = await session.GetVariableAccessAttributesBatchAsync(typeCandidates, maxTypeReads, cts.Token).ConfigureAwait(false);
+            Console.WriteLine($"Reading MMS variable access attributes: {typeCandidates.Length} candidate(s), source={typeReadSource}, strategy={typeReadStrategy}, max={maxTypeReads}.");
+            variableTypes = await ReadVariableAccessAttributesSafelyAsync(session, typeCandidates, maxTypeReads, typeReadDelayMs, cts.Token).ConfigureAwait(false);
             foreach (var type in variableTypes.Take(10))
                 Console.WriteLine($"  {(type.IsSuccess ? "OK" : "FAIL")} {type.Summary}");
             if (variableTypes.Count > 10)
@@ -543,11 +558,27 @@ internal static class Cli
             dataSetDirectories,
             variableTypes);
 
+        IReadOnlyList<LiveIedSettingGroupReadbackEvidence> settingGroupReadbacks = Array.Empty<LiveIedSettingGroupReadbackEvidence>();
+        if (readSettingGroups && document.SettingGroupControls.Count > 0 && session.IsMmsInitiated)
+        {
+            Console.WriteLine($"Reading Setting Group control attributes: {document.SettingGroupControls.Count} candidate(s).");
+            settingGroupReadbacks = await ReadSettingGroupReadbacksAsync(session, document.SettingGroupControls, cts.Token).ConfigureAwait(false);
+            foreach (var readback in settingGroupReadbacks.Take(10))
+                Console.WriteLine($"  SG {(readback.HasAnySuccess ? "OK" : "INFO")} {readback.Reference}: {readback.Attributes.Count(x => x.IsSuccess)}/{readback.Attributes.Count} readable");
+        }
+
+        var onlineEvidence = new LiveIedOnlineServiceEvidence
+        {
+            FileService = fileEvidence,
+            SettingGroupReadbacks = settingGroupReadbacks
+        };
+
         var files = new List<string>();
         files.AddRange(LiveIedModelDiscoveryExporter.WriteBundle(document, output));
-        files.AddRange(LiveIedServiceDiscoveryReportBuilder.WriteFiles(document, output));
+        files.AddRange(WriteOnlineServiceEvidenceFiles(onlineEvidence, output));
+        files.AddRange(LiveIedServiceDiscoveryReportBuilder.WriteFiles(document, output, onlineEvidence));
 
-        var coverage = LiveIedServiceDiscoveryReportBuilder.Build(document);
+        var coverage = LiveIedServiceDiscoveryReportBuilder.Build(document, onlineEvidence);
         Console.WriteLine("Service discovery complete.");
         Console.WriteLine(document.Summary);
         foreach (var item in coverage.Services)
@@ -557,6 +588,177 @@ internal static class Cli
             Console.WriteLine($"  {Path.GetFullPath(file)}");
 
         return 0;
+    }
+
+
+    private static LiveIedFileServiceEvidence BuildFileServiceEvidence(string directoryName, IReadOnlyList<MmsFileDirectoryResult> results)
+    {
+        var last = results.LastOrDefault();
+        var success = results.Count > 0 && results.Any(x => x.IsSuccess);
+        var entries = results
+            .Where(x => x.IsSuccess)
+            .SelectMany(x => x.Entries)
+            .DistinctBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new LiveIedFileEntryEvidence
+            {
+                Name = x.Name,
+                Path = x.Path,
+                SizeBytes = x.SizeBytes,
+                LastModifiedRaw = x.LastModifiedDisplay,
+                IsLikelyDirectory = x.IsLikelyDirectory
+            })
+            .ToArray();
+
+        return new LiveIedFileServiceEvidence
+        {
+            DirectoryName = directoryName,
+            Attempted = true,
+            IsSuccess = success,
+            PageCount = results.Count,
+            MoreFollows = last?.MoreFollows ?? false,
+            Entries = entries,
+            Message = last?.Message ?? "FileDirectory was attempted but no response was recorded."
+        };
+    }
+
+    private static IReadOnlyList<string> WriteOnlineServiceEvidenceFiles(LiveIedOnlineServiceEvidence evidence, string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        var files = new List<string>();
+
+        var filePath = Path.Combine(outputDirectory, "file-inventory.json");
+        File.WriteAllText(filePath, JsonSerializer.Serialize(evidence.FileService, jsonOptions));
+        files.Add(filePath);
+
+        var settingPath = Path.Combine(outputDirectory, "setting-group-readback.json");
+        File.WriteAllText(settingPath, JsonSerializer.Serialize(evidence.SettingGroupReadbacks, jsonOptions));
+        files.Add(settingPath);
+
+        return files;
+    }
+
+    private static IEnumerable<MmsObjectReference> ApplyTypeReadStrategy(IEnumerable<MmsObjectReference> candidates, string strategy)
+    {
+        var normalized = string.IsNullOrWhiteSpace(strategy) ? "safe" : strategy.Trim().ToLowerInvariant();
+        foreach (var candidate in candidates)
+        {
+            if (normalized is "all" or "full")
+            {
+                yield return candidate;
+                continue;
+            }
+
+            if (IsSafeTypeReadCandidate(candidate))
+                yield return candidate;
+        }
+    }
+
+    private static bool IsSafeTypeReadCandidate(MmsObjectReference reference)
+    {
+        var item = reference.Item ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(item))
+            return false;
+
+        var upper = item.ToUpperInvariant();
+        if (upper.Contains("$CO$", StringComparison.Ordinal) || upper.Contains("$GO$", StringComparison.Ordinal) || upper.Contains("$MS$", StringComparison.Ordinal) || upper.Contains("$US$", StringComparison.Ordinal))
+            return false;
+
+        var blockedSegments = new[] { "$OPER$", "$SBOW$", "$CANCEL$", "$ORIGIN", "$UNITS", "$CTLVAL", "$CTLNUM", "$CHECK", "$TEST", "$DB", "$ANGREF", "$SBOTIMEOUT", "$STSELD" };
+        if (blockedSegments.Any(segment => upper.Contains(segment, StringComparison.Ordinal)))
+            return false;
+
+        // Prefer leaf attributes. Some IEDs close the association when GetVariableAccessAttributes
+        // is requested on an FCD/DO level object such as PTOC1$ST$Op.
+        return item.Count(c => c == '$') >= 3;
+    }
+
+    private static async Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ReadVariableAccessAttributesSafelyAsync(
+        MmsClientSession session,
+        IReadOnlyList<MmsObjectReference> candidates,
+        int maxReads,
+        int delayMs,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<MmsVariableAccessAttributesResult>();
+        var limit = maxReads <= 0 ? candidates.Count : Math.Min(candidates.Count, maxReads);
+        for (var i = 0; i < limit; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!session.IsMmsInitiated)
+                break;
+
+            var result = await session.GetVariableAccessAttributesAsync(candidates[i], cancellationToken).ConfigureAwait(false);
+            results.Add(result);
+
+            if (!session.IsMmsInitiated)
+                break;
+
+            if (delayMs > 0 && i < limit - 1)
+                await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
+        }
+
+        return results;
+    }
+
+    private static async Task<IReadOnlyList<LiveIedSettingGroupReadbackEvidence>> ReadSettingGroupReadbacksAsync(
+        MmsClientSession session,
+        IReadOnlyList<LiveIedControlBlockModel> settingGroupControls,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<LiveIedSettingGroupReadbackEvidence>();
+        foreach (var control in settingGroupControls.OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!session.IsMmsInitiated)
+                break;
+
+            var attributes = new List<LiveIedSettingGroupAttributeReadback>();
+            foreach (var attribute in SettingGroupAttributeCandidates(control))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!session.IsMmsInitiated)
+                    break;
+
+                var reference = new MmsObjectReference(control.Domain, $"{control.LogicalNode}${control.FunctionalConstraint}${control.Name}${attribute}", control.FunctionalConstraint);
+                var read = await session.ReadSingleVariableAsync(reference, cancellationToken).ConfigureAwait(false);
+                attributes.Add(new LiveIedSettingGroupAttributeReadback
+                {
+                    Name = attribute,
+                    MmsReference = $"{reference.Domain}/{reference.Item}",
+                    IsSuccess = read.IsSuccess,
+                    Value = read.IsSuccess ? MmsDataValueRenderer.ToCompactString(read.Value, reference.ToString()) : string.Empty,
+                    Message = read.Message
+                });
+            }
+
+            results.Add(new LiveIedSettingGroupReadbackEvidence
+            {
+                Reference = control.Reference,
+                Domain = control.Domain,
+                LogicalNode = control.LogicalNode,
+                Name = control.Name,
+                FunctionalConstraint = control.FunctionalConstraint,
+                Attributes = attributes
+            });
+        }
+
+        return results;
+    }
+
+    private static IEnumerable<string> SettingGroupAttributeCandidates(LiveIedControlBlockModel control)
+    {
+        var preferred = new[] { "NumOfSG", "ActSG", "EditSG", "CnfEdit", "LActTm" };
+        var available = control.Attributes.Count == 0
+            ? new HashSet<string>(preferred, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(control.Attributes, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var attr in preferred)
+        {
+            if (available.Contains(attr))
+                yield return attr;
+        }
     }
 
     private static async Task<int> MmsSclExportAsync(string[] args)
@@ -3379,7 +3581,7 @@ internal static class Cli
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile iedscout-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output out/scl/live-ied.iedscout-connection.iid] [--ld-name-mode auto|keep] [--output out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
-        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-types false] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
+        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-types false] [--type-read-strategy safe] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
         Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");
@@ -3405,7 +3607,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.168.1.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.168.1.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output out/ied-model-discovery");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.168.1.10 --ied-name OCR7SR12 --scl-export-profile iedscout-connection --ld-name-mode auto --output out/scl/OCR7SR12.generated.iid");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.168.1.10 --ied-name OCR7SR12 --read-types false --output out/service-discovery/OCR7SR12");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.168.1.10 --ied-name OCR7SR12 --read-files true --read-setting-groups true --read-types false --output out/service-discovery/OCR7SR12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-find 192.168.1.10 XCBR --fc ST --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-read-smart 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");

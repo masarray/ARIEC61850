@@ -17,7 +17,24 @@ public static class BerReader
         var tagNumber = encodedTag & 0x1F;
 
         if (tagNumber == 0x1F)
-            return false;
+        {
+            tagNumber = 0;
+            var readAny = false;
+            while (offset < source.Length)
+            {
+                var b = span[offset++];
+                readAny = true;
+                tagNumber = (tagNumber << 7) | (b & 0x7F);
+                if ((b & 0x80) == 0)
+                    break;
+
+                if (tagNumber > 1_000_000)
+                    return false;
+            }
+
+            if (!readAny || offset > source.Length)
+                return false;
+        }
 
         if (offset >= source.Length)
             return false;

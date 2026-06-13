@@ -29,8 +29,20 @@ public static class LiveIedServiceDiscoveryReportBuilder
     };
 
     public static LiveIedServiceDiscoveryReport Build(LiveIedModelDiscoveryDocument document)
+        => Build(document, null);
+
+    public static LiveIedServiceDiscoveryReport Build(LiveIedModelDiscoveryDocument document, LiveIedOnlineServiceEvidence? evidence)
     {
         ArgumentNullException.ThrowIfNull(document);
+        var fileEvidence = evidence?.FileService ?? new LiveIedFileServiceEvidence();
+        var settingReadbacks = evidence?.SettingGroupReadbacks ?? Array.Empty<LiveIedSettingGroupReadbackEvidence>();
+        var fileStatus = !fileEvidence.Attempted ? "Not attempted" : fileEvidence.IsSuccess ? "Discovered" : "Attempted, failed or unsupported";
+        var fileCount = fileEvidence.Entries.Count;
+        var fileMessage = !fileEvidence.Attempted ? "FileDirectory was not attempted in this run." : fileEvidence.IsSuccess ? $"FileDirectory returned {fileCount} entries from {fileEvidence.PageCount} page(s)." : fileEvidence.Message;
+        var sgSuccessful = settingReadbacks.Count(x => x.HasAnySuccess);
+        var sgStatus = sgSuccessful > 0 ? "Partially read" : document.Coverage.SettingGroupControlCount > 0 ? "Inventory" : "Not exposed or not discovered";
+        var sgEvidence = sgSuccessful > 0 ? $"{sgSuccessful}/{settingReadbacks.Count} SGCB inventory item(s) have at least one readable SGCB attribute." : "SG/SE inventory is available when exposed in the MMS directory.";
+
         var services = new List<LiveIedServiceCoverageItem>
         {
             Item("Data model", document.Coverage.DataAttributeCount > 0 ? "Discovered" : "Missing", document.Coverage.DataAttributeCount, $"LD={document.Coverage.LogicalDeviceCount}, LN={document.Coverage.LogicalNodeCount}, DO={document.Coverage.DataObjectCount}, DA={document.Coverage.DataAttributeCount}", ""),
@@ -39,9 +51,9 @@ public static class LiveIedServiceDiscoveryReportBuilder
             Item("Reports / RCB", document.Coverage.ReportControlCount > 0 ? "Discovered" : "Not exposed or not discovered", document.Coverage.ReportControlCount, $"BRCB={document.Coverage.BufferedReportControlCount}, URCB={document.Coverage.UnbufferedReportControlCount}", "Read all RCB attributes and normalize static SCL state vs runtime state."),
             Item("GOOSE control blocks", document.Coverage.GooseControlBlockCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.GooseControlBlockCount, "Current implementation detects GSEControl attribute inventory when present.", "Implement GoCB value reader: GoEna, GoID, DatSet, ConfRev, NdsCom, MinTime, MaxTime, DstAddress."),
             Item("Sampled Value control blocks", document.Coverage.SampledValueControlBlockCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.SampledValueControlBlockCount, "Current implementation detects MS/US/SVCB attribute inventory when present.", "Implement SVCB value reader: SvID/smvID, DatSet, ConfRev, SmpRate, SmpMod, NofASDU, DstAddress."),
-            Item("Setting groups", document.Coverage.SettingGroupControlCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.SettingGroupControlCount, "SG/SE inventory is available when exposed in the MMS directory.", "Implement SGCB services/readback: NumOfSG, ActSG, EditSG, CnfEdit plus SG/SE setting attributes."),
+            Item("Setting groups", sgStatus, Math.Max(document.Coverage.SettingGroupControlCount, sgSuccessful), sgEvidence, sgSuccessful > 0 ? "Expand SG/SE setting value grouping and add edition-aware setting semantics." : "Implement SGCB services/readback: NumOfSG, ActSG, EditSG, CnfEdit plus SG/SE setting attributes."),
             Item("Logs", document.Coverage.LogControlCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.LogControlCount, "LogControl inventory is available when LG attributes are exposed.", "Implement log directory/query service."),
-            Item("File service", "Not implemented", 0, "MMS association is available but file directory service is not implemented in ARIEC61850 yet.", "Implement GetServerDirectory(fileDirectory=true), FileDirectory, and file download evidence."),
+            Item("File service", fileStatus, fileCount, fileMessage, fileEvidence.IsSuccess ? "Add FileOpen/FileRead download support and recursive safe directory walking." : "Implement/verify FileDirectory support on this IED and add file download evidence."),
             Item("Variable specifications", document.Coverage.VariableTypeReadAttemptCount > 0 ? (document.Coverage.VariableTypeReadSuccessCount > 0 ? "Partially read" : "Attempted, failed or unsupported") : "Not attempted", document.Coverage.VariableTypeReadSuccessCount, $"attempted={document.Coverage.VariableTypeReadAttemptCount}, ok={document.Coverage.VariableTypeReadSuccessCount}, failed={document.Coverage.VariableTypeReadFailureCount}", "Use safe, leaf-only, dataset-first type reads to avoid IED peer-close behavior."),
             Item("CDC resolution", document.Coverage.UnknownCdcCount == 0 ? "Resolved" : "Partially resolved", document.Coverage.HighConfidenceCdcCount + document.Coverage.MediumConfidenceCdcCount + document.Coverage.LowConfidenceCdcCount, $"high={document.Coverage.HighConfidenceCdcCount}, medium={document.Coverage.MediumConfidenceCdcCount}, low={document.Coverage.LowConfidenceCdcCount}, unknown={document.Coverage.UnknownCdcCount}", "Expand IEC 61850-7-3/7-4 registry and compare against golden IEDScout SCL.")
         };
@@ -60,9 +72,12 @@ public static class LiveIedServiceDiscoveryReportBuilder
     }
 
     public static IReadOnlyList<string> WriteFiles(LiveIedModelDiscoveryDocument document, string outputDirectory)
+        => WriteFiles(document, outputDirectory, null);
+
+    public static IReadOnlyList<string> WriteFiles(LiveIedModelDiscoveryDocument document, string outputDirectory, LiveIedOnlineServiceEvidence? evidence)
     {
         Directory.CreateDirectory(outputDirectory);
-        var report = Build(document);
+        var report = Build(document, evidence);
         var jsonPath = Path.Combine(outputDirectory, "service-coverage-report.json");
         var markdownPath = Path.Combine(outputDirectory, "service-coverage-report.md");
         File.WriteAllText(jsonPath, JsonSerializer.Serialize(report, JsonOptions), Encoding.UTF8);

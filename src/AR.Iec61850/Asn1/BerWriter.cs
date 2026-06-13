@@ -12,7 +12,9 @@ public sealed class BerWriter
 
     public void WriteTlv(BerClass berClass, bool constructed, int tagNumber, ReadOnlySpan<byte> value)
     {
-        WriteTlv(EncodeIdentifier(berClass, constructed, tagNumber), value);
+        WriteIdentifier(berClass, constructed, tagNumber);
+        WriteLength(value.Length);
+        WriteBytes(value);
     }
 
     public void WriteTlv(byte encodedTag, ReadOnlySpan<byte> value)
@@ -45,7 +47,7 @@ public sealed class BerWriter
     public static byte EncodeIdentifier(BerClass berClass, bool constructed, int tagNumber)
     {
         if (tagNumber is < 0 or > 30)
-            throw new ArgumentOutOfRangeException(nameof(tagNumber), "Only short-form BER tag numbers are supported.");
+            throw new ArgumentOutOfRangeException(nameof(tagNumber), "Use WriteTlv/EncodeTlv for high-tag-number BER identifiers.");
 
         return (byte)(((byte)berClass << 6) | (constructed ? 0x20 : 0x00) | tagNumber);
     }
@@ -118,6 +120,38 @@ public sealed class BerWriter
         buffer[6] = (byte)(fraction & 0xFF);
         buffer[7] = quality;
         return buffer.ToArray();
+    }
+
+    private void WriteIdentifier(BerClass berClass, bool constructed, int tagNumber)
+    {
+        if (tagNumber < 0)
+            throw new ArgumentOutOfRangeException(nameof(tagNumber));
+
+        if (tagNumber <= 30)
+        {
+            WriteByte(EncodeIdentifier(berClass, constructed, tagNumber));
+            return;
+        }
+
+        WriteByte((byte)(((byte)berClass << 6) | (constructed ? 0x20 : 0x00) | 0x1F));
+
+        Span<byte> buffer = stackalloc byte[5];
+        var count = 0;
+        var value = tagNumber;
+        do
+        {
+            buffer[count++] = (byte)(value & 0x7F);
+            value >>= 7;
+        }
+        while (value > 0);
+
+        for (var i = count - 1; i >= 0; i--)
+        {
+            var b = buffer[i];
+            if (i != 0)
+                b |= 0x80;
+            WriteByte(b);
+        }
     }
 
     private void WriteLength(int length)

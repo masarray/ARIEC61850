@@ -9,5 +9,12 @@
     <BaseOutputPath>$(ArtifactsRoot)bin/$(MSBuildProjectName)/</BaseOutputPath>
     <BaseIntermediateOutputPath>$(ArtifactsRoot)obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
     <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**;$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**</DefaultItemExcludes>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="bin/**/*.cs;obj/**/*.cs" />
+    <EmbeddedResource Remove="bin/**;obj/**" />
+    <None Remove="bin/**;obj/**" />
+  </ItemGroup>
 </Project>

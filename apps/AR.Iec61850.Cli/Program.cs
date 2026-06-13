@@ -208,7 +208,7 @@ internal static class Cli
         foreach (var summary in gooseSummaries.OrderBy(s => s.AppId))
         {
             Console.WriteLine(
-                $"  APPID=0x{summary.AppId:X4} src={summary.Source} dst={summary.Destination} VLAN={FormatVlan(summary.VlanId, summary.VlanPriority)} goCB={TextOrDash(summary.StreamId)} confRev={summary.ConfigurationRevision ?? 0} packets={summary.PacketCount} stNum={summary.LastStateNumber} sqNum={summary.LastSequenceNumber}");
+                $"  APPID=0x{summary.AppId:X4} src={summary.Source} dst={summary.Destination} VLAN={FormatVlan(summary.VlanId, summary.VlanPriority)} goCB={TextOrDash(summary.StreamId)} confRev={summary.ConfigurationRevision ?? 0} packets={summary.PacketCount} stNum={summary.LastStateNumber} sqNum={summary.LastSequenceNumber} TAL={summary.LastTimeAllowedToLiveMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? "-"}ms stateChanges={summary.GooseStateChangeCount} retrans={summary.GooseRetransmissionCount} gaps={summary.GooseSequenceGapCount} dup={summary.GooseDuplicateCount} regress={summary.GooseSequenceRegressionCount + summary.GooseStateRegressionCount} timeouts={summary.GooseTimeoutCount} valueChanges={summary.GooseValueChangeCount}{FormatChangedSummary(summary.LastChangedSummary)}{FormatDiagnostics(summary.LastDiagnostics)}");
         }
 
         Console.WriteLine($"Other frames: {otherFrames}");
@@ -3446,6 +3446,7 @@ internal static class Cli
             ? startedTicks + (long)Math.Round(durationSeconds * Stopwatch.Frequency)
             : (long?)null;
         var eventTimestamp = DateTimeOffset.UtcNow;
+        long stateGeneration = 0;
         var nextStatusTicks = startedTicks;
         var nextToggleTicks = toggleEverySeconds > 0
             ? startedTicks + (long)Math.Round(toggleEverySeconds * Stopwatch.Frequency)
@@ -3477,13 +3478,14 @@ internal static class Cli
                 if (nowTicks >= nextToggleTicks)
                 {
                     state = !state;
+                    stateGeneration++;
                     eventTimestamp = DateTimeOffset.UtcNow;
                     schedule.Reset();
                     stateChanged = true;
                     nextToggleTicks = nowTicks + (long)Math.Round(toggleEverySeconds * Stopwatch.Frequency);
                 }
 
-                var values = BuildGooseStateValues(profile.Entries, eventTimestamp, state, sent);
+                var values = BuildGooseStateValues(profile.Entries, eventTimestamp, state, stateGeneration);
                 var frame = await session.PublishAsync(
                     values,
                     new Iec61850UtcTime(DateTimeOffset.UtcNow, Quality: 0),
@@ -3573,50 +3575,29 @@ internal static class Cli
         {
             var transport = new InMemoryProcessBusTransport();
             var session = new GoosePublisherSession(profile, sourceMac, transport);
+            var state = false;
+            long stateGeneration = 0;
+            var eventTimestamp = startTime;
 
             for (var i = 0; i < frameCount; i++)
             {
                 var timestamp = startTime.AddMilliseconds(i * 250);
-                var values = BuildGooseValues(profile.Entries, timestamp, i);
+                var stateChanged = i == 0 || i % 3 == 0;
+                if (i > 0 && stateChanged)
+                {
+                    state = !state;
+                    stateGeneration++;
+                    eventTimestamp = timestamp;
+                }
+
+                var values = BuildGooseStateValues(profile.Entries, eventTimestamp, state, stateGeneration);
                 var frame = await session.PublishAsync(
                     values,
                     new Iec61850UtcTime(timestamp, Quality: 0),
-                    stateChanged: i == 0).ConfigureAwait(false);
+                    stateChanged: stateChanged).ConfigureAwait(false);
                 packets.Add(new PcapPacket(timestamp, frame));
             }
         }
-    }
-
-    private static IReadOnlyList<MmsDataValue> BuildGooseValues(IReadOnlyList<SclDataSetEntry> entries, DateTimeOffset timestamp, int index)
-    {
-        var values = new List<MmsDataValue>(entries.Count);
-
-        foreach (var entry in entries)
-        {
-            if (entry.IsTimestamp)
-            {
-                values.Add(MmsDataValue.UtcTime(new Iec61850UtcTime(timestamp, Quality: 0)));
-            }
-            else if (entry.IsQuality)
-            {
-                values.Add(MmsDataValue.BitString(0, new byte[] { 0x00, 0x00 }));
-            }
-            else if (string.Equals(entry.BType, "BOOLEAN", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(entry.BType, "Bool", StringComparison.OrdinalIgnoreCase))
-            {
-                values.Add(MmsDataValue.Boolean(index % 2 == 0));
-            }
-            else if (entry.BType.Contains("INT", StringComparison.OrdinalIgnoreCase))
-            {
-                values.Add(MmsDataValue.Integer(index + entry.Index));
-            }
-            else
-            {
-                values.Add(MmsDataValue.VisibleString($"value-{index}-{entry.Index}"));
-            }
-        }
-
-        return values;
     }
 
     private static IReadOnlyList<MmsDataValue> BuildGooseStateValues(
@@ -3837,7 +3818,7 @@ internal static class Cli
         return streamEvent.Kind switch
         {
             ProcessBusEventKind.SampledValues => $"{prefix} {common} smpCnt={streamEvent.SampleCount?.ToString() ?? "-"} seq={streamEvent.SequenceStatus} payloadBytes={streamEvent.PayloadBytes} bound={(streamEvent.IsBoundToScl ? "SCL" : "anonymous")} values={streamEvent.DecodedValueCount}{FormatDiagnostics(streamEvent.Diagnostics)}",
-            ProcessBusEventKind.Goose => $"{prefix} {common} stNum={streamEvent.StateNumber?.ToString() ?? "-"} sqNum={streamEvent.SequenceNumber?.ToString() ?? "-"} values={streamEvent.ValueCount}",
+            ProcessBusEventKind.Goose => $"{prefix} {common} stNum={streamEvent.StateNumber?.ToString() ?? "-"} sqNum={streamEvent.SequenceNumber?.ToString() ?? "-"} seq={streamEvent.GooseSequenceStatus} TAL={streamEvent.TimeAllowedToLiveMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? "-"}ms bound={(streamEvent.IsBoundToScl ? "SCL" : "anonymous")} values={streamEvent.DecodedValueCount} changed={streamEvent.ChangedValueCount}{FormatChangedSummary(streamEvent.ChangedSummary)}{FormatDiagnostics(streamEvent.Diagnostics)}",
             _ => $"{prefix} {streamEvent.Detail}"
         };
     }
@@ -3847,8 +3828,11 @@ internal static class Cli
         var common = $"{summary.Kind} APPID=0x{summary.AppId:X4} id={TextOrDash(summary.StreamId)} packets={summary.PacketCount}";
         return summary.Kind == ProcessBusEventKind.SampledValues
             ? $"{common} smpCnt={FormatCounterRange(summary.FirstSampleCount, summary.LastSampleCount)} values={summary.LastDecodedValueCount} gaps={summary.SequenceGapCount} missed={summary.MissedSampleCount} dup={summary.DuplicateSampleCount} late={summary.OutOfOrderSampleCount} wraps={summary.WrapCount}"
-            : $"{common} stNum={summary.LastStateNumber} sqNum={summary.LastSequenceNumber}";
+            : $"{common} stNum={summary.LastStateNumber} sqNum={summary.LastSequenceNumber} TAL={summary.LastTimeAllowedToLiveMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? "-"}ms stateChanges={summary.GooseStateChangeCount} retrans={summary.GooseRetransmissionCount} gaps={summary.GooseSequenceGapCount} dup={summary.GooseDuplicateCount} regress={summary.GooseSequenceRegressionCount + summary.GooseStateRegressionCount} timeouts={summary.GooseTimeoutCount} valueChanges={summary.GooseValueChangeCount}{FormatChangedSummary(summary.LastChangedSummary)}{FormatDiagnostics(summary.LastDiagnostics)}";
     }
+
+    private static string FormatChangedSummary(string changedSummary)
+        => string.IsNullOrWhiteSpace(changedSummary) ? string.Empty : $" change=\"{changedSummary}\"";
 
     private static string FormatDiagnostics(IReadOnlyList<string> diagnostics)
     {

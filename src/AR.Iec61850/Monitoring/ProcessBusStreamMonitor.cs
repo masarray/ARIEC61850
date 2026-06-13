@@ -1,6 +1,7 @@
 using AR.Iec61850.Capture;
 using AR.Iec61850.Ethernet;
 using AR.Iec61850.Goose;
+using AR.Iec61850.Mms;
 using AR.Iec61850.SampledValues;
 using AR.Iec61850.Scl;
 
@@ -10,23 +11,33 @@ public sealed class ProcessBusStreamMonitor
 {
     private readonly Dictionary<string, ProcessBusStreamSummary> _summaries = new(StringComparer.OrdinalIgnoreCase);
     private readonly IReadOnlyList<SampledValuesPublisherProfile> _sampledValuesProfiles;
+    private readonly IReadOnlyList<GoosePublisherProfile> _gooseProfiles;
     private readonly double _nominalFrequencyHz;
 
     public ProcessBusStreamMonitor()
-        : this(Array.Empty<SampledValuesPublisherProfile>())
+        : this(Array.Empty<SampledValuesPublisherProfile>(), Array.Empty<GoosePublisherProfile>())
     {
     }
 
     public ProcessBusStreamMonitor(SclDocument document, double nominalFrequencyHz = 50)
-        : this(SampledValuesPublisherProfile.CreateMany(document), nominalFrequencyHz)
+        : this(SampledValuesPublisherProfile.CreateMany(document), GoosePublisherProfile.CreateMany(document), nominalFrequencyHz)
     {
     }
 
     public ProcessBusStreamMonitor(
         IReadOnlyList<SampledValuesPublisherProfile> sampledValuesProfiles,
         double nominalFrequencyHz = 50)
+        : this(sampledValuesProfiles, Array.Empty<GoosePublisherProfile>(), nominalFrequencyHz)
+    {
+    }
+
+    public ProcessBusStreamMonitor(
+        IReadOnlyList<SampledValuesPublisherProfile> sampledValuesProfiles,
+        IReadOnlyList<GoosePublisherProfile> gooseProfiles,
+        double nominalFrequencyHz = 50)
     {
         _sampledValuesProfiles = sampledValuesProfiles ?? Array.Empty<SampledValuesPublisherProfile>();
+        _gooseProfiles = gooseProfiles ?? Array.Empty<GoosePublisherProfile>();
         _nominalFrequencyHz = nominalFrequencyHz <= 0 ? 50 : nominalFrequencyHz;
     }
 
@@ -114,6 +125,30 @@ public sealed class ProcessBusStreamMonitor
     private ProcessBusStreamEvent ObserveGoose(DateTimeOffset timestamp, GooseFrame frame)
     {
         var streamId = string.IsNullOrWhiteSpace(frame.Pdu.GoCbRef) ? frame.AppId.ToString("X4") : frame.Pdu.GoCbRef;
+        var profile = FindGooseProfile(frame);
+        var diagnostics = new List<string>();
+
+        if (frame.Pdu.TimeAllowedToLiveMilliseconds == 0)
+            diagnostics.Add("GOOSE TimeAllowedToLive is zero; supervision cannot be evaluated.");
+
+        if (frame.Pdu.Test)
+            diagnostics.Add("GOOSE test flag is set.");
+
+        if (frame.Pdu.NeedsCommissioning)
+            diagnostics.Add("GOOSE ndsCom flag is set.");
+
+        if (profile is not null)
+        {
+            if (profile.Stream.ConfigurationRevision != frame.Pdu.ConfigurationRevision)
+                diagnostics.Add($"GOOSE confRev mismatch. SCL={profile.Stream.ConfigurationRevision}, frame={frame.Pdu.ConfigurationRevision}.");
+
+            if (!string.Equals(profile.Destination.ToString(), frame.Destination.ToString(), StringComparison.OrdinalIgnoreCase))
+                diagnostics.Add($"GOOSE destination MAC differs from SCL. SCL={profile.Destination}, frame={frame.Destination}.");
+
+            if (profile.Entries.Count != frame.Pdu.Values.Count)
+                diagnostics.Add($"GOOSE DataSet value count mismatch. SCL={profile.Entries.Count}, frame={frame.Pdu.Values.Count}.");
+        }
+
         var key = $"GOOSE|{frame.AppId:X4}|{frame.Source}|{frame.Destination}|{frame.Vlan?.VlanId}|{streamId}|{frame.Pdu.ConfigurationRevision}";
         var summary = GetOrAddSummary(
             key,
@@ -126,7 +161,38 @@ public sealed class ProcessBusStreamMonitor
             streamId,
             frame.Pdu.ConfigurationRevision);
 
-        summary.RecordGoose(frame.Pdu.StateNumber, frame.Pdu.SequenceNumber);
+        if (summary.LastGooseTimestamp.HasValue &&
+            summary.LastTimeAllowedToLiveMilliseconds is > 0 &&
+            (timestamp - summary.LastGooseTimestamp.Value).TotalMilliseconds > summary.LastTimeAllowedToLiveMilliseconds.Value)
+        {
+            diagnostics.Add(
+                $"GOOSE supervision expired before this frame. Gap={(timestamp - summary.LastGooseTimestamp.Value).TotalMilliseconds:0.###} ms, TAL={summary.LastTimeAllowedToLiveMilliseconds.Value} ms.");
+        }
+
+        var previousDisplays = summary.LastGooseValueDisplays.ToArray();
+        var valueDisplays = frame.Pdu.Values.Select(MmsDataValueRenderer.ToCompactString).ToArray();
+        var gooseStatus = summary.RecordGoose(
+            timestamp,
+            frame.Pdu.StateNumber,
+            frame.Pdu.SequenceNumber,
+            frame.Pdu.TimeAllowedToLiveMilliseconds,
+            valueDisplays,
+            diagnostics,
+            out var changedIndexes,
+            out var changedSummary);
+
+        var changedValueCount = changedIndexes.Count(x => x);
+        if (changedValueCount > 0 &&
+            gooseStatus is GooseSequenceStatus.Retransmission or GooseSequenceStatus.Duplicate or GooseSequenceStatus.SequenceJump)
+        {
+            diagnostics.Add("GOOSE values changed without a state-number increment.");
+        }
+
+        if (changedValueCount == 0 && gooseStatus == GooseSequenceStatus.StateChange)
+            diagnostics.Add("GOOSE state number changed but decoded DataSet values did not change.");
+
+        summary.SetLastDiagnostics(diagnostics);
+        var decodedValues = BuildGooseValues(profile, frame.Pdu.Values, changedIndexes, previousDisplays);
 
         return new ProcessBusStreamEvent
         {
@@ -141,9 +207,73 @@ public sealed class ProcessBusStreamMonitor
             ConfigurationRevision = frame.Pdu.ConfigurationRevision,
             StateNumber = frame.Pdu.StateNumber,
             SequenceNumber = frame.Pdu.SequenceNumber,
+            GooseSequenceStatus = gooseStatus,
+            TimeAllowedToLiveMilliseconds = frame.Pdu.TimeAllowedToLiveMilliseconds,
             ValueCount = frame.Pdu.Values.Count,
+            IsBoundToScl = profile is not null,
+            ControlBlockReference = profile?.Stream.ControlBlockReference ?? frame.Pdu.GoCbRef,
+            DecodedValueCount = decodedValues.Count,
+            GooseValues = decodedValues,
+            ChangedValueCount = changedValueCount,
+            ChangedSummary = changedSummary,
+            Diagnostics = diagnostics,
             Detail = string.IsNullOrWhiteSpace(frame.Pdu.GoId) ? $"goCB={streamId}" : $"goID={frame.Pdu.GoId}"
         };
+    }
+
+    private IReadOnlyList<GooseDecodedValue> BuildGooseValues(
+        GoosePublisherProfile? profile,
+        IReadOnlyList<MmsDataValue> values,
+        IReadOnlyList<bool> changedIndexes,
+        IReadOnlyList<string> previousDisplays)
+    {
+        var result = new List<GooseDecodedValue>(values.Count);
+        for (var i = 0; i < values.Count; i++)
+        {
+            var entry = profile is not null && i < profile.Entries.Count ? profile.Entries[i] : null;
+            var display = MmsDataValueRenderer.ToCompactString(values[i]);
+            result.Add(new GooseDecodedValue
+            {
+                Index = i,
+                SignalReference = entry?.SignalReference ?? string.Empty,
+                Fc = entry?.Fc ?? string.Empty,
+                Cdc = entry?.Cdc ?? string.Empty,
+                BType = entry?.BType ?? string.Empty,
+                Value = values[i],
+                DisplayValue = display,
+                IsChanged = i < changedIndexes.Count && changedIndexes[i],
+                PreviousDisplayValue = i < previousDisplays.Count ? previousDisplays[i] : string.Empty
+            });
+        }
+
+        return result;
+    }
+
+    private GoosePublisherProfile? FindGooseProfile(GooseFrame frame)
+    {
+        var exact = _gooseProfiles.FirstOrDefault(profile =>
+            profile.AppId == frame.AppId &&
+            string.Equals(profile.Destination.ToString(), frame.Destination.ToString(), StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(profile.Stream.ControlBlockReference, frame.Pdu.GoCbRef, StringComparison.OrdinalIgnoreCase) &&
+            profile.Stream.ConfigurationRevision == frame.Pdu.ConfigurationRevision);
+        if (exact is not null)
+            return exact;
+
+        var byGoCb = _gooseProfiles.FirstOrDefault(profile =>
+            profile.AppId == frame.AppId &&
+            string.Equals(profile.Stream.ControlBlockReference, frame.Pdu.GoCbRef, StringComparison.OrdinalIgnoreCase));
+        if (byGoCb is not null)
+            return byGoCb;
+
+        var byDataSet = _gooseProfiles.FirstOrDefault(profile =>
+            profile.AppId == frame.AppId &&
+            string.Equals(profile.Stream.DataSetReference, frame.Pdu.DataSetReference, StringComparison.OrdinalIgnoreCase));
+        if (byDataSet is not null)
+            return byDataSet;
+
+        return _gooseProfiles.FirstOrDefault(profile =>
+            profile.AppId == frame.AppId &&
+            string.Equals(profile.Stream.GoId, frame.Pdu.GoId, StringComparison.OrdinalIgnoreCase));
     }
 
     private SampledValuesPublisherProfile? FindSampledValuesProfile(SampledValuesFrame frame, SampledValueAsdu asdu)

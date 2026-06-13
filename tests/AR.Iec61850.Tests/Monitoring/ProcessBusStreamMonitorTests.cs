@@ -117,4 +117,98 @@ public sealed class ProcessBusStreamMonitorTests
         Assert.Equal(1, summary.DuplicateSampleCount);
         Assert.Equal(1, summary.OutOfOrderSampleCount);
     }
+
+    [Fact]
+    public void Monitor_Binds_Goose_To_Scl_And_Tracks_Retransmission()
+    {
+        var document = SclParserTests.LoadMinimalStation();
+        var source = MacAddress.Parse("02:00:00:00:40:01");
+        var timestamp = new Iec61850UtcTime(DateTimeOffset.UtcNow, Quality: 0);
+        var profile = GoosePublisherProfile.FromScl(document);
+        var monitor = new ProcessBusStreamMonitor(document);
+        var values = BuildGooseValues(false, timestamp);
+
+        var first = monitor.Observe(timestamp.Value, profile.BuildEthernetFrame(source, values, timestamp, stateNumber: 1, sequenceNumber: 0));
+        var retransmission = monitor.Observe(timestamp.Value.AddMilliseconds(1), profile.BuildEthernetFrame(source, values, timestamp, stateNumber: 1, sequenceNumber: 1));
+
+        Assert.True(first.IsBoundToScl);
+        Assert.Equal(3, first.DecodedValueCount);
+        Assert.All(first.GooseValues, value => Assert.True(value.IsMappedToScl));
+        Assert.Equal(GooseSequenceStatus.First, first.GooseSequenceStatus);
+        Assert.Equal(GooseSequenceStatus.Retransmission, retransmission.GooseSequenceStatus);
+        Assert.Equal(0, retransmission.ChangedValueCount);
+
+        var summary = Assert.Single(monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.Goose));
+        Assert.Equal(2, summary.PacketCount);
+        Assert.Equal(1, summary.GooseRetransmissionCount);
+        Assert.Equal(0, summary.GooseSequenceGapCount);
+        Assert.Equal(0, summary.GooseTimeoutCount);
+    }
+
+    [Fact]
+    public void Monitor_Tracks_Goose_StateChange_With_Value_Change()
+    {
+        var document = SclParserTests.LoadMinimalStation();
+        var source = MacAddress.Parse("02:00:00:00:40:01");
+        var timestamp = new Iec61850UtcTime(DateTimeOffset.UtcNow, Quality: 0);
+        var profile = GoosePublisherProfile.FromScl(document);
+        var monitor = new ProcessBusStreamMonitor(document);
+
+        _ = monitor.Observe(timestamp.Value, profile.BuildEthernetFrame(source, BuildGooseValues(false, timestamp), timestamp, stateNumber: 1, sequenceNumber: 0));
+        var stateChange = monitor.Observe(timestamp.Value.AddMilliseconds(1), profile.BuildEthernetFrame(source, BuildGooseValues(true, timestamp), timestamp, stateNumber: 2, sequenceNumber: 0));
+
+        Assert.Equal(GooseSequenceStatus.StateChange, stateChange.GooseSequenceStatus);
+        Assert.Equal(1, stateChange.ChangedValueCount);
+        Assert.Contains("[0]", stateChange.ChangedSummary);
+        Assert.DoesNotContain(stateChange.Diagnostics, x => x.Contains("without a state-number", StringComparison.OrdinalIgnoreCase));
+
+        var summary = Assert.Single(monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.Goose));
+        Assert.Equal(1, summary.GooseStateChangeCount);
+        Assert.Equal(1, summary.GooseValueChangeCount);
+    }
+
+    [Fact]
+    public void Monitor_Flags_Goose_Value_Change_Without_State_Increment()
+    {
+        var document = SclParserTests.LoadMinimalStation();
+        var source = MacAddress.Parse("02:00:00:00:40:01");
+        var timestamp = new Iec61850UtcTime(DateTimeOffset.UtcNow, Quality: 0);
+        var profile = GoosePublisherProfile.FromScl(document);
+        var monitor = new ProcessBusStreamMonitor(document);
+
+        _ = monitor.Observe(timestamp.Value, profile.BuildEthernetFrame(source, BuildGooseValues(false, timestamp), timestamp, stateNumber: 1, sequenceNumber: 0));
+        var invalid = monitor.Observe(timestamp.Value.AddMilliseconds(1), profile.BuildEthernetFrame(source, BuildGooseValues(true, timestamp), timestamp, stateNumber: 1, sequenceNumber: 1));
+
+        Assert.Equal(GooseSequenceStatus.Retransmission, invalid.GooseSequenceStatus);
+        Assert.Equal(1, invalid.ChangedValueCount);
+        Assert.Contains(invalid.Diagnostics, x => x.Contains("without a state-number increment", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Monitor_Flags_Goose_TimeAllowedToLive_Expiry()
+    {
+        var document = SclParserTests.LoadMinimalStation();
+        var source = MacAddress.Parse("02:00:00:00:40:01");
+        var timestamp = new Iec61850UtcTime(DateTimeOffset.UtcNow, Quality: 0);
+        var profile = GoosePublisherProfile.FromScl(document);
+        var monitor = new ProcessBusStreamMonitor(document);
+        var values = BuildGooseValues(false, timestamp);
+
+        _ = monitor.Observe(timestamp.Value, profile.BuildEthernetFrame(source, values, timestamp, stateNumber: 1, sequenceNumber: 0));
+        var late = monitor.Observe(timestamp.Value.AddMilliseconds(1500), profile.BuildEthernetFrame(source, values, timestamp, stateNumber: 1, sequenceNumber: 1));
+
+        Assert.Contains(late.Diagnostics, x => x.Contains("supervision expired", StringComparison.OrdinalIgnoreCase));
+
+        var summary = Assert.Single(monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.Goose));
+        Assert.Equal(1, summary.GooseTimeoutCount);
+        Assert.True(summary.MaxArrivalGapMilliseconds >= 1500);
+    }
+
+    private static IReadOnlyList<MmsDataValue> BuildGooseValues(bool state, Iec61850UtcTime timestamp)
+        =>
+        [
+            MmsDataValue.Boolean(state),
+            MmsDataValue.BitString(0, [0x00, 0x00]),
+            MmsDataValue.UtcTime(timestamp)
+        ];
 }

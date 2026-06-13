@@ -24,6 +24,22 @@ public sealed class ProcessBusStreamSummary
     public IReadOnlyList<string> LastDiagnostics { get; private set; } = Array.Empty<string>();
     public uint? LastStateNumber { get; private set; }
     public uint? LastSequenceNumber { get; private set; }
+    public uint? LastTimeAllowedToLiveMilliseconds { get; private set; }
+    public double? LastArrivalGapMilliseconds { get; private set; }
+    public double? MaxArrivalGapMilliseconds { get; private set; }
+    public DateTimeOffset? LastGooseTimestamp => _lastGooseTimestamp;
+    public IReadOnlyList<string> LastGooseValueDisplays => _lastGooseValueDisplays;
+    public int GooseStateChangeCount { get; private set; }
+    public int GooseRetransmissionCount { get; private set; }
+    public int GooseSequenceGapCount { get; private set; }
+    public int GooseDuplicateCount { get; private set; }
+    public int GooseSequenceRegressionCount { get; private set; }
+    public int GooseStateRegressionCount { get; private set; }
+    public int GooseTimeoutCount { get; private set; }
+    public int GooseValueChangeCount { get; private set; }
+    public string LastChangedSummary { get; private set; } = string.Empty;
+    private DateTimeOffset? _lastGooseTimestamp;
+    private IReadOnlyList<string> _lastGooseValueDisplays = Array.Empty<string>();
 
     public ProcessBusSequenceStatus RecordSample(
         ushort? sampleCount,
@@ -89,15 +105,123 @@ public sealed class ProcessBusStreamSummary
         return status;
     }
 
-    public void RecordGoose(uint? stateNumber, uint? sequenceNumber)
+    public GooseSequenceStatus RecordGoose(
+        DateTimeOffset timestamp,
+        uint? stateNumber,
+        uint? sequenceNumber,
+        uint? timeAllowedToLiveMilliseconds,
+        IReadOnlyList<string> valueDisplays,
+        IReadOnlyList<string> diagnostics,
+        out IReadOnlyList<bool> changedIndexes,
+        out string changedSummary)
     {
         PacketCount++;
+        LastDiagnostics = diagnostics.ToArray();
+
+        var mutableChangedIndexes = new bool[valueDisplays.Count];
+        changedSummary = string.Empty;
+
+        if (_lastGooseValueDisplays.Count > 0)
+        {
+            var changed = new List<string>();
+            for (var i = 0; i < valueDisplays.Count; i++)
+            {
+                var previous = i < _lastGooseValueDisplays.Count ? _lastGooseValueDisplays[i] : string.Empty;
+                if (!string.Equals(previous, valueDisplays[i], StringComparison.Ordinal))
+                {
+                    mutableChangedIndexes[i] = true;
+                    changed.Add($"[{i}] {previous} -> {valueDisplays[i]}");
+                }
+            }
+
+            GooseValueChangeCount += changed.Count;
+            changedSummary = string.Join("; ", changed.Take(4));
+            if (changed.Count > 4)
+                changedSummary += $"; +{changed.Count - 4} more";
+        }
+
+        changedIndexes = mutableChangedIndexes;
+        LastChangedSummary = changedSummary;
+
+        if (_lastGooseTimestamp.HasValue)
+        {
+            var gap = (timestamp - _lastGooseTimestamp.Value).TotalMilliseconds;
+            LastArrivalGapMilliseconds = gap;
+            MaxArrivalGapMilliseconds = MaxArrivalGapMilliseconds.HasValue
+                ? Math.Max(MaxArrivalGapMilliseconds.Value, gap)
+                : gap;
+
+            if (LastTimeAllowedToLiveMilliseconds is > 0 && gap > LastTimeAllowedToLiveMilliseconds.Value)
+                GooseTimeoutCount++;
+        }
+
+        var status = ClassifyGoose(stateNumber, sequenceNumber);
+        switch (status)
+        {
+            case GooseSequenceStatus.StateChange:
+                GooseStateChangeCount++;
+                break;
+            case GooseSequenceStatus.Retransmission:
+                GooseRetransmissionCount++;
+                break;
+            case GooseSequenceStatus.Duplicate:
+                GooseDuplicateCount++;
+                break;
+            case GooseSequenceStatus.SequenceJump:
+                GooseSequenceGapCount++;
+                break;
+            case GooseSequenceStatus.SequenceRegression:
+                GooseSequenceRegressionCount++;
+                break;
+            case GooseSequenceStatus.StateRegression:
+                GooseStateRegressionCount++;
+                break;
+        }
+
+        LastTimeAllowedToLiveMilliseconds = timeAllowedToLiveMilliseconds;
+        _lastGooseTimestamp = timestamp;
 
         if (stateNumber.HasValue)
             LastStateNumber = stateNumber;
 
         if (sequenceNumber.HasValue)
             LastSequenceNumber = sequenceNumber;
+
+        _lastGooseValueDisplays = valueDisplays.ToArray();
+        return status;
+    }
+
+    public void SetLastDiagnostics(IReadOnlyList<string> diagnostics)
+        => LastDiagnostics = diagnostics.ToArray();
+
+    private GooseSequenceStatus ClassifyGoose(uint? stateNumber, uint? sequenceNumber)
+    {
+        if (!stateNumber.HasValue || !sequenceNumber.HasValue)
+            return GooseSequenceStatus.Unknown;
+
+        if (!LastStateNumber.HasValue || !LastSequenceNumber.HasValue)
+            return GooseSequenceStatus.First;
+
+        var previousState = LastStateNumber.Value;
+        var previousSequence = LastSequenceNumber.Value;
+        var state = stateNumber.Value;
+        var sequence = sequenceNumber.Value;
+
+        if (state < previousState)
+            return GooseSequenceStatus.StateRegression;
+
+        if (state > previousState)
+            return GooseSequenceStatus.StateChange;
+
+        if (sequence == previousSequence)
+            return GooseSequenceStatus.Duplicate;
+
+        if (sequence < previousSequence)
+            return GooseSequenceStatus.SequenceRegression;
+
+        return sequence == previousSequence + 1
+            ? GooseSequenceStatus.Retransmission
+            : GooseSequenceStatus.SequenceJump;
     }
 
     private static ushort NextSampleCount(ushort current, ushort? sampleCounterWrap)

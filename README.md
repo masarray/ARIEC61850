@@ -35,7 +35,7 @@ Implemented areas include:
 - TCP/TPKT/COTP/ACSE/MMS association foundation.
 - MMS model discovery, FC-aware path resolution, smart read, dataset directory inspection.
 - RCB discovery, report planning, guarded report enable, GI trigger, receive loop, diagnostics, and evidence export.
-- GOOSE frame builder/parser and SCL-backed publishing helpers.
+- GOOSE frame builder/parser, SCL-backed publisher profiles, publisher session, PCAP sniffer diagnostics, `stNum`/`sqNum`/TAL supervision, and changed-value summaries.
 - Sampled Values frame builder/parser, payload generation, payload decode, and WPF publisher workspace.
 - PCAP writer/reader/inspector and stream playback helpers.
 - Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
@@ -46,7 +46,7 @@ Experimental or future areas:
 - full buffered report recovery and replay workflows;
 - MMS file/log/setting-group/control model services;
 - MMS server / IED simulator;
-- live raw GOOSE/SV subscriber loops;
+- live raw GOOSE/SV subscriber CLI loops on top of the Npcap receive path;
 - IEC 62351 security profile;
 - formal third-party conformance testing.
 
@@ -61,9 +61,9 @@ Experimental or future areas:
 ## Build
 
 ```powershell
-dotnet restore .\ARIEC61850.sln
-dotnet build .\ARIEC61850.sln -c Release
-dotnet test .\ARIEC61850.sln -c Release --no-build
+dotnet restore .\ARIEC61850.slnx
+dotnet build .\ARIEC61850.slnx -c Release
+dotnet test .\ARIEC61850.slnx -c Release --no-build
 ```
 
 Build the WPF publisher directly:
@@ -85,6 +85,7 @@ Generate and inspect a demo PCAP:
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
 dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd
+dotnet run --project .\apps\AR.Iec61850.Cli -- stream-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd --delay-ms 0 --limit 20
 ```
 
 Discover a live MMS server or IED:
@@ -104,6 +105,14 @@ Run a guarded report monitor:
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.0.2.10 --port 102 --timeout-ms 120000 --rcb IED1LD0/LLN0.RP.rpt01 --duration-sec 60 --evidence .\.artifacts\out\report-session01 --yes
 ```
+
+Run a bounded GOOSE publisher dry run from SCL:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 1 --stream-index 1 --frames 4 --dry-run
+```
+
+Live GOOSE publishing requires `--yes` and must only be used on an isolated lab adapter.
 
 ## Windows single-file WPF package
 
@@ -133,6 +142,7 @@ Do not commit `.artifacts/`, `out/`, `evidence/`, captures, DLL/EXE/PDB files, o
 - [Quick Start](docs/QUICK_START.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [MMS Reporting Workflow](docs/REPORTING_WORKFLOW.md)
+- [GOOSE Engine Audit](docs/GOOSE_ENGINE_AUDIT.md)
 - [Release Packaging](docs/RELEASE_PACKAGING.md)
 - [Validation](docs/VALIDATION.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)

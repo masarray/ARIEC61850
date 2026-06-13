@@ -111,7 +111,7 @@ public sealed class LiveIedSclExporterTests
             [
                 new MmsFcResolvedPoint
                 {
-                    Domain = "IED1LD0",
+                    Domain = "IED1PROT",
                     LogicalNode = "LLN0",
                     FunctionalConstraint = "BR",
                     DataObjectPath = "brcbA01.RptEna",
@@ -119,7 +119,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "IED1LD0",
+                    Domain = "IED1PROT",
                     LogicalNode = "A50PTOC1",
                     FunctionalConstraint = "ST",
                     DataObjectPath = "Op.stVal",
@@ -129,35 +129,35 @@ public sealed class LiveIedSclExporterTests
         };
         discovery.ReportInventory.DataSets.Add(new MmsDataSetCandidate
         {
-            Domain = "IED1LD0",
+            Domain = "IED1PROT",
             LogicalNode = "LLN0",
             Name = "DataSet",
-            Reference = "IED1LD0/LLN0.DataSet"
+            Reference = "IED1PROT/LLN0.DataSet"
         });
         discovery.ReportInventory.ReportControls.Add(new MmsReportControlCandidate
         {
-            Domain = "IED1LD0",
+            Domain = "IED1PROT",
             LogicalNode = "LLN0",
             Name = "brcbA01",
-            Reference = "IED1LD0/LLN0.BR.brcbA01",
+            Reference = "IED1PROT/LLN0.BR.brcbA01",
             Buffered = true,
-            DataSetReference = "IED1LD0/LLN0.DataSet",
-            ReportId = "IED1LD0/LLN0$BR$brcbA01",
+            DataSetReference = "IED1PROT/LLN0.DataSet",
+            ReportId = "IED1PROT/LLN0$BR$brcbA01",
             ConfRev = "1"
         });
         var dataSet = new MmsDataSetDirectoryResult
         {
             IsSuccess = true,
-            DataSetReference = "IED1LD0/LLN0.DataSet",
+            DataSetReference = "IED1PROT/LLN0.DataSet",
             Members =
             [
                 new MmsDataSetDirectoryMember
                 {
-                    Domain = "IED1LD0",
+                    Domain = "IED1PROT",
                     LogicalNode = "A50PTOC1",
                     FunctionalConstraint = "ST",
                     DataObjectPath = "Op",
-                    UserReference = "IED1LD0/A50PTOC1.Op",
+                    UserReference = "IED1PROT/A50PTOC1.Op",
                     MmsItemName = "A50PTOC1$ST$Op"
                 }
             ]
@@ -177,8 +177,8 @@ public sealed class LiveIedSclExporterTests
 
         Assert.Equal("PROT", lDevice.Attribute("inst")?.Value);
         Assert.Equal("PROT", fcda.Attribute("ldInst")?.Value);
-        Assert.Equal("IED1LD0/LLN0$DataSet", parsed.DataSets[0].Reference);
-        Assert.Equal("IED1LD0/LLN0$BR$brcbA01", parsed.ReportControls[0].ControlBlockReference);
+        Assert.Equal("IED1PROT/LLN0$DataSet", parsed.DataSets[0].Reference);
+        Assert.Equal("IED1PROT/LLN0$BR$brcbA01", parsed.ReportControls[0].ControlBlockReference);
     }
 
     [Fact]

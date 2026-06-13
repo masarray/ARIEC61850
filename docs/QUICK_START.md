@@ -10,9 +10,9 @@
 ## 2. Build and test
 
 ```powershell
-dotnet restore .\ARIEC61850.sln
-dotnet build .\ARIEC61850.sln -c Release
-dotnet test .\ARIEC61850.sln -c Release --no-build
+dotnet restore .\ARIEC61850.slnx
+dotnet build .\ARIEC61850.slnx -c Release
+dotnet test .\ARIEC61850.slnx -c Release --no-build
 ```
 
 ## 3. Run CLI examples
@@ -28,6 +28,7 @@ Generate a local PCAP and inspect it:
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
 dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd
+dotnet run --project .\apps\AR.Iec61850.Cli -- stream-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd --delay-ms 0 --limit 20
 ```
 
 List available adapters:
@@ -40,6 +41,12 @@ Run an SV publish dry run:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- publish-sv-live ".\samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd" --adapter 1 --stream-index 1 --frames 4000 --dry-run
+```
+
+Run a GOOSE publish dry run:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 1 --stream-index 1 --frames 4 --dry-run
 ```
 
 ## 4. Use MMS discovery and reporting commands

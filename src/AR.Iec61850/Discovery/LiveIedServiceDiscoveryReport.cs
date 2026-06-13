@@ -36,12 +36,15 @@ public static class LiveIedServiceDiscoveryReportBuilder
         ArgumentNullException.ThrowIfNull(document);
         var fileEvidence = evidence?.FileService ?? new LiveIedFileServiceEvidence();
         var settingReadbacks = evidence?.SettingGroupReadbacks ?? Array.Empty<LiveIedSettingGroupReadbackEvidence>();
+        var settingMap = evidence?.SettingGroupMap ?? new LiveIedSettingGroupMapDocument();
         var fileStatus = !fileEvidence.Attempted ? "Not attempted" : fileEvidence.IsSuccess ? "Discovered" : "Attempted, failed or unsupported";
         var fileCount = fileEvidence.Entries.Count;
         var fileMessage = !fileEvidence.Attempted ? "FileDirectory was not attempted in this run." : fileEvidence.IsSuccess ? $"FileDirectory returned {fileCount} entries from {fileEvidence.PageCount} page(s)." : fileEvidence.Message;
         var sgSuccessful = settingReadbacks.Count(x => x.HasAnySuccess);
-        var sgStatus = sgSuccessful > 0 ? "Partially read" : document.Coverage.SettingGroupControlCount > 0 ? "Inventory" : "Not exposed or not discovered";
-        var sgEvidence = sgSuccessful > 0 ? $"{sgSuccessful}/{settingReadbacks.Count} SGCB inventory item(s) have at least one readable SGCB attribute." : "SG/SE inventory is available when exposed in the MMS directory.";
+        var sgCoreComplete = settingReadbacks.Count(IsSettingGroupCoreReadbackComplete);
+        var sgStatus = BuildSettingGroupStatus(document, settingReadbacks.Count, sgSuccessful, sgCoreComplete, settingMap.EntryCount);
+        var sgEvidence = BuildSettingGroupEvidence(document, settingReadbacks.Count, sgSuccessful, sgCoreComplete, settingMap);
+        var sgGap = BuildSettingGroupGap(sgCoreComplete, settingMap);
 
         var services = new List<LiveIedServiceCoverageItem>
         {
@@ -51,7 +54,7 @@ public static class LiveIedServiceDiscoveryReportBuilder
             Item("Reports / RCB", document.Coverage.ReportControlCount > 0 ? "Discovered" : "Not exposed or not discovered", document.Coverage.ReportControlCount, $"BRCB={document.Coverage.BufferedReportControlCount}, URCB={document.Coverage.UnbufferedReportControlCount}", "Read all RCB attributes and normalize static SCL state vs runtime state."),
             Item("GOOSE control blocks", document.Coverage.GooseControlBlockCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.GooseControlBlockCount, "Current implementation detects GSEControl attribute inventory when present.", "Implement GoCB value reader: GoEna, GoID, DatSet, ConfRev, NdsCom, MinTime, MaxTime, DstAddress."),
             Item("Sampled Value control blocks", document.Coverage.SampledValueControlBlockCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.SampledValueControlBlockCount, "Current implementation detects MS/US/SVCB attribute inventory when present.", "Implement SVCB value reader: SvID/smvID, DatSet, ConfRev, SmpRate, SmpMod, NofASDU, DstAddress."),
-            Item("Setting groups", sgStatus, Math.Max(document.Coverage.SettingGroupControlCount, sgSuccessful), sgEvidence, sgSuccessful > 0 ? "Expand SG/SE setting value grouping and add edition-aware setting semantics." : "Implement SGCB services/readback: NumOfSG, ActSG, EditSG, CnfEdit plus SG/SE setting attributes."),
+            Item("Setting groups", sgStatus, Math.Max(Math.Max(document.Coverage.SettingGroupControlCount, sgSuccessful), settingMap.EntryCount), sgEvidence, sgGap),
             Item("Logs", document.Coverage.LogControlCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.LogControlCount, "LogControl inventory is available when LG attributes are exposed.", "Implement log directory/query service."),
             Item("File service", fileStatus, fileCount, fileMessage, fileEvidence.IsSuccess ? "Add FileOpen/FileRead download support and recursive safe directory walking." : "Implement/verify FileDirectory support on this IED and add file download evidence."),
             Item("Variable specifications", document.Coverage.VariableTypeReadAttemptCount > 0 ? (document.Coverage.VariableTypeReadSuccessCount > 0 ? "Partially read" : "Attempted, failed or unsupported") : "Not attempted", document.Coverage.VariableTypeReadSuccessCount, $"attempted={document.Coverage.VariableTypeReadAttemptCount}, ok={document.Coverage.VariableTypeReadSuccessCount}, failed={document.Coverage.VariableTypeReadFailureCount}", "Use safe, leaf-only, dataset-first type reads to avoid IED peer-close behavior."),
@@ -111,6 +114,71 @@ public static class LiveIedServiceDiscoveryReportBuilder
         sb.AppendLine();
         sb.AppendLine("This report separates what ARIEC61850 already discovers online from what still needs a dedicated MMS service implementation. It is intentionally stricter than the SCL exporter: a service is not marked complete merely because a placeholder or attribute name was seen in the live model.");
         return sb.ToString();
+    }
+
+
+    private static bool IsSettingGroupCoreReadbackComplete(LiveIedSettingGroupReadbackEvidence readback)
+    {
+        var required = new[] { "NumOfSG", "ActSG", "EditSG", "CnfEdit", "LActTm" };
+        return required.All(name => readback.Attributes.Any(attribute =>
+            attribute.IsSuccess && string.Equals(attribute.Name, name, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static string BuildSettingGroupStatus(
+        LiveIedModelDiscoveryDocument document,
+        int readbackCount,
+        int successfulReadbacks,
+        int coreCompleteReadbacks,
+        int mapEntries)
+    {
+        if (coreCompleteReadbacks > 0 && mapEntries > 0)
+            return "Core readback complete + SG/SE map";
+
+        if (coreCompleteReadbacks > 0)
+            return "Core readback complete";
+
+        if (successfulReadbacks > 0)
+            return "Partially read";
+
+        if (mapEntries > 0)
+            return "SG/SE map";
+
+        return document.Coverage.SettingGroupControlCount > 0 || readbackCount > 0 ? "Inventory" : "Not exposed or not discovered";
+    }
+
+    private static string BuildSettingGroupEvidence(
+        LiveIedModelDiscoveryDocument document,
+        int readbackCount,
+        int successfulReadbacks,
+        int coreCompleteReadbacks,
+        LiveIedSettingGroupMapDocument settingMap)
+    {
+        if (coreCompleteReadbacks > 0 || settingMap.EntryCount > 0)
+        {
+            var readText = settingMap.ReadAttemptCount > 0
+                ? $", setting value reads={settingMap.ReadSuccessCount}/{settingMap.ReadAttemptCount}"
+                : ", setting value reads=not attempted";
+            return $"SGCB core readback complete={coreCompleteReadbacks}/{Math.Max(readbackCount, document.Coverage.SettingGroupControlCount)}; SG/SE map entries={settingMap.EntryCount}{readText}.";
+        }
+
+        if (successfulReadbacks > 0)
+            return $"{successfulReadbacks}/{readbackCount} SGCB inventory item(s) have at least one readable SGCB attribute.";
+
+        return "SG/SE inventory is available when exposed in the MMS directory.";
+    }
+
+    private static string BuildSettingGroupGap(int coreCompleteReadbacks, LiveIedSettingGroupMapDocument settingMap)
+    {
+        if (coreCompleteReadbacks > 0 && settingMap.EntryCount > 0 && settingMap.ReadAttemptCount > 0)
+            return "Add edition-aware setting semantics and safe setting write/confirm workflow evidence later; no write is performed by service discovery.";
+
+        if (coreCompleteReadbacks > 0 && settingMap.EntryCount > 0)
+            return "Optionally enable --read-setting-values true for safe SG/SE value readback evidence; add edition-aware setting semantics later.";
+
+        if (coreCompleteReadbacks > 0)
+            return "Map SG/SE setting attributes and add setting value readback evidence.";
+
+        return "Implement SGCB services/readback: NumOfSG, ActSG, EditSG, CnfEdit plus SG/SE setting attributes.";
     }
 
     private static LiveIedServiceCoverageItem Item(string name, string status, int count, string evidence, string gap)

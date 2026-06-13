@@ -486,6 +486,9 @@ internal static class Cli
         var fileDirectory = options.Get("file-directory", string.Empty);
         var maxFilePages = options.GetInt("max-file-pages", 8);
         var readSettingGroups = options.GetBool("read-setting-groups", true);
+        var readSettingValues = options.GetBool("read-setting-values", false);
+        var maxSettingReads = options.GetInt("max-setting-reads", 256);
+        var settingReadDelayMs = options.GetInt("setting-read-delay-ms", 10);
         var iedName = options.Get("ied-name", string.Empty);
         var apName = options.Get("ap-name", "AP1");
         var output = options.Get("output", Path.Combine("out", "service-discovery"));
@@ -567,10 +570,27 @@ internal static class Cli
                 Console.WriteLine($"  SG {(readback.HasAnySuccess ? "OK" : "INFO")} {readback.Reference}: {readback.Attributes.Count(x => x.IsSuccess)}/{readback.Attributes.Count} readable");
         }
 
+        var settingGroupMap = await BuildSettingGroupMapAsync(
+            session,
+            document,
+            settingGroupReadbacks,
+            readSettingValues,
+            maxSettingReads,
+            settingReadDelayMs,
+            cts.Token).ConfigureAwait(false);
+        if (settingGroupMap.EntryCount > 0)
+        {
+            var readText = settingGroupMap.ReadAttemptCount > 0
+                ? $", setting value reads={settingGroupMap.ReadSuccessCount}/{settingGroupMap.ReadAttemptCount}"
+                : ", setting value reads=not attempted";
+            Console.WriteLine($"Setting Group map: entries={settingGroupMap.EntryCount}{readText}.");
+        }
+
         var onlineEvidence = new LiveIedOnlineServiceEvidence
         {
             FileService = fileEvidence,
-            SettingGroupReadbacks = settingGroupReadbacks
+            SettingGroupReadbacks = settingGroupReadbacks,
+            SettingGroupMap = settingGroupMap
         };
 
         var files = new List<string>();
@@ -636,8 +656,222 @@ internal static class Cli
         File.WriteAllText(settingPath, JsonSerializer.Serialize(evidence.SettingGroupReadbacks, jsonOptions));
         files.Add(settingPath);
 
+        var settingMapPath = Path.Combine(outputDirectory, "setting-group-map.json");
+        File.WriteAllText(settingMapPath, JsonSerializer.Serialize(evidence.SettingGroupMap, jsonOptions));
+        files.Add(settingMapPath);
+
+        var settingMapMarkdownPath = Path.Combine(outputDirectory, "setting-group-map.md");
+        File.WriteAllText(settingMapMarkdownPath, BuildSettingGroupMapMarkdown(evidence.SettingGroupMap));
+        files.Add(settingMapMarkdownPath);
+
         return files;
     }
+
+
+    private static async Task<LiveIedSettingGroupMapDocument> BuildSettingGroupMapAsync(
+        MmsClientSession session,
+        LiveIedModelDiscoveryDocument document,
+        IReadOnlyList<LiveIedSettingGroupReadbackEvidence> readbacks,
+        bool readValues,
+        int maxReads,
+        int readDelayMs,
+        CancellationToken cancellationToken)
+    {
+        var entries = new List<LiveIedSettingGroupMapEntry>();
+        var limit = maxReads <= 0 ? int.MaxValue : maxReads;
+        var attempted = 0;
+        var success = 0;
+        var failure = 0;
+
+        foreach (var entry in EnumerateSettingGroupMapEntries(document))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var mapped = entry;
+            if (readValues && attempted < limit && session.IsMmsInitiated)
+            {
+                var reference = new MmsObjectReference(entry.Domain, entry.MmsItemName, entry.FunctionalConstraint);
+                var read = await session.ReadSingleVariableAsync(reference, cancellationToken).ConfigureAwait(false);
+                attempted++;
+                if (read.IsSuccess)
+                    success++;
+                else
+                    failure++;
+
+                mapped = CopySettingGroupMapEntry(entry, read.IsSuccess, read.IsSuccess ? MmsDataValueRenderer.ToCompactString(read.Value, reference.ToString()) : string.Empty, read.Message);
+
+                if (readDelayMs > 0 && attempted < limit)
+                    await Task.Delay(readDelayMs, cancellationToken).ConfigureAwait(false);
+            }
+
+            entries.Add(mapped);
+        }
+
+        var coreComplete = readbacks.Count(IsSettingGroupCoreReadbackCompleteForMap);
+        var numOfSg = TryGetFirstIntReadback(readbacks, "NumOfSG");
+        var actSg = TryGetFirstIntReadback(readbacks, "ActSG");
+        var editSg = TryGetFirstIntReadback(readbacks, "EditSG");
+        var cnfEdit = TryGetFirstBoolReadback(readbacks, "CnfEdit");
+        var summary = $"SGCB core complete={coreComplete}/{Math.Max(readbacks.Count, document.Coverage.SettingGroupControlCount)}, SG/SE entries={entries.Count}, reads={success}/{attempted}.";
+
+        return new LiveIedSettingGroupMapDocument
+        {
+            Summary = summary,
+            SettingGroupControlCount = document.Coverage.SettingGroupControlCount,
+            CoreReadbackCompleteCount = coreComplete,
+            NumberOfSettingGroups = numOfSg ?? 0,
+            ActiveSettingGroup = actSg ?? 0,
+            EditSettingGroup = editSg ?? 0,
+            ConfirmEdit = cnfEdit,
+            EntryCount = entries.Count,
+            ReadAttemptCount = attempted,
+            ReadSuccessCount = success,
+            ReadFailureCount = failure,
+            Entries = entries
+                .OrderBy(x => x.Domain, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.LogicalNode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.DataObject, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.AttributePath, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+        };
+    }
+
+    private static IEnumerable<LiveIedSettingGroupMapEntry> EnumerateSettingGroupMapEntries(LiveIedModelDiscoveryDocument document)
+    {
+        foreach (var ld in document.LogicalDevices)
+        {
+            foreach (var ln in ld.LogicalNodes)
+            {
+                foreach (var dataObject in ln.DataObjects)
+                {
+                    foreach (var attribute in dataObject.Attributes.Where(IsSettingGroupAttribute))
+                    {
+                        var category = string.Equals(attribute.FunctionalConstraint, "SE", StringComparison.OrdinalIgnoreCase)
+                            ? "EditableSettingValue"
+                            : "SettingGroupValue";
+                        yield return new LiveIedSettingGroupMapEntry
+                        {
+                            Reference = attribute.ObjectReference,
+                            Domain = ld.MmsDomain,
+                            LogicalNode = ln.Name,
+                            LogicalNodeClass = ln.LnClass,
+                            DataObject = dataObject.Name,
+                            AttributePath = attribute.AttributePath,
+                            FunctionalConstraint = attribute.FunctionalConstraint,
+                            Category = category,
+                            MmsReference = attribute.MmsReference,
+                            MmsItemName = attribute.MmsItemName,
+                            InferredCdc = dataObject.InferredCdc,
+                            CdcConfidence = dataObject.CdcConfidence,
+                            SclBType = attribute.SclBType,
+                            TypeSource = attribute.TypeSource,
+                            Message = "Setting value read not attempted."
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    private static bool IsSettingGroupAttribute(LiveIedDataAttributeModel attribute)
+        => string.Equals(attribute.FunctionalConstraint, "SG", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(attribute.FunctionalConstraint, "SE", StringComparison.OrdinalIgnoreCase);
+
+    private static LiveIedSettingGroupMapEntry CopySettingGroupMapEntry(
+        LiveIedSettingGroupMapEntry source,
+        bool isSuccess,
+        string value,
+        string message)
+        => new()
+        {
+            Reference = source.Reference,
+            Domain = source.Domain,
+            LogicalNode = source.LogicalNode,
+            LogicalNodeClass = source.LogicalNodeClass,
+            DataObject = source.DataObject,
+            AttributePath = source.AttributePath,
+            FunctionalConstraint = source.FunctionalConstraint,
+            Category = source.Category,
+            MmsReference = source.MmsReference,
+            MmsItemName = source.MmsItemName,
+            InferredCdc = source.InferredCdc,
+            CdcConfidence = source.CdcConfidence,
+            SclBType = source.SclBType,
+            TypeSource = source.TypeSource,
+            ReadAttempted = true,
+            IsReadSuccess = isSuccess,
+            Value = value,
+            Message = message
+        };
+
+    private static bool IsSettingGroupCoreReadbackCompleteForMap(LiveIedSettingGroupReadbackEvidence readback)
+    {
+        var required = new[] { "NumOfSG", "ActSG", "EditSG", "CnfEdit", "LActTm" };
+        return required.All(name => readback.Attributes.Any(attribute =>
+            attribute.IsSuccess && string.Equals(attribute.Name, name, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static int? TryGetFirstIntReadback(IReadOnlyList<LiveIedSettingGroupReadbackEvidence> readbacks, string attributeName)
+    {
+        foreach (var value in readbacks
+            .SelectMany(x => x.Attributes)
+            .Where(x => x.IsSuccess && string.Equals(x.Name, attributeName, StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.Value))
+        {
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+                return parsed;
+        }
+
+        return null;
+    }
+
+    private static bool? TryGetFirstBoolReadback(IReadOnlyList<LiveIedSettingGroupReadbackEvidence> readbacks, string attributeName)
+    {
+        foreach (var value in readbacks
+            .SelectMany(x => x.Attributes)
+            .Where(x => x.IsSuccess && string.Equals(x.Name, attributeName, StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.Value))
+        {
+            if (bool.TryParse(value, out var parsed))
+                return parsed;
+        }
+
+        return null;
+    }
+
+    private static string BuildSettingGroupMapMarkdown(LiveIedSettingGroupMapDocument map)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("# IEC 61850 Setting Group Map");
+        sb.AppendLine();
+        sb.AppendLine($"- Generated: {map.GeneratedAtUtc:yyyy-MM-dd HH:mm:ss.fff} UTC");
+        sb.AppendLine($"- Summary: {EscapeMarkdown(map.Summary)}");
+        sb.AppendLine($"- NumOfSG: {map.NumberOfSettingGroups}");
+        sb.AppendLine($"- ActSG: {map.ActiveSettingGroup}");
+        sb.AppendLine($"- EditSG: {map.EditSettingGroup}");
+        sb.AppendLine($"- CnfEdit: {(map.ConfirmEdit.HasValue ? (map.ConfirmEdit.Value ? "true" : "false") : "-")}");
+        sb.AppendLine($"- Entries: {map.EntryCount}");
+        sb.AppendLine($"- Setting value reads: {map.ReadSuccessCount}/{map.ReadAttemptCount}");
+        sb.AppendLine();
+        sb.AppendLine("| Reference | FC | CDC | bType | Read | Value |");
+        sb.AppendLine("| --- | --- | --- | --- | --- | --- |");
+        foreach (var entry in map.Entries.Take(200))
+        {
+            var read = !entry.ReadAttempted ? "not attempted" : entry.IsReadSuccess ? "OK" : "FAIL";
+            sb.AppendLine($"| {EscapeMarkdown(entry.Reference)} | {EscapeMarkdown(entry.FunctionalConstraint)} | {EscapeMarkdown(entry.InferredCdc)} | {EscapeMarkdown(entry.SclBType)} | {read} | {EscapeMarkdown(entry.Value)} |");
+        }
+
+        if (map.Entries.Count > 200)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"_Only the first 200 setting entries are shown. Full evidence is available in `setting-group-map.json`._");
+        }
+
+        return sb.ToString();
+    }
+
+    private static string EscapeMarkdown(string value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value.Replace("|", "\\|", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
 
     private static IEnumerable<MmsObjectReference> ApplyTypeReadStrategy(IEnumerable<MmsObjectReference> candidates, string strategy)
     {
@@ -3581,7 +3815,7 @@ internal static class Cli
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile iedscout-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output out/scl/live-ied.iedscout-connection.iid] [--ld-name-mode auto|keep] [--output out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
-        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-types false] [--type-read-strategy safe] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
+        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-strategy safe] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
         Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");
@@ -3607,7 +3841,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.168.1.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.168.1.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output out/ied-model-discovery");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.168.1.10 --ied-name OCR7SR12 --scl-export-profile iedscout-connection --ld-name-mode auto --output out/scl/OCR7SR12.generated.iid");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.168.1.10 --ied-name OCR7SR12 --read-files true --read-setting-groups true --read-types false --output out/service-discovery/OCR7SR12");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.168.1.10 --ied-name OCR7SR12 --read-files true --read-setting-groups true --read-setting-values false --read-types false --output out/service-discovery/OCR7SR12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-find 192.168.1.10 XCBR --fc ST --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-read-smart 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
@@ -3664,12 +3898,44 @@ internal sealed class CliOptions
         for (var i = 0; i < args.Length; i++)
         {
             var arg = args[i];
+            if (string.IsNullOrWhiteSpace(arg))
+                continue;
+
+            // Be tolerant of an extra command separator. This can happen when commands are
+            // copied from dotnet-run examples or when a shell wrapper forwards the literal
+            // separator into the application argument list. Treat it as a separator/no-op
+            // instead of failing with an unhelpful "Option name cannot be empty" message.
+            if (string.Equals(arg, "--", StringComparison.Ordinal))
+                continue;
+
             if (!arg.StartsWith("--", StringComparison.Ordinal))
                 throw new ArgumentException($"Unexpected argument '{arg}'. Options must start with --.");
 
-            var key = arg[2..];
+            var keyValue = arg[2..];
+            if (string.IsNullOrWhiteSpace(keyValue))
+                throw new ArgumentException("Option name cannot be empty. Use --name value, --name=value, or omit the extra -- separator.");
+
+            string key;
+            string? inlineValue = null;
+            var equalsIndex = keyValue.IndexOf('=');
+            if (equalsIndex >= 0)
+            {
+                key = keyValue[..equalsIndex].Trim();
+                inlineValue = keyValue[(equalsIndex + 1)..];
+            }
+            else
+            {
+                key = keyValue.Trim();
+            }
+
             if (string.IsNullOrWhiteSpace(key))
-                throw new ArgumentException("Option name cannot be empty.");
+                throw new ArgumentException("Option name cannot be empty. Use --name value, --name=value, or omit the extra -- separator.");
+
+            if (inlineValue is not null)
+            {
+                values[key] = inlineValue;
+                continue;
+            }
 
             if (i + 1 >= args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal))
             {

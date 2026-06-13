@@ -880,3 +880,11 @@ This keeps ARIEC61850 moving toward libiec61850-level model discovery without ma
 ## N5.12 — Golden-reference diff and service discovery coverage
 
 This version adds `scl-diff` for comparing ARIEC61850-generated IID/SCL files against a trusted golden export such as IEDScout, and `mms-service-discover` for producing an online IEC 61850 service coverage bundle. The goal is to measure structural gaps explicitly instead of guessing from IEDScout warning messages.
+
+
+### N5.14 — Setting Group Deep Discovery + SG/SE Setting Map
+
+- `mms-service-discover` now emits `setting-group-map.json` and `setting-group-map.md`.
+- SGCB core readback is classified separately from SG/SE setting attribute mapping.
+- Optional `--read-setting-values true` performs bounded, read-only SG/SE setting value reads with `--max-setting-reads` and `--setting-read-delay-ms`.
+- The service coverage report can now distinguish `Core readback complete`, `SG/SE map`, and readback evidence instead of treating setting groups as a single placeholder.

@@ -1,0 +1,228 @@
+{
+  "Checks": [
+    {
+      "Stage": "before",
+      "Target": "OCR7SR12PROT/LLN0.BR.brcbA01.RptEna",
+      "Expected": "false",
+      "Observed": "false",
+      "Severity": 0,
+      "Message": "RptEna readback verified.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "before",
+      "Target": "OCR7SR12PROT/LLN0.BR.brcbA01.DatSet",
+      "Expected": "OCR7SR12PROT/LLN0.DataSet",
+      "Observed": "OCR7SR12PROT/LLN0.DataSet",
+      "Severity": 0,
+      "Message": "RCB.DatSet readback verified.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "before",
+      "Target": "OCR7SR12PROT/LLN0.BR.brcbA01.reservation",
+      "Expected": "not active",
+      "Observed": "Resv=- ResvTms=0",
+      "Severity": 0,
+      "Message": "RCB reservation readback verified as inactive.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "before",
+      "Target": "OCR7SR12PROT/LLN0.DataSet",
+      "Expected": "2 member(s) in requested order",
+      "Observed": "2 member(s)",
+      "Severity": 0,
+      "Message": "DataSet directory readback verified.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "after-enable",
+      "Target": "OCR7SR12PROT/LLN0.BR.brcbA01.RptEna",
+      "Expected": "true",
+      "Observed": "true",
+      "Severity": 0,
+      "Message": "RptEna readback verified.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "after-enable",
+      "Target": "OCR7SR12PROT/LLN0.BR.brcbA01.DatSet",
+      "Expected": "OCR7SR12PROT/LLN0.DataSet",
+      "Observed": "OCR7SR12PROT/LLN0.DataSet",
+      "Severity": 0,
+      "Message": "RCB.DatSet readback verified.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "after-gi",
+      "Target": "InformationReport",
+      "Expected": "at least 1 report",
+      "Observed": "4",
+      "Severity": 0,
+      "Message": "InformationReport received.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "after-cleanup",
+      "Target": "OCR7SR12PROT/LLN0.BR.brcbA01.RptEna",
+      "Expected": "false",
+      "Observed": "false",
+      "Severity": 0,
+      "Message": "RptEna readback verified.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "after-cleanup",
+      "Target": "OCR7SR12PROT/LLN0.BR.brcbA01.DatSet",
+      "Expected": "OCR7SR12PROT/LLN0.DataSet",
+      "Observed": "OCR7SR12PROT/LLN0.DataSet",
+      "Severity": 0,
+      "Message": "RCB.DatSet readback verified.",
+      "IsPass": true,
+      "IsWarning": false,
+      "IsFail": false
+    },
+    {
+      "Stage": "after-cleanup",
+      "Target": "OCR7SR12PROT/LLN0.BR.brcbA01.reservation",
+      "Expected": "not active or lease-only",
+      "Observed": "Resv=- ResvTms=42",
+      "Severity": 1,
+      "Message": "BRCB ResvTms lease timer is still visible while RptEna=false. Treat as relay ownership lease/timeout behavior, not cleanup failure.",
+      "IsPass": false,
+      "IsWarning": true,
+      "IsFail": false
+    }
+  ],
+  "RcbSnapshots": [
+    {
+      "Stage": "before",
+      "CapturedAt": "2026-06-12T21:52:49.7580207+00:00",
+      "IsSuccess": true,
+      "Message": "RCB readback snapshot captured.",
+      "Reference": "OCR7SR12PROT/LLN0.BR.brcbA01",
+      "Mode": "BRCB",
+      "DataSetReference": "OCR7SR12PROT/LLN0.DataSet",
+      "ReportId": "OCR7SR12PROT/LLN0$BR$brcbA01",
+      "ConfRev": "1",
+      "EnabledState": "false",
+      "ReservationState": "",
+      "ReservationTimeSeconds": "0",
+      "BufferTimeMs": "100",
+      "IntegrityPeriodMs": "0",
+      "TriggerOptions": "027C",
+      "OptionalFields": "067B80",
+      "ProbeDiagnostics": [
+        "DatSet item=LLN0$BR$brcbA01$DatSet: OK OCR7SR12PROT/LLN0$DataSet",
+        "RptID item=LLN0$BR$brcbA01$RptID: OK OCR7SR12PROT/LLN0$BR$brcbA01",
+        "ConfRev item=LLN0$BR$brcbA01$ConfRev: OK 1",
+        "IntgPd item=LLN0$BR$brcbA01$IntgPd: OK 0",
+        "RptEna item=LLN0$BR$brcbA01$RptEna: OK false",
+        "BufTm item=LLN0$BR$brcbA01$BufTm: OK 100",
+        "TrgOps item=LLN0$BR$brcbA01$TrgOps: OK bits(7C, unused=2)",
+        "OptFlds item=LLN0$BR$brcbA01$OptFlds: OK bits(7B80, unused=6)",
+        "ResvTms item=LLN0$BR$brcbA01$ResvTms: OK 0"
+      ],
+      "Summary": "before: OCR7SR12PROT/LLN0.BR.brcbA01 RptEna=false DatSet=OCR7SR12PROT/LLN0.DataSet Resv=- ResvTms=0 ConfRev=1"
+    },
+    {
+      "Stage": "after-enable",
+      "CapturedAt": "2026-06-12T21:52:49.7705085+00:00",
+      "IsSuccess": true,
+      "Message": "RCB readback snapshot captured.",
+      "Reference": "OCR7SR12PROT/LLN0.BR.brcbA01",
+      "Mode": "BRCB",
+      "DataSetReference": "OCR7SR12PROT/LLN0.DataSet",
+      "ReportId": "OCR7SR12PROT/LLN0$BR$brcbA01",
+      "ConfRev": "1",
+      "EnabledState": "true",
+      "ReservationState": "",
+      "ReservationTimeSeconds": "42",
+      "BufferTimeMs": "100",
+      "IntegrityPeriodMs": "0",
+      "TriggerOptions": "027C",
+      "OptionalFields": "067B80",
+      "ProbeDiagnostics": [
+        "DatSet item=LLN0$BR$brcbA01$DatSet: OK OCR7SR12PROT/LLN0$DataSet",
+        "RptID item=LLN0$BR$brcbA01$RptID: OK OCR7SR12PROT/LLN0$BR$brcbA01",
+        "ConfRev item=LLN0$BR$brcbA01$ConfRev: OK 1",
+        "IntgPd item=LLN0$BR$brcbA01$IntgPd: OK 0",
+        "RptEna item=LLN0$BR$brcbA01$RptEna: OK true",
+        "BufTm item=LLN0$BR$brcbA01$BufTm: OK 100",
+        "TrgOps item=LLN0$BR$brcbA01$TrgOps: OK bits(7C, unused=2)",
+        "OptFlds item=LLN0$BR$brcbA01$OptFlds: OK bits(7B80, unused=6)",
+        "ResvTms item=LLN0$BR$brcbA01$ResvTms: OK 42"
+      ],
+      "Summary": "after-enable: OCR7SR12PROT/LLN0.BR.brcbA01 RptEna=true DatSet=OCR7SR12PROT/LLN0.DataSet Resv=- ResvTms=42 ConfRev=1"
+    },
+    {
+      "Stage": "after-cleanup",
+      "CapturedAt": "2026-06-12T21:53:49.7886468+00:00",
+      "IsSuccess": true,
+      "Message": "RCB readback snapshot captured.",
+      "Reference": "OCR7SR12PROT/LLN0.BR.brcbA01",
+      "Mode": "BRCB",
+      "DataSetReference": "OCR7SR12PROT/LLN0.DataSet",
+      "ReportId": "OCR7SR12PROT/LLN0$BR$brcbA01",
+      "ConfRev": "1",
+      "EnabledState": "false",
+      "ReservationState": "",
+      "ReservationTimeSeconds": "42",
+      "BufferTimeMs": "100",
+      "IntegrityPeriodMs": "0",
+      "TriggerOptions": "027C",
+      "OptionalFields": "067B80",
+      "ProbeDiagnostics": [
+        "DatSet item=LLN0$BR$brcbA01$DatSet: OK OCR7SR12PROT/LLN0$DataSet",
+        "RptID item=LLN0$BR$brcbA01$RptID: OK OCR7SR12PROT/LLN0$BR$brcbA01",
+        "ConfRev item=LLN0$BR$brcbA01$ConfRev: OK 1",
+        "IntgPd item=LLN0$BR$brcbA01$IntgPd: OK 0",
+        "RptEna item=LLN0$BR$brcbA01$RptEna: OK false",
+        "BufTm item=LLN0$BR$brcbA01$BufTm: OK 100",
+        "TrgOps item=LLN0$BR$brcbA01$TrgOps: OK bits(7C, unused=2)",
+        "OptFlds item=LLN0$BR$brcbA01$OptFlds: OK bits(7B80, unused=6)",
+        "ResvTms item=LLN0$BR$brcbA01$ResvTms: OK 42"
+      ],
+      "Summary": "after-cleanup: OCR7SR12PROT/LLN0.BR.brcbA01 RptEna=false DatSet=OCR7SR12PROT/LLN0.DataSet Resv=- ResvTms=42 ConfRev=1"
+    }
+  ],
+  "DataSetSnapshots": [
+    {
+      "Stage": "before",
+      "CapturedAt": "2026-06-12T21:52:49.7604989+00:00",
+      "IsSuccess": true,
+      "Exists": true,
+      "DataSetReference": "OCR7SR12PROT/LLN0.DataSet",
+      "MemberCount": 2,
+      "IsDeletable": false,
+      "MemberReferences": [
+        "OCR7SR12PROT/A50PTOC1.Op",
+        "OCR7SR12PROT/A50PTOC1.Str"
+      ],
+      "Message": "MMS GetNamedVariableListAttributes decoded 2 member(s), deletable=false.",
+      "Summary": "before: OCR7SR12PROT/LLN0.DataSet exists members=2 deletable=false"
+    }
+  ],
+  "PassCount": 9,
+  "WarningCount": 1,
+  "FailureCount": 0,
+  "OverallStatus": "PASS_WITH_WARNING",
+  "Summary": "verification=PASS_WITH_WARNING, pass=9, warnings=1, failures=0, rcbSnapshots=3, dataSetSnapshots=1"
+}

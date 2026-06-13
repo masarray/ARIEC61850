@@ -482,6 +482,10 @@ internal static class Cli
         var typeReadSource = options.Get("type-read-source", "datasets");
         var typeReadStrategy = options.Get("type-read-strategy", "safe");
         var typeReadDelayMs = options.GetInt("type-read-delay-ms", 20);
+        var typeReadIsolated = options.GetBool("type-read-isolated", true);
+        var typeReadQuarantine = options.GetBool("type-read-quarantine", true);
+        var learnTypesFromGolden = options.GetBool("learn-types-from-golden", true);
+        var goldenScl = options.Get("golden-scl", string.Empty);
         var readFiles = options.GetBool("read-files", true);
         var fileDirectory = options.Get("file-directory", string.Empty);
         var maxFilePages = options.GetInt("max-file-pages", 8);
@@ -545,24 +549,14 @@ internal static class Cli
             DelayMs = typeReadDelayMs,
             Summary = "Variable specification probe was not attempted in this run."
         };
-        if (readTypes)
+        LiveIedVariableSpecQuarantineEvidence variableSpecQuarantine = new()
         {
-            var rawTypeCandidates = BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource).ToArray();
-            var typeEvaluations = BuildTypeReadCandidateEvaluations(rawTypeCandidates, typeReadStrategy).ToArray();
-            var typeCandidates = typeEvaluations
-                .Where(x => x.IsSelected)
-                .Select(x => x.Reference)
-                .Take(maxTypeReads <= 0 ? int.MaxValue : maxTypeReads)
-                .ToArray();
-            Console.WriteLine($"Reading MMS variable access attributes: {typeCandidates.Length} selected from {rawTypeCandidates.Length} candidate(s), source={typeReadSource}, strategy={typeReadStrategy}, max={maxTypeReads}, delay={typeReadDelayMs}ms.");
-            variableTypes = await ReadVariableAccessAttributesSafelyAsync(session, typeCandidates, maxTypeReads, typeReadDelayMs, cts.Token).ConfigureAwait(false);
-            variableTypeProbe = BuildVariableTypeProbeEvidence(typeReadSource, typeReadStrategy, maxTypeReads, typeReadDelayMs, typeEvaluations, typeCandidates, variableTypes);
-            Console.WriteLine($"  Type probe: {variableTypeProbe.Summary}");
-            foreach (var type in variableTypes.Take(10))
-                Console.WriteLine($"  {(type.IsSuccess ? "OK" : "FAIL")} {type.Summary}");
-            if (variableTypes.Count > 10)
-                Console.WriteLine($"  ... {variableTypes.Count - 10} more type result(s).");
-        }
+            IsEnabled = typeReadQuarantine,
+            TargetKey = $"{host}:{port}/{iedName}",
+            Summary = typeReadQuarantine
+                ? "Variable specification quarantine is enabled but has not been triggered."
+                : "Variable specification quarantine is disabled for this run."
+        };
 
         var document = LiveIedModelDiscoveryBuilder.Build(
             discovery,
@@ -601,12 +595,64 @@ internal static class Cli
             Console.WriteLine($"Setting Group map: entries={settingGroupMap.EntryCount}{readText}.");
         }
 
+        if (readTypes)
+        {
+            var rawTypeCandidates = BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource).ToArray();
+            var typeEvaluations = BuildTypeReadCandidateEvaluations(rawTypeCandidates, typeReadStrategy).ToArray();
+            var typeCandidates = typeEvaluations
+                .Where(x => x.IsSelected)
+                .Select(x => x.Reference)
+                .Take(maxTypeReads <= 0 ? int.MaxValue : maxTypeReads)
+                .ToArray();
+            Console.WriteLine($"Reading MMS variable access attributes {(typeReadIsolated ? "in isolated association" : "on main association")}: {typeCandidates.Length} selected from {rawTypeCandidates.Length} candidate(s), source={typeReadSource}, strategy={typeReadStrategy}, max={maxTypeReads}, delay={typeReadDelayMs}ms.");
+            variableTypes = typeReadIsolated
+                ? await ReadVariableAccessAttributesIsolatedAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), typeCandidates, maxTypeReads, typeReadDelayMs, cts.Token).ConfigureAwait(false)
+                : await ReadVariableAccessAttributesSafelyAsync(session, typeCandidates, maxTypeReads, typeReadDelayMs, cts.Token).ConfigureAwait(false);
+            variableTypeProbe = BuildVariableTypeProbeEvidence(typeReadSource, typeReadStrategy, maxTypeReads, typeReadDelayMs, typeEvaluations, typeCandidates, variableTypes);
+            variableSpecQuarantine = BuildVariableSpecQuarantineEvidence(variableTypeProbe, typeReadQuarantine, host, port, iedName, typeReadIsolated);
+            Console.WriteLine($"  Type probe: {variableTypeProbe.Summary}");
+            if (variableSpecQuarantine.IsQuarantined)
+                Console.WriteLine($"  Variable specification quarantined for this IED/session: {variableSpecQuarantine.TriggerReference} ({variableSpecQuarantine.Reason}).");
+            foreach (var type in variableTypes.Take(10))
+                Console.WriteLine($"  {(type.IsSuccess ? "OK" : "FAIL")} {type.Summary}");
+            if (variableTypes.Count > 10)
+                Console.WriteLine($"  ... {variableTypes.Count - 10} more type result(s).");
+
+            if (variableTypes.Any(x => x.IsSuccess))
+            {
+                document = LiveIedModelDiscoveryBuilder.Build(
+                    discovery,
+                    new LiveIedModelDiscoveryBuildOptions
+                    {
+                        Host = host,
+                        Port = port,
+                        IedName = iedName,
+                        AccessPointName = apName
+                    },
+                    dataSetDirectories,
+                    variableTypes);
+            }
+        }
+
+        var goldenLearning = learnTypesFromGolden
+            ? BuildGoldenSclTypeLearningEvidence(document, ResolveGoldenSclPath(goldenScl, iedName))
+            : new LiveIedGoldenSclTypeLearningEvidence
+            {
+                Attempted = false,
+                Message = "Golden SCL type learning was disabled by --learn-types-from-golden false.",
+                Summary = "Golden SCL type learning disabled."
+            };
+        if (goldenLearning.Attempted)
+            Console.WriteLine($"Golden SCL type learning: {goldenLearning.Summary}");
+
         var onlineEvidence = new LiveIedOnlineServiceEvidence
         {
             FileService = fileEvidence,
             SettingGroupReadbacks = settingGroupReadbacks,
             SettingGroupMap = settingGroupMap,
-            VariableTypeProbe = variableTypeProbe
+            VariableTypeProbe = variableTypeProbe,
+            VariableSpecQuarantine = variableSpecQuarantine,
+            GoldenSclTypeLearning = goldenLearning
         };
 
         var files = new List<string>();
@@ -688,9 +734,103 @@ internal static class Cli
         File.WriteAllText(typeProbeMarkdownPath, BuildVariableTypeProbeMarkdown(evidence.VariableTypeProbe));
         files.Add(typeProbeMarkdownPath);
 
+        var quarantinePath = Path.Combine(outputDirectory, "variable-spec-quarantine.json");
+        File.WriteAllText(quarantinePath, JsonSerializer.Serialize(evidence.VariableSpecQuarantine, jsonOptions));
+        files.Add(quarantinePath);
+
+        var quarantineMarkdownPath = Path.Combine(outputDirectory, "variable-spec-quarantine.md");
+        File.WriteAllText(quarantineMarkdownPath, BuildVariableSpecQuarantineMarkdown(evidence.VariableSpecQuarantine));
+        files.Add(quarantineMarkdownPath);
+
+        var goldenLearningPath = Path.Combine(outputDirectory, "golden-scl-type-learning.json");
+        File.WriteAllText(goldenLearningPath, JsonSerializer.Serialize(evidence.GoldenSclTypeLearning, jsonOptions));
+        files.Add(goldenLearningPath);
+
+        var goldenLearningMarkdownPath = Path.Combine(outputDirectory, "golden-scl-type-learning.md");
+        File.WriteAllText(goldenLearningMarkdownPath, BuildGoldenSclTypeLearningMarkdown(evidence.GoldenSclTypeLearning));
+        files.Add(goldenLearningMarkdownPath);
+
         return files;
     }
 
+
+
+    private static string BuildVariableSpecQuarantineMarkdown(LiveIedVariableSpecQuarantineEvidence quarantine)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("# IEC 61850 Variable Specification Quarantine");
+        sb.AppendLine();
+        sb.AppendLine($"- Generated: {quarantine.GeneratedAtUtc:yyyy-MM-dd HH:mm:ss.fff} UTC");
+        sb.AppendLine($"- Enabled: {(quarantine.IsEnabled ? "true" : "false")}");
+        sb.AppendLine($"- Quarantined: {(quarantine.IsQuarantined ? "true" : "false")}");
+        sb.AppendLine($"- Scope: {EscapeMarkdown(quarantine.Scope)}");
+        sb.AppendLine($"- Target: {EscapeMarkdown(quarantine.TargetKey)}");
+        sb.AppendLine($"- Trigger reference: {EscapeMarkdown(quarantine.TriggerReference)}");
+        sb.AppendLine($"- Reason: {EscapeMarkdown(quarantine.Reason)}");
+        sb.AppendLine($"- Core discovery preserved: {(quarantine.CoreDiscoveryPreserved ? "true" : "false")}");
+        sb.AppendLine($"- Summary: {EscapeMarkdown(quarantine.Summary)}");
+        sb.AppendLine();
+        if (!string.IsNullOrWhiteSpace(quarantine.TriggerMessage))
+        {
+            sb.AppendLine("## Trigger message");
+            sb.AppendLine();
+            sb.AppendLine(EscapeMarkdown(quarantine.TriggerMessage));
+            sb.AppendLine();
+        }
+        if (!string.IsNullOrWhiteSpace(quarantine.Recommendation))
+        {
+            sb.AppendLine("## Recommendation");
+            sb.AppendLine();
+            sb.AppendLine(EscapeMarkdown(quarantine.Recommendation));
+        }
+        return sb.ToString();
+    }
+
+    private static string BuildGoldenSclTypeLearningMarkdown(LiveIedGoldenSclTypeLearningEvidence learning)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("# IEC 61850 Golden SCL Type Learning");
+        sb.AppendLine();
+        sb.AppendLine($"- Generated: {learning.GeneratedAtUtc:yyyy-MM-dd HH:mm:ss.fff} UTC");
+        sb.AppendLine($"- Attempted: {(learning.Attempted ? "true" : "false")}");
+        sb.AppendLine($"- Success: {(learning.IsSuccess ? "true" : "false")}");
+        sb.AppendLine($"- Golden SCL: {EscapeMarkdown(learning.GoldenSclPath)}");
+        sb.AppendLine($"- Golden bindings: {learning.GoldenBindingCount}");
+        sb.AppendLine($"- Live data objects: {learning.LiveDataObjectCount}");
+        sb.AppendLine($"- Live unknown/medium: {learning.LiveUnknownOrMediumCount}");
+        sb.AppendLine($"- Exact key matches: {learning.ExactKeyMatchCount}");
+        sb.AppendLine($"- Candidate improvements: {learning.CandidateImprovementCount}");
+        sb.AppendLine($"- CDC conflicts: {learning.CdcConflictCount}");
+        sb.AppendLine($"- Summary: {EscapeMarkdown(learning.Summary)}");
+        sb.AppendLine();
+        if (!string.IsNullOrWhiteSpace(learning.Message))
+        {
+            sb.AppendLine("## Message");
+            sb.AppendLine();
+            sb.AppendLine(EscapeMarkdown(learning.Message));
+            sb.AppendLine();
+        }
+        if (learning.Candidates.Count > 0)
+        {
+            sb.AppendLine("## Learning candidates");
+            sb.AppendLine();
+            sb.AppendLine("| Reference | Current CDC | Golden CDC | Golden DOType | Confidence | Action |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- |");
+            foreach (var candidate in learning.Candidates.Take(200))
+                sb.AppendLine($"| {EscapeMarkdown(candidate.Reference)} | {EscapeMarkdown(candidate.CurrentCdc)} | {EscapeMarkdown(candidate.GoldenCdc)} | {EscapeMarkdown(candidate.GoldenDoTypeId)} | {EscapeMarkdown(candidate.CurrentConfidence)} | {EscapeMarkdown(candidate.SuggestedAction)} |");
+            sb.AppendLine();
+        }
+        if (learning.Conflicts.Count > 0)
+        {
+            sb.AppendLine("## CDC conflicts");
+            sb.AppendLine();
+            sb.AppendLine("| Key | Live CDC | Golden CDC | Reference | Notes |");
+            sb.AppendLine("| --- | --- | --- | --- | --- |");
+            foreach (var conflict in learning.Conflicts.Take(120))
+                sb.AppendLine($"| {EscapeMarkdown(conflict.Key)} | {EscapeMarkdown(conflict.LiveCdc)} | {EscapeMarkdown(conflict.GoldenCdc)} | {EscapeMarkdown(conflict.Reference)} | {EscapeMarkdown(conflict.Notes)} |");
+        }
+        return sb.ToString();
+    }
 
     private static string BuildVariableTypeProbeMarkdown(LiveIedVariableTypeProbeEvidence probe)
     {
@@ -1134,6 +1274,256 @@ internal static class Cli
         }
 
         return results;
+    }
+
+
+    private static async Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ReadVariableAccessAttributesIsolatedAsync(
+        string host,
+        int port,
+        TimeSpan timeout,
+        IReadOnlyList<MmsObjectReference> candidates,
+        int maxReads,
+        int delayMs,
+        CancellationToken cancellationToken)
+    {
+        if (candidates.Count == 0)
+            return Array.Empty<MmsVariableAccessAttributesResult>();
+
+        try
+        {
+            await using var typeSession = new MmsClientSession();
+            await typeSession.ConnectAsync(host, port, timeout, cancellationToken).ConfigureAwait(false);
+            return await ReadVariableAccessAttributesSafelyAsync(typeSession, candidates, maxReads, delayMs, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException or System.Net.Sockets.SocketException)
+        {
+            var first = candidates.FirstOrDefault();
+            return new[]
+            {
+                new MmsVariableAccessAttributesResult
+                {
+                    IsSuccess = false,
+                    Reference = first,
+                    Message = $"GetVariableAccessAttributes isolated association fault: {ex.GetType().Name}: {ex.Message}"
+                }
+            };
+        }
+    }
+
+    private static LiveIedVariableSpecQuarantineEvidence BuildVariableSpecQuarantineEvidence(
+        LiveIedVariableTypeProbeEvidence probe,
+        bool enabled,
+        string host,
+        int port,
+        string iedName,
+        bool isolated)
+    {
+        var target = string.IsNullOrWhiteSpace(iedName)
+            ? $"{host}:{port}"
+            : $"{host}:{port}/{iedName}";
+        if (!enabled)
+        {
+            return new LiveIedVariableSpecQuarantineEvidence
+            {
+                IsEnabled = false,
+                IsQuarantined = false,
+                Scope = isolated ? "IsolatedAssociation" : "MainAssociation",
+                TargetKey = target,
+                Summary = "Variable specification quarantine was disabled for this run."
+            };
+        }
+
+        var trigger = probe.Results.FirstOrDefault(x => !x.IsSuccess && IsVariableTypeProtocolFaultMessage(x.Message));
+        var shouldQuarantine = probe.ProtocolFaultSuspected && probe.SuccessCount == 0 && trigger is not null;
+        if (!shouldQuarantine)
+        {
+            return new LiveIedVariableSpecQuarantineEvidence
+            {
+                IsEnabled = true,
+                IsQuarantined = false,
+                Scope = isolated ? "IsolatedAssociation" : "MainAssociation",
+                TargetKey = target,
+                CoreDiscoveryPreserved = isolated,
+                Summary = probe.Attempted
+                    ? "Variable specification quarantine was not triggered."
+                    : "Variable specification probe was not attempted."
+            };
+        }
+
+        var quarantineTrigger = trigger;
+        if (quarantineTrigger is null)
+        {
+            return new LiveIedVariableSpecQuarantineEvidence
+            {
+                IsEnabled = true,
+                IsQuarantined = false,
+                Scope = isolated ? "IsolatedAssociation" : "MainAssociation",
+                TargetKey = target,
+                CoreDiscoveryPreserved = isolated,
+                Summary = "Variable specification quarantine was not triggered because no failing probe result was available."
+            };
+        }
+
+        return new LiveIedVariableSpecQuarantineEvidence
+        {
+            IsEnabled = true,
+            IsQuarantined = true,
+            Scope = isolated ? "IsolatedAssociation" : "MainAssociation",
+            TargetKey = target,
+            TriggerReference = quarantineTrigger.Reference,
+            TriggerMessage = quarantineTrigger.Message,
+            Reason = "GetVariableAccessAttributes caused a transport/association fault and the target should not be probed again in this run.",
+            CoreDiscoveryPreserved = isolated,
+            Recommendation = "Use --read-types false for routine discovery on this IED, or keep --type-read-isolated true with a very small max read count. Prefer golden SCL/type registry learning for CDC/type improvement.",
+            Summary = $"VariableAccessAttributes quarantined after peer-close at {quarantineTrigger.Reference}; core discovery preserved={(isolated ? "true" : "false")}."
+        };
+    }
+
+    private static bool IsVariableTypeProtocolFaultMessage(string message)
+        => !string.IsNullOrWhiteSpace(message) &&
+           (message.Contains("transport fault", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("peer closed", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("closed the TCP", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("association", StringComparison.OrdinalIgnoreCase));
+
+    private static string ResolveGoldenSclPath(string explicitPath, string iedName)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitPath))
+            return explicitPath;
+
+        if (!string.IsNullOrWhiteSpace(iedName))
+        {
+            var candidate = Path.Combine("samples", "scl", $"{iedName}.iid");
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return string.Empty;
+    }
+
+    private static LiveIedGoldenSclTypeLearningEvidence BuildGoldenSclTypeLearningEvidence(
+        LiveIedModelDiscoveryDocument document,
+        string goldenSclPath)
+    {
+        if (string.IsNullOrWhiteSpace(goldenSclPath))
+        {
+            return new LiveIedGoldenSclTypeLearningEvidence
+            {
+                Attempted = false,
+                Message = "No golden SCL path was supplied and no samples/scl/<IED>.iid file was found.",
+                Summary = "Golden SCL learning not attempted."
+            };
+        }
+
+        try
+        {
+            if (!File.Exists(goldenSclPath))
+            {
+                return new LiveIedGoldenSclTypeLearningEvidence
+                {
+                    Attempted = true,
+                    GoldenSclPath = goldenSclPath,
+                    IsSuccess = false,
+                    Message = "Golden SCL file was not found.",
+                    Summary = "Golden SCL learning failed: file not found."
+                };
+            }
+
+            var snapshot = SclModelSnapshotBuilder.Load(goldenSclPath);
+            var goldenByKey = snapshot.DoCdcBindings
+                .Where(x => !string.IsNullOrWhiteSpace(x.Key) && !string.IsNullOrWhiteSpace(x.Cdc))
+                .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+            var liveObjects = document.LogicalDevices
+                .SelectMany(ld => ld.LogicalNodes.SelectMany(ln => ln.DataObjects.Select(dataObject => new
+                {
+                    LogicalDevice = ld,
+                    LogicalNode = ln,
+                    DataObject = dataObject,
+                    Key = $"{ln.LnClass}.{dataObject.Name}"
+                })))
+                .ToArray();
+
+            var unknownOrMedium = liveObjects
+                .Where(x => x.DataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.Unknown or LiveIedDiscoveryConfidenceLevel.Low or LiveIedDiscoveryConfidenceLevel.Medium)
+                .ToArray();
+
+            var candidates = new List<LiveIedGoldenSclTypeLearningEntry>();
+            var conflicts = new List<LiveIedGoldenSclTypeLearningConflict>();
+            var exactMatches = 0;
+            foreach (var item in liveObjects)
+            {
+                if (!goldenByKey.TryGetValue(item.Key, out var golden))
+                    continue;
+
+                exactMatches++;
+                var liveCdc = item.DataObject.InferredCdc ?? string.Empty;
+                var goldenCdc = golden.Cdc ?? string.Empty;
+                var cdcMatches = string.Equals(liveCdc, goldenCdc, StringComparison.OrdinalIgnoreCase);
+                if (!cdcMatches && item.DataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.High or LiveIedDiscoveryConfidenceLevel.Exact)
+                {
+                    conflicts.Add(new LiveIedGoldenSclTypeLearningConflict
+                    {
+                        Key = item.Key,
+                        LiveCdc = liveCdc,
+                        GoldenCdc = goldenCdc,
+                        Reference = item.DataObject.Reference,
+                        Notes = "Live inference is high/exact but golden SCL uses a different CDC. Review before changing the registry."
+                    });
+                    continue;
+                }
+
+                if (!cdcMatches || item.DataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.Unknown or LiveIedDiscoveryConfidenceLevel.Low or LiveIedDiscoveryConfidenceLevel.Medium)
+                {
+                    candidates.Add(new LiveIedGoldenSclTypeLearningEntry
+                    {
+                        Reference = item.DataObject.Reference,
+                        LogicalNodeClass = item.LogicalNode.LnClass,
+                        DataObjectName = item.DataObject.Name,
+                        CurrentCdc = string.IsNullOrWhiteSpace(liveCdc) ? "-" : liveCdc,
+                        GoldenCdc = goldenCdc,
+                        GoldenDoTypeId = golden.DoTypeId,
+                        CurrentConfidence = item.DataObject.ConfidenceLevel.ToString(),
+                        SuggestedAction = cdcMatches ? "Promote confidence using golden SCL key match." : "Review and consider adding LNClass.DO -> CDC to registry."
+                    });
+                }
+            }
+
+            return new LiveIedGoldenSclTypeLearningEvidence
+            {
+                Attempted = true,
+                GoldenSclPath = Path.GetFullPath(goldenSclPath),
+                IsSuccess = true,
+                Message = "Golden SCL was parsed and compared against the live discovery model.",
+                GoldenBindingCount = goldenByKey.Count,
+                LiveDataObjectCount = liveObjects.Length,
+                LiveUnknownOrMediumCount = unknownOrMedium.Length,
+                ExactKeyMatchCount = exactMatches,
+                CandidateImprovementCount = candidates.Count,
+                CdcConflictCount = conflicts.Count,
+                Candidates = candidates
+                    .OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase)
+                    .Take(1000)
+                    .ToArray(),
+                Conflicts = conflicts
+                    .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                    .Take(500)
+                    .ToArray(),
+                Summary = $"goldenBindings={goldenByKey.Count}, liveDO={liveObjects.Length}, unknownOrMedium={unknownOrMedium.Length}, exactKeyMatches={exactMatches}, candidates={candidates.Count}, conflicts={conflicts.Count}."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new LiveIedGoldenSclTypeLearningEvidence
+            {
+                Attempted = true,
+                GoldenSclPath = goldenSclPath,
+                IsSuccess = false,
+                Message = $"Golden SCL learning failed: {ex.GetType().Name}: {ex.Message}",
+                Summary = "Golden SCL learning failed."
+            };
+        }
     }
 
     private static async Task<IReadOnlyList<LiveIedSettingGroupReadbackEvidence>> ReadSettingGroupReadbacksAsync(
@@ -4015,7 +4405,7 @@ internal static class Cli
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile iedscout-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output out/scl/live-ied.iedscout-connection.iid] [--ld-name-mode auto|keep] [--output out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
-        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-source datasets|model|both] [--type-read-strategy safe|dataset-leaf|all] [--max-type-reads 32] [--type-read-delay-ms 50] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
+        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-source datasets|model|both] [--type-read-strategy safe|dataset-leaf|all] [--type-read-isolated true] [--type-read-quarantine true] [--golden-scl samples/scl/OCR7SR12.iid] [--learn-types-from-golden true] [--max-type-reads 32] [--type-read-delay-ms 50] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
         Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");
@@ -4041,7 +4431,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.168.1.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.168.1.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output out/ied-model-discovery");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.168.1.10 --ied-name OCR7SR12 --scl-export-profile iedscout-connection --ld-name-mode auto --output out/scl/OCR7SR12.generated.iid");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.168.1.10 --ied-name OCR7SR12 --read-files true --read-setting-groups true --read-setting-values false --read-types false --output out/service-discovery/OCR7SR12");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.168.1.10 --ied-name OCR7SR12 --read-files true --read-setting-groups true --read-setting-values false --read-types false --learn-types-from-golden true --output out/service-discovery/OCR7SR12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-find 192.168.1.10 XCBR --fc ST --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-read-smart 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");

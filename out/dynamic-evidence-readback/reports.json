@@ -1,0 +1,76 @@
+[
+  {
+    "ReceivedAt": "2026-06-12T21:44:35.8520786+00:00",
+    "Message": "IEC 61850 InformationReport mapped 2/2 included DataSet value(s). inclusionItem=8, included=[0,1], rawAccessResults=13, header=RptID=OCR7SR12MEAS/LLN0$BR$brcbA01; SqNum=0; TimeOfEntry=binary-time=04AA65073C8F; DatSet=OCR7SR12MEAS/LLN0$AR_DYN_DS01; BufOvfl=true; EntryID=0000000000000006; ConfRev=12; OptFlds=sequence-number,report-time-stamp,reason-for-inclusion,data-set-name,buffer-overflow,entryID,conf-revision bits=[1,2,3,4,6,7,8] raw=7B80.",
+    "RawAccessResultCount": 13,
+    "InclusionBitstringItemIndex": 8,
+    "IncludedDataSetIndexes": [
+      0,
+      1
+    ],
+    "header": {
+      "ReportId": "OCR7SR12MEAS/LLN0$BR$brcbA01",
+      "OptionalFields": {
+        "RawHex": "7B80",
+        "SetBitIndexes": [
+          1,
+          2,
+          3,
+          4,
+          6,
+          7,
+          8
+        ],
+        "Names": [
+          "sequence-number",
+          "report-time-stamp",
+          "reason-for-inclusion",
+          "data-set-name",
+          "buffer-overflow",
+          "entryID",
+          "conf-revision"
+        ],
+        "HasSequenceNumber": true,
+        "HasReportTimestamp": true,
+        "HasReasonForInclusion": true,
+        "HasDataSetName": true,
+        "HasDataReference": false,
+        "HasBufferOverflow": true,
+        "HasEntryId": true,
+        "HasConfRevision": true,
+        "HasSegmentation": false,
+        "Summary": "sequence-number,report-time-stamp,reason-for-inclusion,data-set-name,buffer-overflow,entryID,conf-revision bits=[1,2,3,4,6,7,8] raw=7B80"
+      },
+      "SequenceNumber": 0,
+      "TimeOfEntry": "binary-time=04AA65073C8F",
+      "DataSetReference": "OCR7SR12MEAS/LLN0$AR_DYN_DS01",
+      "BufferOverflow": true,
+      "EntryIdHex": "0000000000000006",
+      "ConfRev": 12,
+      "HasAny": true,
+      "Summary": "RptID=OCR7SR12MEAS/LLN0$BR$brcbA01; SqNum=0; TimeOfEntry=binary-time=04AA65073C8F; DatSet=OCR7SR12MEAS/LLN0$AR_DYN_DS01; BufOvfl=true; EntryID=0000000000000006; ConfRev=12; OptFlds=sequence-number,report-time-stamp,reason-for-inclusion,data-set-name,buffer-overflow,entryID,conf-revision bits=[1,2,3,4,6,7,8] raw=7B80"
+    },
+    "values": [
+      {
+        "Index": 0,
+        "MemberReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+        "DataReference": "",
+        "ReasonForInclusion": [
+          "application-trigger"
+        ],
+        "FailureCode": null,
+        "displayValue": "0"
+      },
+      {
+        "Index": 1,
+        "MemberReference": "OCR7SR12MEAS/MMXU1.A.phsA.cVal.mag.f",
+        "DataReference": "",
+        "ReasonForInclusion": [
+          "application-trigger"
+        ],
+        "FailureCode": null,
+        "displayValue": "0"
+      }
+    ]
+  }
+]

@@ -1,0 +1,92 @@
+﻿{
+  "GeneratedAtUtc": "2026-06-13T13:15:24.4923858+00:00",
+  "Target": "192.16.1.157:102",
+  "IedName": "OCR7SR12",
+  "Services": [
+    {
+      "Name": "Data model",
+      "Status": "Discovered",
+      "Count": 9464,
+      "Evidence": "LD=4, LN=123, DO=1186, DA=9464",
+      "Gap": ""
+    },
+    {
+      "Name": "Functional constraints",
+      "Status": "Discovered",
+      "Count": 9464,
+      "Evidence": "FC is extracted from MMS $FC$ names and dataset/readback evidence.",
+      "Gap": ""
+    },
+    {
+      "Name": "DataSets",
+      "Status": "Discovered",
+      "Count": 1,
+      "Evidence": "1 dataset(s) have resolved directory members.",
+      "Gap": "Add deeper DataSet value reads and cross-link to GoCB/SVCB when exposed."
+    },
+    {
+      "Name": "Reports / RCB",
+      "Status": "Discovered",
+      "Count": 286,
+      "Evidence": "BRCB=8, URCB=278",
+      "Gap": "Read all RCB attributes and normalize static SCL state vs runtime state."
+    },
+    {
+      "Name": "GOOSE control blocks",
+      "Status": "Not exposed or not discovered",
+      "Count": 0,
+      "Evidence": "Current implementation detects GSEControl attribute inventory when present.",
+      "Gap": "Implement GoCB value reader: GoEna, GoID, DatSet, ConfRev, NdsCom, MinTime, MaxTime, DstAddress."
+    },
+    {
+      "Name": "Sampled Value control blocks",
+      "Status": "Not exposed or not discovered",
+      "Count": 0,
+      "Evidence": "Current implementation detects MS/US/SVCB attribute inventory when present.",
+      "Gap": "Implement SVCB value reader: SvID/smvID, DatSet, ConfRev, SmpRate, SmpMod, NofASDU, DstAddress."
+    },
+    {
+      "Name": "Setting groups",
+      "Status": "Inventory",
+      "Count": 1,
+      "Evidence": "SG/SE inventory is available when exposed in the MMS directory.",
+      "Gap": "Implement SGCB services/readback: NumOfSG, ActSG, EditSG, CnfEdit plus SG/SE setting attributes."
+    },
+    {
+      "Name": "Logs",
+      "Status": "Not exposed or not discovered",
+      "Count": 0,
+      "Evidence": "LogControl inventory is available when LG attributes are exposed.",
+      "Gap": "Implement log directory/query service."
+    },
+    {
+      "Name": "File service",
+      "Status": "Discovered",
+      "Count": 0,
+      "Evidence": "FileDirectory returned 0 entries from 1 page(s).",
+      "Gap": "Add FileOpen/FileRead download support and recursive safe directory walking."
+    },
+    {
+      "Name": "Variable specifications",
+      "Status": "Safe probe stopped or unsupported",
+      "Count": 0,
+      "Evidence": "attempted=1, ok=0, failed=1, selected=13, skipped=0, stoppedEarly=true. scalar=0, structure=0, selected=13/13.",
+      "Gap": "Reduce max type reads, keep dataset-first leaf-only probing, and avoid the last failed reference class."
+    },
+    {
+      "Name": "CDC resolution",
+      "Status": "Partially resolved",
+      "Count": 899,
+      "Evidence": "high=727, medium=172, low=0, unknown=287",
+      "Gap": "Expand IEC 61850-7-3/7-4 registry and compare against golden IEDScout SCL."
+    }
+  ],
+  "NextGaps": [
+    "GOOSE control blocks: Implement GoCB value reader: GoEna, GoID, DatSet, ConfRev, NdsCom, MinTime, MaxTime, DstAddress.",
+    "Sampled Value control blocks: Implement SVCB value reader: SvID/smvID, DatSet, ConfRev, SmpRate, SmpMod, NofASDU, DstAddress.",
+    "Setting groups: Implement SGCB services/readback: NumOfSG, ActSG, EditSG, CnfEdit plus SG/SE setting attributes.",
+    "Logs: Implement log directory/query service.",
+    "Variable specifications: Reduce max type reads, keep dataset-first leaf-only probing, and avoid the last failed reference class.",
+    "CDC resolution: Expand IEC 61850-7-3/7-4 registry and compare against golden IEDScout SCL."
+  ]
+}

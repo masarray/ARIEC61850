@@ -1,0 +1,18 @@
+﻿[
+  {
+    "Kind": "DOType",
+    "GoldenTypeCount": 34,
+    "GoldenUniqueShapeCount": 33,
+    "CandidateTypeCount": 899,
+    "CandidateUniqueShapeCount": 87,
+    "CandidateDuplicateShapeCount": 812
+  },
+  {
+    "Kind": "DAType",
+    "GoldenTypeCount": 10,
+    "GoldenUniqueShapeCount": 9,
+    "CandidateTypeCount": 524,
+    "CandidateUniqueShapeCount": 213,
+    "CandidateDuplicateShapeCount": 311
+  }
+]

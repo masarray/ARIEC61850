@@ -1,0 +1,5015 @@
+[
+  {
+    "ReadAt": "2026-06-12T22:20:24.3744977+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:25.4634645+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:26.5686196+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:27.6778066+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:28.7848575+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:29.893222+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:31.0001362+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:32.1042604+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:33.2099906+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:34.3134315+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:35.4129096+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:36.5247565+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:37.6327779+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:38.7403437+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:39.7456226+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:40.8546639+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:41.9684838+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:43.0694259+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:44.1777991+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:45.2852433+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:46.3908569+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:47.4997008+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:48.6011318+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:49.7007348+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:50.8029847+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:51.9083503+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:53.0121128+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:54.1181648+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:55.2279286+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:56.3399339+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:57.4435349+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:58.5506339+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:20:59.6579019+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:00.7660609+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:01.8693181+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:02.9799195+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:04.0843442+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:05.1951692+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:06.297234+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:07.4068262+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:08.5132503+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:09.6221214+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:10.7264707+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:11.836422+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:12.9491546+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:14.0623361+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:15.1681657+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:16.2786733+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:17.2805427+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:18.389039+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:19.4986725+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:20.5003227+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:21.612109+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:22.7228844+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:23.8314297+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:24.9374386+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:26.0453326+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:27.149526+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:28.2593634+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:29.3658219+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:30.4791+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:31.5869151+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:32.5903442+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:33.5962076+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:34.7048394+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:35.8138687+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:36.923252+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:37.9263001+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:38.9282841+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:39.9334984+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:40.9351233+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:41.9400329+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:43.0504998+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:44.1566786+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:45.1610739+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:46.2703953+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:47.3765002+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:48.4800379+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:49.5915333+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:50.7019106+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:51.7041174+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:52.710461+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:53.7128335+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:54.8213368+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:55.9311503+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:56.9336823+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:57.9363029+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:21:59.0438268+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:00.1548113+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:01.1631552+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:02.1676358+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:03.1771849+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:04.2866446+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:05.2980916+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:06.3001289+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:07.311529+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:08.422035+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:09.5331181+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:10.5385479+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:11.5451015+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:12.6551219+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:13.7638202+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:14.7654112+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:15.8743932+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:16.9803019+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:18.0913003+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:19.098543+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:20.2047578+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:21.2082744+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:22.2102883+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:23.3200115+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:24.4313077+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:25.5355662+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:26.6470202+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:27.7568822+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:28.7599756+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:29.8653045+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:30.8692244+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:31.8706566+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:32.9835922+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:34.0933152+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:35.2021616+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:36.2074639+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:37.3098625+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:38.3120769+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:39.422644+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:40.5300784+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:41.6353744+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:42.7422519+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:43.8519357+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:44.9608802+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:46.0704713+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:47.1816662+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:48.1867893+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:49.1909361+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:50.3017487+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:51.303261+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:52.3061646+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:53.3086198+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:54.4119491+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:55.523329+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:56.5280944+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:57.6391592+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:58.6438113+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:22:59.6471029+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:00.7603106+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:01.8661519+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:02.8717455+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:03.9831914+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:05.0876614+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:06.1947583+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:07.3003721+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:08.4049348+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:09.5114832+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:10.6193039+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:11.7267791+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:12.8266411+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:13.9371098+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:15.0479693+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:16.1520111+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:17.26256+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:18.269546+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:19.3800239+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:20.3850167+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:21.4964434+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:22.6007857+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:23.6073114+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:24.7100536+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:25.7138313+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:26.8227891+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:27.9325133+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:28.9373865+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:30.049347+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:31.0574507+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:32.0616287+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:33.0637464+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:34.1753927+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:35.1818193+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:36.1882938+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:37.1918804+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:38.2993451+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:39.3060157+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:40.4174597+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:41.525883+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:42.5307213+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:43.5349593+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:44.5363814+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:45.5401938+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:46.6424946+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:47.6450101+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:48.753755+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:49.8607255+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:50.9667049+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:52.0801439+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:53.1897895+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:54.3018423+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:55.3058841+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:56.4157738+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:57.4221996+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:58.4317758+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:23:59.5461676+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:00.6582811+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:01.756193+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:02.8496898+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:03.9528009+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:05.0543056+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:06.1601197+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:07.1613576+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:08.2676598+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:09.3717738+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:10.4812533+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:11.5866209+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:12.6971761+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:13.8094209+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:14.8107709+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:15.9151816+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:17.0165169+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:18.1211109+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:19.1292407+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:20.2306782+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:21.3329277+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:22.4397431+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:23.5493504+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:24.6444537+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:25.7494043+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:26.8575019+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:27.9666383+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:29.0686607+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:30.173926+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:31.2763012+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:32.3808405+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:33.4916114+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:34.5976027+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:35.7025155+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:36.811972+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:37.9257235+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:39.0365779+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:40.1482594+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:41.2587573+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:42.3542393+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:43.4643716+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:44.4684649+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:45.5734807+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:46.6793023+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:47.7867454+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:48.7885043+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:49.7924095+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:50.797584+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:51.9053648+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:53.0161227+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:54.1265193+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:55.2353656+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:56.3468833+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:57.3524114+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:58.4580603+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:24:59.4595898+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:00.573672+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:01.5828881+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:02.6932789+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:03.8050377+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:04.915775+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:05.9196377+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:06.926783+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:08.0358779+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:09.1409357+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:10.253272+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:11.2569993+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:12.364332+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:13.3654147+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:14.462658+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:15.5675756+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:16.5698743+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:17.6776648+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:18.6818403+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:19.6877649+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:20.6927718+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:21.6995764+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:22.7030985+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:23.8136401+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:24.8239234+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:25.9328272+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:26.941111+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:27.9426104+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:28.9498879+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:29.9556534+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:31.0488799+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:32.0557196+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:33.1654124+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:34.2750621+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:35.2819349+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:36.2852044+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:37.2866956+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:38.2910979+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:39.3957892+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:40.4033343+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:41.5113368+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:42.6222124+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:43.6324876+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:44.6369989+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:45.7505754+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:46.7610866+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:47.7620221+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:48.763579+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:49.7676706+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:50.7765155+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:51.7788056+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:52.891833+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:54.0005969+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:55.1088786+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:56.2175008+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:57.2207004+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:58.3335683+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:25:59.4418785+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:00.5537209+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:01.6641606+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:02.7718391+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:03.7788639+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:04.8889288+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:06.0026755+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:07.1155071+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:08.2159675+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:09.2177061+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:10.334108+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:11.3395577+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:12.4486297+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:13.5577368+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:14.66685+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:15.7751809+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:16.7778709+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:17.8812593+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:18.8841324+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:19.8873806+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:20.8937953+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:22.0027742+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:23.1170413+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:24.2270673+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:25.3295048+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:26.3333753+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:27.4387478+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:28.5456623+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:29.5479367+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:30.6586472+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:31.663613+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:32.7708806+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:33.7752456+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:34.8803895+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:35.9923257+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:36.9958717+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:38.1093329+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:39.2183473+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:40.2254225+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:41.3332146+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:42.3440699+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:43.3455723+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:44.3482883+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:45.3518641+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:46.3579397+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:47.4683293+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:48.5817118+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:49.6932882+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:50.8064387+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:51.8102557+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:52.8127814+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:53.8171497+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:54.8213479+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:55.8250348+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:56.8293068+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:57.9348266+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:58.9385773+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:26:59.9406413+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:00.9527863+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:01.960896+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:03.0705816+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:04.1803195+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:05.2884537+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:06.3933722+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:07.3980885+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:08.5094623+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:09.6229314+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:10.6255479+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:11.729597+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:12.8398011+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:13.939492+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:15.0491355+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:16.0554348+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:17.0577333+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:18.1703539+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:19.278807+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:20.3893947+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:21.5037203+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:22.6159607+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:23.721148+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:24.731793+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:25.8330703+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:26.8361419+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:27.946968+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:29.0563893+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:30.1638691+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:31.2769612+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:32.3890949+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:33.4953877+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:34.5988776+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:35.7104809+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:36.8223542+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:37.9265675+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:39.0372174+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:40.1451622+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:41.2582433+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:42.2599977+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:43.2618156+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:44.2647606+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:45.2663137+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:46.2693656+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:47.2825564+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:48.3851932+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:49.4932957+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:50.6052536+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:51.6084225+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:52.6132125+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:53.7219627+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:54.8359865+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:55.8419623+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:56.8442056+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:57.9516935+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:27:59.0537621+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:00.1582171+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:01.2661664+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:02.3747147+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:03.4837564+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:04.5895952+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:05.6942781+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:06.802488+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:07.913911+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:09.0235613+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:10.1362638+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:11.2461029+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:12.3485513+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:13.4581433+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:14.5679525+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:15.678327+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:16.7848035+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:17.8923767+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:18.9987619+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:20.0020003+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:21.1121542+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:22.2229135+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:23.3311949+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:24.4393671+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:25.5382731+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:26.6483106+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:27.7584675+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:28.866043+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:29.9735317+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:31.0791696+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:32.1796857+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:33.2904596+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:34.4006449+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:35.5137628+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:36.6194204+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:37.726182+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:38.8262139+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:39.9348651+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:41.0378667+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:42.1424688+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:43.2422066+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:44.3448248+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:45.4459727+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:46.5516576+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:47.658311+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:48.7596908+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:49.86806+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:50.9762489+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:52.0830572+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:53.0858748+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:54.191683+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:55.2951238+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:56.3911958+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:57.4917196+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:58.5931653+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:28:59.7031292+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:00.806514+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:01.9080308+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:03.0029674+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:04.1032573+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:05.2057232+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:06.3053009+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:07.4182911+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:08.420337+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:09.4220347+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:10.532742+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:11.634918+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:12.7436446+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:13.8466369+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:14.9491054+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:16.0592363+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:17.1648081+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:18.2721071+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:19.3734219+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:20.4809907+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:21.5867972+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:22.6973163+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:23.8013761+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:24.9051325+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:26.0125438+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:27.1186005+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:28.2310634+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:29.3348364+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:30.4436157+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:31.4469507+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:32.5543057+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:33.6624316+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:34.7682376+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:35.8647948+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:36.9680746+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:38.0739751+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:39.1849919+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:40.2923821+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:41.3004866+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:42.409571+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:43.4115386+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:44.5117403+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:45.6147306+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:46.6165238+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:47.6180584+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:48.7250232+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:49.8311894+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:50.834685+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:51.942061+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:53.048247+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:54.1582572+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:55.2636984+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:56.2685638+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:57.3772386+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:58.4863847+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:29:59.5994075+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:00.7005971+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:01.8129908+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:02.9184061+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:04.0294403+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:05.1345307+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:06.2428468+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:07.3458203+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:08.4538987+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:09.5618052+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:10.5654301+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:11.6700277+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:12.7819576+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:13.8930348+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:15.0005413+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:16.1073658+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:17.2060078+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:18.3135007+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:19.4194414+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:20.5183665+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:21.6189492+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:22.7266335+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T22:30:23.7295069+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  }
+]

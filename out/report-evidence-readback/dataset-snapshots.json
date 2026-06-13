@@ -1,0 +1,17 @@
+[
+  {
+    "Stage": "before",
+    "CapturedAt": "2026-06-12T21:43:20.1996175+00:00",
+    "IsSuccess": true,
+    "Exists": true,
+    "DataSetReference": "OCR7SR12PROT/LLN0.DataSet",
+    "MemberCount": 2,
+    "IsDeletable": false,
+    "MemberReferences": [
+      "OCR7SR12PROT/A50PTOC1.Op",
+      "OCR7SR12PROT/A50PTOC1.Str"
+    ],
+    "Message": "MMS GetNamedVariableListAttributes decoded 2 member(s), deletable=false.",
+    "Summary": "before: OCR7SR12PROT/LLN0.DataSet exists members=2 deletable=false"
+  }
+]

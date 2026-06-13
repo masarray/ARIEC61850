@@ -1,0 +1,1774 @@
+﻿{
+  "schemaVersion": "live-to-scl-export-v1",
+  "generatedAtUtc": "2026-06-13T11:49:26.2623729+00:00",
+  "profile": "full-model",
+  "sclPath": "out\\scl\\OCR7SR12.standard-discovery.iid",
+  "reportPath": "",
+  "summaryPath": "",
+  "excludedAttributesPath": "",
+  "logicalDeviceCount": 4,
+  "logicalNodeCount": 123,
+  "dataSetCount": 1,
+  "reportControlCount": 286,
+  "gooseControlBlockCount": 0,
+  "sampledValueControlBlockCount": 0,
+  "settingGroupControlCount": 1,
+  "logControlCount": 0,
+  "lNodeTypeCount": 123,
+  "doTypeCount": 899,
+  "daTypeCount": 524,
+  "enumTypeCount": 4,
+  "warnings": [
+    {
+      "code": "SettingControlShell",
+      "reference": "OCR7SR12PROT/LLN0.SP.SGCB",
+      "message": "Setting group control was detected, but NumOfSG/ActSG/EditSG values are not read yet. Exported SCL contains a conservative SettingControl shell."
+    },
+    {
+      "code": "Discovery.CONTROL_BLOCK_VALUE_READ_PENDING",
+      "reference": "",
+      "message": "GO/SV/SG/LG control blocks were inventoried from live FC attribute names. Attribute values such as DatSet, GoID, svID, APPID, and multicast address are not read yet and remain companion evidence until the deep value reader is implemented."
+    }
+  ],
+  "excludedAttributes": [],
+  "dataSetMappings": [
+    {
+      "kind": "FCDA",
+      "sourceReference": "OCR7SR12PROT/A50PTOC1.Op",
+      "sclReference": "PROT/A50PTOC1.Op [ST]",
+      "message": "DataSet member converted to SCL FCDA."
+    },
+    {
+      "kind": "FCDA",
+      "sourceReference": "OCR7SR12PROT/A50PTOC1.Str",
+      "sclReference": "PROT/A50PTOC1.Str [ST]",
+      "message": "DataSet member converted to SCL FCDA."
+    }
+  ],
+  "reportMappings": [
+    {
+      "kind": "BRCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.BR.brcbA01",
+      "sclReference": "OCR7SR12CTRL/LLN0$BR$brcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "BRCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.BR.brcbB01",
+      "sclReference": "OCR7SR12CTRL/LLN0$BR$brcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbC01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbC01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbD01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbD01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbE01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbE01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbF01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbF01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbG01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbG01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbH01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbH01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbI01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbI01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LLN0.RP.urcbJ01",
+      "sclReference": "OCR7SR12CTRL/LLN0$RP$urcbJ01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/BI6GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/BI6GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/BI6GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/BI6GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/BO8GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/BO8GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/BO8GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/BO8GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOesGGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPDOesGGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOesGGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPDOesGGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOesGGIO2.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPDOesGGIO2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOesGGIO2.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPDOesGGIO2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOesGGIO3.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPDOesGGIO3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOesGGIO3.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPDOesGGIO3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOesGGIO4.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPDOesGGIO4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOesGGIO4.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPDOesGGIO4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOnsGGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPDOnsGGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOnsGGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPDOnsGGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOnsGGIO2.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPDOnsGGIO2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOnsGGIO2.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPDOnsGGIO2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOnsGGIO3.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPDOnsGGIO3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOnsGGIO3.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPDOnsGGIO3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOnsGGIO4.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPDOnsGGIO4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPDOnsGGIO4.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPDOnsGGIO4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPi8GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPi8GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPi8GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPi8GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPi8GGIO2.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPi8GGIO2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPi8GGIO2.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPi8GGIO2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPo8GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPo8GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPo8GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPo8GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPo8GGIO2.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/DPo8GGIO2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/DPo8GGIO2.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/DPo8GGIO2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/E4GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/E4GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/E4GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/E4GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/L9GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/L9GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/L9GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/L9GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LPHD1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/LPHD1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/LPHD1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/LPHD1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/Q0CILO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/Q0CILO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/Q0CILO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/Q0CILO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/Q0CSWI1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/Q0CSWI1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/Q0CSWI1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/Q0CSWI1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/Q0XCBR1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/Q0XCBR1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/Q0XCBR1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/Q0XCBR1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOesGGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPDOesGGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOesGGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPDOesGGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOesGGIO2.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPDOesGGIO2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOesGGIO2.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPDOesGGIO2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOesGGIO3.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPDOesGGIO3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOesGGIO3.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPDOesGGIO3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOesGGIO4.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPDOesGGIO4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOesGGIO4.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPDOesGGIO4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOnsGGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPDOnsGGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOnsGGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPDOnsGGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOnsGGIO2.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPDOnsGGIO2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOnsGGIO2.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPDOnsGGIO2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOnsGGIO3.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPDOnsGGIO3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOnsGGIO3.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPDOnsGGIO3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOnsGGIO4.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPDOnsGGIO4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPDOnsGGIO4.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPDOnsGGIO4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPi64GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPi64GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPi64GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPi64GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPo32GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/SPo32GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/SPo32GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/SPo32GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/V8GGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12CTRL/V8GGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12CTRL/V8GGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12CTRL/V8GGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "BRCB",
+      "sourceReference": "OCR7SR12DR/LLN0.BR.brcbA01",
+      "sclReference": "OCR7SR12DR/LLN0$BR$brcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "BRCB",
+      "sourceReference": "OCR7SR12DR/LLN0.BR.brcbB01",
+      "sclReference": "OCR7SR12DR/LLN0$BR$brcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbA01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbB01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbC01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbC01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbD01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbD01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbE01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbE01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbF01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbF01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbG01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbG01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbH01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbH01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbI01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbI01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LLN0.RP.urcbJ01",
+      "sclReference": "OCR7SR12DR/LLN0$RP$urcbJ01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LPHD1.RP.urcbA01",
+      "sclReference": "OCR7SR12DR/LPHD1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/LPHD1.RP.urcbB01",
+      "sclReference": "OCR7SR12DR/LPHD1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/RDRE1.RP.urcbA01",
+      "sclReference": "OCR7SR12DR/RDRE1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12DR/RDRE1.RP.urcbB01",
+      "sclReference": "OCR7SR12DR/RDRE1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "BRCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.BR.brcbA01",
+      "sclReference": "OCR7SR12MEAS/LLN0$BR$brcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "BRCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.BR.brcbB01",
+      "sclReference": "OCR7SR12MEAS/LLN0$BR$brcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbC01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbC01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbD01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbD01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbE01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbE01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbF01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbF01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbG01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbG01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbH01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbH01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbI01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbI01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LLN0.RP.urcbJ01",
+      "sclReference": "OCR7SR12MEAS/LLN0$RP$urcbJ01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/Har2MMXU1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/Har2MMXU1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/Har2MMXU1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/Har2MMXU1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/I_MSQI1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/I_MSQI1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/I_MSQI1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/I_MSQI1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LPHD1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/LPHD1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/LPHD1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/LPHD1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MaxMMXU1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/MaxMMXU1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MaxMMXU1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/MaxMMXU1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MeanMMXU1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/MeanMMXU1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MeanMMXU1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/MeanMMXU1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MinMMXU1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/MinMMXU1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MinMMXU1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/MinMMXU1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MMTR1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/MMTR1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MMTR1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/MMTR1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MMXU1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/MMXU1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/MMXU1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/MMXU1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/V_MSQI1.RP.urcbA01",
+      "sclReference": "OCR7SR12MEAS/V_MSQI1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12MEAS/V_MSQI1.RP.urcbB01",
+      "sclReference": "OCR7SR12MEAS/V_MSQI1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "BRCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.BR.brcbA01",
+      "sclReference": "OCR7SR12PROT/LLN0$BR$brcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "BRCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.BR.brcbB01",
+      "sclReference": "OCR7SR12PROT/LLN0$BR$brcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbC01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbC01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbD01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbD01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbE01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbE01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbF01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbF01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbG01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbG01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbH01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbH01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbI01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbI01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LLN0.RP.urcbJ01",
+      "sclReference": "OCR7SR12PROT/LLN0$RP$urcbJ01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTOV1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A2759PTOV1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTOV1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A2759PTOV1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTOV2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A2759PTOV2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTOV2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A2759PTOV2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTOV3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A2759PTOV3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTOV3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A2759PTOV3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTOV4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A2759PTOV4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTOV4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A2759PTOV4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTUV1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A2759PTUV1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTUV1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A2759PTUV1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTUV2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A2759PTUV2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTUV2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A2759PTUV2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTUV3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A2759PTUV3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTUV3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A2759PTUV3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTUV4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A2759PTUV4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A2759PTUV4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A2759PTUV4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A32PDOP1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A32PDOP1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A32PDOP1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A32PDOP1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A32PDOP2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A32PDOP2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A32PDOP2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A32PDOP2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A32PDUP1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A32PDUP1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A32PDUP1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A32PDUP1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A32PDUP2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A32PDUP2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A32PDUP2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A32PDUP2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A37gPTUC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A37gPTUC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A37gPTUC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A37gPTUC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A37gPTUC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A37gPTUC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A37gPTUC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A37gPTUC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A37PTUC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A37PTUC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A37PTUC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A37PTUC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A37PTUC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A37PTUC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A37PTUC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A37PTUC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A46BcPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A46BcPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A46BcPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A46BcPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A46DtPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A46DtPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A46DtPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A46DtPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A46ItPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A46ItPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A46ItPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A46ItPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A47PTOV1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A47PTOV1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A47PTOV1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A47PTOV1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A47PTOV2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A47PTOV2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A47PTOV2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A47PTOV2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A49PTTR1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A49PTTR1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A49PTTR1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A49PTTR1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC5.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC5$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC5.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC5$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC6.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC6$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50AFDSARC6.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50AFDSARC6$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50BfRBRF1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50BfRBRF1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50BfRBRF1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50BfRBRF1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gLCPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50gLCPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gLCPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50gLCPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gLCPTOC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50gLCPTOC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gLCPTOC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50gLCPTOC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50gPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50gPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gPTOC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50gPTOC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gPTOC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50gPTOC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gPTOC3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50gPTOC3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gPTOC3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50gPTOC3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gPTOC4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50gPTOC4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50gPTOC4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50gPTOC4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50LCPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50LCPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50LCPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50LCPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50LCPTOC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50LCPTOC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50LCPTOC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50LCPTOC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50nPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50nPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50nPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50nPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50nPTOC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50nPTOC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50nPTOC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50nPTOC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50nPTOC3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50nPTOC3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50nPTOC3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50nPTOC3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50nPTOC4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50nPTOC4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50nPTOC4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50nPTOC4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50PTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50PTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50PTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50PTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50PTOC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50PTOC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50PTOC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50PTOC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50PTOC3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50PTOC3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50PTOC3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50PTOC3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50PTOC4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A50PTOC4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A50PTOC4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A50PTOC4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51gPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51gPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51gPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51gPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51gPTOC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51gPTOC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51gPTOC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51gPTOC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51gPTOC3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51gPTOC3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51gPTOC3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51gPTOC3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51gPTOC4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51gPTOC4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51gPTOC4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51gPTOC4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51nPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51nPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51nPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51nPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51nPTOC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51nPTOC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51nPTOC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51nPTOC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51nPTOC3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51nPTOC3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51nPTOC3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51nPTOC3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51nPTOC4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51nPTOC4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51nPTOC4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51nPTOC4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51PTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51PTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51PTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51PTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51PTOC2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51PTOC2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51PTOC2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51PTOC2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51PTOC3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51PTOC3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51PTOC3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51PTOC3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51PTOC4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A51PTOC4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A51PTOC4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A51PTOC4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A55PDOP1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A55PDOP1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A55PDOP1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A55PDOP1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A55PDOP2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A55PDOP2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A55PDOP2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A55PDOP2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A55PDUP1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A55PDUP1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A55PDUP1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A55PDUP1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A55PDUP2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A55PDUP2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A55PDUP2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A55PDUP2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A59nDtPTOV1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A59nDtPTOV1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A59nDtPTOV1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A59nDtPTOV1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A59nItPTOV1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A59nItPTOV1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A59nItPTOV1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A59nItPTOV1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A64hPTOC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A64hPTOC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A64hPTOC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A64hPTOC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A79RREC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A79RREC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A79RREC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A79RREC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81Hb2PHAR1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81Hb2PHAR1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81Hb2PHAR1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81Hb2PHAR1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTOF1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81PTOF1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTOF1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81PTOF1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTOF2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81PTOF2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTOF2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81PTOF2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTOF3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81PTOF3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTOF3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81PTOF3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTOF4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81PTOF4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTOF4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81PTOF4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTUF1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81PTUF1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTUF1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81PTUF1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTUF2.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81PTUF2$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTUF2.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81PTUF2$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTUF3.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81PTUF3$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTUF3.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81PTUF3$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTUF4.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/A81PTUF4$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/A81PTUF4.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/A81PTUF4$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/CntDelGGIO1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/CntDelGGIO1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/CntDelGGIO1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/CntDelGGIO1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LPHD1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/LPHD1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/LPHD1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/LPHD1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/PTRC1.RP.urcbA01",
+      "sclReference": "OCR7SR12PROT/PTRC1$RP$urcbA01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    },
+    {
+      "kind": "URCB",
+      "sourceReference": "OCR7SR12PROT/PTRC1.RP.urcbB01",
+      "sclReference": "OCR7SR12PROT/PTRC1$RP$urcbB01",
+      "message": "ReportControl converted from live RCB discovery. Runtime RptEna/Resv state excluded."
+    }
+  ],
+  "controlBlockMappings": [
+    {
+      "kind": "SettingControl",
+      "sourceReference": "OCR7SR12PROT/LLN0.SP.SGCB",
+      "sclReference": "OCR7SR12PROT/LLN0$SG$SGCB",
+      "message": "SettingControl shell exported from SG/SE attribute inventory. ActSG/EditSG values remain runtime evidence until SGCB value read is implemented."
+    }
+  ]
+}

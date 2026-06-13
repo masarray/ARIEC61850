@@ -1,0 +1,22 @@
+{
+  "GeneratedAtUtc": "2026-06-13T13:37:11.6970037+00:00",
+  "Attempted": false,
+  "Source": "datasets",
+  "Strategy": "safe",
+  "MaxReads": 128,
+  "DelayMs": 20,
+  "RawCandidateCount": 0,
+  "SelectedCandidateCount": 0,
+  "SkippedCandidateCount": 0,
+  "AttemptCount": 0,
+  "SuccessCount": 0,
+  "FailureCount": 0,
+  "ExactScalarTypeCount": 0,
+  "ExactStructureTypeCount": 0,
+  "StoppedBeforeCandidateExhausted": false,
+  "ProtocolFaultSuspected": false,
+  "Summary": "Variable specification probe was not attempted in this run.",
+  "SkippedByReason": [],
+  "SelectedCandidates": [],
+  "Results": []
+}

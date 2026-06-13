@@ -1,0 +1,15 @@
+{
+  "GeneratedAtUtc": "2026-06-13T13:15:24.2589309+00:00",
+  "Summary": "SGCB core complete=0/1, SG/SE entries=0, reads=0/0.",
+  "SettingGroupControlCount": 1,
+  "CoreReadbackCompleteCount": 0,
+  "NumberOfSettingGroups": 0,
+  "ActiveSettingGroup": 0,
+  "EditSettingGroup": 0,
+  "ConfirmEdit": null,
+  "EntryCount": 0,
+  "ReadAttemptCount": 0,
+  "ReadSuccessCount": 0,
+  "ReadFailureCount": 0,
+  "Entries": []
+}

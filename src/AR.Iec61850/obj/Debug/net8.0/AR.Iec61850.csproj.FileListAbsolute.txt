@@ -1,0 +1,12 @@
+D:\Git\ARIEC61850\src\AR.Iec61850\bin\Debug\net8.0\AR.Iec61850.deps.json
+D:\Git\ARIEC61850\src\AR.Iec61850\bin\Debug\net8.0\AR.Iec61850.dll
+D:\Git\ARIEC61850\src\AR.Iec61850\bin\Debug\net8.0\AR.Iec61850.pdb
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\AR.Iec61850.GeneratedMSBuildEditorConfig.editorconfig
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\AR.Iec61850.AssemblyInfoInputs.cache
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\AR.Iec61850.AssemblyInfo.cs
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\AR.Iec61850.csproj.CoreCompileInputs.cache
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\AR.Iec61850.sourcelink.json
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\AR.Iec61850.dll
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\refint\AR.Iec61850.dll
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\AR.Iec61850.pdb
+D:\Git\ARIEC61850\src\AR.Iec61850\obj\Debug\net8.0\ref\AR.Iec61850.dll

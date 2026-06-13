@@ -1,0 +1,38 @@
+[
+  {
+    "ReadAt": "2026-06-12T21:09:40.3674038+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T21:09:41.4743222+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T21:09:42.5801228+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  },
+  {
+    "ReadAt": "2026-06-12T21:09:43.6865099+00:00",
+    "Reference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "SelectedReference": "OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f",
+    "FunctionalConstraint": "MX",
+    "IsSuccess": true,
+    "DisplayValue": "0",
+    "Message": "Smart read OK: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f [MX] = 0"
+  }
+]

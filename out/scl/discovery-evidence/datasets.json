@@ -1,0 +1,36 @@
+﻿[
+  {
+    "Reference": "OCR7SR12PROT/LLN0.DataSet",
+    "Domain": "OCR7SR12PROT",
+    "LogicalNode": "LLN0",
+    "Name": "DataSet",
+    "IsDeletable": false,
+    "MemberCount": 2,
+    "Members": [
+      {
+        "Index": 0,
+        "Reference": "OCR7SR12PROT/A50PTOC1.Op",
+        "FunctionalConstraint": "ST",
+        "MmsReference": "OCR7SR12PROT/A50PTOC1$ST$Op",
+        "Confidence": 0
+      },
+      {
+        "Index": 1,
+        "Reference": "OCR7SR12PROT/A50PTOC1.Str",
+        "FunctionalConstraint": "ST",
+        "MmsReference": "OCR7SR12PROT/A50PTOC1$ST$Str",
+        "Confidence": 0
+      }
+    ],
+    "UsedByReportControls": [
+      "OCR7SR12PROT/LLN0.BR.brcbA01",
+      "OCR7SR12PROT/LLN0.RP.urcbA01",
+      "OCR7SR12PROT/LLN0.RP.urcbC01",
+      "OCR7SR12PROT/LLN0.RP.urcbD01",
+      "OCR7SR12PROT/LLN0.RP.urcbE01",
+      "OCR7SR12PROT/LLN0.RP.urcbF01"
+    ],
+    "UsedByGooseControls": [],
+    "UsedBySampledValueControls": []
+  }
+]

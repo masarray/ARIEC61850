@@ -1,0 +1,13 @@
+{
+  "GeneratedAtUtc": "2026-06-13T13:37:11.6971388+00:00",
+  "IsEnabled": true,
+  "IsQuarantined": false,
+  "Scope": "Session",
+  "TargetKey": "192.16.1.157:102/OCR7SR12",
+  "TriggerReference": "",
+  "TriggerMessage": "",
+  "Reason": "",
+  "CoreDiscoveryPreserved": true,
+  "Recommendation": "",
+  "Summary": "Variable specification quarantine is enabled but has not been triggered."
+}

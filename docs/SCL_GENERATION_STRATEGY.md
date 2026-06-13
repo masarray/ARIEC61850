@@ -180,3 +180,19 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-service-discover 192.16.1.157
 ```
 
 The command writes the normal live model evidence plus `service-coverage-report.md/json`, explicitly separating discovered areas from remaining protocol-service gaps such as file service, log service, setting-group service, and GoCB/SVCB value readers.
+
+## Variable specification quarantine and golden type learning
+
+`GetVariableAccessAttributes` can be useful for exact MMS type discovery, but field devices may reject or even close the TCP association for this service. ARIEC61850 therefore treats it as optional and isolated:
+
+- `--type-read-isolated true` opens a disposable association for variable specification reads.
+- `--type-read-quarantine true` marks an IED/session as unsafe after a peer-close or transport fault.
+- `--golden-scl <file>` or `samples/scl/<IED>.iid` supplies a trusted IEDScout/vendor IID reference for CDC/type learning.
+
+The generated reports separate three different facts:
+
+1. Core online discovery coverage.
+2. Whether exact variable specification probing is safe for the target.
+3. Which CDC/type mappings can be learned from a golden SCL reference.
+
+This avoids forcing live type probes on IEDs that are already known to be sensitive.

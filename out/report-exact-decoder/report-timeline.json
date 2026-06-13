@@ -1,0 +1,312 @@
+[
+  {
+    "ReceivedAt": "2026-06-12T22:37:45.7976773+00:00",
+    "RptID": "OCR7SR12PROT/LLN0$BR$brcbA01",
+    "DataSet": "OCR7SR12PROT/LLN0$DataSet",
+    "ConfRev": 1,
+    "SequenceNumber": 1,
+    "TimeOfEntry": "2026-06-12 20:55:08.659 UTC (binary-time=047D1E733C8F)",
+    "BufferOverflow": true,
+    "EntryID": "000000000000000D",
+    "OptionalFields": [
+      "sequence-number",
+      "report-time-stamp",
+      "reason-for-inclusion",
+      "data-set-name",
+      "buffer-overflow",
+      "entryID",
+      "conf-revision"
+    ],
+    "OptionalFieldBits": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8
+    ],
+    "OptionalFieldsRaw": "7B80",
+    "DecoderMode": "optflds-driven",
+    "StreamKey": "OCR7SR12PROT/LLN0$BR$brcbA01|ds=OCR7SR12PROT/LLN0$DataSet|conf=1",
+    "ParseWarnings": [],
+    "IncludedDataSetIndexes": [
+      0
+    ],
+    "IncludedCount": 1,
+    "MappedCount": 1,
+    "Reasons": [
+      "quality-change"
+    ],
+    "Values": [
+      {
+        "Index": 0,
+        "MemberReference": "OCR7SR12PROT/A50PTOC1.Op",
+        "DataReference": "",
+        "Reason": "quality-change",
+        "displayValue": "Structure(3) {stVal=true, q=bits(0000, unused=3), t=2026-06-12 12:00:24.253 UTC (q=0x3F)}"
+      }
+    ]
+  },
+  {
+    "ReceivedAt": "2026-06-12T22:37:45.8111041+00:00",
+    "RptID": "OCR7SR12PROT/LLN0$BR$brcbA01",
+    "DataSet": "OCR7SR12PROT/LLN0$DataSet",
+    "ConfRev": 1,
+    "SequenceNumber": 1,
+    "TimeOfEntry": "2026-06-12 20:55:17.702 UTC (binary-time=047D41C63C8F)",
+    "BufferOverflow": false,
+    "EntryID": "000000000000000F",
+    "OptionalFields": [
+      "sequence-number",
+      "report-time-stamp",
+      "reason-for-inclusion",
+      "data-set-name",
+      "buffer-overflow",
+      "entryID",
+      "conf-revision"
+    ],
+    "OptionalFieldBits": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8
+    ],
+    "OptionalFieldsRaw": "7B80",
+    "DecoderMode": "optflds-driven",
+    "StreamKey": "OCR7SR12PROT/LLN0$BR$brcbA01|ds=OCR7SR12PROT/LLN0$DataSet|conf=1",
+    "ParseWarnings": [],
+    "IncludedDataSetIndexes": [
+      1
+    ],
+    "IncludedCount": 1,
+    "MappedCount": 1,
+    "Reasons": [
+      "quality-change"
+    ],
+    "Values": [
+      {
+        "Index": 1,
+        "MemberReference": "OCR7SR12PROT/A50PTOC1.Str",
+        "DataReference": "",
+        "Reason": "quality-change",
+        "displayValue": "Structure(10) {general=true, phsA=0, phsB=true, phsC=0, neut=false, q=0, t=false, [7]=0, ... \u002B2}"
+      }
+    ]
+  },
+  {
+    "ReceivedAt": "2026-06-12T22:37:45.8111848+00:00",
+    "RptID": "OCR7SR12PROT/LLN0$BR$brcbA01",
+    "DataSet": "OCR7SR12PROT/LLN0$DataSet",
+    "ConfRev": 1,
+    "SequenceNumber": 1,
+    "TimeOfEntry": "2026-06-12 22:10:17.992 UTC (binary-time=04C1ED083C8F)",
+    "BufferOverflow": false,
+    "EntryID": "0000000000000016",
+    "OptionalFields": [
+      "sequence-number",
+      "report-time-stamp",
+      "reason-for-inclusion",
+      "data-set-name",
+      "buffer-overflow",
+      "entryID",
+      "conf-revision"
+    ],
+    "OptionalFieldBits": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8
+    ],
+    "OptionalFieldsRaw": "7B80",
+    "DecoderMode": "optflds-driven",
+    "StreamKey": "OCR7SR12PROT/LLN0$BR$brcbA01|ds=OCR7SR12PROT/LLN0$DataSet|conf=1",
+    "ParseWarnings": [],
+    "IncludedDataSetIndexes": [
+      0
+    ],
+    "IncludedCount": 1,
+    "MappedCount": 1,
+    "Reasons": [
+      "quality-change"
+    ],
+    "Values": [
+      {
+        "Index": 0,
+        "MemberReference": "OCR7SR12PROT/A50PTOC1.Op",
+        "DataReference": "",
+        "Reason": "quality-change",
+        "displayValue": "Structure(3) {stVal=false, q=bits(0000, unused=3), t=2026-06-12 12:00:24.253 UTC (q=0x3F)}"
+      }
+    ]
+  },
+  {
+    "ReceivedAt": "2026-06-12T22:37:45.8112046+00:00",
+    "RptID": "OCR7SR12PROT/LLN0$BR$brcbA01",
+    "DataSet": "OCR7SR12PROT/LLN0$DataSet",
+    "ConfRev": 1,
+    "SequenceNumber": 2,
+    "TimeOfEntry": "2026-06-12 22:10:24.482 UTC (binary-time=04C206623C8F)",
+    "BufferOverflow": false,
+    "EntryID": "0000000000000017",
+    "OptionalFields": [
+      "sequence-number",
+      "report-time-stamp",
+      "reason-for-inclusion",
+      "data-set-name",
+      "buffer-overflow",
+      "entryID",
+      "conf-revision"
+    ],
+    "OptionalFieldBits": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8
+    ],
+    "OptionalFieldsRaw": "7B80",
+    "DecoderMode": "optflds-driven",
+    "StreamKey": "OCR7SR12PROT/LLN0$BR$brcbA01|ds=OCR7SR12PROT/LLN0$DataSet|conf=1",
+    "ParseWarnings": [],
+    "IncludedDataSetIndexes": [
+      0
+    ],
+    "IncludedCount": 1,
+    "MappedCount": 1,
+    "Reasons": [
+      "quality-change"
+    ],
+    "Values": [
+      {
+        "Index": 0,
+        "MemberReference": "OCR7SR12PROT/A50PTOC1.Op",
+        "DataReference": "",
+        "Reason": "quality-change",
+        "displayValue": "Structure(3) {stVal=true, q=bits(0000, unused=3), t=2026-06-12 12:00:24.253 UTC (q=0x3F)}"
+      }
+    ]
+  },
+  {
+    "ReceivedAt": "2026-06-12T22:37:45.8112215+00:00",
+    "RptID": "OCR7SR12PROT/LLN0$BR$brcbA01",
+    "DataSet": "OCR7SR12PROT/LLN0$DataSet",
+    "ConfRev": 1,
+    "SequenceNumber": 4,
+    "TimeOfEntry": "2026-06-12 22:28:24.657 UTC (binary-time=04D281D13C8F)",
+    "BufferOverflow": false,
+    "EntryID": "000000000000001C",
+    "OptionalFields": [
+      "sequence-number",
+      "report-time-stamp",
+      "reason-for-inclusion",
+      "data-set-name",
+      "buffer-overflow",
+      "entryID",
+      "conf-revision"
+    ],
+    "OptionalFieldBits": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8
+    ],
+    "OptionalFieldsRaw": "7B80",
+    "DecoderMode": "optflds-driven",
+    "StreamKey": "OCR7SR12PROT/LLN0$BR$brcbA01|ds=OCR7SR12PROT/LLN0$DataSet|conf=1",
+    "ParseWarnings": [],
+    "IncludedDataSetIndexes": [
+      0,
+      1
+    ],
+    "IncludedCount": 2,
+    "MappedCount": 2,
+    "Reasons": [
+      "application-trigger"
+    ],
+    "Values": [
+      {
+        "Index": 0,
+        "MemberReference": "OCR7SR12PROT/A50PTOC1.Op",
+        "DataReference": "",
+        "Reason": "application-trigger",
+        "displayValue": "Structure(3) {stVal=true, q=bits(0000, unused=3), t=2026-06-12 12:00:24.253 UTC (q=0x3F)}"
+      },
+      {
+        "Index": 1,
+        "MemberReference": "OCR7SR12PROT/A50PTOC1.Str",
+        "DataReference": "",
+        "Reason": "application-trigger",
+        "displayValue": "Structure(10) {general=true, phsA=0, phsB=true, phsC=0, neut=false, q=0, t=false, [7]=0, ... \u002B2}"
+      }
+    ]
+  },
+  {
+    "ReceivedAt": "2026-06-12T22:37:45.8113339+00:00",
+    "RptID": "OCR7SR12PROT/LLN0$BR$brcbA01",
+    "DataSet": "OCR7SR12PROT/LLN0$DataSet",
+    "ConfRev": 1,
+    "SequenceNumber": 0,
+    "TimeOfEntry": "2026-06-12 22:37:45.790 UTC (binary-time=04DB11BE3C8F)",
+    "BufferOverflow": false,
+    "EntryID": "000000000000001D",
+    "OptionalFields": [
+      "sequence-number",
+      "report-time-stamp",
+      "reason-for-inclusion",
+      "data-set-name",
+      "buffer-overflow",
+      "entryID",
+      "conf-revision"
+    ],
+    "OptionalFieldBits": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8
+    ],
+    "OptionalFieldsRaw": "7B80",
+    "DecoderMode": "optflds-driven",
+    "StreamKey": "OCR7SR12PROT/LLN0$BR$brcbA01|ds=OCR7SR12PROT/LLN0$DataSet|conf=1",
+    "ParseWarnings": [],
+    "IncludedDataSetIndexes": [
+      0,
+      1
+    ],
+    "IncludedCount": 2,
+    "MappedCount": 2,
+    "Reasons": [
+      "application-trigger"
+    ],
+    "Values": [
+      {
+        "Index": 0,
+        "MemberReference": "OCR7SR12PROT/A50PTOC1.Op",
+        "DataReference": "",
+        "Reason": "application-trigger",
+        "displayValue": "Structure(3) {stVal=true, q=bits(0000, unused=3), t=2026-06-12 12:00:24.253 UTC (q=0x3F)}"
+      },
+      {
+        "Index": 1,
+        "MemberReference": "OCR7SR12PROT/A50PTOC1.Str",
+        "DataReference": "",
+        "Reason": "application-trigger",
+        "displayValue": "Structure(10) {general=true, phsA=0, phsB=true, phsC=0, neut=false, q=0, t=false, [7]=0, ... \u002B2}"
+      }
+    ]
+  }
+]

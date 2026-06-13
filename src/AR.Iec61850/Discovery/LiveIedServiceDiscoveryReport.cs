@@ -38,6 +38,8 @@ public static class LiveIedServiceDiscoveryReportBuilder
         var settingReadbacks = evidence?.SettingGroupReadbacks ?? Array.Empty<LiveIedSettingGroupReadbackEvidence>();
         var settingMap = evidence?.SettingGroupMap ?? new LiveIedSettingGroupMapDocument();
         var typeProbe = evidence?.VariableTypeProbe ?? new LiveIedVariableTypeProbeEvidence();
+        var typeQuarantine = evidence?.VariableSpecQuarantine ?? new LiveIedVariableSpecQuarantineEvidence();
+        var goldenLearning = evidence?.GoldenSclTypeLearning ?? new LiveIedGoldenSclTypeLearningEvidence();
         var fileStatus = !fileEvidence.Attempted ? "Not attempted" : fileEvidence.IsSuccess ? "Discovered" : "Attempted, failed or unsupported";
         var fileCount = fileEvidence.Entries.Count;
         var fileMessage = !fileEvidence.Attempted ? "FileDirectory was not attempted in this run." : fileEvidence.IsSuccess ? $"FileDirectory returned {fileCount} entries from {fileEvidence.PageCount} page(s)." : fileEvidence.Message;
@@ -58,8 +60,9 @@ public static class LiveIedServiceDiscoveryReportBuilder
             Item("Setting groups", sgStatus, Math.Max(Math.Max(document.Coverage.SettingGroupControlCount, sgSuccessful), settingMap.EntryCount), sgEvidence, sgGap),
             Item("Logs", document.Coverage.LogControlCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.LogControlCount, "LogControl inventory is available when LG attributes are exposed.", "Implement log directory/query service."),
             Item("File service", fileStatus, fileCount, fileMessage, fileEvidence.IsSuccess ? "Add FileOpen/FileRead download support and recursive safe directory walking." : "Implement/verify FileDirectory support on this IED and add file download evidence."),
-            Item("Variable specifications", BuildVariableTypeStatus(document, typeProbe), Math.Max(document.Coverage.VariableTypeReadSuccessCount, typeProbe.SuccessCount), BuildVariableTypeEvidence(document, typeProbe), BuildVariableTypeGap(typeProbe)),
-            Item("CDC resolution", document.Coverage.UnknownCdcCount == 0 ? "Resolved" : "Partially resolved", document.Coverage.HighConfidenceCdcCount + document.Coverage.MediumConfidenceCdcCount + document.Coverage.LowConfidenceCdcCount, $"high={document.Coverage.HighConfidenceCdcCount}, medium={document.Coverage.MediumConfidenceCdcCount}, low={document.Coverage.LowConfidenceCdcCount}, unknown={document.Coverage.UnknownCdcCount}", "Expand IEC 61850-7-3/7-4 registry and compare against golden IEDScout SCL.")
+            Item("Variable specifications", BuildVariableTypeStatus(document, typeProbe, typeQuarantine), Math.Max(document.Coverage.VariableTypeReadSuccessCount, typeProbe.SuccessCount), BuildVariableTypeEvidence(document, typeProbe, typeQuarantine), BuildVariableTypeGap(typeProbe, typeQuarantine)),
+            Item("Golden SCL type learning", BuildGoldenLearningStatus(goldenLearning), goldenLearning.CandidateImprovementCount, BuildGoldenLearningEvidence(goldenLearning), BuildGoldenLearningGap(goldenLearning)),
+            Item("CDC resolution", document.Coverage.UnknownCdcCount == 0 ? "Resolved" : "Partially resolved", document.Coverage.HighConfidenceCdcCount + document.Coverage.MediumConfidenceCdcCount + document.Coverage.LowConfidenceCdcCount, $"high={document.Coverage.HighConfidenceCdcCount}, medium={document.Coverage.MediumConfidenceCdcCount}, low={document.Coverage.LowConfidenceCdcCount}, unknown={document.Coverage.UnknownCdcCount}", "Expand IEC 61850-7-3/7-4 registry and feed golden SCL learning results into normalized type generation.")
         };
 
         return new LiveIedServiceDiscoveryReport
@@ -118,8 +121,11 @@ public static class LiveIedServiceDiscoveryReportBuilder
     }
 
 
-    private static string BuildVariableTypeStatus(LiveIedModelDiscoveryDocument document, LiveIedVariableTypeProbeEvidence probe)
+    private static string BuildVariableTypeStatus(LiveIedModelDiscoveryDocument document, LiveIedVariableTypeProbeEvidence probe, LiveIedVariableSpecQuarantineEvidence quarantine)
     {
+        if (quarantine.IsQuarantined)
+            return "Quarantined after peer-close";
+
         if (!probe.Attempted && document.Coverage.VariableTypeReadAttemptCount == 0)
             return "Not attempted";
 
@@ -138,16 +144,22 @@ public static class LiveIedServiceDiscoveryReportBuilder
         return "Safely attempted";
     }
 
-    private static string BuildVariableTypeEvidence(LiveIedModelDiscoveryDocument document, LiveIedVariableTypeProbeEvidence probe)
+    private static string BuildVariableTypeEvidence(LiveIedModelDiscoveryDocument document, LiveIedVariableTypeProbeEvidence probe, LiveIedVariableSpecQuarantineEvidence quarantine)
     {
+        if (quarantine.IsQuarantined)
+            return $"{quarantine.Summary} trigger={quarantine.TriggerReference}";
+
         if (!probe.Attempted)
             return $"attempted={document.Coverage.VariableTypeReadAttemptCount}, ok={document.Coverage.VariableTypeReadSuccessCount}, failed={document.Coverage.VariableTypeReadFailureCount}";
 
         return $"{probe.Summary} scalar={probe.ExactScalarTypeCount}, structure={probe.ExactStructureTypeCount}, selected={probe.SelectedCandidateCount}/{probe.RawCandidateCount}.";
     }
 
-    private static string BuildVariableTypeGap(LiveIedVariableTypeProbeEvidence probe)
+    private static string BuildVariableTypeGap(LiveIedVariableTypeProbeEvidence probe, LiveIedVariableSpecQuarantineEvidence quarantine)
     {
+        if (quarantine.IsQuarantined)
+            return "Use golden SCL/type registry learning for this IED; keep GetVariableAccessAttributes disabled or isolated.";
+
         if (!probe.Attempted)
             return "Use safe, leaf-only, dataset-first type reads to avoid IED peer-close behavior.";
 
@@ -160,6 +172,40 @@ public static class LiveIedServiceDiscoveryReportBuilder
         return "Check whether this IED supports GetVariableAccessAttributes for selected leaf attributes; keep probe limits low.";
     }
 
+
+
+    private static string BuildGoldenLearningStatus(LiveIedGoldenSclTypeLearningEvidence learning)
+    {
+        if (!learning.Attempted)
+            return "Not attempted";
+        if (!learning.IsSuccess)
+            return "Unavailable";
+        if (learning.CandidateImprovementCount > 0)
+            return "Learning candidates found";
+        if (learning.ExactKeyMatchCount > 0)
+            return "Golden reference aligned";
+        return "No applicable learning candidates";
+    }
+
+    private static string BuildGoldenLearningEvidence(LiveIedGoldenSclTypeLearningEvidence learning)
+    {
+        if (!learning.Attempted)
+            return "No golden SCL file was supplied or auto-detected.";
+        if (!learning.IsSuccess)
+            return learning.Message;
+        return $"goldenBindings={learning.GoldenBindingCount}, liveDO={learning.LiveDataObjectCount}, unknownOrMedium={learning.LiveUnknownOrMediumCount}, exactKeyMatches={learning.ExactKeyMatchCount}, candidates={learning.CandidateImprovementCount}, conflicts={learning.CdcConflictCount}.";
+    }
+
+    private static string BuildGoldenLearningGap(LiveIedGoldenSclTypeLearningEvidence learning)
+    {
+        if (!learning.Attempted)
+            return "Provide --golden-scl samples/scl/<IED>.iid or keep the golden file in samples/scl for automatic CDC/type learning.";
+        if (!learning.IsSuccess)
+            return "Fix golden SCL path/parsing before using it as a type-learning reference.";
+        if (learning.CandidateImprovementCount > 0)
+            return "Promote confirmed golden CDC/type candidates into the standard/vendor registry and SCL normalizer.";
+        return string.Empty;
+    }
 
     private static bool IsSettingGroupCoreReadbackComplete(LiveIedSettingGroupReadbackEvidence readback)
     {

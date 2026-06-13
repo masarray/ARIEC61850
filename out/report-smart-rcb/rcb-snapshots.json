@@ -1,0 +1,32 @@
+[
+  {
+    "Stage": "before",
+    "CapturedAt": "2026-06-13T00:13:25.9318052+00:00",
+    "IsSuccess": true,
+    "Message": "RCB readback snapshot captured.",
+    "Reference": "OCR7SR12PROT/LLN0.BR.brcbB01",
+    "Mode": "BRCB",
+    "DataSetReference": "OCR7SR12PROT/LLN0.DataSet",
+    "ReportId": "OCR7SR12PROT/LLN0$BR$brcbB01",
+    "ConfRev": "1",
+    "EnabledState": "false",
+    "ReservationState": "",
+    "ReservationTimeSeconds": "0",
+    "BufferTimeMs": "100",
+    "IntegrityPeriodMs": "0",
+    "TriggerOptions": "027C",
+    "OptionalFields": "067B80",
+    "ProbeDiagnostics": [
+      "DatSet item=LLN0$BR$brcbB01$DatSet: OK ",
+      "RptID item=LLN0$BR$brcbB01$RptID: OK OCR7SR12PROT/LLN0$BR$brcbB01",
+      "ConfRev item=LLN0$BR$brcbB01$ConfRev: OK 1",
+      "IntgPd item=LLN0$BR$brcbB01$IntgPd: OK 0",
+      "RptEna item=LLN0$BR$brcbB01$RptEna: OK false",
+      "BufTm item=LLN0$BR$brcbB01$BufTm: OK 100",
+      "TrgOps item=LLN0$BR$brcbB01$TrgOps: OK bits(7C, unused=2)",
+      "OptFlds item=LLN0$BR$brcbB01$OptFlds: OK bits(7B80, unused=6)",
+      "ResvTms item=LLN0$BR$brcbB01$ResvTms: OK 0"
+    ],
+    "Summary": "before: OCR7SR12PROT/LLN0.BR.brcbB01 RptEna=false DatSet=OCR7SR12PROT/LLN0.DataSet Resv=- ResvTms=0 ConfRev=1"
+  }
+]

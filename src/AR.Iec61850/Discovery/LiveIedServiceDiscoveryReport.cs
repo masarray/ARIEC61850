@@ -37,6 +37,7 @@ public static class LiveIedServiceDiscoveryReportBuilder
         var fileEvidence = evidence?.FileService ?? new LiveIedFileServiceEvidence();
         var settingReadbacks = evidence?.SettingGroupReadbacks ?? Array.Empty<LiveIedSettingGroupReadbackEvidence>();
         var settingMap = evidence?.SettingGroupMap ?? new LiveIedSettingGroupMapDocument();
+        var typeProbe = evidence?.VariableTypeProbe ?? new LiveIedVariableTypeProbeEvidence();
         var fileStatus = !fileEvidence.Attempted ? "Not attempted" : fileEvidence.IsSuccess ? "Discovered" : "Attempted, failed or unsupported";
         var fileCount = fileEvidence.Entries.Count;
         var fileMessage = !fileEvidence.Attempted ? "FileDirectory was not attempted in this run." : fileEvidence.IsSuccess ? $"FileDirectory returned {fileCount} entries from {fileEvidence.PageCount} page(s)." : fileEvidence.Message;
@@ -57,7 +58,7 @@ public static class LiveIedServiceDiscoveryReportBuilder
             Item("Setting groups", sgStatus, Math.Max(Math.Max(document.Coverage.SettingGroupControlCount, sgSuccessful), settingMap.EntryCount), sgEvidence, sgGap),
             Item("Logs", document.Coverage.LogControlCount > 0 ? "Inventory" : "Not exposed or not discovered", document.Coverage.LogControlCount, "LogControl inventory is available when LG attributes are exposed.", "Implement log directory/query service."),
             Item("File service", fileStatus, fileCount, fileMessage, fileEvidence.IsSuccess ? "Add FileOpen/FileRead download support and recursive safe directory walking." : "Implement/verify FileDirectory support on this IED and add file download evidence."),
-            Item("Variable specifications", document.Coverage.VariableTypeReadAttemptCount > 0 ? (document.Coverage.VariableTypeReadSuccessCount > 0 ? "Partially read" : "Attempted, failed or unsupported") : "Not attempted", document.Coverage.VariableTypeReadSuccessCount, $"attempted={document.Coverage.VariableTypeReadAttemptCount}, ok={document.Coverage.VariableTypeReadSuccessCount}, failed={document.Coverage.VariableTypeReadFailureCount}", "Use safe, leaf-only, dataset-first type reads to avoid IED peer-close behavior."),
+            Item("Variable specifications", BuildVariableTypeStatus(document, typeProbe), Math.Max(document.Coverage.VariableTypeReadSuccessCount, typeProbe.SuccessCount), BuildVariableTypeEvidence(document, typeProbe), BuildVariableTypeGap(typeProbe)),
             Item("CDC resolution", document.Coverage.UnknownCdcCount == 0 ? "Resolved" : "Partially resolved", document.Coverage.HighConfidenceCdcCount + document.Coverage.MediumConfidenceCdcCount + document.Coverage.LowConfidenceCdcCount, $"high={document.Coverage.HighConfidenceCdcCount}, medium={document.Coverage.MediumConfidenceCdcCount}, low={document.Coverage.LowConfidenceCdcCount}, unknown={document.Coverage.UnknownCdcCount}", "Expand IEC 61850-7-3/7-4 registry and compare against golden IEDScout SCL.")
         };
 
@@ -114,6 +115,49 @@ public static class LiveIedServiceDiscoveryReportBuilder
         sb.AppendLine();
         sb.AppendLine("This report separates what ARIEC61850 already discovers online from what still needs a dedicated MMS service implementation. It is intentionally stricter than the SCL exporter: a service is not marked complete merely because a placeholder or attribute name was seen in the live model.");
         return sb.ToString();
+    }
+
+
+    private static string BuildVariableTypeStatus(LiveIedModelDiscoveryDocument document, LiveIedVariableTypeProbeEvidence probe)
+    {
+        if (!probe.Attempted && document.Coverage.VariableTypeReadAttemptCount == 0)
+            return "Not attempted";
+
+        if (probe.ProtocolFaultSuspected && probe.SuccessCount == 0)
+            return "Safe probe stopped or unsupported";
+
+        if (probe.SuccessCount > 0 && probe.StoppedBeforeCandidateExhausted)
+            return "Safely partially read";
+
+        if (probe.SuccessCount > 0)
+            return "Safely read";
+
+        if (probe.Attempted && probe.SelectedCandidateCount == 0)
+            return "No safe candidates";
+
+        return "Safely attempted";
+    }
+
+    private static string BuildVariableTypeEvidence(LiveIedModelDiscoveryDocument document, LiveIedVariableTypeProbeEvidence probe)
+    {
+        if (!probe.Attempted)
+            return $"attempted={document.Coverage.VariableTypeReadAttemptCount}, ok={document.Coverage.VariableTypeReadSuccessCount}, failed={document.Coverage.VariableTypeReadFailureCount}";
+
+        return $"{probe.Summary} scalar={probe.ExactScalarTypeCount}, structure={probe.ExactStructureTypeCount}, selected={probe.SelectedCandidateCount}/{probe.RawCandidateCount}.";
+    }
+
+    private static string BuildVariableTypeGap(LiveIedVariableTypeProbeEvidence probe)
+    {
+        if (!probe.Attempted)
+            return "Use safe, leaf-only, dataset-first type reads to avoid IED peer-close behavior.";
+
+        if (probe.ProtocolFaultSuspected)
+            return "Reduce max type reads, keep dataset-first leaf-only probing, and avoid the last failed reference class.";
+
+        if (probe.SuccessCount > 0)
+            return "Feed exact type results into CDC/template normalization and expand safe candidate batches gradually.";
+
+        return "Check whether this IED supports GetVariableAccessAttributes for selected leaf attributes; keep probe limits low.";
     }
 
 

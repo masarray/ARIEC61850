@@ -79,9 +79,59 @@ public sealed class LiveIedSettingGroupMapEntry
     public string Message { get; init; } = string.Empty;
 }
 
+public sealed class LiveIedVariableTypeProbeEvidence
+{
+    public DateTimeOffset GeneratedAtUtc { get; init; } = DateTimeOffset.UtcNow;
+    public bool Attempted { get; init; }
+    public string Source { get; init; } = string.Empty;
+    public string Strategy { get; init; } = string.Empty;
+    public int MaxReads { get; init; }
+    public int DelayMs { get; init; }
+    public int RawCandidateCount { get; init; }
+    public int SelectedCandidateCount { get; init; }
+    public int SkippedCandidateCount { get; init; }
+    public int AttemptCount { get; init; }
+    public int SuccessCount { get; init; }
+    public int FailureCount { get; init; }
+    public int ExactScalarTypeCount { get; init; }
+    public int ExactStructureTypeCount { get; init; }
+    public bool StoppedBeforeCandidateExhausted { get; init; }
+    public bool ProtocolFaultSuspected { get; init; }
+    public string Summary { get; init; } = string.Empty;
+    public IReadOnlyList<LiveIedVariableTypeProbeSkipSummary> SkippedByReason { get; init; } = Array.Empty<LiveIedVariableTypeProbeSkipSummary>();
+    public IReadOnlyList<LiveIedVariableTypeProbeCandidateEvidence> SelectedCandidates { get; init; } = Array.Empty<LiveIedVariableTypeProbeCandidateEvidence>();
+    public IReadOnlyList<LiveIedVariableTypeProbeResultEvidence> Results { get; init; } = Array.Empty<LiveIedVariableTypeProbeResultEvidence>();
+}
+
+public sealed class LiveIedVariableTypeProbeSkipSummary
+{
+    public string Reason { get; init; } = string.Empty;
+    public int Count { get; init; }
+}
+
+public sealed class LiveIedVariableTypeProbeCandidateEvidence
+{
+    public string Reference { get; init; } = string.Empty;
+    public string Domain { get; init; } = string.Empty;
+    public string MmsItemName { get; init; } = string.Empty;
+    public string FunctionalConstraint { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class LiveIedVariableTypeProbeResultEvidence
+{
+    public string Reference { get; init; } = string.Empty;
+    public bool IsSuccess { get; init; }
+    public string MmsType { get; init; } = string.Empty;
+    public string SclBType { get; init; } = string.Empty;
+    public string TypeSignature { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+}
+
 public sealed class LiveIedOnlineServiceEvidence
 {
     public LiveIedFileServiceEvidence FileService { get; init; } = new();
     public IReadOnlyList<LiveIedSettingGroupReadbackEvidence> SettingGroupReadbacks { get; init; } = Array.Empty<LiveIedSettingGroupReadbackEvidence>();
     public LiveIedSettingGroupMapDocument SettingGroupMap { get; init; } = new();
+    public LiveIedVariableTypeProbeEvidence VariableTypeProbe { get; init; } = new();
 }

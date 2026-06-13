@@ -536,13 +536,28 @@ internal static class Cli
         }
 
         IReadOnlyList<MmsVariableAccessAttributesResult> variableTypes = Array.Empty<MmsVariableAccessAttributesResult>();
+        LiveIedVariableTypeProbeEvidence variableTypeProbe = new()
+        {
+            Attempted = false,
+            Source = typeReadSource,
+            Strategy = typeReadStrategy,
+            MaxReads = maxTypeReads,
+            DelayMs = typeReadDelayMs,
+            Summary = "Variable specification probe was not attempted in this run."
+        };
         if (readTypes)
         {
-            var typeCandidates = ApplyTypeReadStrategy(BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource), typeReadStrategy)
+            var rawTypeCandidates = BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource).ToArray();
+            var typeEvaluations = BuildTypeReadCandidateEvaluations(rawTypeCandidates, typeReadStrategy).ToArray();
+            var typeCandidates = typeEvaluations
+                .Where(x => x.IsSelected)
+                .Select(x => x.Reference)
                 .Take(maxTypeReads <= 0 ? int.MaxValue : maxTypeReads)
                 .ToArray();
-            Console.WriteLine($"Reading MMS variable access attributes: {typeCandidates.Length} candidate(s), source={typeReadSource}, strategy={typeReadStrategy}, max={maxTypeReads}.");
+            Console.WriteLine($"Reading MMS variable access attributes: {typeCandidates.Length} selected from {rawTypeCandidates.Length} candidate(s), source={typeReadSource}, strategy={typeReadStrategy}, max={maxTypeReads}, delay={typeReadDelayMs}ms.");
             variableTypes = await ReadVariableAccessAttributesSafelyAsync(session, typeCandidates, maxTypeReads, typeReadDelayMs, cts.Token).ConfigureAwait(false);
+            variableTypeProbe = BuildVariableTypeProbeEvidence(typeReadSource, typeReadStrategy, maxTypeReads, typeReadDelayMs, typeEvaluations, typeCandidates, variableTypes);
+            Console.WriteLine($"  Type probe: {variableTypeProbe.Summary}");
             foreach (var type in variableTypes.Take(10))
                 Console.WriteLine($"  {(type.IsSuccess ? "OK" : "FAIL")} {type.Summary}");
             if (variableTypes.Count > 10)
@@ -590,7 +605,8 @@ internal static class Cli
         {
             FileService = fileEvidence,
             SettingGroupReadbacks = settingGroupReadbacks,
-            SettingGroupMap = settingGroupMap
+            SettingGroupMap = settingGroupMap,
+            VariableTypeProbe = variableTypeProbe
         };
 
         var files = new List<string>();
@@ -664,9 +680,69 @@ internal static class Cli
         File.WriteAllText(settingMapMarkdownPath, BuildSettingGroupMapMarkdown(evidence.SettingGroupMap));
         files.Add(settingMapMarkdownPath);
 
+        var typeProbePath = Path.Combine(outputDirectory, "safe-variable-spec-probe.json");
+        File.WriteAllText(typeProbePath, JsonSerializer.Serialize(evidence.VariableTypeProbe, jsonOptions));
+        files.Add(typeProbePath);
+
+        var typeProbeMarkdownPath = Path.Combine(outputDirectory, "safe-variable-spec-probe.md");
+        File.WriteAllText(typeProbeMarkdownPath, BuildVariableTypeProbeMarkdown(evidence.VariableTypeProbe));
+        files.Add(typeProbeMarkdownPath);
+
         return files;
     }
 
+
+    private static string BuildVariableTypeProbeMarkdown(LiveIedVariableTypeProbeEvidence probe)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("# IEC 61850 Safe Variable Specification Probe");
+        sb.AppendLine();
+        sb.AppendLine($"- Generated: {probe.GeneratedAtUtc:yyyy-MM-dd HH:mm:ss.fff} UTC");
+        sb.AppendLine($"- Attempted: {(probe.Attempted ? "true" : "false")}");
+        sb.AppendLine($"- Source: {EscapeMarkdown(probe.Source)}");
+        sb.AppendLine($"- Strategy: {EscapeMarkdown(probe.Strategy)}");
+        sb.AppendLine($"- Max reads: {probe.MaxReads}");
+        sb.AppendLine($"- Delay: {probe.DelayMs} ms");
+        sb.AppendLine($"- Raw candidates: {probe.RawCandidateCount}");
+        sb.AppendLine($"- Selected candidates: {probe.SelectedCandidateCount}");
+        sb.AppendLine($"- Skipped candidates: {probe.SkippedCandidateCount}");
+        sb.AppendLine($"- Results: {probe.SuccessCount}/{probe.AttemptCount} successful, failures={probe.FailureCount}");
+        sb.AppendLine($"- Exact scalar types: {probe.ExactScalarTypeCount}");
+        sb.AppendLine($"- Exact structure types: {probe.ExactStructureTypeCount}");
+        sb.AppendLine($"- Stopped early: {(probe.StoppedBeforeCandidateExhausted ? "true" : "false")}");
+        sb.AppendLine($"- Protocol fault suspected: {(probe.ProtocolFaultSuspected ? "true" : "false")}");
+        sb.AppendLine($"- Summary: {EscapeMarkdown(probe.Summary)}");
+        sb.AppendLine();
+
+        if (probe.SkippedByReason.Count > 0)
+        {
+            sb.AppendLine("## Skipped candidates by reason");
+            sb.AppendLine();
+            sb.AppendLine("| Reason | Count |");
+            sb.AppendLine("| --- | ---: |");
+            foreach (var item in probe.SkippedByReason)
+                sb.AppendLine($"| {EscapeMarkdown(item.Reason)} | {item.Count} |");
+            sb.AppendLine();
+        }
+
+        if (probe.Results.Count > 0)
+        {
+            sb.AppendLine("## Probe results");
+            sb.AppendLine();
+            sb.AppendLine("| Reference | Result | MMS type | SCL bType | Message |");
+            sb.AppendLine("| --- | --- | --- | --- | --- |");
+            foreach (var result in probe.Results.Take(120))
+            {
+                var status = result.IsSuccess ? "OK" : "FAIL";
+                sb.AppendLine($"| {EscapeMarkdown(result.Reference)} | {status} | {EscapeMarkdown(result.MmsType)} | {EscapeMarkdown(result.SclBType)} | {EscapeMarkdown(result.Message)} |");
+            }
+
+            if (probe.Results.Count > 120)
+                sb.AppendLine($"| ... | ... | ... | ... | {probe.Results.Count - 120} more result(s) in safe-variable-spec-probe.json | ");
+        }
+
+        return sb.ToString();
+    }
 
     private static async Task<LiveIedSettingGroupMapDocument> BuildSettingGroupMapAsync(
         MmsClientSession session,
@@ -873,40 +949,164 @@ internal static class Cli
     private static string EscapeMarkdown(string value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value.Replace("|", "\\|", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
 
+    private sealed class TypeReadCandidateEvaluation
+    {
+        public MmsObjectReference Reference { get; init; }
+        public bool IsSelected { get; init; }
+        public string Reason { get; init; } = string.Empty;
+    }
+
     private static IEnumerable<MmsObjectReference> ApplyTypeReadStrategy(IEnumerable<MmsObjectReference> candidates, string strategy)
+        => BuildTypeReadCandidateEvaluations(candidates, strategy)
+            .Where(x => x.IsSelected)
+            .Select(x => x.Reference);
+
+    private static IEnumerable<TypeReadCandidateEvaluation> BuildTypeReadCandidateEvaluations(IEnumerable<MmsObjectReference> candidates, string strategy)
     {
         var normalized = string.IsNullOrWhiteSpace(strategy) ? "safe" : strategy.Trim().ToLowerInvariant();
         foreach (var candidate in candidates)
-        {
-            if (normalized is "all" or "full")
-            {
-                yield return candidate;
-                continue;
-            }
-
-            if (IsSafeTypeReadCandidate(candidate))
-                yield return candidate;
-        }
+            yield return EvaluateTypeReadCandidate(candidate, normalized);
     }
 
-    private static bool IsSafeTypeReadCandidate(MmsObjectReference reference)
+    private static TypeReadCandidateEvaluation EvaluateTypeReadCandidate(MmsObjectReference reference, string normalizedStrategy)
     {
+        if (normalizedStrategy is "all" or "full")
+        {
+            return new TypeReadCandidateEvaluation
+            {
+                Reference = reference,
+                IsSelected = true,
+                Reason = "selected-by-full-strategy"
+            };
+        }
+
         var item = reference.Item ?? string.Empty;
         if (string.IsNullOrWhiteSpace(item))
-            return false;
+            return ExcludedTypeCandidate(reference, "empty-mms-item");
 
         var upper = item.ToUpperInvariant();
-        if (upper.Contains("$CO$", StringComparison.Ordinal) || upper.Contains("$GO$", StringComparison.Ordinal) || upper.Contains("$MS$", StringComparison.Ordinal) || upper.Contains("$US$", StringComparison.Ordinal))
-            return false;
+        if (upper.Contains("$CO$", StringComparison.Ordinal) ||
+            upper.Contains("$GO$", StringComparison.Ordinal) ||
+            upper.Contains("$MS$", StringComparison.Ordinal) ||
+            upper.Contains("$US$", StringComparison.Ordinal))
+        {
+            return ExcludedTypeCandidate(reference, "unsafe-functional-constraint");
+        }
 
-        var blockedSegments = new[] { "$OPER$", "$SBOW$", "$CANCEL$", "$ORIGIN", "$UNITS", "$CTLVAL", "$CTLNUM", "$CHECK", "$TEST", "$DB", "$ANGREF", "$SBOTIMEOUT", "$STSELD" };
+        var blockedSegments = new[]
+        {
+            "$OPER$", "$SBOW$", "$CANCEL$", "$ORIGIN", "$UNITS", "$CTLVAL", "$CTLNUM",
+            "$CHECK", "$TEST", "$DB", "$ANGREF", "$SBOTIMEOUT", "$STSELD"
+        };
         if (blockedSegments.Any(segment => upper.Contains(segment, StringComparison.Ordinal)))
-            return false;
+            return ExcludedTypeCandidate(reference, "unsafe-control-or-optional-structure");
 
-        // Prefer leaf attributes. Some IEDs close the association when GetVariableAccessAttributes
+        // Leaf-only guard. Some IEDs close the association when GetVariableAccessAttributes
         // is requested on an FCD/DO level object such as PTOC1$ST$Op.
-        return item.Count(c => c == '$') >= 3;
+        if (item.Count(c => c == '$') < 3)
+            return ExcludedTypeCandidate(reference, "not-leaf-variable");
+
+        if (normalizedStrategy is "dataset-leaf" or "datasets-leaf" or "safe" or "leaf" or "leaf-only")
+        {
+            return new TypeReadCandidateEvaluation
+            {
+                Reference = reference,
+                IsSelected = true,
+                Reason = "selected-safe-leaf"
+            };
+        }
+
+        // Unknown strategies deliberately fall back to safe behavior rather than full behavior.
+        return new TypeReadCandidateEvaluation
+        {
+            Reference = reference,
+            IsSelected = true,
+            Reason = $"selected-safe-leaf-unknown-strategy-{normalizedStrategy}"
+        };
     }
+
+    private static TypeReadCandidateEvaluation ExcludedTypeCandidate(MmsObjectReference reference, string reason)
+        => new()
+        {
+            Reference = reference,
+            IsSelected = false,
+            Reason = reason
+        };
+
+    private static LiveIedVariableTypeProbeEvidence BuildVariableTypeProbeEvidence(
+        string source,
+        string strategy,
+        int maxReads,
+        int delayMs,
+        IReadOnlyList<TypeReadCandidateEvaluation> evaluations,
+        IReadOnlyList<MmsObjectReference> selectedCandidates,
+        IReadOnlyList<MmsVariableAccessAttributesResult> results)
+    {
+        var skipped = evaluations.Where(x => !x.IsSelected).ToArray();
+        var maxLimit = maxReads <= 0 ? selectedCandidates.Count : Math.Min(selectedCandidates.Count, maxReads);
+        var stoppedBeforeExhausted = results.Count < maxLimit;
+        var protocolFault = stoppedBeforeExhausted || results.Any(IsVariableTypeProtocolFault);
+        var success = results.Count(x => x.IsSuccess);
+        var failure = results.Count(x => !x.IsSuccess);
+        var structure = results.Count(x => x.IsSuccess && x.TypeSpecification?.Children.Count > 0);
+        var scalar = success - structure;
+        var summary = $"attempted={results.Count}, ok={success}, failed={failure}, selected={selectedCandidates.Count}, skipped={skipped.Length}, stoppedEarly={stoppedBeforeExhausted.ToString().ToLowerInvariant()}.";
+
+        return new LiveIedVariableTypeProbeEvidence
+        {
+            Attempted = true,
+            Source = source,
+            Strategy = strategy,
+            MaxReads = maxReads,
+            DelayMs = delayMs,
+            RawCandidateCount = evaluations.Count,
+            SelectedCandidateCount = selectedCandidates.Count,
+            SkippedCandidateCount = skipped.Length,
+            AttemptCount = results.Count,
+            SuccessCount = success,
+            FailureCount = failure,
+            ExactScalarTypeCount = scalar,
+            ExactStructureTypeCount = structure,
+            StoppedBeforeCandidateExhausted = stoppedBeforeExhausted,
+            ProtocolFaultSuspected = protocolFault,
+            Summary = summary,
+            SkippedByReason = skipped
+                .GroupBy(x => x.Reason, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(x => x.Count())
+                .ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(x => new LiveIedVariableTypeProbeSkipSummary { Reason = x.Key, Count = x.Count() })
+                .ToArray(),
+            SelectedCandidates = selectedCandidates
+                .Take(256)
+                .Select(x => new LiveIedVariableTypeProbeCandidateEvidence
+                {
+                    Reference = string.IsNullOrWhiteSpace(x.Domain) ? x.Item : $"{x.Domain}/{x.Item}",
+                    Domain = x.Domain,
+                    MmsItemName = x.Item,
+                    FunctionalConstraint = x.FunctionalConstraint,
+                    Reason = "selected-safe-leaf"
+                })
+                .ToArray(),
+            Results = results
+                .Select(x => new LiveIedVariableTypeProbeResultEvidence
+                {
+                    Reference = x.ReferenceKey,
+                    IsSuccess = x.IsSuccess,
+                    MmsType = x.MmsType,
+                    SclBType = x.SclBType,
+                    TypeSignature = x.TypeSignature,
+                    Message = x.Message
+                })
+                .ToArray()
+        };
+    }
+
+    private static bool IsVariableTypeProtocolFault(MmsVariableAccessAttributesResult result)
+        => !result.IsSuccess &&
+           (result.Message.Contains("transport fault", StringComparison.OrdinalIgnoreCase) ||
+            result.Message.Contains("peer closed", StringComparison.OrdinalIgnoreCase) ||
+            result.Message.Contains("closed the TCP", StringComparison.OrdinalIgnoreCase) ||
+            result.Message.Contains("association", StringComparison.OrdinalIgnoreCase));
 
     private static async Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ReadVariableAccessAttributesSafelyAsync(
         MmsClientSession session,
@@ -3815,7 +4015,7 @@ internal static class Cli
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile iedscout-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output out/scl/live-ied.iedscout-connection.iid] [--ld-name-mode auto|keep] [--output out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
-        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-strategy safe] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
+        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-source datasets|model|both] [--type-read-strategy safe|dataset-leaf|all] [--max-type-reads 32] [--type-read-delay-ms 50] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
         Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");

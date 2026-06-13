@@ -490,3 +490,8 @@ This version adds `scl-diff` for comparing ARIEC61850-generated IID/SCL files ag
 - SGCB core readback is classified separately from SG/SE setting attribute mapping.
 - Optional `--read-setting-values true` performs bounded, read-only SG/SE setting value reads with `--max-setting-reads` and `--setting-read-delay-ms`.
 - The service coverage report can now distinguish `Core readback complete`, `SG/SE map`, and readback evidence instead of treating setting groups as a single placeholder.
+
+
+### N5.15 — Safe Variable Specification Probe
+
+The `mms-service-discover` command now records a dedicated safe variable specification probe evidence bundle (`safe-variable-spec-probe.json` and `.md`). The probe is dataset-first/leaf-only by default, skips control-service/optional structures that are risky on some IEDs, records skipped candidate reasons, and reports whether probing stopped early due to a suspected protocol/transport fault. This moves variable specification coverage from a binary attempted/not-attempted status into an evidence-grade, batch-expandable workflow.

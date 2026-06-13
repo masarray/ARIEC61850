@@ -60,7 +60,12 @@ public static class MmsDataCodec
             MmsDataKind.Boolean => Convert.ToString(value.Value, CultureInfo.InvariantCulture)?.ToLowerInvariant() ?? string.Empty,
             MmsDataKind.Integer => Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty,
             MmsDataKind.Unsigned => Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty,
-            MmsDataKind.FloatingPoint => value.Value is float f ? f.ToString("0.###", CultureInfo.InvariantCulture) : string.Empty,
+            MmsDataKind.FloatingPoint => value.Value switch
+            {
+                float f => f.ToString("0.###", CultureInfo.InvariantCulture),
+                double d => d.ToString("0.###", CultureInfo.InvariantCulture),
+                _ => string.Empty
+            },
             MmsDataKind.VisibleString or MmsDataKind.MmsString => Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty,
             MmsDataKind.BinaryTime => MmsBinaryTime.FromBytes(value.RawValue).ToDisplayString(),
             MmsDataKind.UtcTime => value.Value is Iec61850UtcTime utc ? $"{utc.Value:yyyy-MM-dd HH:mm:ss.fff} UTC (q=0x{utc.Quality:X2})" : string.Empty,
@@ -78,7 +83,7 @@ public static class MmsDataCodec
             MmsDataKind.BitString => value.RawValue.ToArray(),
             MmsDataKind.Integer => BerWriter.EncodeSignedInteger((long)value.Value!),
             MmsDataKind.Unsigned => BerWriter.EncodeUnsignedInteger((ulong)value.Value!),
-            MmsDataKind.FloatingPoint => BerWriter.EncodeSinglePrecisionFloat((float)value.Value!),
+            MmsDataKind.FloatingPoint => BerWriter.EncodeSinglePrecisionFloat(Convert.ToSingle(value.Value, CultureInfo.InvariantCulture)),
             MmsDataKind.OctetString => value.RawValue.ToArray(),
             MmsDataKind.VisibleString => BerWriter.EncodeAscii((string)value.Value!),
             MmsDataKind.MmsString => BerWriter.EncodeAscii((string)value.Value!),

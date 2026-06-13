@@ -2,6 +2,8 @@
 
 Date: 2026-06-12
 
+Updated: 2026-06-13
+
 ## Scope
 
 This note covers the first live Sampled Values publish path:
@@ -10,7 +12,8 @@ This note covers the first live Sampled Values publish path:
 SCL file
 -> SclParser
 -> SampledValuesPublisherProfile
--> demo 4I+4V sample payload
+-> SampledValuesPayloadLayout / SampledValuesPayloadBuilder
+-> typed demo 4I+4V sample payload
 -> SampledValuesPublisherSession
 -> NpcapProcessBusTransport
 -> selected Ethernet adapter
@@ -30,7 +33,7 @@ dotnet run --project apps\AR.Iec61850.Cli -- list-adapters
 Dry-run the 9-2LE sample stream without NIC transmit:
 
 ```powershell
-dotnet run --project apps\AR.Iec61850.Cli -- publish-sv-live "samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd" --adapter 5 --stream-index 1 --frames 16 --dry-run
+dotnet run --project apps\AR.Iec61850.Cli -- publish-sv-live "samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd" --adapter 5 --stream-index 1 --frames 16 --smpcnt-wrap auto --dry-run
 ```
 
 Publish one second of SV traffic to the selected adapter:
@@ -73,6 +76,21 @@ DataSet entries: 16
 Payload bytes: 64
 ```
 
+N5.17 dry-run after adding the core payload layout engine:
+
+```text
+Command:
+dotnet .\apps\AR.Iec61850.Cli\bin\Release\net8.0\AR.Iec61850.Cli.dll publish-sv-live ".\samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd" --adapter 1 --source-mac 02:00:00:00:20:01 --stream-index 1 --frames 3 --dry-run
+
+Result:
+datasetEntries=16
+payloadBytes=64
+smpCntWrap=4000
+sent=1/3 smpCnt=0 payloadBytes=64
+sent=2/3 smpCnt=1 payloadBytes=64
+sent=3/3 smpCnt=2 payloadBytes=64
+```
+
 Live run:
 
 ```text
@@ -100,15 +118,19 @@ smpCnt=0..19999
 - Use `--dry-run` before live output.
 - Use `--duration-sec` for bounded soak tests.
 - Use `--continuous` only when you intend to stop manually with `Ctrl+C`.
+- Use `--smpcnt-wrap auto` for SCL-driven sample-counter wrap, or `none` only
+  when intentionally testing unrestricted 16-bit counter rollover.
 - Use `list-adapters`; do not guess adapter indexes.
 - Send live traffic only on an isolated test NIC/TAP or lab switch.
 - Do not use an office network or production substation network.
 
 ## Limitations
 
-- The demo sample payload is generated from SCL DataSet order, but it is not yet
-  a general engineering-value binding system.
+- The demo sample payload is generated from a typed SCL DataSet payload layout,
+  but it is not yet a complete engineering-unit binding system.
 - The current live publisher sends one selected SV stream per command.
+- The current publisher supports exactly one ASDU per frame; `nofASDU > 1`
+  fails explicitly until multi-ASDU stream publishing is implemented.
 - The pacing clock is software-based and subject to OS scheduling jitter.
 - There is no live subscriber verification command yet.
 - APPID conflicts are reported by SCL inspection but are not automatically

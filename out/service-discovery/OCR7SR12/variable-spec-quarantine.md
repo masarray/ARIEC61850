@@ -1,6 +1,6 @@
 # IEC 61850 Variable Specification Quarantine
 
-- Generated: 2026-06-13 13:37:11.697 UTC
+- Generated: 2026-06-13 14:20:23.866 UTC
 - Enabled: true
 - Quarantined: false
 - Scope: Session

@@ -176,11 +176,12 @@ internal static class Cli
 
     private static int InspectPcap(string[] args)
     {
-        if (args.Length != 1)
-            throw new ArgumentException("inspect-pcap requires exactly one PCAP file path.");
+        if (args.Length < 1)
+            throw new ArgumentException("inspect-pcap requires a PCAP file path.");
 
+        var options = CliOptions.Parse(args[1..]);
         var packets = PcapReader.ReadAll(args[0]);
-        var monitor = new ProcessBusStreamMonitor();
+        var monitor = CreateProcessBusMonitor(options);
         var otherFrames = 0;
 
         foreach (var packet in packets)
@@ -200,7 +201,7 @@ internal static class Cli
         foreach (var summary in svSummaries.OrderBy(s => s.AppId))
         {
             Console.WriteLine(
-                $"  APPID=0x{summary.AppId:X4} src={summary.Source} dst={summary.Destination} VLAN={FormatVlan(summary.VlanId, summary.VlanPriority)} svID={TextOrDash(summary.StreamId)} confRev={summary.ConfigurationRevision ?? 0} packets={summary.PacketCount} smpCnt={FormatCounterRange(summary.FirstSampleCount, summary.LastSampleCount)}");
+                $"  APPID=0x{summary.AppId:X4} src={summary.Source} dst={summary.Destination} VLAN={FormatVlan(summary.VlanId, summary.VlanPriority)} svID={TextOrDash(summary.StreamId)} confRev={summary.ConfigurationRevision ?? 0} packets={summary.PacketCount} smpCnt={FormatCounterRange(summary.FirstSampleCount, summary.LastSampleCount)} values={summary.LastDecodedValueCount} gaps={summary.SequenceGapCount} missed={summary.MissedSampleCount} dup={summary.DuplicateSampleCount} late={summary.OutOfOrderSampleCount} wraps={summary.WrapCount}");
         }
 
         Console.WriteLine($"GOOSE streams: {gooseSummaries.Length} frames={gooseSummaries.Sum(s => s.PacketCount)}");
@@ -223,7 +224,7 @@ internal static class Cli
         var delayMs = options.GetInt("delay-ms", 50);
         var limit = options.GetInt("limit", 0);
         var packets = PcapReader.ReadAll(args[0]);
-        var monitor = new ProcessBusStreamMonitor();
+        var monitor = CreateProcessBusMonitor(options);
         var emitted = 0;
 
         Console.WriteLine($"Streaming {Path.GetFullPath(args[0])}");
@@ -250,6 +251,16 @@ internal static class Cli
             Console.WriteLine(FormatMonitorSummary(summary));
 
         return 0;
+    }
+
+    private static ProcessBusStreamMonitor CreateProcessBusMonitor(CliOptions options)
+    {
+        if (!options.TryGet("scl", out var sclPath) || string.IsNullOrWhiteSpace(sclPath))
+            return new ProcessBusStreamMonitor();
+
+        var nominalHz = options.GetDouble("nominal-hz", 50);
+        var document = new SclParser().Load(sclPath);
+        return new ProcessBusStreamMonitor(document, nominalHz);
     }
 
     private static int ListAdapters()
@@ -387,6 +398,7 @@ internal static class Cli
         var typeReadSource = options.Get("type-read-source", "datasets");
         var output = options.Get("output", Path.Combine("out", "ied-model-discovery"));
         var iedName = options.Get("ied-name", string.Empty);
+        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-iedscout-learned" : iedName);
         var apName = options.Get("ap-name", "AP1");
 
         await using var session = new MmsClientSession();
@@ -486,6 +498,7 @@ internal static class Cli
         var typeReadQuarantine = options.GetBool("type-read-quarantine", true);
         var learnTypesFromGolden = options.GetBool("learn-types-from-golden", true);
         var goldenScl = options.Get("golden-scl", string.Empty);
+        var goldenConflictPolicy = options.Get("golden-learning-conflict-policy", "review-only");
         var readFiles = options.GetBool("read-files", true);
         var fileDirectory = options.Get("file-directory", string.Empty);
         var maxFilePages = options.GetInt("max-file-pages", 8);
@@ -494,6 +507,7 @@ internal static class Cli
         var maxSettingReads = options.GetInt("max-setting-reads", 256);
         var settingReadDelayMs = options.GetInt("setting-read-delay-ms", 10);
         var iedName = options.Get("ied-name", string.Empty);
+        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-iedscout-learned" : iedName);
         var apName = options.Get("ap-name", "AP1");
         var output = options.Get("output", Path.Combine("out", "service-discovery"));
 
@@ -645,6 +659,10 @@ internal static class Cli
         if (goldenLearning.Attempted)
             Console.WriteLine($"Golden SCL type learning: {goldenLearning.Summary}");
 
+        var goldenPromotion = BuildGoldenSclRegistryPromotionEvidence(goldenLearning, goldenProfileName, goldenConflictPolicy);
+        if (goldenPromotion.Attempted)
+            Console.WriteLine($"Golden registry promotion: {goldenPromotion.Summary}");
+
         var onlineEvidence = new LiveIedOnlineServiceEvidence
         {
             FileService = fileEvidence,
@@ -652,7 +670,8 @@ internal static class Cli
             SettingGroupMap = settingGroupMap,
             VariableTypeProbe = variableTypeProbe,
             VariableSpecQuarantine = variableSpecQuarantine,
-            GoldenSclTypeLearning = goldenLearning
+            GoldenSclTypeLearning = goldenLearning,
+            GoldenSclRegistryPromotion = goldenPromotion
         };
 
         var files = new List<string>();
@@ -750,6 +769,18 @@ internal static class Cli
         File.WriteAllText(goldenLearningMarkdownPath, BuildGoldenSclTypeLearningMarkdown(evidence.GoldenSclTypeLearning));
         files.Add(goldenLearningMarkdownPath);
 
+        var goldenPromotionPath = Path.Combine(outputDirectory, "golden-learning-registry-promotion.json");
+        File.WriteAllText(goldenPromotionPath, JsonSerializer.Serialize(evidence.GoldenSclRegistryPromotion, jsonOptions));
+        files.Add(goldenPromotionPath);
+
+        var goldenPromotionMarkdownPath = Path.Combine(outputDirectory, "golden-learning-registry-promotion.md");
+        File.WriteAllText(goldenPromotionMarkdownPath, BuildGoldenSclRegistryPromotionMarkdown(evidence.GoldenSclRegistryPromotion));
+        files.Add(goldenPromotionMarkdownPath);
+
+        var goldenRegistryPath = Path.Combine(outputDirectory, "golden-learned-cdc-registry.json");
+        File.WriteAllText(goldenRegistryPath, JsonSerializer.Serialize(BuildGoldenLearnedCdcRegistryDocument(evidence.GoldenSclRegistryPromotion), jsonOptions));
+        files.Add(goldenRegistryPath);
+
         return files;
     }
 
@@ -830,6 +861,115 @@ internal static class Cli
                 sb.AppendLine($"| {EscapeMarkdown(conflict.Key)} | {EscapeMarkdown(conflict.LiveCdc)} | {EscapeMarkdown(conflict.GoldenCdc)} | {EscapeMarkdown(conflict.Reference)} | {EscapeMarkdown(conflict.Notes)} |");
         }
         return sb.ToString();
+    }
+
+    private static string BuildGoldenSclRegistryPromotionMarkdown(LiveIedGoldenSclRegistryPromotionEvidence promotion)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("# IEC 61850 Golden Learning Registry Promotion");
+        sb.AppendLine();
+        sb.AppendLine($"- Generated: {promotion.GeneratedAtUtc:yyyy-MM-dd HH:mm:ss.fff} UTC");
+        sb.AppendLine($"- Attempted: {(promotion.Attempted ? "true" : "false")}");
+        sb.AppendLine($"- Success: {(promotion.IsSuccess ? "true" : "false")}");
+        sb.AppendLine($"- Profile: {EscapeMarkdown(promotion.ProfileName)}");
+        sb.AppendLine($"- Conflict policy: {EscapeMarkdown(promotion.ConflictPolicy)}");
+        sb.AppendLine($"- Candidates: {promotion.CandidateCount}");
+        sb.AppendLine($"- Applied promotions: {promotion.AppliedPromotionCount}");
+        sb.AppendLine($"- Review conflicts: {promotion.ReviewConflictCount}");
+        sb.AppendLine($"- Generated registry entries: {promotion.GeneratedRegistryEntryCount}");
+        sb.AppendLine($"- Summary: {EscapeMarkdown(promotion.Summary)}");
+        sb.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(promotion.Message))
+        {
+            sb.AppendLine("## Message");
+            sb.AppendLine();
+            sb.AppendLine(EscapeMarkdown(promotion.Message));
+            sb.AppendLine();
+        }
+
+        if (promotion.AppliedPromotions.Count > 0)
+        {
+            sb.AppendLine("## Applied promotions");
+            sb.AppendLine();
+            sb.AppendLine("| Key | LN class | DO | Previous CDC | Promoted CDC | Confidence | Golden DOType | Action | Reference |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            foreach (var entry in promotion.AppliedPromotions.Take(200))
+            {
+                sb.AppendLine($"| {EscapeMarkdown(entry.Key)} | {EscapeMarkdown(entry.LogicalNodeClass)} | {EscapeMarkdown(entry.DataObjectName)} | {EscapeMarkdown(entry.PreviousCdc)} | {EscapeMarkdown(entry.PromotedCdc)} | {EscapeMarkdown(entry.PromotedConfidence)} | {EscapeMarkdown(entry.GoldenDoTypeId)} | {EscapeMarkdown(entry.Action)} | {EscapeMarkdown(entry.Reference)} |");
+            }
+
+            if (promotion.AppliedPromotions.Count > 200)
+                sb.AppendLine($"| ... | ... | ... | ... | ... | ... | ... | ... | {promotion.AppliedPromotions.Count - 200} more promotion(s) in golden-learning-registry-promotion.json |");
+
+            sb.AppendLine();
+        }
+
+        if (promotion.ReviewConflicts.Count > 0)
+        {
+            sb.AppendLine("## Review conflicts");
+            sb.AppendLine();
+            sb.AppendLine("| Key | Reference | Live CDC | Golden CDC | Policy | Recommendation |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- |");
+            foreach (var conflict in promotion.ReviewConflicts.Take(120))
+            {
+                sb.AppendLine($"| {EscapeMarkdown(conflict.Key)} | {EscapeMarkdown(conflict.Reference)} | {EscapeMarkdown(conflict.LiveCdc)} | {EscapeMarkdown(conflict.GoldenCdc)} | {EscapeMarkdown(conflict.Policy)} | {EscapeMarkdown(conflict.Recommendation)} |");
+            }
+
+            if (promotion.ReviewConflicts.Count > 120)
+                sb.AppendLine($"| ... | ... | ... | ... | ... | {promotion.ReviewConflicts.Count - 120} more conflict(s) in golden-learning-registry-promotion.json |");
+        }
+
+        if (promotion.AppliedPromotions.Count == 0 && promotion.ReviewConflicts.Count == 0)
+        {
+            sb.AppendLine("## Registry output");
+            sb.AppendLine();
+            sb.AppendLine("No learned CDC registry entries were generated for this run.");
+        }
+
+        return sb.ToString();
+    }
+
+    private static GoldenLearnedCdcRegistryDocument BuildGoldenLearnedCdcRegistryDocument(LiveIedGoldenSclRegistryPromotionEvidence promotion)
+    {
+        var entries = promotion.AppliedPromotions
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Reference, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new GoldenLearnedCdcRegistryEntry
+            {
+                Key = x.Key,
+                ProfileName = promotion.ProfileName,
+                LogicalNodeClass = x.LogicalNodeClass,
+                DataObjectName = x.DataObjectName,
+                Cdc = x.PromotedCdc,
+                Confidence = x.PromotedConfidence,
+                GoldenDoTypeId = x.GoldenDoTypeId,
+                SourceReference = x.Reference,
+                PreviousCdc = x.PreviousCdc,
+                PreviousConfidence = x.PreviousConfidence,
+                Action = x.Action,
+                Source = "GoldenSclRegistryPromotion"
+            })
+            .ToArray();
+
+        return new GoldenLearnedCdcRegistryDocument
+        {
+            GeneratedAtUtc = promotion.GeneratedAtUtc,
+            Attempted = promotion.Attempted,
+            IsSuccess = promotion.IsSuccess,
+            ProfileName = promotion.ProfileName,
+            ConflictPolicy = promotion.ConflictPolicy,
+            CandidateCount = promotion.CandidateCount,
+            EntryCount = entries.Length,
+            ReviewConflictCount = promotion.ReviewConflictCount,
+            Entries = entries,
+            ReviewConflicts = promotion.ReviewConflicts
+                .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.Reference, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            Message = promotion.Message,
+            Summary = promotion.Summary
+        };
     }
 
     private static string BuildVariableTypeProbeMarkdown(LiveIedVariableTypeProbeEvidence probe)
@@ -1089,6 +1229,39 @@ internal static class Cli
     private static string EscapeMarkdown(string value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value.Replace("|", "\\|", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
 
+    private sealed class GoldenLearnedCdcRegistryDocument
+    {
+        public string SchemaVersion { get; init; } = "ariec61850.golden-learned-cdc-registry.v1";
+        public DateTimeOffset GeneratedAtUtc { get; init; } = DateTimeOffset.UtcNow;
+        public bool Attempted { get; init; }
+        public bool IsSuccess { get; init; }
+        public string ProfileName { get; init; } = string.Empty;
+        public string ConflictPolicy { get; init; } = "review-only";
+        public int CandidateCount { get; init; }
+        public int EntryCount { get; init; }
+        public int ReviewConflictCount { get; init; }
+        public IReadOnlyList<GoldenLearnedCdcRegistryEntry> Entries { get; init; } = Array.Empty<GoldenLearnedCdcRegistryEntry>();
+        public IReadOnlyList<LiveIedGoldenSclRegistryPromotionConflict> ReviewConflicts { get; init; } = Array.Empty<LiveIedGoldenSclRegistryPromotionConflict>();
+        public string Message { get; init; } = string.Empty;
+        public string Summary { get; init; } = string.Empty;
+    }
+
+    private sealed class GoldenLearnedCdcRegistryEntry
+    {
+        public string Key { get; init; } = string.Empty;
+        public string ProfileName { get; init; } = string.Empty;
+        public string LogicalNodeClass { get; init; } = string.Empty;
+        public string DataObjectName { get; init; } = string.Empty;
+        public string Cdc { get; init; } = string.Empty;
+        public string Confidence { get; init; } = string.Empty;
+        public string GoldenDoTypeId { get; init; } = string.Empty;
+        public string SourceReference { get; init; } = string.Empty;
+        public string PreviousCdc { get; init; } = string.Empty;
+        public string PreviousConfidence { get; init; } = string.Empty;
+        public string Action { get; init; } = string.Empty;
+        public string Source { get; init; } = string.Empty;
+    }
+
     private sealed class TypeReadCandidateEvaluation
     {
         public MmsObjectReference Reference { get; init; }
@@ -1334,8 +1507,7 @@ internal static class Cli
         }
 
         var trigger = probe.Results.FirstOrDefault(x => !x.IsSuccess && IsVariableTypeProtocolFaultMessage(x.Message));
-        var shouldQuarantine = probe.ProtocolFaultSuspected && probe.SuccessCount == 0 && trigger is not null;
-        if (!shouldQuarantine)
+        if (!probe.ProtocolFaultSuspected || probe.SuccessCount != 0 || trigger is null)
         {
             return new LiveIedVariableSpecQuarantineEvidence
             {
@@ -1351,19 +1523,6 @@ internal static class Cli
         }
 
         var quarantineTrigger = trigger;
-        if (quarantineTrigger is null)
-        {
-            return new LiveIedVariableSpecQuarantineEvidence
-            {
-                IsEnabled = true,
-                IsQuarantined = false,
-                Scope = isolated ? "IsolatedAssociation" : "MainAssociation",
-                TargetKey = target,
-                CoreDiscoveryPreserved = isolated,
-                Summary = "Variable specification quarantine was not triggered because no failing probe result was available."
-            };
-        }
-
         return new LiveIedVariableSpecQuarantineEvidence
         {
             IsEnabled = true,
@@ -1400,6 +1559,186 @@ internal static class Cli
 
         return string.Empty;
     }
+
+
+
+    private static LiveIedGoldenSclRegistryPromotionEvidence BuildGoldenSclRegistryPromotionEvidence(
+        LiveIedGoldenSclTypeLearningEvidence learning,
+        string profileName,
+        string conflictPolicy)
+    {
+        var normalizedProfile = string.IsNullOrWhiteSpace(profileName) ? "generic-iedscout-learned" : profileName.Trim();
+        var normalizedPolicy = string.IsNullOrWhiteSpace(conflictPolicy) ? "review-only" : conflictPolicy.Trim().ToLowerInvariant();
+        if (normalizedPolicy is not "review-only" and not "prefer-live" and not "prefer-golden")
+            normalizedPolicy = "review-only";
+
+        if (!learning.Attempted)
+        {
+            return new LiveIedGoldenSclRegistryPromotionEvidence
+            {
+                Attempted = false,
+                IsSuccess = false,
+                ProfileName = normalizedProfile,
+                ConflictPolicy = normalizedPolicy,
+                Message = "Golden SCL learning was not attempted, so no registry promotion can be generated.",
+                Summary = "Golden registry promotion not attempted."
+            };
+        }
+
+        if (!learning.IsSuccess)
+        {
+            return new LiveIedGoldenSclRegistryPromotionEvidence
+            {
+                Attempted = true,
+                IsSuccess = false,
+                ProfileName = normalizedProfile,
+                ConflictPolicy = normalizedPolicy,
+                Message = learning.Message,
+                Summary = "Golden registry promotion unavailable because learning failed."
+            };
+        }
+
+        var promotions = new List<LiveIedGoldenSclRegistryPromotionEntry>();
+        var conflicts = new List<LiveIedGoldenSclRegistryPromotionConflict>();
+        foreach (var candidate in learning.Candidates)
+        {
+            var key = MakeLnDoKey(candidate.LogicalNodeClass, candidate.DataObjectName);
+            var currentCdc = candidate.CurrentCdc.Equals("-", StringComparison.Ordinal) ? string.Empty : candidate.CurrentCdc;
+            var sameCdc = !string.IsNullOrWhiteSpace(currentCdc) &&
+                currentCdc.Equals(candidate.GoldenCdc, StringComparison.OrdinalIgnoreCase);
+
+            if (sameCdc)
+            {
+                promotions.Add(new LiveIedGoldenSclRegistryPromotionEntry
+                {
+                    Key = key,
+                    LogicalNodeClass = candidate.LogicalNodeClass,
+                    DataObjectName = candidate.DataObjectName,
+                    Reference = candidate.Reference,
+                    PreviousCdc = currentCdc,
+                    PromotedCdc = candidate.GoldenCdc,
+                    PreviousConfidence = candidate.CurrentConfidence,
+                    PromotedConfidence = "GoldenConfirmedHigh",
+                    GoldenDoTypeId = candidate.GoldenDoTypeId,
+                    Action = "Promote confidence using matching golden CDC/type key."
+                });
+                continue;
+            }
+
+            if (normalizedPolicy.Equals("prefer-golden", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(candidate.GoldenCdc))
+            {
+                promotions.Add(new LiveIedGoldenSclRegistryPromotionEntry
+                {
+                    Key = key,
+                    LogicalNodeClass = candidate.LogicalNodeClass,
+                    DataObjectName = candidate.DataObjectName,
+                    Reference = candidate.Reference,
+                    PreviousCdc = string.IsNullOrWhiteSpace(currentCdc) ? "-" : currentCdc,
+                    PromotedCdc = candidate.GoldenCdc,
+                    PreviousConfidence = candidate.CurrentConfidence,
+                    PromotedConfidence = "GoldenOverrideHigh",
+                    GoldenDoTypeId = candidate.GoldenDoTypeId,
+                    Action = "Promote to golden CDC by explicit prefer-golden conflict policy."
+                });
+            }
+            else
+            {
+                conflicts.Add(new LiveIedGoldenSclRegistryPromotionConflict
+                {
+                    Key = key,
+                    Reference = candidate.Reference,
+                    LiveCdc = string.IsNullOrWhiteSpace(currentCdc) ? "-" : currentCdc,
+                    GoldenCdc = candidate.GoldenCdc,
+                    Policy = normalizedPolicy,
+                    Recommendation = normalizedPolicy.Equals("prefer-live", StringComparison.OrdinalIgnoreCase)
+                        ? "Keep live inference; do not promote this candidate."
+                        : "Review before changing CDC registry because live and golden CDC differ."
+                });
+            }
+        }
+
+        foreach (var conflict in learning.Conflicts)
+        {
+            if (normalizedPolicy.Equals("prefer-golden", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(conflict.GoldenCdc))
+            {
+                promotions.Add(new LiveIedGoldenSclRegistryPromotionEntry
+                {
+                    Key = conflict.Key,
+                    LogicalNodeClass = ExtractLnClassFromKey(conflict.Key),
+                    DataObjectName = ExtractDoNameFromKey(conflict.Key),
+                    Reference = conflict.Reference,
+                    PreviousCdc = conflict.LiveCdc,
+                    PromotedCdc = conflict.GoldenCdc,
+                    PreviousConfidence = "HighOrExact",
+                    PromotedConfidence = "GoldenOverrideHigh",
+                    GoldenDoTypeId = string.Empty,
+                    Action = "Override high/exact live inference by explicit prefer-golden conflict policy."
+                });
+                continue;
+            }
+
+            conflicts.Add(new LiveIedGoldenSclRegistryPromotionConflict
+            {
+                Key = conflict.Key,
+                Reference = conflict.Reference,
+                LiveCdc = conflict.LiveCdc,
+                GoldenCdc = conflict.GoldenCdc,
+                Policy = normalizedPolicy,
+                Recommendation = normalizedPolicy.Equals("prefer-live", StringComparison.OrdinalIgnoreCase)
+                    ? "Keep high/exact live inference; golden CDC is recorded for audit only."
+                    : "Manual review required before overriding high/exact live inference."
+            });
+        }
+
+        var dedupedPromotions = promotions
+            .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.OrderByDescending(promotion => PromotionRank(promotion.PromotedConfidence)).ThenBy(promotion => promotion.Reference, StringComparer.OrdinalIgnoreCase).First())
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var dedupedConflicts = conflicts
+            .GroupBy(x => $"{x.Key}|{x.LiveCdc}|{x.GoldenCdc}", StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new LiveIedGoldenSclRegistryPromotionEvidence
+        {
+            Attempted = true,
+            IsSuccess = true,
+            ProfileName = normalizedProfile,
+            ConflictPolicy = normalizedPolicy,
+            CandidateCount = learning.CandidateImprovementCount,
+            AppliedPromotionCount = dedupedPromotions.Length,
+            ReviewConflictCount = dedupedConflicts.Length,
+            GeneratedRegistryEntryCount = dedupedPromotions.Length,
+            AppliedPromotions = dedupedPromotions,
+            ReviewConflicts = dedupedConflicts,
+            Message = "Golden SCL learning candidates were converted into an auditable vendor/profile CDC registry layer.",
+            Summary = $"profile={normalizedProfile}, policy={normalizedPolicy}, candidates={learning.CandidateImprovementCount}, applied={dedupedPromotions.Length}, conflicts={dedupedConflicts.Length}."
+        };
+    }
+
+    private static int PromotionRank(string confidence)
+        => confidence.Contains("Override", StringComparison.OrdinalIgnoreCase) ? 2 : 1;
+
+    private static string MakeLnDoKey(string lnClass, string dataObject)
+        => string.IsNullOrWhiteSpace(lnClass) ? dataObject : $"{lnClass}.{dataObject}";
+
+    private static string ExtractLnClassFromKey(string key)
+    {
+        var index = key.IndexOf('.', StringComparison.Ordinal);
+        return index <= 0 ? string.Empty : key[..index];
+    }
+
+    private static string ExtractDoNameFromKey(string key)
+    {
+        var index = key.IndexOf('.', StringComparison.Ordinal);
+        return index < 0 || index + 1 >= key.Length ? key : key[(index + 1)..];
+    }
+
 
     private static LiveIedGoldenSclTypeLearningEvidence BuildGoldenSclTypeLearningEvidence(
         LiveIedModelDiscoveryDocument document,
@@ -1600,6 +1939,7 @@ internal static class Cli
         var maxTypeReads = options.GetInt("max-type-reads", 512);
         var typeReadSource = options.Get("type-read-source", "both");
         var iedName = options.Get("ied-name", string.Empty);
+        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-iedscout-learned" : iedName);
         var apName = options.Get("ap-name", "AP1");
         var profile = options.Get("scl-export-profile", options.Get("profile", "iedscout-connection"));
         var output = options.Get("output", Path.Combine("out", "scl", "live-ied.generated.iid"));
@@ -2958,13 +3298,22 @@ internal static class Cli
 
         var frameLimit = ResolveFrameLimit(options, sampleRateHz, continuous, durationSeconds);
         var statusIntervalMs = options.GetInt("status-ms", 1000);
+        var sampleCounterWrap = ResolveSampleCounterWrapOption(options, profile, nominalHz);
 
         Console.WriteLine($"SCL: {Path.GetFullPath(args[0])}");
         Console.WriteLine($"Mode: {(dryRun ? "dry-run (no NIC transmit)" : "live raw Ethernet transmit")}");
         Console.WriteLine($"Adapter: [{adapter.Index}] MAC={adapter.MacAddress?.ToString() ?? "-"} {TextOrDash(adapter.Description)}");
         Console.WriteLine($"SV stream: #{streamIndex}/{profiles.Count} {profile.Stream.ControlBlockReference}");
         Console.WriteLine($"  svID={TextOrDash(profile.Stream.SvId)} APPID=0x{profile.AppId:X4} dst={profile.Destination} VLAN={FormatVlan(profile.Vlan)}");
-        Console.WriteLine($"  source={sourceMac} {FormatFrameLimit(frameLimit)} rate={sampleRateHz.ToString("0.###", CultureInfo.InvariantCulture)} Hz nominal={nominalHz.ToString("0.###", CultureInfo.InvariantCulture)} Hz datasetEntries={profile.Entries.Count}");
+        Console.WriteLine($"  source={sourceMac} {FormatFrameLimit(frameLimit)} rate={sampleRateHz.ToString("0.###", CultureInfo.InvariantCulture)} Hz nominal={nominalHz.ToString("0.###", CultureInfo.InvariantCulture)} Hz datasetEntries={profile.Entries.Count} payloadBytes={profile.PayloadLayout.PayloadByteLength} smpCntWrap={FormatNullableUShort(sampleCounterWrap)}");
+        if (!profile.PayloadLayout.IsFullySupported)
+        {
+            Console.WriteLine("  Unsupported SV payload entries:");
+            foreach (var item in profile.PayloadLayout.UnsupportedElements.Take(8))
+                Console.WriteLine($"    - {item.SignalReference} bType={TextOrDash(item.BType)}");
+            if (profile.PayloadLayout.UnsupportedElements.Count > 8)
+                Console.WriteLine($"    - ... {profile.PayloadLayout.UnsupportedElements.Count - 8} more unsupported entrie(s)");
+        }
         if (!frameLimit.HasValue && durationSeconds <= 0)
             Console.WriteLine("  Press Ctrl+C to stop the continuous publisher.");
 
@@ -2972,7 +3321,7 @@ internal static class Cli
             ? new InMemoryProcessBusTransport()
             : new NpcapProcessBusTransport(adapterSelector);
 
-        var session = new SampledValuesPublisherSession(profile, sourceMac, transport);
+        var session = new SampledValuesPublisherSession(profile, sourceMac, transport, sampleCounterWrap: sampleCounterWrap);
         var startedTicks = Stopwatch.GetTimestamp();
         var startedAt = DateTimeOffset.UtcNow;
         var nextStatusTicks = startedTicks;
@@ -3000,12 +3349,13 @@ internal static class Cli
                     break;
 
                 var timestamp = startedAt.AddTicks((long)Math.Round(sent * TimeSpan.TicksPerSecond / sampleRateHz));
-                var payload = BuildDemoSamplePayload(profile.Entries, sent, sampleRateHz, nominalHz);
+                var sampleTime = new Iec61850UtcTime(timestamp, Quality: 0);
+                var payload = profile.BuildDemoPayload(sent, sampleRateHz, nominalHz, sampleTime);
                 lastSampleCount = session.NextSampleCount;
                 lastPayloadBytes = payload.Length;
                 await session.PublishNextAsync(
                     payload,
-                    new Iec61850UtcTime(timestamp, Quality: 0)).ConfigureAwait(false);
+                    sampleTime).ConfigureAwait(false);
                 sent++;
 
                 var nowTicks = Stopwatch.GetTimestamp();
@@ -3191,16 +3541,18 @@ internal static class Cli
         foreach (var profile in profiles)
         {
             var transport = new InMemoryProcessBusTransport();
-            var session = new SampledValuesPublisherSession(profile, sourceMac, transport);
-            var intervalMicros = ResolveSvIntervalMicros(profile.Stream.SampleRate);
+            var sampleRate = profile.Stream.SampleRate == 0 ? 4000 : profile.Stream.SampleRate;
+            var session = new SampledValuesPublisherSession(profile, sourceMac, transport, sampleCounterWrap: profile.ResolveSampleCounterWrap(50));
+            var intervalMicros = ResolveSvIntervalMicros((ushort)sampleRate);
 
             for (var i = 0; i < frameCount; i++)
             {
                 var timestamp = startTime.AddTicks(i * intervalMicros * 10L);
-                var payload = BuildSamplePayload(profile.Entries, i);
+                var sampleTime = new Iec61850UtcTime(timestamp, Quality: 0);
+                var payload = profile.BuildDemoPayload(i, sampleRate, 50, sampleTime);
                 var frame = session.PublishNextAsync(
                     payload,
-                    new Iec61850UtcTime(timestamp, Quality: 0)).AsTask().GetAwaiter().GetResult();
+                    sampleTime).AsTask().GetAwaiter().GetResult();
                 packets.Add(new PcapPacket(timestamp, frame));
             }
         }
@@ -3233,83 +3585,6 @@ internal static class Cli
                 packets.Add(new PcapPacket(timestamp, frame));
             }
         }
-    }
-
-    private static byte[] BuildSamplePayload(IReadOnlyList<SclDataSetEntry> entries, int sampleIndex)
-    {
-        var bytes = new List<byte>(Math.Max(entries.Count, 1) * 4);
-        Span<byte> buffer = stackalloc byte[4];
-
-        foreach (var entry in entries)
-        {
-            if (entry.IsQuality)
-            {
-                bytes.AddRange([0x00, 0x00, 0x00, 0x00]);
-                continue;
-            }
-
-            if (entry.IsTimestamp)
-            {
-                bytes.AddRange([0x00, 0x00, 0x00, 0x00]);
-                continue;
-            }
-
-            var value = 1000 + (sampleIndex * 10) + entry.Index;
-            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(buffer, value);
-            bytes.AddRange(buffer.ToArray());
-        }
-
-        return bytes.ToArray();
-    }
-
-    private static byte[] BuildDemoSamplePayload(
-        IReadOnlyList<SclDataSetEntry> entries,
-        long sampleIndex,
-        double sampleRateHz,
-        double nominalHz)
-    {
-        var bytes = new List<byte>(Math.Max(entries.Count, 1) * 4);
-        Span<byte> buffer = stackalloc byte[4];
-
-        foreach (var entry in entries)
-        {
-            if (entry.IsQuality)
-            {
-                bytes.AddRange([0x00, 0x00, 0x00, 0x00]);
-                continue;
-            }
-
-            if (entry.IsTimestamp)
-            {
-                bytes.AddRange([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-                continue;
-            }
-
-            var amplitude = string.Equals(entry.LnClass, "TVTR", StringComparison.OrdinalIgnoreCase)
-                ? 100_000
-                : string.Equals(entry.LnClass, "TCTR", StringComparison.OrdinalIgnoreCase)
-                    ? 10_000
-                    : 1_000;
-            var angle = (2.0 * Math.PI * nominalHz * sampleIndex / sampleRateHz) + ResolvePhaseRadians(entry);
-            var value = (int)Math.Round(amplitude * Math.Sin(angle));
-            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(buffer, value);
-            bytes.AddRange(buffer.ToArray());
-        }
-
-        return bytes.ToArray();
-    }
-
-    private static double ResolvePhaseRadians(SclDataSetEntry entry)
-    {
-        if (!int.TryParse(entry.LnInst, NumberStyles.Integer, CultureInfo.InvariantCulture, out var instance))
-            return 0;
-
-        return instance switch
-        {
-            2 => -2.0 * Math.PI / 3.0,
-            3 => 2.0 * Math.PI / 3.0,
-            _ => 0
-        };
     }
 
     private static IReadOnlyList<MmsDataValue> BuildGooseValues(IReadOnlyList<SclDataSetEntry> entries, DateTimeOffset timestamp, int index)
@@ -3411,6 +3686,24 @@ internal static class Cli
         return continuous ? null : 4000;
     }
 
+    private static ushort? ResolveSampleCounterWrapOption(CliOptions options, SampledValuesPublisherProfile profile, double nominalHz)
+    {
+        var text = options.Get("smpcnt-wrap", "auto").Trim();
+        if (string.IsNullOrWhiteSpace(text) || text.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            return profile.ResolveSampleCounterWrap(nominalHz);
+
+        if (text.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("off", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("false", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("0", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (!ushort.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) || parsed <= 1)
+            throw new ArgumentException("--smpcnt-wrap must be auto, none, or an integer greater than 1.");
+
+        return parsed;
+    }
+
     private static long? ResolveGooseFrameLimit(
         CliOptions options,
         bool continuous,
@@ -3433,6 +3726,9 @@ internal static class Cli
 
     private static string FormatFrameLimit(long? frameLimit)
         => frameLimit.HasValue ? $"frames={frameLimit.Value}" : "frames=continuous";
+
+    private static string FormatNullableUShort(ushort? value)
+        => value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "-";
 
     private static string FormatGooseLimit(long? frameLimit, double durationSeconds)
     {
@@ -3540,7 +3836,7 @@ internal static class Cli
 
         return streamEvent.Kind switch
         {
-            ProcessBusEventKind.SampledValues => $"{prefix} {common} smpCnt={streamEvent.SampleCount?.ToString() ?? "-"} payloadBytes={streamEvent.PayloadBytes}",
+            ProcessBusEventKind.SampledValues => $"{prefix} {common} smpCnt={streamEvent.SampleCount?.ToString() ?? "-"} seq={streamEvent.SequenceStatus} payloadBytes={streamEvent.PayloadBytes} bound={(streamEvent.IsBoundToScl ? "SCL" : "anonymous")} values={streamEvent.DecodedValueCount}{FormatDiagnostics(streamEvent.Diagnostics)}",
             ProcessBusEventKind.Goose => $"{prefix} {common} stNum={streamEvent.StateNumber?.ToString() ?? "-"} sqNum={streamEvent.SequenceNumber?.ToString() ?? "-"} values={streamEvent.ValueCount}",
             _ => $"{prefix} {streamEvent.Detail}"
         };
@@ -3550,8 +3846,20 @@ internal static class Cli
     {
         var common = $"{summary.Kind} APPID=0x{summary.AppId:X4} id={TextOrDash(summary.StreamId)} packets={summary.PacketCount}";
         return summary.Kind == ProcessBusEventKind.SampledValues
-            ? $"{common} smpCnt={FormatCounterRange(summary.FirstSampleCount, summary.LastSampleCount)}"
+            ? $"{common} smpCnt={FormatCounterRange(summary.FirstSampleCount, summary.LastSampleCount)} values={summary.LastDecodedValueCount} gaps={summary.SequenceGapCount} missed={summary.MissedSampleCount} dup={summary.DuplicateSampleCount} late={summary.OutOfOrderSampleCount} wraps={summary.WrapCount}"
             : $"{common} stNum={summary.LastStateNumber} sqNum={summary.LastSequenceNumber}";
+    }
+
+    private static string FormatDiagnostics(IReadOnlyList<string> diagnostics)
+    {
+        if (diagnostics.Count == 0)
+            return string.Empty;
+
+        var text = string.Join(" | ", diagnostics.Take(2));
+        if (diagnostics.Count > 2)
+            text += $" | +{diagnostics.Count - 2} more";
+
+        return $" diag=\"{text}\"";
     }
 
     private static IEnumerable<T> TakeWithLimit<T>(IEnumerable<T> source, int limit)
@@ -4398,14 +4706,14 @@ internal static class Cli
         Console.WriteLine("  inspect-scl <file.scd|file.cid|file.icd|file.iid>");
         Console.WriteLine("  scl-diff <golden.scl|golden.iid> <candidate.scl|candidate.iid> [--output out/scl-diff]");
         Console.WriteLine("  generate-pcap <scl-file> <output.pcap> [--source-mac XX:XX:XX:XX:XX:XX] [--sv-frames N] [--goose-frames N]");
-        Console.WriteLine("  inspect-pcap <file.pcap>");
-        Console.WriteLine("  stream-pcap <file.pcap> [--delay-ms N] [--limit N]");
+        Console.WriteLine("  inspect-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50]");
+        Console.WriteLine("  stream-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50] [--delay-ms N] [--limit N]");
         Console.WriteLine("  list-adapters");
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile iedscout-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output out/scl/live-ied.iedscout-connection.iid] [--ld-name-mode auto|keep] [--output out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
-        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-source datasets|model|both] [--type-read-strategy safe|dataset-leaf|all] [--type-read-isolated true] [--type-read-quarantine true] [--golden-scl samples/scl/OCR7SR12.iid] [--learn-types-from-golden true] [--max-type-reads 32] [--type-read-delay-ms 50] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
+        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-source datasets|model|both] [--type-read-strategy safe|dataset-leaf|all] [--type-read-isolated true] [--type-read-quarantine true] [--golden-scl samples/scl/OCR7SR12.iid] [--learn-types-from-golden true] [--golden-profile-name OCR7SR12] [--golden-learning-conflict-policy review-only|prefer-live|prefer-golden] [--max-type-reads 32] [--type-read-delay-ms 50] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
         Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");
@@ -4417,15 +4725,15 @@ internal static class Cli
         Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--strict-rcb] [--allow-urcb-fallback true|false] [--max-rcb-claim-attempts 6] [--rcb-probe-count 1] [--rcb-probe-delay-ms 1000] [--contention-cooldown-sec 60] [--duration-sec 60] [--gi true|false] [--gi-interval-sec 0] [--poll-points LD/LN.DO.da,...] [--poll-interval-ms 1000] [--soak-snapshot-sec 60] [--evidence out/session] [--yes]");
         Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--strict-rcb] [--allow-urcb-fallback true|false] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--evidence out/session] [--yes]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
-        Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
+        Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--smpcnt-wrap auto|none|N] [--dry-run] [--yes]");
         Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-scl samples/scl/minimal-station.scd");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- scl-diff samples/scl/OCR7SR12.iid out/scl/OCR7SR12.standard-discovery.iid --output out/scl-diff/OCR7SR12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- generate-pcap samples/scl/minimal-station.scd out/processbus-demo.pcap");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-pcap out/processbus-demo.pcap");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap out/processbus-demo.pcap --delay-ms 50 --limit 12");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-pcap out/processbus-demo.pcap --scl samples/scl/minimal-station.scd");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap out/processbus-demo.pcap --scl samples/scl/minimal-station.scd --delay-ms 50 --limit 12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.168.1.10 --port 102 --max-report-probes 16");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.168.1.10 --show-points --raw-limit 40");

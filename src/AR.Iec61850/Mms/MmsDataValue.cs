@@ -43,6 +43,9 @@ public sealed class MmsDataValue
     public static MmsDataValue FloatingPoint(float value)
         => new(MmsDataKind.FloatingPoint, value);
 
+    public static MmsDataValue FloatingPoint(double value)
+        => new(MmsDataKind.FloatingPoint, value);
+
     public static MmsDataValue OctetString(ReadOnlySpan<byte> value)
         => new(MmsDataKind.OctetString, rawValue: value.ToArray());
 

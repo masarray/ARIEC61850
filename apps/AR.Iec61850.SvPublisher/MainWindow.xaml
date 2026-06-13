@@ -6,20 +6,20 @@
         xmlns:controls="clr-namespace:AR.Iec61850.SvPublisher.Controls"
         mc:Ignorable="d"
         Title="AR IEC 61850 SV Publisher"
-        Width="1460"
-        Height="900"
-        MinWidth="1280"
-        MinHeight="760"
+        Width="1380"
+        Height="820"
+        MinWidth="1180"
+        MinHeight="700"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI Variable, Segoe UI"
         FontSize="13"
-        Background="#F4F6F8">
+        Background="#F3F5F7">
     <Window.Resources>
         <SolidColorBrush x:Key="TextStrong" Color="#111827" />
         <SolidColorBrush x:Key="TextMuted" Color="#64748B" />
-        <SolidColorBrush x:Key="Line" Color="#D8DEE8" />
+        <SolidColorBrush x:Key="Line" Color="#D7DEE8" />
         <SolidColorBrush x:Key="Panel" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="PanelSubtle" Color="#F8FAFC" />
+        <SolidColorBrush x:Key="Subtle" Color="#F8FAFC" />
         <SolidColorBrush x:Key="Accent" Color="#2563EB" />
         <SolidColorBrush x:Key="Danger" Color="#B91C1C" />
 
@@ -27,20 +27,6 @@
             <Setter Property="Foreground" Value="{StaticResource TextStrong}" />
             <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
             <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
-        </Style>
-
-        <Style x:Key="SectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#334155" />
-            <Setter Property="Margin" Value="0,18,0,8" />
-        </Style>
-
-        <Style x:Key="LabelText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="0,0,8,0" />
         </Style>
 
         <Style x:Key="PanelShell" TargetType="Border">
@@ -51,10 +37,16 @@
             <Setter Property="SnapsToDevicePixels" Value="True" />
         </Style>
 
+        <Style x:Key="LabelText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
         <Style TargetType="Button">
             <Setter Property="Height" Value="31" />
-            <Setter Property="MinWidth" Value="86" />
-            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="MinWidth" Value="74" />
+            <Setter Property="Padding" Value="10,0" />
             <Setter Property="Margin" Value="0,0,8,0" />
             <Setter Property="BorderBrush" Value="#CBD5E1" />
             <Setter Property="BorderThickness" Value="1" />
@@ -82,16 +74,7 @@
             <Setter Property="BorderBrush" Value="#CBD5E1" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="Foreground" Value="{StaticResource TextStrong}" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
-
-        <Style TargetType="ComboBox">
-            <Setter Property="Height" Value="29" />
-            <Setter Property="Padding" Value="6,3" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Background" Value="#FFFFFF" />
         </Style>
 
         <Style TargetType="DataGrid">
@@ -101,8 +84,8 @@
             <Setter Property="HorizontalGridLinesBrush" Value="#E5EAF1" />
             <Setter Property="VerticalGridLinesBrush" Value="#EEF2F7" />
             <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="RowHeight" Value="30" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="RowHeight" Value="34" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="CanUserDeleteRows" Value="False" />
             <Setter Property="AutoGenerateColumns" Value="False" />
@@ -111,15 +94,12 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="68" />
+            <RowDefinition Height="64" />
             <RowDefinition Height="*" />
             <RowDefinition Height="34" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
-                Background="#FFFFFF"
-                BorderBrush="{StaticResource Line}"
-                BorderThickness="0,0,0,1">
+        <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
             <Grid Margin="18,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="360" />
@@ -128,35 +108,31 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="SV Publisher Workbench"
-                               FontSize="21"
-                               FontWeight="SemiBold"
-                               Foreground="#0F172A" />
-                    <TextBlock Text="SCL-driven sampled values injection for isolated lab NICs"
-                               FontSize="12"
-                               Foreground="{StaticResource TextMuted}" />
+                    <TextBlock Text="SV Publisher" FontSize="21" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <TextBlock Text="{Binding StreamControlBlock}" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
-                <WrapPanel Grid.Column="1"
-                           VerticalAlignment="Center"
-                           ItemHeight="28">
-                    <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="14" Padding="10,5" Margin="0,0,8,0">
-                        <TextBlock Text="1 Open SCL" FontSize="12" Foreground="#1D4ED8" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Manual" Click="ManualMode_Click" />
+                    <Button Content="Ramp..." Click="RampSetup_Click" />
+                    <Button Content="State Sequencer..." Click="StateSequencer_Click" MinWidth="126" />
+                    <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="10,5" Margin="8,0,0,0">
+                        <TextBlock>
+                            <Run Text="Mode " />
+                            <Run Text="{Binding Mode}" FontWeight="SemiBold" />
+                        </TextBlock>
                     </Border>
-                    <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="14" Padding="10,5" Margin="0,0,8,0">
-                        <TextBlock Text="2 Configure stream" FontSize="12" Foreground="#334155" />
-                    </Border>
-                    <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="14" Padding="10,5" Margin="0,0,8,0">
-                        <TextBlock Text="3 Save plan" FontSize="12" Foreground="#334155" />
-                    </Border>
-                    <Border Background="#FEF2F2" BorderBrush="#FECACA" BorderThickness="1" CornerRadius="14" Padding="10,5">
-                        <TextBlock Text="4 Run on isolated NIC" FontSize="12" Foreground="#991B1B" />
-                    </Border>
-                </WrapPanel>
+                </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="Open SCL" Command="{Binding OpenSclCommand}" Style="{StaticResource PrimaryButton}" />
-                    <Button Content="Save" Command="{Binding SaveProfileCommand}" />
+                    <Button Content="SCL / Config..." Click="OpenConfig_Click" MinWidth="112" />
+                    <Button Content="Run Dry" Command="{Binding RunDryCommand}" Style="{StaticResource PrimaryButton}" />
+                    <CheckBox Content="Arm NIC"
+                              IsChecked="{Binding IsLiveArmed}"
+                              Foreground="#991B1B"
+                              VerticalAlignment="Center"
+                              Margin="2,0,10,0" />
+                    <Button Content="Run NIC" Command="{Binding RunLiveCommand}" Style="{StaticResource DangerButton}" />
                     <Button Content="Stop" Command="{Binding StopCommand}" Style="{StaticResource DangerButton}" Margin="0" />
                 </StackPanel>
             </Grid>
@@ -164,176 +140,49 @@
 
         <Grid Grid.Row="1" Margin="16">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="500" />
+                <ColumnDefinition Width="420" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Style="{StaticResource PanelShell}" Margin="0,0,12,0">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="18">
-                        <TextBlock Text="SCL and Network" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
-                        <TextBlock Text="{Binding SclSummary}" Foreground="{StaticResource TextMuted}" FontSize="12" />
-                        <TextBlock Text="{Binding SclPath}" Foreground="{StaticResource TextMuted}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,4,0,10" />
-
-                        <TextBlock Text="SV stream" Style="{StaticResource LabelText}" />
-                        <ComboBox ItemsSource="{Binding Streams}"
-                                  SelectedItem="{Binding SelectedStream}"
-                                  DisplayMemberPath="Label"
-                                  Margin="0,4,0,10" />
-
-                        <TextBlock Text="NIC adapter" Style="{StaticResource LabelText}" />
-                        <Grid Margin="0,4,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="94" />
-                            </Grid.ColumnDefinitions>
-                            <ComboBox ItemsSource="{Binding Adapters}"
-                                      SelectedItem="{Binding SelectedAdapter}"
-                                      DisplayMemberPath="DisplayName" />
-                            <Button Grid.Column="1"
-                                    Content="Refresh"
-                                    Command="{Binding RefreshAdaptersCommand}"
-                                    Margin="8,0,0,0" />
-                        </Grid>
-
-                        <TextBlock Text="Stream Config" Style="{StaticResource SectionTitle}" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="124" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="102" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="36" />
-                                <RowDefinition Height="36" />
-                                <RowDefinition Height="36" />
-                                <RowDefinition Height="36" />
-                                <RowDefinition Height="36" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Text="svID" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding StreamId, UpdateSourceTrigger=PropertyChanged}" />
-
-                            <TextBlock Grid.Row="1" Text="APPID" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AppIdText, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Dst MAC" Style="{StaticResource LabelText}" Margin="14,0,8,0" />
-                            <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding DestinationMac, UpdateSourceTrigger=PropertyChanged}" />
-
-                            <TextBlock Grid.Row="2" Text="Source MAC" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SourceMac, UpdateSourceTrigger=PropertyChanged}" />
-                            <CheckBox Grid.Row="2" Grid.Column="2" Content="VLAN" IsChecked="{Binding UseVlan}" VerticalAlignment="Center" Margin="14,0,0,0" />
-                            <StackPanel Grid.Row="2" Grid.Column="3" Orientation="Horizontal">
-                                <TextBox Width="62" Text="{Binding VlanId, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Text="prio" Style="{StaticResource LabelText}" Margin="10,0,4,0" />
-                                <TextBox Width="42" Text="{Binding VlanPriority, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="3" Text="Sample rate" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SampleRateHz, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Row="3" Grid.Column="2" Text="Frequency" Style="{StaticResource LabelText}" Margin="14,0,8,0" />
-                            <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding NominalFrequencyHz, UpdateSourceTrigger=PropertyChanged}" />
-
-                            <TextBlock Grid.Row="4" Text="dLSB I / V" Style="{StaticResource LabelText}" />
-                            <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
-                                <TextBox Width="82" Text="{Binding CurrentDlsb, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBox Width="82" Margin="8,0,0,0" Text="{Binding VoltageDlsb, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                            <TextBlock Grid.Row="4" Grid.Column="2" Text="Entries" Style="{StaticResource LabelText}" Margin="14,0,8,0" />
-                            <TextBlock Grid.Row="4" Grid.Column="3" VerticalAlignment="Center" Foreground="#334155">
-                                <Run Text="{Binding DataSetEntryCount}" />
-                                <Run Text=" / mapped " />
-                                <Run Text="{Binding MappedSignalCount}" />
-                            </TextBlock>
-                        </Grid>
-
-                        <TextBlock Text="Injection Set" Style="{StaticResource SectionTitle}" />
-                        <DataGrid ItemsSource="{Binding Channels}"
-                                  SelectedItem="{Binding SelectedRampChannel}"
-                                  Height="255">
-                            <DataGrid.Columns>
-                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled}" Width="42" />
-                                <DataGridTextColumn Header="Signal" Binding="{Binding Name}" IsReadOnly="True" Width="54" />
-                                <DataGridTextColumn Header="Value" Binding="{Binding Magnitude, UpdateSourceTrigger=PropertyChanged}" Width="*" />
-                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" IsReadOnly="True" Width="48" />
-                                <DataGridTextColumn Header="Angle" Binding="{Binding AngleDegrees, UpdateSourceTrigger=PropertyChanged}" Width="76" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button Content="Balance 3-phase" Command="{Binding ApplyBalancedDefaultsCommand}" />
-                            <ComboBox Width="136"
-                                      ItemsSource="{Binding Modes}"
-                                      SelectedItem="{Binding Mode}"
-                                      Margin="0,0,8,0" />
-                        </StackPanel>
-
-                        <TextBlock Text="Run Behavior" Style="{StaticResource SectionTitle}" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="124" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="108" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="36" />
-                                <RowDefinition Height="36" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Text="Duration" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Column="1" Text="{Binding DurationSeconds, UpdateSourceTrigger=PropertyChanged}" />
-                            <CheckBox Grid.Column="2" Content="Continuous" IsChecked="{Binding Continuous}" VerticalAlignment="Center" Margin="14,0,0,0" />
-                            <CheckBox Grid.Column="3" Content="Loop sequence" IsChecked="{Binding LoopSequence}" VerticalAlignment="Center" />
-
-                            <TextBlock Grid.Row="1" Text="Ramp target" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding RampTargetMagnitude, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Ramp sec" Style="{StaticResource LabelText}" Margin="14,0,8,0" />
-                            <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding RampDurationSeconds, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
-
-                        <TextBlock Text="State Sequencer" Style="{StaticResource SectionTitle}" />
-                        <DataGrid ItemsSource="{Binding SequenceStates}" Height="150">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="State" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*" />
-                                <DataGridTextColumn Header="Sec" Binding="{Binding DurationSeconds, UpdateSourceTrigger=PropertyChanged}" Width="58" />
-                                <DataGridTextColumn Header="I x" Binding="{Binding CurrentScale, UpdateSourceTrigger=PropertyChanged}" Width="54" />
-                                <DataGridTextColumn Header="V x" Binding="{Binding VoltageScale, UpdateSourceTrigger=PropertyChanged}" Width="54" />
-                                <DataGridTextColumn Header="Deg" Binding="{Binding AngleShiftDegrees, UpdateSourceTrigger=PropertyChanged}" Width="58" />
-                                <DataGridTextColumn Header="Hz" Binding="{Binding FrequencyHz, UpdateSourceTrigger=PropertyChanged}" Width="58" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button Content="Add state" Command="{Binding AddSequenceStateCommand}" />
-                            <Button Content="Remove last" Command="{Binding RemoveSequenceStateCommand}" />
-                        </StackPanel>
-
-                        <TextBlock Text="Publish" Style="{StaticResource SectionTitle}" />
-                        <CheckBox Content="Arm live NIC transmit. Use only on an isolated test network."
-                                  IsChecked="{Binding IsLiveArmed}"
-                                  Foreground="#991B1B"
-                                  Margin="0,0,0,10" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="Run Dry" Command="{Binding RunDryCommand}" Style="{StaticResource PrimaryButton}" />
-                            <Button Content="Run NIC" Command="{Binding RunLiveCommand}" Style="{StaticResource DangerButton}" />
-                        </StackPanel>
-                    </StackPanel>
-                </ScrollViewer>
-            </Border>
-
-            <Border Grid.Column="1" Style="{StaticResource PanelShell}" Margin="0,0,12,0">
                 <DockPanel Margin="18">
                     <StackPanel DockPanel.Dock="Top">
-                        <TextBlock Text="Phasor" FontSize="18" FontWeight="SemiBold" />
-                        <TextBlock Text="Editable secondary current and voltage vectors. The draw scale is normalized per quantity."
+                        <TextBlock Text="Injection values" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Edit secondary current, voltage, phase angle, and frequency."
                                    FontSize="12"
                                    Foreground="{StaticResource TextMuted}"
                                    Margin="0,2,0,14" />
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="78" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="36" />
+                                <RowDefinition Height="36" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="Frequency" Style="{StaticResource LabelText}" />
+                            <TextBox Grid.Column="1" Text="{Binding NominalFrequencyHz, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Grid.Column="2" Text="Duration" Style="{StaticResource LabelText}" Margin="12,0,0,0" />
+                            <TextBox Grid.Column="3" Text="{Binding DurationSeconds, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="1" Text="Sample rate" Style="{StaticResource LabelText}" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SampleRateHz, UpdateSourceTrigger=PropertyChanged}" />
+                            <CheckBox Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2"
+                                      Content="Continuous"
+                                      IsChecked="{Binding Continuous}"
+                                      VerticalAlignment="Center"
+                                      Margin="12,0,0,0" />
+                        </Grid>
                     </StackPanel>
 
                     <Border DockPanel.Dock="Bottom"
-                            Background="{StaticResource PanelSubtle}"
+                            Background="{StaticResource Subtle}"
                             BorderBrush="{StaticResource Line}"
                             BorderThickness="1"
                             CornerRadius="8"
@@ -343,26 +192,48 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Text="Stream" Style="{StaticResource LabelText}" />
-                                <TextBlock Text="{Binding StreamControlBlock}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="DataSet" Style="{StaticResource LabelText}" />
+                                <TextBlock>
+                                    <Run Text="{Binding DataSetEntryCount, Mode=OneWay}" />
+                                    <Run Text=" entries, " />
+                                    <Run Text="{Binding MappedSignalCount, Mode=OneWay}" />
+                                    <Run Text=" mapped" />
+                                </TextBlock>
                             </StackPanel>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="Payload" Style="{StaticResource LabelText}" />
                                 <TextBlock>
-                                    <Run Text="{Binding PayloadBytes}" />
+                                    <Run Text="{Binding PayloadBytes, Mode=OneWay}" />
                                     <Run Text=" bytes" />
                                 </TextBlock>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Mode" Style="{StaticResource LabelText}" />
-                                <TextBlock Text="{Binding Mode}" />
                             </StackPanel>
                         </Grid>
                     </Border>
 
+                    <DataGrid ItemsSource="{Binding Channels}"
+                              SelectedItem="{Binding SelectedRampChannel}">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled}" Width="44" />
+                            <DataGridTextColumn Header="Signal" Binding="{Binding Name}" IsReadOnly="True" Width="60" />
+                            <DataGridTextColumn Header="Value" Binding="{Binding Magnitude, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                            <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" IsReadOnly="True" Width="48" />
+                            <DataGridTextColumn Header="Angle" Binding="{Binding AngleDegrees, UpdateSourceTrigger=PropertyChanged}" Width="76" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="1" Style="{StaticResource PanelShell}" Margin="0,0,12,0">
+                <DockPanel Margin="18">
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="Phasor" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Drag-style vector view equivalent: current and voltage are normalized separately."
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextMuted}"
+                                   Margin="0,2,0,14" />
+                    </StackPanel>
                     <controls:PhasorPlot Channels="{Binding Channels}" />
                 </DockPanel>
             </Border>
@@ -370,41 +241,12 @@
             <Border Grid.Column="2" Style="{StaticResource PanelShell}">
                 <DockPanel Margin="18">
                     <StackPanel DockPanel.Dock="Top">
-                        <TextBlock Text="SV Waveform" FontSize="18" FontWeight="SemiBold" />
-                        <TextBlock Text="Representative two-cycle view for three-phase voltage and current values before payload scaling."
+                        <TextBlock Text="Waveform" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Representative time signal view for three-phase voltage and current."
                                    FontSize="12"
                                    Foreground="{StaticResource TextMuted}"
                                    Margin="0,2,0,14" />
                     </StackPanel>
-
-                    <Border DockPanel.Dock="Bottom"
-                            Background="{StaticResource PanelSubtle}"
-                            BorderBrush="{StaticResource Line}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12"
-                            Margin="0,14,0,0"
-                            Height="190">
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top"
-                                       Text="Evidence"
-                                       FontSize="12"
-                                       FontWeight="SemiBold"
-                                       Foreground="#334155"
-                                       Margin="0,0,0,8" />
-                            <TextBox Text="{Binding EvidenceText}"
-                                     IsReadOnly="True"
-                                     Height="Auto"
-                                     AcceptsReturn="True"
-                                     TextWrapping="Wrap"
-                                     VerticalScrollBarVisibility="Auto"
-                                     FontFamily="Consolas"
-                                     FontSize="11"
-                                     BorderBrush="#CBD5E1"
-                                     Background="#FFFFFF" />
-                        </DockPanel>
-                    </Border>
-
                     <controls:WaveformPlot Channels="{Binding Channels}" />
                 </DockPanel>
             </Border>
@@ -413,7 +255,7 @@
         <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
             <Grid Margin="16,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="260" />
+                    <ColumnDefinition Width="220" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="#334155" />

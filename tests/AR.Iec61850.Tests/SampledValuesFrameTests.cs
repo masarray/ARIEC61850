@@ -90,4 +90,83 @@ public sealed class SampledValuesFrameTests
 
         Assert.False(SampledValuesFrameParser.TryParsePdu(tampered, out _));
     }
+
+    [Fact]
+    public void SampledValues_PayloadLayout_Maps_Dataset_Order_And_Widths()
+    {
+        var document = Scl.SclParserTests.LoadMinimalStation();
+        var profile = SampledValuesPublisherProfile.FromScl(document);
+
+        Assert.True(profile.PayloadLayout.IsFullySupported);
+        Assert.Equal(8, profile.PayloadLayout.PayloadByteLength);
+        Assert.Equal(2, profile.PayloadLayout.Elements.Count);
+
+        var value = profile.PayloadLayout.Elements[0];
+        Assert.Equal(0, value.Offset);
+        Assert.Equal(4, value.Width);
+        Assert.Equal(SampledValuePayloadElementKind.Int32, value.Kind);
+
+        var quality = profile.PayloadLayout.Elements[1];
+        Assert.Equal(4, quality.Offset);
+        Assert.Equal(4, quality.Width);
+        Assert.Equal(SampledValuePayloadElementKind.Quality, quality.Kind);
+    }
+
+    [Fact]
+    public void SampledValues_PayloadBuilder_Writes_Typed_Values_In_DataSet_Order()
+    {
+        var document = Scl.SclParserTests.LoadMinimalStation();
+        var profile = SampledValuesPublisherProfile.FromScl(document);
+
+        var payload = profile.BuildPayload([
+            MmsDataValue.Integer(123),
+            MmsDataValue.BitString(0, [0x01, 0x02, 0x03, 0x04])
+        ]);
+
+        Assert.Equal("0000007B01020304", Convert.ToHexString(payload));
+    }
+
+    [Fact]
+    public void SampledValues_PayloadDecoder_Reads_Typed_Values_In_DataSet_Order()
+    {
+        var document = Scl.SclParserTests.LoadMinimalStation();
+        var profile = SampledValuesPublisherProfile.FromScl(document);
+        var payload = profile.BuildPayload([
+            MmsDataValue.Integer(123),
+            MmsDataValue.BitString(0, [0x01, 0x02, 0x03, 0x04])
+        ]);
+
+        var decoded = SampledValuesPayloadDecoder.Decode(profile.PayloadLayout, payload);
+
+        Assert.True(decoded.IsComplete);
+        Assert.Equal(8, decoded.ExpectedPayloadBytes);
+        Assert.Equal(8, decoded.ActualPayloadBytes);
+        Assert.Equal(2, decoded.Values.Count);
+        Assert.Equal(MmsDataKind.Integer, decoded.Values[0].Value.Kind);
+        Assert.Equal(123L, decoded.Values[0].Value.Value);
+        Assert.Equal(MmsDataKind.BitString, decoded.Values[1].Value.Kind);
+        Assert.Equal("0001020304", Convert.ToHexString(decoded.Values[1].Value.RawValue.ToArray()));
+    }
+
+    [Fact]
+    public void SampledValues_PayloadDecoder_Reports_Short_Payload()
+    {
+        var document = Scl.SclParserTests.LoadMinimalStation();
+        var profile = SampledValuesPublisherProfile.FromScl(document);
+
+        var decoded = SampledValuesPayloadDecoder.Decode(profile.PayloadLayout, Convert.FromHexString("0000007B"));
+
+        Assert.False(decoded.IsComplete);
+        Assert.Single(decoded.Values);
+        Assert.Contains(decoded.Diagnostics, x => x.Contains("too short", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SampledValues_Profile_Resolves_SampleCounterWrap_From_SmpPerSec()
+    {
+        var document = Scl.SclParserTests.LoadMinimalStation();
+        var profile = SampledValuesPublisherProfile.FromScl(document);
+
+        Assert.Equal((ushort)4000, profile.ResolveSampleCounterWrap(50));
+    }
 }

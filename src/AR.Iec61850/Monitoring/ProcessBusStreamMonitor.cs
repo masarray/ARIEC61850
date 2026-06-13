@@ -2,12 +2,33 @@ using AR.Iec61850.Capture;
 using AR.Iec61850.Ethernet;
 using AR.Iec61850.Goose;
 using AR.Iec61850.SampledValues;
+using AR.Iec61850.Scl;
 
 namespace AR.Iec61850.Monitoring;
 
 public sealed class ProcessBusStreamMonitor
 {
     private readonly Dictionary<string, ProcessBusStreamSummary> _summaries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IReadOnlyList<SampledValuesPublisherProfile> _sampledValuesProfiles;
+    private readonly double _nominalFrequencyHz;
+
+    public ProcessBusStreamMonitor()
+        : this(Array.Empty<SampledValuesPublisherProfile>())
+    {
+    }
+
+    public ProcessBusStreamMonitor(SclDocument document, double nominalFrequencyHz = 50)
+        : this(SampledValuesPublisherProfile.CreateMany(document), nominalFrequencyHz)
+    {
+    }
+
+    public ProcessBusStreamMonitor(
+        IReadOnlyList<SampledValuesPublisherProfile> sampledValuesProfiles,
+        double nominalFrequencyHz = 50)
+    {
+        _sampledValuesProfiles = sampledValuesProfiles ?? Array.Empty<SampledValuesPublisherProfile>();
+        _nominalFrequencyHz = nominalFrequencyHz <= 0 ? 50 : nominalFrequencyHz;
+    }
 
     public IReadOnlyCollection<ProcessBusStreamSummary> Summaries => _summaries.Values;
 
@@ -35,6 +56,16 @@ public sealed class ProcessBusStreamMonitor
     {
         var asdu = frame.Pdu.Asdus.FirstOrDefault();
         var streamId = string.IsNullOrWhiteSpace(asdu?.SvId) ? frame.AppId.ToString("X4") : asdu.SvId;
+        var profile = asdu is null ? null : FindSampledValuesProfile(frame, asdu);
+        var diagnostics = new List<string>();
+        IReadOnlyList<SampledValuesDecodedValue> decodedValues = Array.Empty<SampledValuesDecodedValue>();
+        if (profile is not null && asdu is not null)
+        {
+            var decode = SampledValuesPayloadDecoder.Decode(profile.PayloadLayout, asdu.SamplePayload);
+            decodedValues = decode.Values;
+            diagnostics.AddRange(decode.Diagnostics);
+        }
+
         var key = $"SV|{frame.AppId:X4}|{frame.Source}|{frame.Destination}|{frame.Vlan?.VlanId}|{streamId}|{asdu?.ConfigurationRevision}";
         var summary = GetOrAddSummary(
             key,
@@ -47,7 +78,11 @@ public sealed class ProcessBusStreamMonitor
             streamId,
             asdu?.ConfigurationRevision);
 
-        summary.Record(asdu?.SampleCount, null, null);
+        var sequenceStatus = summary.RecordSample(
+            asdu?.SampleCount,
+            profile?.ResolveSampleCounterWrap(_nominalFrequencyHz),
+            decodedValues.Count,
+            diagnostics);
 
         return new ProcessBusStreamEvent
         {
@@ -62,7 +97,17 @@ public sealed class ProcessBusStreamMonitor
             ConfigurationRevision = asdu?.ConfigurationRevision,
             SampleCount = asdu?.SampleCount,
             PayloadBytes = asdu?.SamplePayload.Length ?? 0,
-            Detail = asdu is null ? "SV frame without ASDU" : $"svID={streamId}"
+            SequenceStatus = sequenceStatus,
+            IsBoundToScl = profile is not null,
+            ControlBlockReference = profile?.Stream.ControlBlockReference ?? string.Empty,
+            DecodedValueCount = decodedValues.Count,
+            DecodedValues = decodedValues,
+            Diagnostics = diagnostics,
+            Detail = asdu is null
+                ? "SV frame without ASDU"
+                : profile is null
+                    ? $"svID={streamId}; no SCL profile binding"
+                    : $"svID={streamId}; bound={profile.Stream.ControlBlockReference}"
         };
     }
 
@@ -81,7 +126,7 @@ public sealed class ProcessBusStreamMonitor
             streamId,
             frame.Pdu.ConfigurationRevision);
 
-        summary.Record(null, frame.Pdu.StateNumber, frame.Pdu.SequenceNumber);
+        summary.RecordGoose(frame.Pdu.StateNumber, frame.Pdu.SequenceNumber);
 
         return new ProcessBusStreamEvent
         {
@@ -99,6 +144,27 @@ public sealed class ProcessBusStreamMonitor
             ValueCount = frame.Pdu.Values.Count,
             Detail = string.IsNullOrWhiteSpace(frame.Pdu.GoId) ? $"goCB={streamId}" : $"goID={frame.Pdu.GoId}"
         };
+    }
+
+    private SampledValuesPublisherProfile? FindSampledValuesProfile(SampledValuesFrame frame, SampledValueAsdu asdu)
+    {
+        var exact = _sampledValuesProfiles.FirstOrDefault(profile =>
+            profile.AppId == frame.AppId &&
+            string.Equals(profile.Destination.ToString(), frame.Destination.ToString(), StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(profile.Stream.SvId, asdu.SvId, StringComparison.OrdinalIgnoreCase) &&
+            profile.Stream.ConfigurationRevision == asdu.ConfigurationRevision);
+        if (exact is not null)
+            return exact;
+
+        var bySvId = _sampledValuesProfiles.FirstOrDefault(profile =>
+            profile.AppId == frame.AppId &&
+            string.Equals(profile.Stream.SvId, asdu.SvId, StringComparison.OrdinalIgnoreCase));
+        if (bySvId is not null)
+            return bySvId;
+
+        return _sampledValuesProfiles.FirstOrDefault(profile =>
+            profile.AppId == frame.AppId &&
+            string.Equals(profile.Stream.DataSetReference, asdu.DataSetReference, StringComparison.OrdinalIgnoreCase));
     }
 
     private ProcessBusStreamSummary GetOrAddSummary(

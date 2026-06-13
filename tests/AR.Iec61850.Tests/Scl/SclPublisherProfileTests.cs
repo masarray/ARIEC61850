@@ -81,4 +81,17 @@ public sealed class SclPublisherProfileTests
         Assert.Throws<AR.Iec61850.Scl.SclProfileException>(() =>
             profile.CreateFrame(source, [MmsDataValue.Boolean(true)], timestamp));
     }
+
+    [Fact]
+    public void SampledValues_Profile_Rejects_MultiAsdu_Stream_Until_Supported()
+    {
+        var xml = File.ReadAllText(SclParserTests.MinimalStationPath())
+            .Replace("nofASDU=\"1\"", "nofASDU=\"2\"", StringComparison.Ordinal);
+        var document = new AR.Iec61850.Scl.SclParser().Parse(xml, "multi-asdu.scd");
+
+        void Action() => _ = SampledValuesPublisherProfile.FromScl(document);
+        var error = Assert.Throws<AR.Iec61850.Scl.SclProfileException>(Action);
+
+        Assert.Contains("nofASDU=2", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

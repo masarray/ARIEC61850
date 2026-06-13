@@ -1,6 +1,6 @@
 ﻿# IEC 61850 Online Service Discovery Coverage
 
-- Generated: 2026-06-13 13:37:11.990 UTC
+- Generated: 2026-06-13 14:20:24.416 UTC
 - Target: 192.16.1.157:102
 - IED: OCR7SR12
 
@@ -17,6 +17,7 @@
 | File service | Discovered | 0 | FileDirectory returned 0 entries from 1 page(s). | Add FileOpen/FileRead download support and recursive safe directory walking. |
 | Variable specifications | Not attempted | 0 | attempted=0, ok=0, failed=0 | Use safe, leaf-only, dataset-first type reads to avoid IED peer-close behavior. |
 | Golden SCL type learning | Learning candidates found | 140 | goldenBindings=272, liveDO=1186, unknownOrMedium=459, exactKeyMatches=743, candidates=140, conflicts=2. | Promote confirmed golden CDC/type candidates into the standard/vendor registry and SCL normalizer. |
+| Golden registry promotion | Promotions generated + conflicts for review | 67 | profile=OCR7SR12, policy=review-only, candidates=140, applied=67, conflicts=3, registryEntries=67. | Review CDC conflicts before applying golden overrides; keep conflict policy review-only unless validated against the IED/vendor model. |
 | CDC resolution | Partially resolved | 899 | high=727, medium=172, low=0, unknown=287 | Expand IEC 61850-7-3/7-4 registry and feed golden SCL learning results into normalized type generation. |
 
 ## Next implementation gaps
@@ -27,6 +28,7 @@
 - Logs: Implement log directory/query service.
 - Variable specifications: Use safe, leaf-only, dataset-first type reads to avoid IED peer-close behavior.
 - Golden SCL type learning: Promote confirmed golden CDC/type candidates into the standard/vendor registry and SCL normalizer.
+- Golden registry promotion: Review CDC conflicts before applying golden overrides; keep conflict policy review-only unless validated against the IED/vendor model.
 - CDC resolution: Expand IEC 61850-7-3/7-4 registry and feed golden SCL learning results into normalized type generation.
 
 ## Interpretation

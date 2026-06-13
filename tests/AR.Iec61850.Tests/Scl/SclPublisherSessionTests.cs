@@ -34,6 +34,30 @@ public sealed class SclPublisherSessionTests
     }
 
     [Fact]
+    public async Task SampledValues_Session_Uses_Configured_SampleCounterWrap()
+    {
+        var document = SclParserTests.LoadMinimalStation();
+        var profile = SampledValuesPublisherProfile.FromScl(document);
+        var transport = new InMemoryProcessBusTransport();
+        var session = new SampledValuesPublisherSession(
+            profile,
+            MacAddress.Parse("02:00:00:00:20:01"),
+            transport,
+            initialSampleCount: 3999,
+            sampleCounterWrap: 4000);
+        var payload = profile.BuildDefaultPayload();
+
+        await session.PublishNextAsync(payload);
+        await session.PublishNextAsync(payload);
+
+        Assert.Equal((ushort)1, session.NextSampleCount);
+        Assert.True(SampledValuesFrameParser.TryParseEthernetFrame(transport.Frames[0], out var first));
+        Assert.True(SampledValuesFrameParser.TryParseEthernetFrame(transport.Frames[1], out var second));
+        Assert.Equal((ushort)3999, first.Pdu.Asdus[0].SampleCount);
+        Assert.Equal((ushort)0, second.Pdu.Asdus[0].SampleCount);
+    }
+
+    [Fact]
     public async Task Goose_Session_Sends_Retransmit_And_StateChange_Sequence()
     {
         var document = SclParserTests.LoadMinimalStation();

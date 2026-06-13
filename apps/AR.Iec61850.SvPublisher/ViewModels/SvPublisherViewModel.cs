@@ -460,6 +460,7 @@ public sealed class SvPublisherViewModel : ObservableObject
         var nextUiTicks = startedTicks;
         var rampStartMagnitude = SelectedRampChannel?.Magnitude ?? 0;
         var rampSignalKey = SelectedRampChannel?.Key ?? string.Empty;
+        var sampleCounterWrap = ResolveSampleCounterWrap(selectedStream, sampleRateHz, NominalFrequencyHz);
 
         IProcessBusTransport transport = live
             ? new NpcapProcessBusTransport(SelectedAdapter?.Selector ?? string.Empty)
@@ -479,7 +480,8 @@ public sealed class SvPublisherViewModel : ObservableObject
 
                 var elapsedSeconds = sent / sampleRateHz;
                 var timestamp = startedAt.AddTicks((long)Math.Round(sent * TimeSpan.TicksPerSecond / sampleRateHz));
-                var payload = BuildSamplePayload(selectedStream.Entries, elapsedSeconds, rampSignalKey, rampStartMagnitude);
+                var sampleTime = new Iec61850UtcTime(timestamp, Quality: 0);
+                var payload = BuildSamplePayload(selectedStream, elapsedSeconds, rampSignalKey, rampStartMagnitude, sampleTime);
                 var frame = SampledValuesFrameBuilder.BuildEthernetFrame(new SampledValuesFrame
                 {
                     Destination = destination,
@@ -496,7 +498,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                                 DataSetReference = DataSetReference.Trim(),
                                 SampleCount = sampleCount,
                                 ConfigurationRevision = selectedStream.ConfigurationRevision,
-                                ReferenceTime = new Iec61850UtcTime(timestamp, Quality: 0),
+                                ReferenceTime = sampleTime,
                                 SampleSynchronization = 2,
                                 SampleRate = ToSampleRate(sampleRateHz),
                                 SampleMode = MapSampleMode(selectedStream.SampleMode),
@@ -508,7 +510,7 @@ public sealed class SvPublisherViewModel : ObservableObject
 
                 await transport.SendAsync(frame, cancellationToken).ConfigureAwait(false);
                 lastFrameBytes = frame.Length;
-                sampleCount = sampleCount == ushort.MaxValue ? (ushort)0 : (ushort)(sampleCount + 1);
+                sampleCount = IncrementSampleCount(sampleCount, sampleCounterWrap);
                 sent++;
 
                 var nowTicks = Stopwatch.GetTimestamp();
@@ -543,50 +545,89 @@ public sealed class SvPublisherViewModel : ObservableObject
     }
 
     private byte[] BuildSamplePayload(
-        IReadOnlyList<SclDataSetEntry> entries,
+        SclSampledValuesStream stream,
+        double elapsedSeconds,
+        string rampSignalKey,
+        double rampStartMagnitude,
+        Iec61850UtcTime timestamp)
+    {
+        var layout = SampledValuesPayloadLayout.FromDataSet(stream.Entries);
+        if (!layout.IsFullySupported)
+            throw new InvalidOperationException("Unsupported SV payload layout: " + string.Join("; ", layout.UnsupportedElements.Select(x => $"{x.SignalReference} bType={x.BType}")));
+
+        var entriesByIndex = stream.Entries.ToDictionary(x => x.Index);
+        var values = new List<MmsDataValue>(layout.Elements.Count);
+        foreach (var element in layout.Elements)
+        {
+            if (!entriesByIndex.TryGetValue(element.Index, out var entry))
+                throw new InvalidOperationException($"SV payload layout entry {element.Index} has no matching DataSet entry.");
+
+            if (element.Kind == SampledValuePayloadElementKind.Quality ||
+                element.Kind == SampledValuePayloadElementKind.BitString ||
+                element.Kind == SampledValuePayloadElementKind.EntryTime)
+            {
+                values.Add(MmsDataValue.BitString(0, new byte[element.Width]));
+                continue;
+            }
+
+            if (element.Kind == SampledValuePayloadElementKind.Timestamp)
+            {
+                values.Add(MmsDataValue.UtcTime(timestamp));
+                continue;
+            }
+
+            values.Add(BuildChannelValue(entry, element, elapsedSeconds, rampSignalKey, rampStartMagnitude));
+        }
+
+        return SampledValuesPayloadBuilder.BuildPayload(layout, values);
+    }
+
+    private MmsDataValue BuildChannelValue(
+        SclDataSetEntry entry,
+        SampledValuePayloadElement element,
         double elapsedSeconds,
         string rampSignalKey,
         double rampStartMagnitude)
     {
-        var bytes = new List<byte>(Math.Max(entries.Count, 1) * 4);
-        Span<byte> buffer = stackalloc byte[4];
+        var channel = ResolveChannel(entry);
+        if (channel is null || !channel.IsEnabled)
+            return ZeroValue(element);
 
-        foreach (var entry in entries)
+        var effective = ResolveEffectiveChannel(channel, elapsedSeconds, rampSignalKey, rampStartMagnitude);
+        var dlsb = channel.Kind == "I" ? CurrentDlsb : VoltageDlsb;
+        if (dlsb <= 0)
+            throw new InvalidOperationException("dLSB must be greater than 0.");
+
+        var angle = (2.0 * Math.PI * effective.FrequencyHz * elapsedSeconds) + (effective.AngleDegrees * Math.PI / 180.0);
+        var counts = effective.Magnitude / dlsb;
+        var sample = counts * Math.Sin(angle);
+        return element.Kind switch
         {
-            if (entry.IsQuality)
-            {
-                bytes.AddRange([0x00, 0x00, 0x00, 0x00]);
-                continue;
-            }
-
-            if (entry.IsTimestamp)
-            {
-                bytes.AddRange([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-                continue;
-            }
-
-            var channel = ResolveChannel(entry);
-            if (channel is null || !channel.IsEnabled)
-            {
-                bytes.AddRange([0x00, 0x00, 0x00, 0x00]);
-                continue;
-            }
-
-            var effective = ResolveEffectiveChannel(channel, elapsedSeconds, rampSignalKey, rampStartMagnitude);
-            var dlsb = channel.Kind == "I" ? CurrentDlsb : VoltageDlsb;
-            if (dlsb <= 0)
-                throw new InvalidOperationException("dLSB must be greater than 0.");
-
-            var angle = (2.0 * Math.PI * effective.FrequencyHz * elapsedSeconds) + (effective.AngleDegrees * Math.PI / 180.0);
-            var counts = effective.Magnitude / dlsb;
-            var sample = counts * Math.Sin(angle);
-            var value = (int)Math.Clamp(Math.Round(sample), int.MinValue, int.MaxValue);
-            BinaryPrimitives.WriteInt32BigEndian(buffer, value);
-            bytes.AddRange(buffer.ToArray());
-        }
-
-        return bytes.ToArray();
+            SampledValuePayloadElementKind.Boolean => MmsDataValue.Boolean(Math.Abs(sample) >= 0.5),
+            SampledValuePayloadElementKind.UInt8 or
+            SampledValuePayloadElementKind.UInt16 or
+            SampledValuePayloadElementKind.UInt24 or
+            SampledValuePayloadElementKind.UInt32 or
+            SampledValuePayloadElementKind.UInt64 => MmsDataValue.Unsigned((ulong)Math.Max(0, Math.Round(sample))),
+            SampledValuePayloadElementKind.Float32 or
+            SampledValuePayloadElementKind.Float64 => MmsDataValue.FloatingPoint((float)sample),
+            _ => MmsDataValue.Integer((long)Math.Clamp(Math.Round(sample), long.MinValue, long.MaxValue))
+        };
     }
+
+    private static MmsDataValue ZeroValue(SampledValuePayloadElement element)
+        => element.Kind switch
+        {
+            SampledValuePayloadElementKind.Boolean => MmsDataValue.Boolean(false),
+            SampledValuePayloadElementKind.UInt8 or
+            SampledValuePayloadElementKind.UInt16 or
+            SampledValuePayloadElementKind.UInt24 or
+            SampledValuePayloadElementKind.UInt32 or
+            SampledValuePayloadElementKind.UInt64 => MmsDataValue.Unsigned(0),
+            SampledValuePayloadElementKind.Float32 or
+            SampledValuePayloadElementKind.Float64 => MmsDataValue.FloatingPoint(0),
+            _ => MmsDataValue.Integer(0)
+        };
 
     private EffectiveChannel ResolveEffectiveChannel(
         SignalChannelViewModel channel,
@@ -650,6 +691,13 @@ public sealed class SvPublisherViewModel : ObservableObject
 
         if (CurrentDlsb <= 0 || VoltageDlsb <= 0)
             throw new InvalidOperationException("Current and voltage dLSB must be greater than 0.");
+
+        if (SelectedStream.Stream.NoAsdu != 1)
+            throw new InvalidOperationException($"SV stream declares nofASDU={SelectedStream.Stream.NoAsdu}. This publisher currently supports exactly one ASDU per frame.");
+
+        var layout = SampledValuesPayloadLayout.FromDataSet(SelectedStream.Stream.Entries);
+        if (!layout.IsFullySupported)
+            throw new InvalidOperationException("Unsupported SV payload layout: " + string.Join("; ", layout.UnsupportedElements.Select(x => $"{x.SignalReference} bType={x.BType}")));
 
         if (!MacAddress.TryParse(SourceMac, out _))
             throw new InvalidOperationException("Source MAC is invalid.");
@@ -768,7 +816,7 @@ public sealed class SvPublisherViewModel : ObservableObject
     }
 
     private static int EstimatePayloadBytes(IEnumerable<SclDataSetEntry> entries)
-        => entries.Sum(entry => entry.IsTimestamp ? 8 : 4);
+        => SampledValuesPayloadLayout.FromDataSet(entries.ToArray()).PayloadByteLength;
 
     private static ushort? ToSampleRate(double sampleRateHz)
     {
@@ -786,6 +834,30 @@ public sealed class SvPublisherViewModel : ObservableObject
             "SecPerSmp" => 2,
             _ => null
         };
+
+    private static ushort? ResolveSampleCounterWrap(SclSampledValuesStream stream, double sampleRateHz, double nominalFrequencyHz)
+    {
+        var mode = MapSampleMode(stream.SampleMode);
+        var samplesPerSecond = mode switch
+        {
+            0 when stream.SampleRate > 0 && nominalFrequencyHz > 0 => stream.SampleRate * nominalFrequencyHz,
+            1 when sampleRateHz > 0 => sampleRateHz,
+            _ => 0
+        };
+
+        if (samplesPerSecond <= 0 || samplesPerSecond > ushort.MaxValue)
+            return null;
+
+        return (ushort)Math.Round(samplesPerSecond);
+    }
+
+    private static ushort IncrementSampleCount(ushort current, ushort? wrap)
+    {
+        if (wrap is > 1)
+            return current + 1 >= wrap.Value ? (ushort)0 : (ushort)(current + 1);
+
+        return current == ushort.MaxValue ? (ushort)0 : (ushort)(current + 1);
+    }
 
     private static async Task DelayUntilSampleAsync(long startedTicks, long sampleIndex, double sampleRateHz, CancellationToken cancellationToken)
     {

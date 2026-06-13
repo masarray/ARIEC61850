@@ -16,12 +16,14 @@ public sealed class SampledValuesPublisherProfile
         AppId = appId;
         Destination = destination;
         Vlan = vlan;
+        PayloadLayout = SampledValuesPayloadLayout.FromDataSet(stream.Entries);
     }
 
     public SclSampledValuesStream Stream { get; }
     public ushort AppId { get; }
     public MacAddress Destination { get; }
     public VlanTag? Vlan { get; }
+    public SampledValuesPayloadLayout PayloadLayout { get; }
     public IReadOnlyList<SclDataSetEntry> Entries => Stream.Entries;
 
     public static IReadOnlyList<SampledValuesPublisherProfile> CreateMany(SclDocument document)
@@ -88,6 +90,38 @@ public sealed class SampledValuesPublisherProfile
         return SampledValuesFrameBuilder.BuildEthernetFrame(CreateFrame(source, sampleCount, samplePayload, referenceTime, sampleSynchronization));
     }
 
+    public byte[] BuildPayload(IReadOnlyList<MmsDataValue> values)
+        => SampledValuesPayloadBuilder.BuildPayload(PayloadLayout, values);
+
+    public byte[] BuildDefaultPayload(Iec61850UtcTime? timestamp = null)
+        => SampledValuesPayloadBuilder.BuildDefaultPayload(PayloadLayout, timestamp);
+
+    public byte[] BuildDemoPayload(
+        long sampleIndex,
+        double sampleRateHz,
+        double nominalHz,
+        Iec61850UtcTime? timestamp = null)
+        => SampledValuesPayloadBuilder.BuildDemoPayload(PayloadLayout, sampleIndex, sampleRateHz, nominalHz, timestamp);
+
+    public ushort? ResolveSampleCounterWrap(double nominalFrequencyHz)
+    {
+        var mode = TryMapSampleMode(Stream.SampleMode);
+        if (Stream.SampleRate == 0)
+            return null;
+
+        var samplesPerSecond = mode switch
+        {
+            0 => Stream.SampleRate * nominalFrequencyHz,
+            1 => Stream.SampleRate,
+            _ => 0
+        };
+
+        if (samplesPerSecond <= 0 || samplesPerSecond > ushort.MaxValue)
+            return null;
+
+        return (ushort)Math.Round(samplesPerSecond);
+    }
+
     private static SampledValuesPublisherProfile Create(SclSampledValuesStream stream)
     {
         if (!stream.Address.AppId.HasValue)
@@ -101,6 +135,9 @@ public sealed class SampledValuesPublisherProfile
 
         if (string.IsNullOrWhiteSpace(stream.DataSetReference) || stream.Entries.Count == 0)
             throw new SclProfileException($"SV {stream.ControlBlockReference} has no resolved DataSet entries.");
+
+        if (stream.NoAsdu != 1)
+            throw new SclProfileException($"SV {stream.ControlBlockReference} declares nofASDU={stream.NoAsdu}. This publisher currently supports exactly one ASDU per frame.");
 
         return new SampledValuesPublisherProfile(stream, stream.Address.AppId.Value, stream.Address.DestinationMac.Value, stream.Address.ToVlanTag());
     }

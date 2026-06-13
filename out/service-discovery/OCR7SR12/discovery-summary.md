@@ -1,6 +1,6 @@
 ﻿# Live IEC 61850 IED Model Discovery
 
-- Generated: 2026-06-13 13:37:11.736 UTC
+- Generated: 2026-06-13 14:20:23.958 UTC
 - Source: LiveMmsDiscovery
 - Target: 192.16.1.157:102
 - IED: OCR7SR12

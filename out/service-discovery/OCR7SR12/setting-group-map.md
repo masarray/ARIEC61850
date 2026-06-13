@@ -1,6 +1,6 @@
 # IEC 61850 Setting Group Map
 
-- Generated: 2026-06-13 13:37:11.752 UTC
+- Generated: 2026-06-13 14:20:23.997 UTC
 - Summary: SGCB core complete=1/1, SG/SE entries=0, reads=0/0.
 - NumOfSG: 4
 - ActSG: 1

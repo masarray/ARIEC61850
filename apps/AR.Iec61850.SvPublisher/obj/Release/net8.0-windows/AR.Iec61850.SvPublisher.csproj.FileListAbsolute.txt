@@ -30,3 +30,9 @@ D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\refint
 D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\AR.Iec61850.SvPublisher.pdb
 D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\AR.Iec61850.SvPublisher.genruntimeconfig.cache
 D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\ref\AR.Iec61850.SvPublisher.dll
+D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\RampSetupWindow.baml
+D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\StateSequencerWindow.baml
+D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\SvConfigWindow.baml
+D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\RampSetupWindow.g.cs
+D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\StateSequencerWindow.g.cs
+D:\Git\ARIEC61850\apps\AR.Iec61850.SvPublisher\obj\Release\net8.0-windows\SvConfigWindow.g.cs

@@ -14,15 +14,21 @@ public sealed class SampledValuesPublisherSession
         SampledValuesPublisherProfile profile,
         MacAddress source,
         IProcessBusTransport transport,
-        ushort initialSampleCount = 0)
+        ushort initialSampleCount = 0,
+        ushort? sampleCounterWrap = null)
     {
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
         _source = source;
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        if (sampleCounterWrap is 1)
+            throw new ArgumentOutOfRangeException(nameof(sampleCounterWrap), "SV sample counter wrap must be greater than 1 when supplied.");
+
+        SampleCounterWrap = sampleCounterWrap;
         NextSampleCount = initialSampleCount;
     }
 
     public ushort NextSampleCount { get; private set; }
+    public ushort? SampleCounterWrap { get; }
 
     public async ValueTask<byte[]> PublishNextAsync(
         byte[] samplePayload,
@@ -33,13 +39,18 @@ public sealed class SampledValuesPublisherSession
         ArgumentNullException.ThrowIfNull(samplePayload);
 
         var sampleCount = NextSampleCount;
-        NextSampleCount = IncrementSampleCount(sampleCount);
+        NextSampleCount = IncrementSampleCount(sampleCount, SampleCounterWrap);
 
         var frame = _profile.BuildEthernetFrame(_source, sampleCount, samplePayload, referenceTime, sampleSynchronization);
         await _transport.SendAsync(frame, cancellationToken).ConfigureAwait(false);
         return frame;
     }
 
-    private static ushort IncrementSampleCount(ushort current)
-        => current == ushort.MaxValue ? (ushort)0 : (ushort)(current + 1);
+    private static ushort IncrementSampleCount(ushort current, ushort? wrap)
+    {
+        if (wrap is > 1)
+            return current + 1 >= wrap.Value ? (ushort)0 : (ushort)(current + 1);
+
+        return current == ushort.MaxValue ? (ushort)0 : (ushort)(current + 1);
+    }
 }

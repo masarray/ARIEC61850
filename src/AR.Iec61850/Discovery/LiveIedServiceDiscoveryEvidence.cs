@@ -184,6 +184,48 @@ public sealed class LiveIedGoldenSclTypeLearningConflict
 }
 
 
+
+public sealed class LiveIedGoldenSclRegistryPromotionEvidence
+{
+    public DateTimeOffset GeneratedAtUtc { get; init; } = DateTimeOffset.UtcNow;
+    public bool Attempted { get; init; }
+    public bool IsSuccess { get; init; }
+    public string ProfileName { get; init; } = string.Empty;
+    public string ConflictPolicy { get; init; } = "review-only";
+    public int CandidateCount { get; init; }
+    public int AppliedPromotionCount { get; init; }
+    public int ReviewConflictCount { get; init; }
+    public int GeneratedRegistryEntryCount { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public string Summary { get; init; } = string.Empty;
+    public IReadOnlyList<LiveIedGoldenSclRegistryPromotionEntry> AppliedPromotions { get; init; } = Array.Empty<LiveIedGoldenSclRegistryPromotionEntry>();
+    public IReadOnlyList<LiveIedGoldenSclRegistryPromotionConflict> ReviewConflicts { get; init; } = Array.Empty<LiveIedGoldenSclRegistryPromotionConflict>();
+}
+
+public sealed class LiveIedGoldenSclRegistryPromotionEntry
+{
+    public string Key { get; init; } = string.Empty;
+    public string LogicalNodeClass { get; init; } = string.Empty;
+    public string DataObjectName { get; init; } = string.Empty;
+    public string Reference { get; init; } = string.Empty;
+    public string PreviousCdc { get; init; } = string.Empty;
+    public string PromotedCdc { get; init; } = string.Empty;
+    public string PreviousConfidence { get; init; } = string.Empty;
+    public string PromotedConfidence { get; init; } = "GoldenConfirmed";
+    public string GoldenDoTypeId { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty;
+}
+
+public sealed class LiveIedGoldenSclRegistryPromotionConflict
+{
+    public string Key { get; init; } = string.Empty;
+    public string Reference { get; init; } = string.Empty;
+    public string LiveCdc { get; init; } = string.Empty;
+    public string GoldenCdc { get; init; } = string.Empty;
+    public string Policy { get; init; } = string.Empty;
+    public string Recommendation { get; init; } = string.Empty;
+}
+
 public sealed class LiveIedOnlineServiceEvidence
 {
     public LiveIedFileServiceEvidence FileService { get; init; } = new();
@@ -192,4 +234,5 @@ public sealed class LiveIedOnlineServiceEvidence
     public LiveIedVariableTypeProbeEvidence VariableTypeProbe { get; init; } = new();
     public LiveIedVariableSpecQuarantineEvidence VariableSpecQuarantine { get; init; } = new();
     public LiveIedGoldenSclTypeLearningEvidence GoldenSclTypeLearning { get; init; } = new();
+    public LiveIedGoldenSclRegistryPromotionEvidence GoldenSclRegistryPromotion { get; init; } = new();
 }

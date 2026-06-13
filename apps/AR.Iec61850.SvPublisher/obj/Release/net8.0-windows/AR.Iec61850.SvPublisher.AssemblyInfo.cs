@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AR.Iec61850.SvPublisher")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+14f1da91184e658b6e647587c0076c84a70c63de")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2110f965e486da223cd8badd6786c000edef4cf6")]
 [assembly: System.Reflection.AssemblyProductAttribute("AR.Iec61850.SvPublisher")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AR.Iec61850.SvPublisher")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

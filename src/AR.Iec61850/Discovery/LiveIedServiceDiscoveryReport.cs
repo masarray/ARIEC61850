@@ -40,6 +40,7 @@ public static class LiveIedServiceDiscoveryReportBuilder
         var typeProbe = evidence?.VariableTypeProbe ?? new LiveIedVariableTypeProbeEvidence();
         var typeQuarantine = evidence?.VariableSpecQuarantine ?? new LiveIedVariableSpecQuarantineEvidence();
         var goldenLearning = evidence?.GoldenSclTypeLearning ?? new LiveIedGoldenSclTypeLearningEvidence();
+        var goldenPromotion = evidence?.GoldenSclRegistryPromotion ?? new LiveIedGoldenSclRegistryPromotionEvidence();
         var fileStatus = !fileEvidence.Attempted ? "Not attempted" : fileEvidence.IsSuccess ? "Discovered" : "Attempted, failed or unsupported";
         var fileCount = fileEvidence.Entries.Count;
         var fileMessage = !fileEvidence.Attempted ? "FileDirectory was not attempted in this run." : fileEvidence.IsSuccess ? $"FileDirectory returned {fileCount} entries from {fileEvidence.PageCount} page(s)." : fileEvidence.Message;
@@ -62,6 +63,7 @@ public static class LiveIedServiceDiscoveryReportBuilder
             Item("File service", fileStatus, fileCount, fileMessage, fileEvidence.IsSuccess ? "Add FileOpen/FileRead download support and recursive safe directory walking." : "Implement/verify FileDirectory support on this IED and add file download evidence."),
             Item("Variable specifications", BuildVariableTypeStatus(document, typeProbe, typeQuarantine), Math.Max(document.Coverage.VariableTypeReadSuccessCount, typeProbe.SuccessCount), BuildVariableTypeEvidence(document, typeProbe, typeQuarantine), BuildVariableTypeGap(typeProbe, typeQuarantine)),
             Item("Golden SCL type learning", BuildGoldenLearningStatus(goldenLearning), goldenLearning.CandidateImprovementCount, BuildGoldenLearningEvidence(goldenLearning), BuildGoldenLearningGap(goldenLearning)),
+            Item("Golden registry promotion", BuildGoldenPromotionStatus(goldenPromotion), goldenPromotion.AppliedPromotionCount, BuildGoldenPromotionEvidence(goldenPromotion), BuildGoldenPromotionGap(goldenPromotion)),
             Item("CDC resolution", document.Coverage.UnknownCdcCount == 0 ? "Resolved" : "Partially resolved", document.Coverage.HighConfidenceCdcCount + document.Coverage.MediumConfidenceCdcCount + document.Coverage.LowConfidenceCdcCount, $"high={document.Coverage.HighConfidenceCdcCount}, medium={document.Coverage.MediumConfidenceCdcCount}, low={document.Coverage.LowConfidenceCdcCount}, unknown={document.Coverage.UnknownCdcCount}", "Expand IEC 61850-7-3/7-4 registry and feed golden SCL learning results into normalized type generation.")
         };
 
@@ -204,6 +206,55 @@ public static class LiveIedServiceDiscoveryReportBuilder
             return "Fix golden SCL path/parsing before using it as a type-learning reference.";
         if (learning.CandidateImprovementCount > 0)
             return "Promote confirmed golden CDC/type candidates into the standard/vendor registry and SCL normalizer.";
+        return string.Empty;
+    }
+
+
+    private static string BuildGoldenPromotionStatus(LiveIedGoldenSclRegistryPromotionEvidence promotion)
+    {
+        if (!promotion.Attempted)
+            return "Not attempted";
+
+        if (!promotion.IsSuccess)
+            return "Unavailable";
+
+        if (promotion.AppliedPromotionCount > 0 && promotion.ReviewConflictCount > 0)
+            return "Promotions generated + conflicts for review";
+
+        if (promotion.AppliedPromotionCount > 0)
+            return "Promotions generated";
+
+        if (promotion.ReviewConflictCount > 0)
+            return "Conflicts for review";
+
+        return "No promotions needed";
+    }
+
+    private static string BuildGoldenPromotionEvidence(LiveIedGoldenSclRegistryPromotionEvidence promotion)
+    {
+        if (!promotion.Attempted)
+            return "Golden registry promotion was not attempted.";
+
+        if (!promotion.IsSuccess)
+            return string.IsNullOrWhiteSpace(promotion.Message) ? "Golden registry promotion unavailable." : promotion.Message;
+
+        return $"profile={promotion.ProfileName}, policy={promotion.ConflictPolicy}, candidates={promotion.CandidateCount}, applied={promotion.AppliedPromotionCount}, conflicts={promotion.ReviewConflictCount}, registryEntries={promotion.GeneratedRegistryEntryCount}.";
+    }
+
+    private static string BuildGoldenPromotionGap(LiveIedGoldenSclRegistryPromotionEvidence promotion)
+    {
+        if (!promotion.Attempted)
+            return "Enable --learn-types-from-golden true and provide --golden-scl to generate vendor/profile CDC promotion evidence.";
+
+        if (!promotion.IsSuccess)
+            return "Fix golden learning/promotion input before generating a vendor/profile CDC registry layer.";
+
+        if (promotion.ReviewConflictCount > 0)
+            return "Review CDC conflicts before applying golden overrides; keep conflict policy review-only unless validated against the IED/vendor model.";
+
+        if (promotion.AppliedPromotionCount > 0)
+            return "Feed promoted golden CDC/type bindings into the SCL normalizer and reduce medium/unknown CDC confidence in future exports.";
+
         return string.Empty;
     }
 

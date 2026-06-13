@@ -34,7 +34,7 @@ public class MmsReportDiscoveryMapperTests
 
         var brcb = inventory.ReportControls.Single(x => x.Buffered);
         Assert.Equal("OCR7SR12PROT/LLN0.BR.brcbA01", brcb.Reference);
-        Assert.Equal("OCR7SR12PROT/LLN0.DataSet", brcb.DataSetReference);
+        Assert.Empty(brcb.DataSetReference);
         Assert.Contains("RptID", brcb.Attributes);
         Assert.Contains("DatSet", brcb.Attributes);
     }

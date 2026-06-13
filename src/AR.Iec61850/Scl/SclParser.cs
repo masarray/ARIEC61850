@@ -232,7 +232,7 @@ public sealed class SclParser
                         var dataSetName = Attr(control, "datSet");
                         var dataSet = ResolveDataSet(dataSets, iedName, ldInst, "LLN0", dataSetName);
 
-                        if (dataSet is null)
+                        if (dataSet is null && !string.IsNullOrWhiteSpace(dataSetName))
                             warnings.Add($"GOOSE {iedName}{ldInst}/LLN0$GO${name} references missing DataSet '{dataSetName}'.");
 
                         addressIndex.TryGetValue(StreamAddressKey("GOOSE", iedName, ldInst, name), out var address);
@@ -279,7 +279,7 @@ public sealed class SclParser
                         var dataSetName = Attr(control, "datSet");
                         var dataSet = ResolveDataSet(dataSets, iedName, ldInst, "LLN0", dataSetName);
 
-                        if (dataSet is null)
+                        if (dataSet is null && !string.IsNullOrWhiteSpace(dataSetName))
                             warnings.Add($"SV {iedName}{ldInst}/LLN0$SV${name} references missing DataSet '{dataSetName}'.");
 
                         addressIndex.TryGetValue(StreamAddressKey("SV", iedName, ldInst, name), out var address);
@@ -329,7 +329,7 @@ public sealed class SclParser
                         var dataSetName = Attr(control, "datSet");
                         var dataSet = ResolveDataSet(dataSets, iedName, ldInst, lnPath, dataSetName);
 
-                        if (dataSet is null)
+                        if (dataSet is null && !string.IsNullOrWhiteSpace(dataSetName))
                             warnings.Add($"Report {iedName}{ldInst}/{lnPath}${name} references missing DataSet '{dataSetName}'.");
 
                         var buffered = BoolAttr(control, "buffered");

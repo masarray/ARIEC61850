@@ -369,3 +369,70 @@ Healthy end-state:
 
 Report evidence now includes `report-frames.json`, `report-streams.json`, and `report-values.csv` in addition to `report-timeline.json`. The mapper first attempts an OptFlds-driven IEC 61850 report decode before falling back to the legacy inclusion-bitstring scan. Each report frame records `DecoderMode`, stream key (`RptID + DataSet + ConfRev`), parse warnings, optional-field bits/raw value, included indexes, reasons, and member-value mapping. The CSV is intended for quick FAT/SAT review in spreadsheet tools.
 
+
+## Smart RCB Pool Selector / Anti-Contention v1
+
+The report planner now emits Smart RCB selection evidence. Use these checks after running a report command with `--evidence`:
+
+- `rcb-candidates.json` lists selected, candidate, skipped, and filtered RCBs with score and reason.
+- `rcb-selection.json` records whether fallback was used from the preferred RCB.
+- `rcb-claim-attempts.json` records the selected RCB, write sequence, and verification checks.
+
+Recommended smoke cases:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --evidence out/report-smart-rcb --yes
+```
+
+Strict one-RCB diagnostic mode:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --strict-rcb --duration-sec 60 --evidence out/report-strict-rcb --yes
+```
+
+Expected behavior:
+- Without `--strict-rcb`, a busy/unsafe preferred RCB may be skipped and a safe compatible RCB selected.
+- With `--strict-rcb`, the command blocks if the requested RCB is not available.
+
+## Smart RCB claim fallback validation
+
+When Smart RCB selection chooses a candidate that appears free but the live claim is rejected by the IED, the CLI now treats the rejected candidate as `ClaimFailedTryNext` and automatically rebuilds the plan while excluding that RCB for the current command. This prevents the client from repeatedly fighting a busy, disabled, or vendor-rejected RCB.
+
+Expected behavior when the first fallback BRCB rejects `RptEna=true`:
+
+```text
+Smart RCB claim failed on <RCB>; trying the next safe candidate instead of fighting this RCB.
+Smart RCB claim fallback attempt 2: excluding previous failed candidate(s): <RCB>
+```
+
+Evidence file `rcb-claim-attempts.json` records each attempted RCB and the selected fallback chain.
+
+## Smart RCB pre-claim contention probe
+
+Use this mode when another client may be starting at the same time or when a preferred RCB is known to be used by SCADA/gateway clients.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --poll-interval-ms 1000 --rcb-probe-count 3 --rcb-probe-delay-ms 1000 --contention-cooldown-sec 60 --evidence out/report-smart-rcb-contention --yes
+```
+
+Expected safe behavior:
+
+- If the selected RCB remains stable/free across probes, the guarded report session starts normally.
+- If the selected RCB flips `RptEna`, reservation, `DatSet`, or `ConfRev`, the command classifies it as pre-claim contention and tries the next safe candidate.
+- The evidence directory contains `rcb-contention-probes.json`.
+
+## Full SCL discovery inventory validation
+
+Run:
+
+```powershell
+ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-scl-export 192.16.1.157 --port 102 --timeout-ms 120000 --max-report-probes 286 --read-datasets true --read-types true --max-type-reads 512 --type-read-source both --ied-name OCR7SR12 --ap-name AP1 --profile connection --output out/scl/OCR7SR12.generated.iid
+```
+
+Expected:
+
+- generated IID exists;
+- round-trip parser succeeds;
+- counts print DataSets, RCB, GoCB, SVCB, SGCB, and LCB;
+- `discovery-evidence/control-block-inventory.json` exists;
+- warnings clearly separate generated SCL shells from exact live values that have not yet been read.

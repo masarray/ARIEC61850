@@ -14,7 +14,7 @@ public static class MmsReportDiscoveryMapper
 
         var inventory = new MmsReportInventory();
         inventory.DataSets.AddRange(BuildDataSets(snapshot.DomainVariableLists));
-        inventory.ReportControls.AddRange(BuildReportControls(snapshot.DomainVariables, inventory.DataSets));
+        inventory.ReportControls.AddRange(BuildReportControls(snapshot.DomainVariables));
         return inventory;
     }
 
@@ -45,8 +45,7 @@ public static class MmsReportDiscoveryMapper
     }
 
     private static IEnumerable<MmsReportControlCandidate> BuildReportControls(
-        IReadOnlyDictionary<string, IReadOnlyList<string>> domainVariables,
-        IReadOnlyList<MmsDataSetCandidate> dataSets)
+        IReadOnlyDictionary<string, IReadOnlyList<string>> domainVariables)
     {
         var map = new Dictionary<string, MmsReportControlCandidate>(StringComparer.OrdinalIgnoreCase);
 
@@ -64,7 +63,6 @@ public static class MmsReportDiscoveryMapper
                 if (!map.TryGetValue(parsed.Reference, out var candidate))
                 {
                     candidate = parsed;
-                    candidate.DataSetReference = InferLikelyDataSet(candidate, dataSets);
                     map[candidate.Reference] = candidate;
                 }
 
@@ -121,33 +119,6 @@ public static class MmsReportDiscoveryMapper
         };
 
         return true;
-    }
-
-    private static string InferLikelyDataSet(MmsReportControlCandidate reportControl, IReadOnlyList<MmsDataSetCandidate> dataSets)
-    {
-        var sameDomain = dataSets
-            .Where(ds => ds.Domain.Equals(reportControl.Domain, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-        if (sameDomain.Length == 0)
-            return string.Empty;
-
-        var sameLogicalNode = sameDomain
-            .Where(ds => ds.LogicalNode.Equals(reportControl.LogicalNode, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-        if (sameLogicalNode.Length == 1)
-            return sameLogicalNode[0].Reference;
-
-        if (sameDomain.Length == 1)
-            return sameDomain[0].Reference;
-
-        var byName = sameDomain.FirstOrDefault(ds =>
-            !string.IsNullOrWhiteSpace(ds.Name) &&
-            (reportControl.Name.Contains(ds.Name, StringComparison.OrdinalIgnoreCase) ||
-             ds.Name.Contains(reportControl.Name, StringComparison.OrdinalIgnoreCase)));
-
-        return byName?.Reference ?? string.Empty;
     }
 
     private static bool IsKnownReportAttribute(string text)

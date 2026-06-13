@@ -25,6 +25,7 @@ public sealed class MmsReportSubscriptionPlan
     public IReadOnlyList<string> Steps { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> Blockers { get; init; } = Array.Empty<string>();
+    public MmsRcbSelectionEvidence RcbSelection { get; init; } = new();
 
     public bool IsReady => Status is MmsReportSubscriptionPlanStatus.ReadyReadOnly or MmsReportSubscriptionPlanStatus.ReadyRequiresWrite;
 
@@ -45,7 +46,11 @@ public static class MmsReportSubscriptionPlanner
         MmsReportInventory inventory,
         IReadOnlyList<MmsDataSetDirectoryResult> dataSetDirectories,
         string? preferredRcbReference = null,
-        string? preferredDataSetReference = null)
+        string? preferredDataSetReference = null,
+        bool strictRcb = false,
+        bool allowUrCbFallback = true,
+        bool allowPollingFallback = true,
+        IReadOnlySet<string>? excludedRcbReferences = null)
     {
         ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(dataSetDirectories);
@@ -55,37 +60,19 @@ public static class MmsReportSubscriptionPlanner
             .GroupBy(x => NormalizeReference(x.DataSetReference), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
 
-        var candidates = inventory.ReportControls
-            .Where(x => !string.IsNullOrWhiteSpace(x.DataSetReference))
-            .Where(x => !IsExplicitlyEnabled(x))
-            .Where(x => !IsReservedByOtherClient(x))
-            .ToArray();
+        var selection = MmsRcbPoolSelector.BuildStaticSelection(
+            inventory,
+            dataSetMap,
+            preferredRcbReference,
+            preferredDataSetReference,
+            strictRcb,
+            allowUrCbFallback,
+            allowPollingFallback,
+            excludedRcbReferences);
 
-        if (!string.IsNullOrWhiteSpace(preferredRcbReference))
-            candidates = candidates.Where(x => IsSameReference(x.Reference, preferredRcbReference)).ToArray();
-
-        if (!string.IsNullOrWhiteSpace(preferredDataSetReference))
-            candidates = candidates.Where(x => IsSameReference(x.DataSetReference, preferredDataSetReference)).ToArray();
-
-        var scored = candidates
-            .Select(x => new
-            {
-                ReportControl = x,
-                DataSet = dataSetMap.TryGetValue(NormalizeReference(x.DataSetReference), out var mapped) ? mapped : null,
-                SafetyScore = StaticCandidateSafetyScore(x),
-                DataSetScore = dataSetMap.TryGetValue(NormalizeReference(x.DataSetReference), out var mapped2) && mapped2.Members.Count > 0 ? 0 : 1
-            })
-            .OrderBy(x => x.DataSetScore)
-            .ThenByDescending(x => x.ReportControl.Buffered)
-            .ThenByDescending(x => x.SafetyScore)
-            .ThenBy(x => x.ReportControl.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.ReportControl.LogicalNode.Equals("LLN0", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenBy(x => x.ReportControl.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.ReportControl.Name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        var selectedEntry = scored.FirstOrDefault();
-        var selected = selectedEntry?.ReportControl;
+        var selected = MmsRcbPoolSelector.SelectReportControl(inventory, selection);
+        var selectedDataSetKey = selected == null ? string.Empty : NormalizeReference(selected.DataSetReference);
+        var dataSet = selected != null && dataSetMap.TryGetValue(selectedDataSetKey, out var mappedDataSet) ? mappedDataSet : null;
         if (selected == null)
         {
             var knownStatic = inventory.ReportControls.Count(x => !string.IsNullOrWhiteSpace(x.DataSetReference));
@@ -96,16 +83,17 @@ public static class MmsReportSubscriptionPlanner
                 Mode = MmsReportSubscriptionPlanMode.StaticDataSet,
                 Status = MmsReportSubscriptionPlanStatus.Blocked,
                 DataSetReference = preferredDataSetReference ?? string.Empty,
-                Blockers =
-                [
+                Blockers = new[]
+                {
                     $"No static RCB with a usable DatSet matched the requested filter. Static RCB seen={knownStatic}, occupied={occupied}, reserved={reserved}.",
                     "Run mms-report-plan --max-report-probes 286 --raw-limit 0 and verify at least one RCB has DatSet plus RptEna=false/0."
-                ],
-                Steps = ["Keep the workflow read-only until at least one RCB has DatSet, is not enabled, and is not actively reserved."]
+                }.Concat(selection.Blockers).ToArray(),
+                Warnings = selection.Warnings,
+                Steps = ["Keep the workflow read-only until at least one RCB has DatSet, is not enabled, and is not actively reserved."],
+                RcbSelection = selection
             };
         }
 
-        var dataSet = selectedEntry!.DataSet;
         var members = dataSet?.Members ?? Array.Empty<MmsDataSetDirectoryMember>();
         var blockers = new List<string>();
         var warnings = new List<string>();
@@ -129,9 +117,10 @@ public static class MmsReportSubscriptionPlanner
             ReportControl = selected,
             DataSetReference = selected.DataSetReference,
             Members = members,
-            Warnings = warnings,
-            Blockers = blockers,
-            Steps = BuildStaticSteps(selected, members)
+            Warnings = warnings.Concat(selection.Warnings).ToArray(),
+            Blockers = blockers.Concat(selection.Blockers).ToArray(),
+            Steps = BuildStaticSteps(selected, members),
+            RcbSelection = selection
         };
     }
 
@@ -141,7 +130,11 @@ public static class MmsReportSubscriptionPlanner
         IEnumerable<string> requestedPoints,
         string? preferredLogicalDevice = null,
         string? preferredRcbReference = null,
-        string? dataSetName = null)
+        string? dataSetName = null,
+        bool strictRcb = false,
+        bool allowUrCbFallback = true,
+        bool allowPollingFallback = true,
+        IReadOnlySet<string>? excludedRcbReferences = null)
     {
         ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(directory);
@@ -161,27 +154,17 @@ public static class MmsReportSubscriptionPlanner
         if (points.Length == 0)
             blockers.Add("No requested point could be resolved from the live IED directory.");
 
-        var readiness = MmsReportReadinessPlanner.Build(inventory);
-        var dynamicSlots = readiness.Items
-            .Where(x => x.Kind == MmsReportReadinessKind.EmptyDynamicSlotNeedsDataSet)
-            .Select(x => x.ReportControl)
-            .ToArray();
-
-        if (!string.IsNullOrWhiteSpace(preferredLogicalDevice))
-            dynamicSlots = dynamicSlots.Where(x => x.Domain.Equals(preferredLogicalDevice, StringComparison.OrdinalIgnoreCase)).ToArray();
-
-        if (!string.IsNullOrWhiteSpace(preferredRcbReference))
-            dynamicSlots = dynamicSlots.Where(x => x.Reference.Equals(preferredRcbReference, StringComparison.OrdinalIgnoreCase)).ToArray();
-
         var firstPointDomain = points.FirstOrDefault()?.Domain ?? string.Empty;
-        var selected = dynamicSlots
-            .OrderByDescending(x => x.Buffered)
-            .ThenBy(x => firstPointDomain.Length > 0 && x.Domain.Equals(firstPointDomain, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenBy(x => x.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.LogicalNode.Equals("LLN0", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenBy(x => x.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+        var effectivePreferredLogicalDevice = string.IsNullOrWhiteSpace(preferredLogicalDevice) ? firstPointDomain : preferredLogicalDevice;
+        var selection = MmsRcbPoolSelector.BuildDynamicSelection(
+            inventory,
+            effectivePreferredLogicalDevice,
+            preferredRcbReference,
+            strictRcb,
+            allowUrCbFallback,
+            allowPollingFallback,
+            excludedRcbReferences);
+        var selected = MmsRcbPoolSelector.SelectReportControl(inventory, selection);
 
         if (selected == null)
             blockers.Add("No free dynamic RCB slot matched the requested filter.");
@@ -206,9 +189,10 @@ public static class MmsReportSubscriptionPlanner
             DataSetReference = dsReference,
             DynamicPoints = points,
             Members = points.Select(ToDirectoryMember).ToArray(),
-            Warnings = warnings,
-            Blockers = blockers,
-            Steps = selected == null ? Array.Empty<string>() : BuildDynamicSteps(selected, dsReference, points)
+            Warnings = warnings.Concat(selection.Warnings).ToArray(),
+            Blockers = blockers.Concat(selection.Blockers).ToArray(),
+            Steps = selected == null ? Array.Empty<string>() : BuildDynamicSteps(selected, dsReference, points),
+            RcbSelection = selection
         };
     }
 

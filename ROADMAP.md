@@ -183,8 +183,8 @@ Latest verified local status:
 - Guarded report commands can export JSON/Markdown evidence artifacts with
   `--evidence`.
 - MMS `binary-time` is decoded as a typed raw value for report timestamps.
-- Latest automated validation: `dotnet test .\ARIEC61850.slnx -c Release
-  --no-build` passed with 71 tests.
+- Latest automated validation: `dotnet test .\ARIEC61850.slnx -c Release`
+  passed with 116 tests.
 
 Latest live MMS evidence against lab IED `192.16.1.157:102`:
 
@@ -204,6 +204,10 @@ static report monitor=poll smart-read during active report, 4/4 poll reads OK, 4
 report header=RptID/OptFlds/SqNum/TimeOfEntry/DatSet/BufOvfl/EntryID/ConfRev/reason decoded
 report diagnostics=sequence/EntryID/reason/write/poll/evidence export implemented
 dynamic report=create DataSet, bind, enable, GI, receive, map 2/2 values, cleanup OK
+live-to-SCL export=OCR7SR12 generated IID with product-related LD mapping, DataSet directory read, 286 RCBs, SGCB shell, internal CDC labels removed
+generated CDC invalid labels=GEN:0, Status:0, Controllable:0, Setting:0, Measurement:0
+generated CDC distribution=INS:240, LPL:119, INC:119, SPS:109, SPC:83, ACT:72, ACD:68, DPC:42, MV:17, WYE:13, BCR:7, DEL:4, DPL:4, SEQ:2
+IEDScout connection follow-up=generated SCL connects, but IEDScout reported value-read warnings. Fixed concrete RCB export as `indexed=false` to stop `brcbA0101`/`urcbA0101` references, and added CDC-aware bType normalization for common live values such as `Beh.stVal=INT32`, `Mod.ctlModel=INT32`, `Op.general=BOOLEAN`, `Str.dirGeneral=INT32`, and `BCR.actVal=INT32`.
 ```
 
 ## 5. Feature Status Matrix
@@ -736,3 +740,116 @@ This milestone is designed to prove that InformationReport routing and confirmed
 
 Report evidence now includes `report-frames.json`, `report-streams.json`, and `report-values.csv` in addition to `report-timeline.json`. The mapper first attempts an OptFlds-driven IEC 61850 report decode before falling back to the legacy inclusion-bitstring scan. Each report frame records `DecoderMode`, stream key (`RptID + DataSet + ConfRev`), parse warnings, optional-field bits/raw value, included indexes, reasons, and member-value mapping. The CSV is intended for quick FAT/SAT review in spreadsheet tools.
 
+
+## Milestone: Smart RCB Pool Selector & Anti-Contention v1
+
+Status: implemented in CLI planner/live workflows.
+
+What changed:
+- Static and dynamic report plans now build a Smart RCB selection evidence model instead of blindly binding to the first/preferred RCB.
+- `--rcb` is treated as a preferred candidate by default, not a hard lock.
+- `--strict-rcb` restores hard-lock behavior for diagnostic testing of one exact RCB.
+- `--allow-urcb-fallback true|false` controls whether URCB can be selected when a BRCB is not available.
+- Evidence export now includes `rcb-candidates.json`, `rcb-selection.json`, and `rcb-claim-attempts.json`.
+
+Operational rule:
+- If the preferred RCB is `RptEna=true`, reserved, or otherwise unsafe, the engine skips it and selects the next compatible candidate when fallback is allowed.
+- The engine must not disable or overwrite an RCB that was already enabled before the session started.
+
+Next hardening target:
+- Active contention/flapping detection using repeated probe windows before claim.
+- Lost-ownership detection during active report session.
+- Polling fallback when all RCB candidates are busy.
+
+### Completed: Smart RCB claim fallback hardening
+
+Smart RCB selection now has a runtime claim-fallback loop. If a candidate looks available during readback but `RptEna=true` or `DatSet` claim is rejected by the IED, the candidate is marked as a failed claim for the current command, excluded from the next selection pass, and the next safe RCB is tried. This avoids repeated RCB fighting and records the attempt chain in evidence.
+
+## Completed: Smart RCB pre-claim contention probe
+
+The Smart RCB selector now has a pre-claim contention guard for long-running and multi-client test environments. A selected RCB can be probed repeatedly before any `RptEna`/`DatSet` write is attempted. If `RptEna`, reservation state, `DatSet`, or `ConfRev` changes across probes, or if the RCB becomes busy/reserved during the probe window, the command marks that RCB as command-local cooldown and tries the next safe candidate instead of fighting another client.
+
+Evidence output now includes `rcb-contention-probes.json` and a **RCB Pre-Claim Contention Probes** section in `summary.md`.
+
+Recommended next milestone: run a 10-minute smart-RCB monitor with `--rcb-probe-count 3`, then harden fallback-to-polling when no RCB candidate survives contention/claim attempts.
+
+## Phase N5 — Live IED Model Discovery and Generic SCL Export
+
+ARIEC61850 now targets a tool-class workflow: **Live IED -> Canonical Model -> Generic IID/CID-style SCL -> Re-import for connection -> SCL-backed simulator seed**.
+
+### N5.1 Live IED Model Discovery v1 — in progress
+
+- [x] Add `mms-model-discover` read-only CLI command.
+- [x] Build canonical `ied-model.json` from MMS GetNameList, DataSet directory, and RCB inventory.
+- [x] Preserve FC as exact observed evidence from live MMS `$FC$` paths and DataSet members.
+- [x] Add CDC inference with confidence scoring and evidence.
+- [x] Generate `type-confidence-report.json`, `datasets.json`, `rcb-inventory.json`, `control-block-inventory.json`, and `discovery-summary.md`.
+- [x] Validate OCR7SR12 live output for FC/CDC coverage and generated SCL CDC validity.
+
+### N5.2 MMS VariableAccessAttributes Type Reader
+
+- [x] Implement native MMS GetVariableAccessAttributes / variable specification request builder.
+- [x] Decode primitive, structure, array, bit-string, UTC time, binary time, visible string, octet string, array, and structure type specifications.
+- [x] Attach exact MMS type evidence to DataAttributes where the IED supports the service.
+- [x] Use type evidence to improve SCL `bType` and future `DAType` reconstruction.
+- [ ] Harden type-read strategy after OCR7SR12 closed TCP on a leaf `GetVariableAccessAttributes` request. The reader needs safer root/DO-level probing, reconnect/resume, and vendor fault isolation before full type coverage can be claimed.
+
+### N5.3 CDC Pattern Registry
+
+- [x] Establish first-pass CDC inference and confidence model in the canonical live IED discovery output.
+- [ ] Expand built-in inference registry for SPS, DPS, INS, ENS, ACT, ACD, MV, CMV, WYE, DEL, SPC, DPC, INC, ING, ASG, BSC, ISC, APC, and control/setting families.
+- [x] Add confidence categories: exact, high, medium, low, unknown.
+- [x] Stop emitting internal semantic labels as SCL CDC values. `GEN`, `Status`, `Controllable`, `Setting`, and `Measurement` are rejected as CDC values and no longer appear in generated `DOType cdc`.
+- [x] Add OCR7SR12-proven CDC rules for `NamPlt=LPL`, `PhyNam=DPL`, `Beh/Health=INS`, `Mod=INC`, protection `Op=ACT`, protection `Str=ACD`, `SPCSO=SPC`, `Pos/DPCSO=DPC`, counters `BCR`, phase measurements `WYE/DEL`, `SEQ`, and `MV`.
+- [ ] Support optional external profile/NSD registry without bundling restricted IEC content.
+
+### N5.4 Generic DataTypeTemplates Builder
+
+- [x] Build initial `LNodeType`, `DOType`, and structured `DAType` output from the canonical live model.
+- [x] Generate nested `DAType` chains for dotted DA paths such as `cVal.mag.f`.
+- [ ] Deduplicate templates by structure hash across equivalent LN/DO/DA structures.
+- [ ] Mark generated IDs as generic and never pretend they are vendor-original type IDs.
+
+### N5.5 Generic IID/CID-style SCL Writer
+
+- [x] Write `Header`, `Communication`, `IED`, `AccessPoint`, `Server`, `LDevice`, `LN0`, `LN`, `DataSet`, `ReportControl`, and `DataTypeTemplates` from live discovery evidence.
+- [x] Keep runtime state and contention data in companion JSON, not static SCL.
+- [x] Generate `*.generated.iid` connection profile via `mms-scl-export`.
+- [x] Map live MMS domains to SCL `LDevice.inst` without duplicating `IED.name` in product-related naming. Example: live domain `OCR7SR12PROT` + `--ied-name OCR7SR12` exports `LDevice inst="PROT"` and DataSet `FCDA ldInst="PROT"`.
+- [x] Stop exporting heuristic RCB `datSet` bindings. RCB `datSet` is now emitted only when live readback/structure evidence provides the value, not merely because a DataSet exists in the same logical device.
+- [x] Export live-discovered concrete RCBs as `indexed=false` so tools do not append another instance suffix and try invalid names such as `brcbA0101`.
+- [ ] Add GoCB/SVCB/SettingControl/LogControl export when corresponding deep discovery evidence is available.
+- [ ] Add explicit `*.generated.cid` profile with tighter client-connection assumptions.
+
+### N5.6 Round-trip SCL Validator
+
+- [x] Import generated SCL with ARIEC61850 parser during `mms-scl-export`.
+- [x] Verify the OCR7SR12 live export no longer round-trips as `OCR7SR12OCR7SR12*` logical devices.
+- [ ] Add a strict validator that fails on duplicate IED-name prefixes, unresolved FCDA targets, invalid RCB DataSet links, GSE/SMV control block links, and DataTypeTemplate IDs.
+- [ ] Use generated SCL as source for `mms-report-monitor --scl` connection workflow.
+
+### N5.7 SCL-backed Simulator Seed
+
+- [ ] Start ARIEC61850 MMS server from generated SCL.
+- [ ] Expose discovered LD/LN/DO/DA model.
+- [ ] Simulate DataSets, BRCB/URCB, and GOOSE publisher configuration from generated SCL.
+- [ ] Allow value changes and report/GOOSE emission from simulator runtime.
+
+### N5.6 — Full SCL Discovery Inventory v1
+
+Status: started.
+
+This phase keeps Edition 1 export out of scope and focuses on full discovery depth for an Edition 2 / 2.1-ready generated SCL model.
+
+- [x] Promote GO/SV/SG/LG detection from placeholders to structured control-block inventory.
+- [x] Add `control-block-inventory.json` while keeping `control-block-placeholders.json` for compatibility.
+- [x] Add discovery coverage counts for GoCB, SVCB, SGCB, and LCB.
+- [x] Add conservative SCL shell export for `GSEControl`, `SampledValueControl`, `SettingControl`, and `LogControl`.
+- [x] Add explicit warnings when DatSet/address/ID/timing values are not read yet.
+- [x] Detect `LLN0.SP.SGCB` as SettingControl evidence and skip exporting it as a fake DO CDC.
+- [ ] Implement online GoCB/SVCB/SGCB/LCB value readback.
+- [ ] Add Communication `GSE`/`SMV` address export from exact MMS values or passive traffic enrichment.
+- [ ] Add semantic validator for generated SCL control blocks.
+- [ ] Add MMS file directory discovery (`FileDirectory`) with read-only CLI output and evidence JSON before any file download/delete support.
+- [ ] Add service capability evidence to the live model and SCL `Services` section instead of hard-coded service assumptions.
+- [ ] Add selected DOI/DAI/Val readback for settings/nameplate/control model values needed to approach IEDScout-class CID/IID content.

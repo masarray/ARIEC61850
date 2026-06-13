@@ -165,6 +165,21 @@ public sealed class MmsReportSoakSnapshot
         $"{CapturedAt:yyyy-MM-dd HH:mm:ss.fff} UTC elapsed={ElapsedSeconds:0.###}s reports={ReportCount} values={ValueCount} poll={PollReadSuccessCount}/{PollReadCount} pending={PendingConfirmedOperationCount} queuedReports={QueuedInformationReportCount}";
 }
 
+public sealed class MmsRcbClaimAttempt
+{
+    public int AttemptNumber { get; init; }
+    public DateTimeOffset AttemptedAt { get; init; }
+    public string RcbReference { get; init; } = string.Empty;
+    public string PlanMode { get; init; } = string.Empty;
+    public string DataSetReference { get; init; } = string.Empty;
+    public string Decision { get; init; } = string.Empty;
+    public bool IsSuccess { get; init; }
+    public bool IsFallback { get; init; }
+    public string WriteAttribute { get; init; } = string.Empty;
+    public string WriteReference { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+}
+
 public sealed class MmsStaticReportSessionResult
 {
     public bool IsSuccess { get; init; }
@@ -172,6 +187,8 @@ public sealed class MmsStaticReportSessionResult
     public IReadOnlyList<MmsReportFrame> Reports { get; init; } = Array.Empty<MmsReportFrame>();
     public IReadOnlyList<MmsReportPollRead> PollReads { get; init; } = Array.Empty<MmsReportPollRead>();
     public IReadOnlyList<MmsReportSoakSnapshot> SoakSnapshots { get; init; } = Array.Empty<MmsReportSoakSnapshot>();
+    public IReadOnlyList<MmsRcbClaimAttempt> RcbClaimAttempts { get; init; } = Array.Empty<MmsRcbClaimAttempt>();
+    public IReadOnlyList<MmsRcbContentionProbeResult> RcbContentionProbes { get; init; } = Array.Empty<MmsRcbContentionProbeResult>();
     public DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset CompletedAt { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();

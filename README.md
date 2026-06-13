@@ -393,3 +393,67 @@ The evidence bundle includes `soak-snapshots.json` and a **Soak Snapshots** tabl
 
 Report evidence now includes `report-frames.json`, `report-streams.json`, and `report-values.csv` in addition to `report-timeline.json`. The mapper first attempts an OptFlds-driven IEC 61850 report decode before falling back to the legacy inclusion-bitstring scan. Each report frame records `DecoderMode`, stream key (`RptID + DataSet + ConfRev`), parse warnings, optional-field bits/raw value, included indexes, reasons, and member-value mapping. The CSV is intended for quick FAT/SAT review in spreadsheet tools.
 
+
+### Smart RCB Selection
+
+Report commands now treat `--rcb` as a preferred RCB by default. If the preferred RCB is busy, reserved, or unsafe, ARIEC61850 can select a compatible fallback RCB instead of fighting another client.
+
+Use `--strict-rcb` when the goal is to test one exact RCB and fail if it is not available.
+
+Evidence output includes:
+
+- `rcb-candidates.json`
+- `rcb-selection.json`
+- `rcb-claim-attempts.json`
+
+This is intended to avoid unsafe RCB contention in real substations where SCADA, gateways, or other tools may already be using the first BRCB/URCB instance.
+
+### Smart RCB claim fallback
+
+The report monitor treats `--rcb` as a preferred candidate unless `--strict-rcb` is used. If a selected RCB looks free during readback but rejects the live claim (`RptEna=true` or dynamic `DatSet` bind), ARIEC61850 marks that RCB as a failed claim, excludes it from the current command, and tries the next safe candidate. Evidence is written to `rcb-claim-attempts.json` so the skipped/failed/selected chain is auditable.
+
+### Smart RCB pre-claim contention guard
+
+ARIEC61850 now treats RCBs as a pool of exclusive resources rather than a fixed `brcbA01` target. The monitor can probe the selected RCB several times before writing `RptEna` or binding a DataSet. If the RCB flips state or becomes busy/reserved during the probe window, the command records the condition in `rcb-contention-probes.json`, skips that candidate for the current command, and tries the next safe RCB.
+
+Example:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --rcb-probe-count 3 --rcb-probe-delay-ms 1000 --contention-cooldown-sec 60 --evidence out/report-smart-rcb-contention --yes
+```
+
+### Live IED model discovery and future SCL export
+
+ARIEC61850 is moving toward a tool-class workflow: connect to a live IED, discover its IEC 61850 model, reconstruct a canonical model, export a generic IID/CID-style SCL snapshot, re-import that SCL for client connection, and later use the same SCL as an MMS server/simulator seed.
+
+The first implementation phase is read-only:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-model-discover 192.16.1.157 --port 102 --timeout-ms 120000 --max-report-probes 286 --read-datasets true --ied-name OCR7SR12 --output out/ied-model-discovery
+```
+
+The command writes `ied-model.json`, `discovery-summary.md`, `type-confidence-report.json`, `datasets.json`, `rcb-inventory.json`, and `control-block-inventory.json`. FC is stored as observed evidence; CDC and future DataTypeTemplates are reconstructed with confidence scoring rather than claimed as vendor-original templates.
+
+
+## N5.2 MMS VariableAccessAttributes Type Reader
+
+Live IED model discovery now includes a bounded MMS `GetVariableAccessAttributes` pass. The generated discovery bundle records exact MMS type evidence where the IED supports it, while CDC and SCL `DataTypeTemplates` remain reconstructed with explicit confidence. This strengthens the Live-to-SCL path without pretending to recover vendor-original engineering templates.
+
+Key outputs: `variable-access-attributes.json`, richer `ied-model.json`, and MMS type coverage in `discovery-summary.md`.
+
+
+## N5.3/N5.5 Live-to-SCL Generic Exporter
+
+ARIEC61850 can now convert live read-only MMS discovery into a generic IID/CID-style SCL connection snapshot. The generated SCL is not the original vendor ICD; it is a reconstructed, importable engineering snapshot containing Communication, IED tree, DataSet, ReportControl, and generic DataTypeTemplates based on FC evidence, MMS type discovery, and CDC inference.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-scl-export 192.16.1.157 --port 102 --timeout-ms 120000 --max-report-probes 286 --read-datasets true --read-types true --max-type-reads 512 --type-read-source both --ied-name OCR7SR12 --ap-name AP1 --profile connection --ld-name-mode auto --output out/scl/OCR7SR12.generated.iid
+```
+
+The command writes the SCL file plus `*.scl-export-report.json`, `*.scl-export-summary.md`, and an optional `discovery-evidence/` bundle. The CLI also runs a round-trip parser check so the generated SCL can immediately feed ARIEC61850 client workflows. Generated `DOType cdc` values are restricted to known IEC 61850 CDC names; internal labels such as `GEN`, `Status`, `Controllable`, `Setting`, and `Measurement` are rejected.
+
+### Full SCL discovery inventory
+
+`mms-model-discover` and `mms-scl-export` now include a structured control-block inventory for SCL-oriented discovery. GO/SV/SG/LG functional-constraint attributes, plus relay variants such as `LLN0.SP.SGCB`, are grouped into candidate `GSEControl`, `SampledValueControl`, `SettingControl`, and `LogControl` entries. The discovery bundle writes `control-block-inventory.json` and the SCL exporter can emit conservative control-block shells with warnings when exact DatSet/address/ID/timing values have not been read yet.
+
+Edition 1 export is intentionally deferred. The current focus is a complete live discovery model that can feed Edition 2 / 2.1-ready IID/CID generation, connection reuse, and eventually SCL-backed simulation.

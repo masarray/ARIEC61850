@@ -201,3 +201,39 @@ The evidence folder includes `soak-snapshots.json` and a **Soak Snapshots** tabl
 
 Report evidence now includes `report-frames.json`, `report-streams.json`, and `report-values.csv` in addition to `report-timeline.json`. The mapper first attempts an OptFlds-driven IEC 61850 report decode before falling back to the legacy inclusion-bitstring scan. Each report frame records `DecoderMode`, stream key (`RptID + DataSet + ConfRev`), parse warnings, optional-field bits/raw value, included indexes, reasons, and member-value mapping. The CSV is intended for quick FAT/SAT review in spreadsheet tools.
 
+
+## Smart RCB fallback
+
+Preferred RCB with automatic fallback:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --evidence out/report-smart-rcb --yes
+```
+
+Strict RCB mode:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --strict-rcb --evidence out/report-strict-rcb --yes
+```
+
+Inspect `rcb-candidates.json` and `rcb-selection.json` to see why an RCB was selected, skipped, or filtered out.
+
+### Smart RCB contention-safe monitor
+
+When another client may also be claiming RCBs, enable pre-claim probing so ARIEC61850 does not fight a flapping or busy RCB.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.16.1.157 --port 102 --timeout-ms 120000 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --rcb-probe-count 3 --rcb-probe-delay-ms 1000 --contention-cooldown-sec 60 --evidence out/report-smart-rcb-contention --yes
+```
+
+Review `rcb-candidates.json`, `rcb-claim-attempts.json`, and `rcb-contention-probes.json` to see why an RCB was selected, skipped, or put into command-local cooldown.
+
+## Live-to-SCL full discovery inventory
+
+Generate an Edition 2 / 2.1-ready generic IID/CID-style SCL snapshot from a live IED without writing to the IED:
+
+```powershell
+ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-scl-export 192.16.1.157 --port 102 --timeout-ms 120000 --max-report-probes 286 --read-datasets true --read-types true --max-type-reads 512 --type-read-source both --ied-name OCR7SR12 --ap-name AP1 --profile connection --ld-name-mode auto --output out/scl/OCR7SR12.generated.iid
+```
+
+The export bundle includes structured discovery evidence such as `discovery-evidence/control-block-inventory.json`, `datasets.json`, `rcb-inventory.json`, and `variable-access-attributes.json`. The generated SCL uses product-related LD mapping by default and rejects internal CDC labels such as `GEN`, `Status`, `Controllable`, `Setting`, and `Measurement`. GOOSE/SV/SG/log controls are exported as conservative SCL shells when only the control-block attribute inventory is known; exact DatSet/address/ID/timing values are intentionally warned until the deep value-reader phase is complete.

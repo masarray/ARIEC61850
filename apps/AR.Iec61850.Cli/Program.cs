@@ -1,10 +1,12 @@
 using AR.Iec61850.Capture;
+using AR.Iec61850.Discovery;
 using AR.Iec61850.Ethernet;
 using AR.Iec61850.Goose;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Monitoring;
 using AR.Iec61850.SampledValues;
 using AR.Iec61850.Scl;
+using AR.Iec61850.Scl.Export;
 using AR.Iec61850.Transports;
 using AR.Iec61850.Transports.Npcap;
 using System.Diagnostics;
@@ -34,6 +36,8 @@ internal static class Cli
                 "list-adapters" => ListAdapters(),
                 "mms-discover" => await MmsDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
+                "mms-model-discover" => await MmsModelDiscoverAsync(args[1..]).ConfigureAwait(false),
+                "mms-scl-export" => await MmsSclExportAsync(args[1..]).ConfigureAwait(false),
                 "mms-find" => await MmsFindAsync(args[1..]).ConfigureAwait(false),
                 "mms-resolve" => await MmsResolveAsync(args[1..]).ConfigureAwait(false),
                 "mms-read-smart" => await MmsReadSmartAsync(args[1..]).ConfigureAwait(false),
@@ -329,6 +333,363 @@ internal static class Cli
         return 0;
     }
 
+
+
+    private static async Task<int> MmsModelDiscoverAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-model-discover requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        var timeoutMs = options.GetInt("timeout-ms", 120000);
+        var maxReportProbes = options.GetInt("max-report-probes", 286);
+        var readDataSets = options.GetBool("read-datasets", true);
+        var readTypes = options.GetBool("read-types", true);
+        var maxTypeReads = options.GetInt("max-type-reads", 256);
+        var typeReadSource = options.Get("type-read-source", "datasets");
+        var output = options.Get("output", Path.Combine("out", "ied-model-discovery"));
+        var iedName = options.Get("ied-name", string.Empty);
+        var apName = options.Get("ap-name", "AP1");
+
+        await using var session = new MmsClientSession();
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: live IED model discovery (read-only, no RCB writes).");
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), cts.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        if (!string.IsNullOrWhiteSpace(session.LastHandshakeMessage))
+            Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(
+            probeReportAttributes: true,
+            maxReportAttributeProbes: maxReportProbes,
+            cancellationToken: cts.Token).ConfigureAwait(false);
+
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+        Console.WriteLine($"FC counts: {FormatFcCounts(discovery.IedDirectory.CountByFunctionalConstraint())}");
+
+        IReadOnlyList<MmsDataSetDirectoryResult> dataSetDirectories = Array.Empty<MmsDataSetDirectoryResult>();
+        if (readDataSets && discovery.ReportInventory.DataSets.Count > 0)
+        {
+            Console.WriteLine($"Reading DataSet directories: {discovery.ReportInventory.DataSets.Count} candidate(s).");
+            dataSetDirectories = await session.GetDataSetDirectoriesAsync(
+                discovery.ReportInventory.DataSets.Select(x => x.Reference),
+                discovery.IedDirectory,
+                cts.Token).ConfigureAwait(false);
+
+            foreach (var dataSet in dataSetDirectories.Take(10))
+                Console.WriteLine($"  {(dataSet.IsSuccess ? "OK" : "FAIL")} {dataSet.Summary}");
+
+            if (dataSetDirectories.Count > 10)
+                Console.WriteLine($"  ... {dataSetDirectories.Count - 10} more DataSet result(s).");
+        }
+
+        IReadOnlyList<MmsVariableAccessAttributesResult> variableTypes = Array.Empty<MmsVariableAccessAttributesResult>();
+        if (readTypes)
+        {
+            var typeCandidates = BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource)
+                .Take(maxTypeReads <= 0 ? int.MaxValue : maxTypeReads)
+                .ToArray();
+
+            Console.WriteLine($"Reading MMS variable access attributes: {typeCandidates.Length} candidate(s), source={typeReadSource}, max={maxTypeReads}.");
+            variableTypes = await session.GetVariableAccessAttributesBatchAsync(typeCandidates, maxTypeReads, cts.Token).ConfigureAwait(false);
+            foreach (var type in variableTypes.Take(10))
+                Console.WriteLine($"  {(type.IsSuccess ? "OK" : "FAIL")} {type.Summary}");
+
+            if (variableTypes.Count > 10)
+                Console.WriteLine($"  ... {variableTypes.Count - 10} more type result(s).");
+        }
+
+        var document = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions
+            {
+                Host = host,
+                Port = port,
+                IedName = iedName,
+                AccessPointName = apName
+            },
+            dataSetDirectories,
+            variableTypes);
+
+        var files = LiveIedModelDiscoveryExporter.WriteBundle(document, output);
+        Console.WriteLine(document.Summary);
+        Console.WriteLine(
+            $"Coverage: LD={document.Coverage.LogicalDeviceCount}, LN={document.Coverage.LogicalNodeCount}, DO={document.Coverage.DataObjectCount}, DA={document.Coverage.DataAttributeCount}, exactTypes={document.Coverage.ExactMmsTypeCount}/{document.Coverage.VariableTypeReadAttemptCount}, highCDC={document.Coverage.HighConfidenceCdcCount}, mediumCDC={document.Coverage.MediumConfidenceCdcCount}, unknownCDC={document.Coverage.UnknownCdcCount}, GoCB={document.Coverage.GooseControlBlockCount}, SVCB={document.Coverage.SampledValueControlBlockCount}, SGCB={document.Coverage.SettingGroupControlCount}, LCB={document.Coverage.LogControlCount}.");
+        Console.WriteLine("Discovery evidence written:");
+        foreach (var file in files)
+            Console.WriteLine($"  {Path.GetFullPath(file)}");
+
+        return 0;
+    }
+
+
+
+    private static async Task<int> MmsSclExportAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-scl-export requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        var timeoutMs = options.GetInt("timeout-ms", 120000);
+        var maxReportProbes = options.GetInt("max-report-probes", 286);
+        var readDataSets = options.GetBool("read-datasets", true);
+        var readTypes = options.GetBool("read-types", true);
+        var maxTypeReads = options.GetInt("max-type-reads", 512);
+        var typeReadSource = options.Get("type-read-source", "both");
+        var iedName = options.Get("ied-name", string.Empty);
+        var apName = options.Get("ap-name", "AP1");
+        var profile = options.Get("profile", "connection");
+        var output = options.Get("output", Path.Combine("out", "scl", "live-ied.generated.iid"));
+        var subnet = options.Get("ip-subnet", "255.255.255.0");
+        var gateway = options.Get("ip-gateway", "0.0.0.0");
+        var osiApTitle = options.Get("osi-ap-title", string.Empty);
+        var osiAeQualifier = options.Get("osi-ae-qualifier", string.Empty);
+        var osiPsel = options.Get("osi-psel", "00000001");
+        var osiSsel = options.Get("osi-ssel", "0001");
+        var osiTsel = options.Get("osi-tsel", "0001");
+        var includeOsi = options.GetBool("include-osi", true);
+        var writeDiscoveryBundle = options.GetBool("write-discovery", true);
+        var ldNameMode = ParseLogicalDeviceNameMode(options.Get("ld-name-mode", "auto"));
+
+        await using var session = new MmsClientSession();
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: live-to-SCL generic IID/CID-style export (read-only discovery; no RCB writes). ");
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), cts.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        if (!string.IsNullOrWhiteSpace(session.LastHandshakeMessage))
+            Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(
+            probeReportAttributes: true,
+            maxReportAttributeProbes: maxReportProbes,
+            cancellationToken: cts.Token).ConfigureAwait(false);
+
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+        Console.WriteLine($"FC counts: {FormatFcCounts(discovery.IedDirectory.CountByFunctionalConstraint())}");
+
+        IReadOnlyList<MmsDataSetDirectoryResult> dataSetDirectories = Array.Empty<MmsDataSetDirectoryResult>();
+        if (readDataSets && discovery.ReportInventory.DataSets.Count > 0)
+        {
+            Console.WriteLine($"Reading DataSet directories: {discovery.ReportInventory.DataSets.Count} candidate(s).");
+            dataSetDirectories = await session.GetDataSetDirectoriesAsync(
+                discovery.ReportInventory.DataSets.Select(x => x.Reference),
+                discovery.IedDirectory,
+                cts.Token).ConfigureAwait(false);
+
+            foreach (var dataSet in dataSetDirectories.Take(10))
+                Console.WriteLine($"  {(dataSet.IsSuccess ? "OK" : "FAIL")} {dataSet.Summary}");
+
+            if (dataSetDirectories.Count > 10)
+                Console.WriteLine($"  ... {dataSetDirectories.Count - 10} more DataSet result(s).");
+        }
+
+        IReadOnlyList<MmsVariableAccessAttributesResult> variableTypes = Array.Empty<MmsVariableAccessAttributesResult>();
+        if (readTypes)
+        {
+            var typeCandidates = BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource)
+                .Take(maxTypeReads <= 0 ? int.MaxValue : maxTypeReads)
+                .ToArray();
+
+            Console.WriteLine($"Reading MMS variable access attributes: {typeCandidates.Length} candidate(s), source={typeReadSource}, max={maxTypeReads}.");
+            variableTypes = await session.GetVariableAccessAttributesBatchAsync(typeCandidates, maxTypeReads, cts.Token).ConfigureAwait(false);
+            foreach (var type in variableTypes.Take(10))
+                Console.WriteLine($"  {(type.IsSuccess ? "OK" : "FAIL")} {type.Summary}");
+
+            if (variableTypes.Count > 10)
+                Console.WriteLine($"  ... {variableTypes.Count - 10} more type result(s).");
+        }
+
+        var document = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions
+            {
+                Host = host,
+                Port = port,
+                IedName = iedName,
+                AccessPointName = apName
+            },
+            dataSetDirectories,
+            variableTypes);
+
+        var export = LiveIedSclExporter.WriteFiles(
+            document,
+            output,
+            new LiveIedSclExportOptions
+            {
+                Profile = profile,
+                IpAddress = host,
+                IpSubnet = subnet,
+                IpGateway = gateway,
+                OsiApTitle = osiApTitle,
+                OsiAeQualifier = osiAeQualifier,
+                OsiPsel = osiPsel,
+                OsiSsel = osiSsel,
+                OsiTsel = osiTsel,
+                IncludeDefaultOsiParameters = includeOsi,
+                LogicalDeviceNameMode = ldNameMode
+            });
+
+        if (writeDiscoveryBundle)
+        {
+            var discoveryDirectory = Path.Combine(Path.GetDirectoryName(output) ?? ".", "discovery-evidence");
+            _ = LiveIedModelDiscoveryExporter.WriteBundle(document, discoveryDirectory);
+        }
+
+        Console.WriteLine("Live-to-SCL export complete.");
+        Console.WriteLine($"  SCL: {Path.GetFullPath(export.SclPath)}");
+        Console.WriteLine($"  Report: {Path.GetFullPath(export.ReportPath)}");
+        Console.WriteLine($"  Summary: {Path.GetFullPath(export.SummaryPath)}");
+        Console.WriteLine($"  Counts: LD={export.LogicalDeviceCount}, LN={export.LogicalNodeCount}, DataSets={export.DataSetCount}, RCB={export.ReportControlCount}, GoCB={export.GooseControlBlockCount}, SVCB={export.SampledValueControlBlockCount}, SGCB={export.SettingGroupControlCount}, LCB={export.LogControlCount}, LNodeType={export.LNodeTypeCount}, DOType={export.DoTypeCount}, DAType={export.DaTypeCount}, warnings={export.Warnings.Count}.");
+        Console.WriteLine("Round-trip check:");
+        var parsed = new SclParser().Load(output);
+        Console.WriteLine($"  Parsed SCL: IED={parsed.Ieds.Count}, DataSets={parsed.DataSets.Count}, Reports={parsed.ReportControls.Count}, GOOSE={parsed.GooseStreams.Count}, SV={parsed.SampledValuesStreams.Count}, warnings={parsed.Warnings.Count}.");
+
+        return 0;
+    }
+
+    private static LiveIedSclLogicalDeviceNameMode ParseLogicalDeviceNameMode(string value)
+        => value.Trim().ToLowerInvariant() switch
+        {
+            "" or "auto" => LiveIedSclLogicalDeviceNameMode.Auto,
+            "keep" or "mms" or "domain" => LiveIedSclLogicalDeviceNameMode.Keep,
+            _ => throw new ArgumentException("--ld-name-mode must be auto or keep.")
+        };
+
+    private static IEnumerable<MmsObjectReference> BuildTypeReadCandidates(
+        MmsDiscoveryResult discovery,
+        IReadOnlyList<MmsDataSetDirectoryResult> dataSetDirectories,
+        string source)
+    {
+        var includeDataSets = string.Equals(source, "datasets", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(source, "both", StringComparison.OrdinalIgnoreCase);
+        var includeModel = string.Equals(source, "model", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(source, "both", StringComparison.OrdinalIgnoreCase);
+
+        if (!includeDataSets && !includeModel)
+            throw new ArgumentException("--type-read-source must be datasets, model, or both.");
+
+        var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (includeDataSets)
+        {
+            foreach (var member in dataSetDirectories
+                .Where(x => x.IsSuccess)
+                .SelectMany(x => x.Members)
+                .Where(x => !string.IsNullOrWhiteSpace(x.Domain) && !string.IsNullOrWhiteSpace(x.MmsItemName)))
+            {
+                var expanded = ExpandDataSetMemberTypeCandidates(discovery.IedDirectory, member).ToArray();
+                foreach (var point in expanded)
+                {
+                    var reference = point.ToObjectReference();
+                    var key = $"{reference.Domain}/{reference.Item}";
+                    if (emitted.Add(key))
+                        yield return reference;
+                }
+
+                if (expanded.Length == 0)
+                {
+                    var reference = new MmsObjectReference(member.Domain, member.MmsItemName, member.FunctionalConstraint);
+                    var key = $"{reference.Domain}/{reference.Item}";
+                    if (emitted.Add(key))
+                        yield return reference;
+                }
+            }
+        }
+
+        if (includeModel)
+        {
+            foreach (var point in discovery.IedDirectory.Points
+                .OrderBy(x => TypeReadPriority(x), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.UserReference, StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(point.Domain) || string.IsNullOrWhiteSpace(point.MmsItemName))
+                    continue;
+
+                var reference = new MmsObjectReference(point.Domain, point.MmsItemName, point.FunctionalConstraint);
+                var key = $"{reference.Domain}/{reference.Item}";
+                if (emitted.Add(key))
+                    yield return reference;
+            }
+        }
+    }
+
+
+    private static IEnumerable<MmsFcResolvedPoint> ExpandDataSetMemberTypeCandidates(
+        MmsIedModelDirectory directory,
+        MmsDataSetDirectoryMember member)
+    {
+        if (string.IsNullOrWhiteSpace(member.UserReference))
+            yield break;
+
+        var normalizedMember = member.UserReference.Trim();
+        var slash = normalizedMember.IndexOf('/', StringComparison.Ordinal);
+        if (slash < 0 || slash >= normalizedMember.Length - 1)
+            yield break;
+
+        var domain = normalizedMember[..slash];
+        var userPath = normalizedMember[(slash + 1)..];
+        var dot = userPath.IndexOf('.', StringComparison.Ordinal);
+        if (dot <= 0 || dot >= userPath.Length - 1)
+            yield break;
+
+        var logicalNode = userPath[..dot];
+        var dataObjectPath = userPath[(dot + 1)..];
+        var fc = member.FunctionalConstraint;
+
+        var matches = directory.Points
+            .Where(point => string.Equals(point.Domain, domain, StringComparison.OrdinalIgnoreCase))
+            .Where(point => string.Equals(point.LogicalNode, logicalNode, StringComparison.OrdinalIgnoreCase))
+            .Where(point => string.IsNullOrWhiteSpace(fc) || string.Equals(point.FunctionalConstraint, fc, StringComparison.OrdinalIgnoreCase))
+            .Where(point => IsDataSetMemberLeaf(point.DataObjectPath, dataObjectPath))
+            .OrderBy(point => TypeReadPriority(point), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(point => point.DataObjectPath, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        foreach (var match in matches)
+            yield return match;
+    }
+
+    private static bool IsDataSetMemberLeaf(string pointPath, string memberPath)
+    {
+        if (string.IsNullOrWhiteSpace(pointPath) || string.IsNullOrWhiteSpace(memberPath))
+            return false;
+
+        if (pointPath.Equals(memberPath, StringComparison.OrdinalIgnoreCase))
+            return !IsFcdLevelTypeCandidate(pointPath);
+
+        return pointPath.StartsWith(memberPath + ".", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsFcdLevelTypeCandidate(string dataObjectPath)
+        => dataObjectPath.IndexOf('.', StringComparison.Ordinal) < 0;
+
+    private static string TypeReadPriority(MmsFcResolvedPoint point)
+    {
+        var path = point.DataObjectPath;
+        if (path.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase))
+            return "00";
+        if (path.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase))
+            return "01";
+        if (path.EndsWith(".q", StringComparison.OrdinalIgnoreCase))
+            return "02";
+        if (path.EndsWith(".t", StringComparison.OrdinalIgnoreCase))
+            return "03";
+        if (string.Equals(point.FunctionalConstraint, "ST", StringComparison.OrdinalIgnoreCase))
+            return "04";
+        if (string.Equals(point.FunctionalConstraint, "MX", StringComparison.OrdinalIgnoreCase))
+            return "05";
+        return "99";
+    }
 
     private static async Task<int> MmsDirectoryAsync(string[] args)
     {
@@ -630,6 +991,9 @@ internal static class Cli
         var rawLimit = options.GetInt("raw-limit", 80);
         var preferredRcb = options.Get("rcb", string.Empty);
         var preferredDataSet = options.Get("dataset", string.Empty);
+        var strictRcb = options.GetBool("strict-rcb", fallback: false);
+        var allowUrCbFallback = options.GetBool("allow-urcb-fallback", fallback: true);
+        var allowPollingFallback = options.GetBool("allow-polling-fallback", fallback: true);
         var readValues = options.GetBool("read-values", fallback: false);
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
@@ -656,7 +1020,7 @@ internal static class Cli
             staticDataSets = staticDataSets.Append(preferredDataSet).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
         var directories = await session.GetDataSetDirectoriesAsync(staticDataSets, discovery.IedDirectory, timeout.Token).ConfigureAwait(false);
-        var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet);
+        var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet, strictRcb, allowUrCbFallback, allowPollingFallback);
 
         Console.WriteLine();
         WriteReportSubscriptionPlan(plan, rawLimit);
@@ -772,6 +1136,25 @@ internal static class Cli
         var rawLimit = options.GetInt("raw-limit", 80);
         var preferredRcb = options.Get("rcb", string.Empty);
         var preferredDataSet = options.Get("dataset", string.Empty);
+        var strictRcb = options.GetBool("strict-rcb", fallback: false);
+        var allowUrCbFallback = options.GetBool("allow-urcb-fallback", fallback: true);
+        var allowPollingFallback = options.GetBool("allow-polling-fallback", fallback: true);
+        var maxRcbClaimAttempts = options.GetInt("max-rcb-claim-attempts", 6);
+        if (maxRcbClaimAttempts < 1)
+            throw new ArgumentException("--max-rcb-claim-attempts must be at least 1.");
+
+        var rcbProbeCount = options.GetInt("rcb-probe-count", 1);
+        if (rcbProbeCount < 1)
+            throw new ArgumentException("--rcb-probe-count must be at least 1.");
+
+        var rcbProbeDelayMs = options.GetInt("rcb-probe-delay-ms", 1000);
+        if (rcbProbeDelayMs < 0)
+            throw new ArgumentException("--rcb-probe-delay-ms must be greater than or equal to 0.");
+
+        var contentionCooldownSec = options.GetInt("contention-cooldown-sec", 60);
+        if (contentionCooldownSec < 0)
+            throw new ArgumentException("--contention-cooldown-sec must be greater than or equal to 0.");
+
         var evidencePath = options.Get("evidence", string.Empty);
         var durationSec = options.GetInt("duration-sec", monitorMode ? 60 : 15);
         if (durationSec < 1)
@@ -827,7 +1210,7 @@ internal static class Cli
             staticDataSets = staticDataSets.Append(preferredDataSet).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
         var directories = await session.GetDataSetDirectoriesAsync(staticDataSets, discovery.IedDirectory, timeout.Token).ConfigureAwait(false);
-        var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet);
+        var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet, strictRcb, allowUrCbFallback, allowPollingFallback);
 
         if (plan.IsReady && plan.ReportControl != null)
         {
@@ -841,7 +1224,7 @@ internal static class Cli
                     timeout.Token).ConfigureAwait(false);
             }
 
-            plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet);
+            plan = MmsReportSubscriptionPlanner.BuildStaticPlan(discovery.ReportInventory, directories, preferredRcb, preferredDataSet, strictRcb, allowUrCbFallback, allowPollingFallback);
         }
 
         Console.WriteLine();
@@ -872,28 +1255,151 @@ internal static class Cli
             return 0;
         }
 
-        Console.WriteLine();
-        Console.WriteLine(monitorMode
-            ? $"Starting guarded report monitor for {durationSec}s..."
-            : $"Starting guarded static report session for {durationSec}s...");
-        if (pollPoints.Count > 0)
-            Console.WriteLine($"Poll reads: {pollPoints.Count} point(s), interval={pollIntervalMs}ms.");
-        if (giIntervalSec > 0)
-            Console.WriteLine($"Periodic GI: every {giIntervalSec}s after initial GI.");
-        if (soakSnapshotSec > 0)
-            Console.WriteLine($"Soak snapshots: every {soakSnapshotSec}s.");
+        var excludedClaimFailures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var claimAttempts = new List<MmsRcbClaimAttempt>();
+        var contentionProbes = new List<MmsRcbContentionProbeResult>();
+        var executedPlan = plan;
+        MmsStaticReportSessionResult live = new();
 
-        var live = await session.RunGuardedStaticReportSessionAsync(
-            plan,
-            TimeSpan.FromSeconds(durationSec),
-            reserveSec,
-            triggerGi,
-            timeout.Token,
-            pollDirectory: pollPoints.Count > 0 ? discovery.IedDirectory : null,
-            pollReferences: pollPoints,
-            pollInterval: TimeSpan.FromMilliseconds(pollIntervalMs),
-            periodicGeneralInterrogationInterval: giIntervalSec > 0 ? TimeSpan.FromSeconds(giIntervalSec) : null,
-            soakSnapshotInterval: soakSnapshotSec > 0 ? TimeSpan.FromSeconds(soakSnapshotSec) : null).ConfigureAwait(false);
+        for (var attempt = 1; ; attempt++)
+        {
+            if (attempt > 1)
+            {
+                var retryPlan = BuildStaticPlanForClaimAttempt(
+                    discovery.ReportInventory,
+                    directories,
+                    preferredRcb,
+                    preferredDataSet,
+                    strictRcb,
+                    allowUrCbFallback,
+                    allowPollingFallback,
+                    excludedClaimFailures);
+
+                if (retryPlan.IsReady && retryPlan.ReportControl != null)
+                {
+                    await session.ProbeReportControlAttributesAsync(retryPlan.ReportControl, timeout.Token).ConfigureAwait(false);
+                    retryPlan = BuildStaticPlanForClaimAttempt(
+                        discovery.ReportInventory,
+                        directories,
+                        preferredRcb,
+                        preferredDataSet,
+                        strictRcb,
+                        allowUrCbFallback,
+                        allowPollingFallback,
+                        excludedClaimFailures);
+                }
+
+                Console.WriteLine();
+                Console.WriteLine($"Smart RCB claim fallback attempt {attempt}: excluding previous failed candidate(s): {string.Join(", ", excludedClaimFailures)}");
+                WriteReportSubscriptionPlan(retryPlan, rawLimit);
+
+                if (!retryPlan.IsReady || retryPlan.ReportControl == null)
+                {
+                    live = new MmsStaticReportSessionResult
+                    {
+                        IsSuccess = false,
+                        RcbClaimAttempts = claimAttempts,
+                        Message = "All Smart RCB claim candidates failed or no safe fallback candidate remained."
+                    };
+                    executedPlan = retryPlan;
+                    break;
+                }
+
+                if (!MmsReportSubscriptionPlanner.HasExplicitSafeStaticWriteState(retryPlan.ReportControl))
+                {
+                    live = new MmsStaticReportSessionResult
+                    {
+                        IsSuccess = false,
+                        RcbClaimAttempts = claimAttempts,
+                        Message = $"Smart RCB fallback candidate {retryPlan.ReportControl.Reference} is not explicit-safe for live write."
+                    };
+                    executedPlan = retryPlan;
+                    break;
+                }
+
+                plan = retryPlan;
+            }
+
+            if (rcbProbeCount > 1 && plan.ReportControl != null)
+            {
+                var contentionProbe = await ProbeSelectedRcbContentionAsync(
+                    session,
+                    plan.ReportControl,
+                    rcbProbeCount,
+                    TimeSpan.FromMilliseconds(rcbProbeDelayMs),
+                    contentionCooldownSec,
+                    timeout.Token).ConfigureAwait(false);
+                contentionProbes.Add(contentionProbe);
+
+                Console.WriteLine();
+                Console.WriteLine(contentionProbe.Summary);
+                foreach (var observation in contentionProbe.Observations.Take(8))
+                    Console.WriteLine($"  - {observation.Summary}");
+                if (contentionProbe.Observations.Count > 8)
+                    Console.WriteLine($"  ... +{contentionProbe.Observations.Count - 8} more RCB probe observation(s)");
+
+                if (contentionProbe.IsContended)
+                {
+                    claimAttempts.Add(ToRcbPreClaimContentionAttempt(attempt, plan, contentionProbe));
+
+                    if (!strictRcb && attempt < maxRcbClaimAttempts && plan.ReportControl != null)
+                    {
+                        excludedClaimFailures.Add(NormalizeRcbReferenceForCli(plan.ReportControl.Reference));
+                        Console.WriteLine($"Smart RCB pre-claim contention detected on {plan.ReportControl.Reference}; putting this candidate in command-local cooldown and trying the next safe RCB.");
+                        continue;
+                    }
+
+                    var blockedRcbReference = plan.ReportControl?.Reference ?? "-";
+                    live = new MmsStaticReportSessionResult
+                    {
+                        IsSuccess = false,
+                        RcbClaimAttempts = claimAttempts,
+                        RcbContentionProbes = contentionProbes,
+                        StartedAt = DateTimeOffset.UtcNow,
+                        CompletedAt = DateTimeOffset.UtcNow,
+                        Warnings = [contentionProbe.Reason],
+                        Message = $"Smart RCB pre-claim contention blocked the session for {blockedRcbReference}."
+                    };
+                    break;
+                }
+            }
+
+            executedPlan = plan;
+            Console.WriteLine();
+            Console.WriteLine(monitorMode
+                ? $"Starting guarded report monitor for {durationSec}s using {plan.ReportControl!.Reference} (claim attempt {attempt})..."
+                : $"Starting guarded static report session for {durationSec}s using {plan.ReportControl!.Reference} (claim attempt {attempt})...");
+            if (pollPoints.Count > 0)
+                Console.WriteLine($"Poll reads: {pollPoints.Count} point(s), interval={pollIntervalMs}ms.");
+            if (giIntervalSec > 0)
+                Console.WriteLine($"Periodic GI: every {giIntervalSec}s after initial GI.");
+            if (soakSnapshotSec > 0)
+                Console.WriteLine($"Soak snapshots: every {soakSnapshotSec}s.");
+
+            live = await session.RunGuardedStaticReportSessionAsync(
+                plan,
+                TimeSpan.FromSeconds(durationSec),
+                reserveSec,
+                triggerGi,
+                timeout.Token,
+                pollDirectory: pollPoints.Count > 0 ? discovery.IedDirectory : null,
+                pollReferences: pollPoints,
+                pollInterval: TimeSpan.FromMilliseconds(pollIntervalMs),
+                periodicGeneralInterrogationInterval: giIntervalSec > 0 ? TimeSpan.FromSeconds(giIntervalSec) : null,
+                soakSnapshotInterval: soakSnapshotSec > 0 ? TimeSpan.FromSeconds(soakSnapshotSec) : null).ConfigureAwait(false);
+
+            var claimFailed = IsRcbClaimFailure(live);
+            claimAttempts.Add(ToRcbClaimAttempt(attempt, plan, live, claimFailed));
+            if (!claimFailed || strictRcb || attempt >= maxRcbClaimAttempts || plan.ReportControl == null)
+                break;
+
+            excludedClaimFailures.Add(NormalizeRcbReferenceForCli(plan.ReportControl.Reference));
+            Console.WriteLine();
+            Console.WriteLine($"Smart RCB claim failed on {plan.ReportControl.Reference}; trying the next safe candidate instead of fighting this RCB.");
+        }
+
+        live = WithRcbRuntimeEvidence(live, claimAttempts, contentionProbes);
+        plan = executedPlan;
 
         Console.WriteLine();
         Console.WriteLine(live.Message);
@@ -976,6 +1482,9 @@ internal static class Cli
 
         var preferredLd = options.Get("ld", string.Empty);
         var preferredRcb = options.Get("rcb", string.Empty);
+        var strictRcb = options.GetBool("strict-rcb", fallback: false);
+        var allowUrCbFallback = options.GetBool("allow-urcb-fallback", fallback: true);
+        var allowPollingFallback = options.GetBool("allow-polling-fallback", fallback: true);
         var dataSetName = options.Get("dataset-name", "AR_DYN_DS01");
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
@@ -1002,7 +1511,7 @@ internal static class Cli
                 Console.WriteLine($"      -> {resolve.BestCandidate.UserReference} [{resolve.BestCandidate.FunctionalConstraint}] mms={resolve.BestCandidate.MmsReference}");
         }
 
-        var plan = MmsReportSubscriptionPlanner.BuildDynamicPlan(discovery.ReportInventory, discovery.IedDirectory, requestedPoints, preferredLd, preferredRcb, dataSetName);
+        var plan = MmsReportSubscriptionPlanner.BuildDynamicPlan(discovery.ReportInventory, discovery.IedDirectory, requestedPoints, preferredLd, preferredRcb, dataSetName, strictRcb, allowUrCbFallback, allowPollingFallback);
 
         Console.WriteLine();
         WriteReportSubscriptionPlan(plan, rawLimit);
@@ -1038,6 +1547,9 @@ internal static class Cli
         var evidencePath = options.Get("evidence", string.Empty);
         var preferredLd = options.Get("ld", string.Empty);
         var preferredRcb = options.Get("rcb", string.Empty);
+        var strictRcb = options.GetBool("strict-rcb", fallback: false);
+        var allowUrCbFallback = options.GetBool("allow-urcb-fallback", fallback: true);
+        var allowPollingFallback = options.GetBool("allow-polling-fallback", fallback: true);
         var dataSetName = options.Get("dataset-name", "AR_DYN_DS01");
         var durationSec = options.GetInt("duration-sec", 15);
         if (durationSec < 1)
@@ -1076,7 +1588,7 @@ internal static class Cli
                 Console.WriteLine($"      -> {resolve.BestCandidate.UserReference} [{resolve.BestCandidate.FunctionalConstraint}] mms={resolve.BestCandidate.MmsReference}");
         }
 
-        var plan = MmsReportSubscriptionPlanner.BuildDynamicPlan(discovery.ReportInventory, discovery.IedDirectory, requestedPoints, preferredLd, preferredRcb, dataSetName);
+        var plan = MmsReportSubscriptionPlanner.BuildDynamicPlan(discovery.ReportInventory, discovery.IedDirectory, requestedPoints, preferredLd, preferredRcb, dataSetName, strictRcb, allowUrCbFallback, allowPollingFallback);
 
         Console.WriteLine();
         WriteReportSubscriptionPlan(plan, rawLimit);
@@ -1877,6 +2389,15 @@ internal static class Cli
             Console.WriteLine($"  DatSet={TextOrDash(r.DataSetReference)} RptEna={TextOrDash(r.EnabledState)} Resv={reservation} RptID={TextOrDash(r.ReportId)} ConfRev={TextOrDash(r.ConfRev)}");
         }
 
+        if (plan.RcbSelection.Candidates.Count > 0)
+        {
+            Console.WriteLine("Smart RCB selection:");
+            Console.WriteLine($"  {plan.RcbSelection.Summary}");
+            foreach (var candidate in plan.RcbSelection.Candidates.Take(Math.Min(rawLimit <= 0 ? plan.RcbSelection.Candidates.Count : rawLimit, 12)))
+                Console.WriteLine($"  - {candidate.Decision,-10} {candidate.Mode} {candidate.Reference} score={candidate.Score} availability={candidate.Availability} reason={candidate.Reason}");
+            WriteLimitNotice(plan.RcbSelection.Candidates.Count, rawLimit <= 0 ? 0 : Math.Min(rawLimit, 12), "RCB candidate(s)");
+        }
+
         if (plan.Blockers.Count > 0)
         {
             Console.WriteLine("Blockers:");
@@ -1954,6 +2475,198 @@ internal static class Cli
         if (snapshots.Count > 8)
             Console.WriteLine($"  ... +{snapshots.Count - 8} more soak snapshot(s)");
     }
+
+
+    private static MmsReportSubscriptionPlan BuildStaticPlanForClaimAttempt(
+        MmsReportInventory inventory,
+        IReadOnlyList<MmsDataSetDirectoryResult> directories,
+        string preferredRcb,
+        string preferredDataSet,
+        bool strictRcb,
+        bool allowUrCbFallback,
+        bool allowPollingFallback,
+        IReadOnlySet<string> excludedRcbReferences)
+        => MmsReportSubscriptionPlanner.BuildStaticPlan(
+            inventory,
+            directories,
+            preferredRcb,
+            preferredDataSet,
+            strictRcb,
+            allowUrCbFallback,
+            allowPollingFallback,
+            excludedRcbReferences);
+
+    private static bool IsRcbClaimFailure(MmsStaticReportSessionResult result)
+        => result.Message.Contains("RptEna=true failed", StringComparison.OrdinalIgnoreCase) ||
+           result.Message.Contains("RCB.DatSet write failed", StringComparison.OrdinalIgnoreCase);
+
+    private static MmsRcbClaimAttempt ToRcbClaimAttempt(
+        int attemptNumber,
+        MmsReportSubscriptionPlan plan,
+        MmsStaticReportSessionResult result,
+        bool claimFailed)
+    {
+        var write = result.WriteSteps.FirstOrDefault(x =>
+            x.Attribute.Equals("RptEna", StringComparison.OrdinalIgnoreCase) ||
+            x.Attribute.Equals("DatSet", StringComparison.OrdinalIgnoreCase));
+
+        return new MmsRcbClaimAttempt
+        {
+            AttemptNumber = attemptNumber,
+            AttemptedAt = DateTimeOffset.UtcNow,
+            RcbReference = plan.ReportControl?.Reference ?? string.Empty,
+            PlanMode = plan.Mode.ToString(),
+            DataSetReference = plan.DataSetReference,
+            Decision = claimFailed ? "ClaimFailedTryNext" : result.IsSuccess ? "ClaimSucceeded" : "SessionCompletedWithFailure",
+            IsSuccess = result.IsSuccess,
+            IsFallback = attemptNumber > 1,
+            WriteAttribute = write?.Attribute ?? string.Empty,
+            WriteReference = write?.Reference ?? string.Empty,
+            Message = write?.Message ?? result.Message
+        };
+    }
+
+    private static MmsRcbClaimAttempt ToRcbPreClaimContentionAttempt(
+        int attemptNumber,
+        MmsReportSubscriptionPlan plan,
+        MmsRcbContentionProbeResult contentionProbe)
+        => new()
+        {
+            AttemptNumber = attemptNumber,
+            AttemptedAt = DateTimeOffset.UtcNow,
+            RcbReference = plan.ReportControl?.Reference ?? contentionProbe.RcbReference,
+            PlanMode = plan.Mode.ToString(),
+            DataSetReference = plan.DataSetReference,
+            Decision = contentionProbe.IsContended ? "PreClaimContentionCooldown" : "PreClaimProbeStable",
+            IsSuccess = false,
+            IsFallback = attemptNumber > 1,
+            WriteAttribute = "pre-claim-probe",
+            WriteReference = plan.ReportControl?.Reference ?? contentionProbe.RcbReference,
+            Message = contentionProbe.Summary
+        };
+
+    private static async Task<MmsRcbContentionProbeResult> ProbeSelectedRcbContentionAsync(
+        MmsClientSession session,
+        MmsReportControlCandidate rcb,
+        int probeCount,
+        TimeSpan probeDelay,
+        int cooldownSeconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(rcb);
+
+        var observations = new List<MmsRcbContentionProbeObservation>();
+        for (var index = 1; index <= probeCount; index++)
+        {
+            await session.ProbeReportControlAttributesAsync(rcb, cancellationToken).ConfigureAwait(false);
+            observations.Add(new MmsRcbContentionProbeObservation
+            {
+                ProbeNumber = index,
+                CapturedAt = DateTimeOffset.UtcNow,
+                RcbReference = rcb.Reference,
+                RptEna = rcb.EnabledState,
+                Resv = rcb.ReservationState,
+                ResvTms = rcb.ReservationTimeSeconds,
+                DataSetReference = rcb.DataSetReference,
+                ConfRev = rcb.ConfRev,
+                Message = rcb.ProbeDiagnostics.LastOrDefault() ?? string.Empty
+            });
+
+            if (index < probeCount && probeDelay > TimeSpan.Zero)
+                await Task.Delay(probeDelay, cancellationToken).ConfigureAwait(false);
+        }
+
+        var rptEnaStates = observations
+            .Select(x => NormalizeProbeValue(x.RptEna))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var resvStates = observations
+            .Select(x => NormalizeProbeValue(string.IsNullOrWhiteSpace(x.ResvTms) ? x.Resv : x.ResvTms))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var dataSets = observations
+            .Select(x => NormalizeProbeValue(x.DataSetReference))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var confRevs = observations
+            .Select(x => NormalizeProbeValue(x.ConfRev))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var isBusy = observations.Any(x => IsTrueLike(x.RptEna) || IsTrueLike(x.Resv) || IsPositiveInteger(x.ResvTms));
+        var isFlapping = rptEnaStates.Length > 1 || resvStates.Length > 1 || dataSets.Length > 1 || confRevs.Length > 1;
+        var isContended = isBusy || isFlapping;
+        var reason = isFlapping
+            ? "RCB state changed across pre-claim probes. Treat as contended/flapping to avoid fighting another client."
+            : isBusy
+                ? "RCB became busy/reserved during pre-claim probes. Treat as owned by another client and skip."
+                : "RCB remained stable and free across pre-claim probes.";
+
+        return new MmsRcbContentionProbeResult
+        {
+            RcbReference = rcb.Reference,
+            IsContended = isContended,
+            IsBusyAtProbe = isBusy,
+            IsFlapping = isFlapping,
+            CooldownSeconds = isContended ? cooldownSeconds : 0,
+            Decision = isContended ? "CooldownSkip" : "StableProceed",
+            Reason = reason,
+            RecommendedAction = isContended
+                ? "Do not write RptEna/DatSet on this RCB in the current command; try the next candidate or polling fallback."
+                : "Safe to continue with guarded claim attempt.",
+            Observations = observations
+        };
+    }
+
+    private static string NormalizeProbeValue(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        return text == "-" ? string.Empty : text;
+    }
+
+    private static bool IsTrueLike(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        return text.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+               text.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+               text.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+               text.Equals("on", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPositiveInteger(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        return ulong.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) && number > 0;
+    }
+
+    private static MmsStaticReportSessionResult WithRcbRuntimeEvidence(
+        MmsStaticReportSessionResult result,
+        IReadOnlyList<MmsRcbClaimAttempt> claimAttempts,
+        IReadOnlyList<MmsRcbContentionProbeResult> contentionProbes)
+        => new()
+        {
+            IsSuccess = result.IsSuccess,
+            WriteSteps = result.WriteSteps,
+            Reports = result.Reports,
+            PollReads = result.PollReads,
+            SoakSnapshots = result.SoakSnapshots,
+            RcbClaimAttempts = claimAttempts,
+            RcbContentionProbes = contentionProbes,
+            StartedAt = result.StartedAt,
+            CompletedAt = result.CompletedAt,
+            Warnings = result.Warnings,
+            Diagnostics = result.Diagnostics,
+            Verification = result.Verification,
+            Message = result.Message
+        };
+
+    private static string NormalizeRcbReferenceForCli(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.');
 
     private static void WriteReportDiagnostics(MmsReportSessionDiagnostics diagnostics)
     {
@@ -2052,12 +2765,15 @@ internal static class Cli
                     selectedRcb.ReservationTimeSeconds,
                     selectedRcb.OptionalFields,
                     selectedRcb.TriggerOptions
-                }
+                },
+                rcbSelection = plan.RcbSelection
             },
             result.IsSuccess,
             result.Message,
             durationSeconds = result.StartedAt == default || result.CompletedAt == default ? 0 : (result.CompletedAt - result.StartedAt).TotalSeconds,
             soakSnapshots = result.SoakSnapshots.Count,
+            rcbClaimAttempts = result.RcbClaimAttempts,
+            rcbContentionProbes = result.RcbContentionProbes,
             result.Diagnostics,
             verification = result.Verification,
             warnings = result.Warnings
@@ -2068,6 +2784,10 @@ internal static class Cli
         var reportFramesJsonPath = Path.Combine(directory, "report-frames.json");
         var reportStreamsJsonPath = Path.Combine(directory, "report-streams.json");
         var reportValuesCsvPath = Path.Combine(directory, "report-values.csv");
+        var rcbCandidatesJsonPath = Path.Combine(directory, "rcb-candidates.json");
+        var rcbSelectionJsonPath = Path.Combine(directory, "rcb-selection.json");
+        var rcbClaimAttemptsJsonPath = Path.Combine(directory, "rcb-claim-attempts.json");
+        var rcbContentionProbesJsonPath = Path.Combine(directory, "rcb-contention-probes.json");
         var reportTimelineJsonPath = Path.Combine(directory, "report-timeline.json");
         var pollReadsJsonPath = Path.Combine(directory, "poll-reads.json");
         var soakSnapshotsJsonPath = Path.Combine(directory, "soak-snapshots.json");
@@ -2082,6 +2802,10 @@ internal static class Cli
         await File.WriteAllTextAsync(reportFramesJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportFrameEvidence), jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(reportStreamsJsonPath, JsonSerializer.Serialize(ToReportStreamEvidence(result.Reports), jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(reportValuesCsvPath, BuildReportValuesCsv(result.Reports), System.Text.Encoding.UTF8).ConfigureAwait(false);
+        await File.WriteAllTextAsync(rcbCandidatesJsonPath, JsonSerializer.Serialize(plan.RcbSelection.Candidates, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(rcbSelectionJsonPath, JsonSerializer.Serialize(plan.RcbSelection, jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(rcbClaimAttemptsJsonPath, JsonSerializer.Serialize(ToRcbClaimAttemptEvidence(plan, result), jsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(rcbContentionProbesJsonPath, JsonSerializer.Serialize(result.RcbContentionProbes, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(reportTimelineJsonPath, JsonSerializer.Serialize(result.Reports.Select(ToReportTimelineEvidence), jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(pollReadsJsonPath, JsonSerializer.Serialize(result.PollReads, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(soakSnapshotsJsonPath, JsonSerializer.Serialize(result.SoakSnapshots, jsonOptions)).ConfigureAwait(false);
@@ -2091,8 +2815,37 @@ internal static class Cli
         await File.WriteAllTextAsync(dataSetSnapshotsJsonPath, JsonSerializer.Serialize(result.Verification.DataSetSnapshots, jsonOptions)).ConfigureAwait(false);
         await File.WriteAllTextAsync(summaryMdPath, BuildReportEvidenceMarkdown(context.generatedAt, target, mode, plan, result), System.Text.Encoding.UTF8).ConfigureAwait(false);
 
-        return [summaryJsonPath, reportsJsonPath, reportFramesJsonPath, reportStreamsJsonPath, reportValuesCsvPath, reportTimelineJsonPath, pollReadsJsonPath, soakSnapshotsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
+        return [summaryJsonPath, reportsJsonPath, reportFramesJsonPath, reportStreamsJsonPath, reportValuesCsvPath, rcbCandidatesJsonPath, rcbSelectionJsonPath, rcbClaimAttemptsJsonPath, rcbContentionProbesJsonPath, reportTimelineJsonPath, pollReadsJsonPath, soakSnapshotsJsonPath, writeStepsJsonPath, verificationJsonPath, rcbSnapshotsJsonPath, dataSetSnapshotsJsonPath, summaryMdPath];
     }
+
+    private static object ToRcbClaimAttemptEvidence(MmsReportSubscriptionPlan plan, MmsStaticReportSessionResult result)
+        => new
+        {
+            selectedRcb = plan.ReportControl?.Reference ?? string.Empty,
+            plan.Mode,
+            plan.DataSetReference,
+            selection = plan.RcbSelection,
+            attempts = result.RcbClaimAttempts,
+            preClaimContentionProbes = result.RcbContentionProbes,
+            lowLevelWriteSequence = result.WriteSteps.Select((step, index) => new
+            {
+                index = index + 1,
+                step.Attribute,
+                step.Reference,
+                step.Attempted,
+                step.IsSuccess,
+                step.Message
+            }),
+            verification = result.Verification.Checks.Select(check => new
+            {
+                check.Stage,
+                check.Target,
+                check.Expected,
+                check.Observed,
+                check.Severity,
+                check.Message
+            })
+        };
 
     private static object ToReportEvidence(MmsReportFrame report)
         => new
@@ -2277,6 +3030,50 @@ internal static class Cli
             $"- Duration: {(result.StartedAt == default || result.CompletedAt == default ? 0 : (result.CompletedAt - result.StartedAt).TotalSeconds):0.###} s",
             $"- Soak snapshots: {result.SoakSnapshots.Count}",
             string.Empty,
+            "## Smart RCB Selection",
+            string.Empty,
+            $"- {plan.RcbSelection.Summary}",
+            string.Empty,
+            "| Decision | RCB | Score | Availability | Reason |",
+            "| --- | --- | ---: | --- | --- |",
+        };
+
+        foreach (var candidate in plan.RcbSelection.Candidates.Take(20))
+            lines.Add($"| {candidate.Decision} | {candidate.Mode} {candidate.Reference.Replace("|", "\\|")} | {candidate.Score} | {candidate.Availability} | {candidate.Reason.Replace("|", "\\|")} |");
+        if (plan.RcbSelection.Candidates.Count > 20)
+            lines.Add($"| ... | +{plan.RcbSelection.Candidates.Count - 20} more RCB candidates |  |  | See rcb-candidates.json | ");
+
+        if (result.RcbClaimAttempts.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add("### RCB Claim Attempts");
+            lines.Add(string.Empty);
+            lines.Add("| Attempt | RCB | Decision | Success | Write | Message |");
+            lines.Add("| ---: | --- | --- | --- | --- | --- |");
+            foreach (var attempt in result.RcbClaimAttempts)
+            {
+                lines.Add($"| {attempt.AttemptNumber} | {attempt.RcbReference.Replace("|", "\\|")} | {attempt.Decision} | {attempt.IsSuccess.ToString().ToLowerInvariant()} | {attempt.WriteAttribute} | {attempt.Message.Replace("|", "\\|")} |");
+            }
+        }
+
+        if (result.RcbContentionProbes.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add("### RCB Pre-Claim Contention Probes");
+            lines.Add(string.Empty);
+            lines.Add("| RCB | Decision | Contended | Busy | Flapping | Cooldown | Reason |");
+            lines.Add("| --- | --- | --- | --- | --- | ---: | --- |");
+            foreach (var probe in result.RcbContentionProbes)
+            {
+                lines.Add($"| {probe.RcbReference.Replace("|", "\\|")} | {probe.Decision} | {probe.IsContended.ToString().ToLowerInvariant()} | {probe.IsBusyAtProbe.ToString().ToLowerInvariant()} | {probe.IsFlapping.ToString().ToLowerInvariant()} | {probe.CooldownSeconds} | {probe.Reason.Replace("|", "\\|")} |");
+            }
+
+            lines.Add(string.Empty);
+            lines.Add("Probe observations are written to `rcb-contention-probes.json`.");
+        }
+
+        lines.Add(string.Empty);
+        lines.AddRange([
             "## Counts",
             string.Empty,
             $"| Metric | Value |",
@@ -2295,7 +3092,7 @@ internal static class Cli
             $"| EntryID regressions | {diagnostics.EntryIdRegressionCount} |",
             $"| Buffer overflow observed | {diagnostics.BufferOverflowObserved.ToString().ToLowerInvariant()} |",
             string.Empty
-        };
+        ]);
 
         if (diagnostics.WarningMessages.Count > 0)
         {
@@ -2356,7 +3153,7 @@ internal static class Cli
             foreach (var report in result.Reports)
             {
                 var reasons = string.Join(",", report.Values.SelectMany(x => x.ReasonForInclusion).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
-                lines.Add($"| {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} | {TextOrDash(report.Header.ReportId).Replace("|", "\\|")} | {report.Header.SequenceNumber?.ToString() ?? "-"} | {TextOrDash(report.Header.EntryIdHex)} | {report.Header.BufferOverflow?.ToString().ToLowerInvariant() ?? "-"} | [{string.Join(",", report.IncludedDataSetIndexes)}] | {report.Values.Count} | {TextOrDash(reasons)} | {TextOrDash(report.Header.TimeOfEntry).Replace("|", "\\|")} | {TextOrDash(report.Header.DataSetReference).Replace("|", "\\|")} |");
+                lines.Add($"| {report.ReceivedAt:yyyy-MM-dd HH:mm:ss.fff} | {TextOrDash(report.Header.ReportId).Replace("|", "\\|")} | {TextOrDash(report.DecoderMode)} | {report.Header.SequenceNumber?.ToString(CultureInfo.InvariantCulture) ?? "-"} | {TextOrDash(report.Header.EntryIdHex)} | {report.Header.BufferOverflow?.ToString().ToLowerInvariant() ?? "-"} | [{string.Join(",", report.IncludedDataSetIndexes)}] | {report.Values.Count} | {TextOrDash(reasons)} | {TextOrDash(report.Header.TimeOfEntry).Replace("|", "\\|")} | {TextOrDash(report.Header.DataSetReference).Replace("|", "\\|")} |");
             }
             lines.Add(string.Empty);
         }
@@ -2411,16 +3208,18 @@ internal static class Cli
         Console.WriteLine("  list-adapters");
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
+        Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output out/ied-model-discovery]");
+        Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--profile connection] [--ld-name-mode auto|keep] [--output out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
         Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");
         Console.WriteLine("  mms-report-plan <host-or-ip> [--port 102] [--timeout-ms 60000] [--max-report-probes N] [--only-safe] [--kind ReadyStaticDataSet]");
-        Console.WriteLine("  mms-report-static-plan <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--dataset LD/LLN0.DataSet] [--read-values]");
-        Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01]");
+        Console.WriteLine("  mms-report-static-plan <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--strict-rcb] [--allow-urcb-fallback true|false] [--dataset LD/LLN0.DataSet] [--read-values]");
+        Console.WriteLine("  mms-report-dynamic-plan <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--strict-rcb] [--allow-urcb-fallback true|false] [--dataset-name AR_DYN_DS01]");
         Console.WriteLine("  mms-rcb-probe <host-or-ip> <LD/LN.BR.name|LD/LN.RP.name> [--port 102] [--timeout-ms 120000]");
-        Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--evidence out/session] [--yes]");
-        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--duration-sec 60] [--gi true|false] [--gi-interval-sec 0] [--poll-points LD/LN.DO.da,...] [--poll-interval-ms 1000] [--soak-snapshot-sec 60] [--evidence out/session] [--yes]");
-        Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--evidence out/session] [--yes]");
+        Console.WriteLine("  mms-report-static-live <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--strict-rcb] [--allow-urcb-fallback true|false] [--max-rcb-claim-attempts 6] [--rcb-probe-count 1] [--rcb-probe-delay-ms 1000] [--contention-cooldown-sec 60] [--duration-sec 15] [--reserve-sec 30] [--gi true|false] [--evidence out/session] [--yes]");
+        Console.WriteLine("  mms-report-monitor <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--strict-rcb] [--allow-urcb-fallback true|false] [--max-rcb-claim-attempts 6] [--rcb-probe-count 1] [--rcb-probe-delay-ms 1000] [--contention-cooldown-sec 60] [--duration-sec 60] [--gi true|false] [--gi-interval-sec 0] [--poll-points LD/LN.DO.da,...] [--poll-interval-ms 1000] [--soak-snapshot-sec 60] [--evidence out/session] [--yes]");
+        Console.WriteLine("  mms-report-dynamic-live <host-or-ip> --points <LD/LN.DO.da,LD/LN.DO.da> [--ld LD] [--rcb LD/LN.RP.name] [--strict-rcb] [--allow-urcb-fallback true|false] [--dataset-name AR_DYN_DS01] [--duration-sec 15] [--delete-dataset true|false] [--evidence out/session] [--yes]");
         Console.WriteLine("  mms-dataset-directory <host-or-ip> [LD/LLN0.DataSet] [--port 102] [--timeout-ms 60000] [--raw-limit N] [--read-values]");
         Console.WriteLine("  publish-sv-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--rate-hz N] [--nominal-hz N] [--dry-run] [--yes]");
         Console.WriteLine("  publish-goose-live <scl-file> --adapter <index|name> [--stream-index N] [--source-mac XX:XX:XX:XX:XX:XX] [--frames N] [--duration-sec N] [--continuous] [--status-ms N] [--min-ms N] [--max-ms N] [--toggle-every-sec N] [--initial-state true|false] [--test] [--nds-com] [--dry-run] [--yes]");
@@ -2433,6 +3232,8 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.168.1.10 --port 102 --max-report-probes 16");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.168.1.10 --show-points --raw-limit 40");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.168.1.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output out/ied-model-discovery");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.168.1.10 --ied-name OCR7SR12 --profile connection --ld-name-mode auto --output out/scl/OCR7SR12.generated.iid");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-find 192.168.1.10 XCBR --fc ST --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-read-smart 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
@@ -2440,7 +3241,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-plan 192.168.1.10 --read-values");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-plan 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-static-live 192.168.1.10 --duration-sec 15 --yes");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --evidence out/report-session01 --yes");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor 192.168.1.10 --rcb OCR7SR12PROT/LLN0.BR.brcbA01 --rcb-probe-count 3 --duration-sec 60 --poll-points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f --evidence out/report-session01 --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-dynamic-live 192.168.1.10 --points OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f,OCR7SR12CTRL/BI6GGIO1.Ind1.stVal --yes");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-dataset-directory 192.168.1.10 OCR7SR12PROT/LLN0.DataSet --raw-limit 80");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- publish-sv-live \"samples/scl/01_SV_Stream_4I+4V_(9-2LE).scd\" --adapter 1 --stream-index 1 --frames 4000 --dry-run");

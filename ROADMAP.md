@@ -853,3 +853,30 @@ This phase keeps Edition 1 export out of scope and focuses on full discovery dep
 - [ ] Add MMS file directory discovery (`FileDirectory`) with read-only CLI output and evidence JSON before any file download/delete support.
 - [ ] Add service capability evidence to the live model and SCL `Services` section instead of hard-coded service assumptions.
 - [ ] Add selected DOI/DAI/Val readback for settings/nameplate/control model values needed to approach IEDScout-class CID/IID content.
+
+### N5.8 — Standard model registry and IEDScout-clean SCL profile
+
+- [x] Add a conservative built-in standard model registry for common LN/DO -> CDC mapping such as `LLN0.NamPlt=LPL`, `LPHD.PhyNam=DPL`, `LPHD.PhyHealth=ENS`, `PTOC.Op=ACT`, `PTOC.Str=ACD`, `CSWI.Pos=DPC`, `XCBR.Pos=DPC`, `MMXU.PhV=WYE`, `MMXU.PPV=DEL`, and RDRE fault counters as `INS`.
+- [x] Add export profiles: `iedscout-connection`, `full-model`, and `simulator-seed`.
+- [x] Add an attribute export classifier that excludes control service parameters (`Oper`, `SBOw`, `Cancel`, `ctlVal`, `origin.*`, `Check`, `T`, `Test`) and optional unproven measurement/config leaves (`db`, `units.*`, `angRef`, `seqT`, `sboTimeout`, `stSeld`) from the IEDScout connection SCL.
+- [x] Write `*.scl-excluded-attributes.json` so excluded live-discovery data remains auditable and can be used by the future simulator seed.
+- [ ] Validate the regenerated `iedscout-connection` IID against IEDScout and reduce COM00010 read warnings to only genuine live IED access limitations.
+
+### N5.9 — Standard-discovery profile and enum CDC synthesis
+
+- [x] Add `standard-discovery` as an alias for the broader full model export profile.
+- [x] Add a small standard enum registry for Ed2 enumerated CDC synthesis.
+- [x] Export `ENS`/`ENC`/`ENG` value leaves as `bType="Enum"` with generated `EnumType` definitions instead of plain integer SCL leaves.
+- [ ] Expand standard LN/DO/CDC dictionary coverage toward libiec61850-style complete online model discovery.
+- [ ] Add model-size/deduplication report to distinguish compact engineering IID output from evidence-grade full discovery output.
+
+### N5.11 — Standard-discovery / connection-companion split
+
+The live-to-SCL exporter now treats full discovery and IEDScout online connection checks as two different artifacts. Full `standard-discovery` exports keep the richer IEC 61850 model needed for audit and simulator seed work. A generated `iedscout-connection` companion omits control-service parameters and optional configuration leaves that many IEDs reject when a client performs a read-all pass during online connect.
+
+This keeps ARIEC61850 moving toward libiec61850-level model discovery without making the full model artificially small just to silence client read-all warnings.
+
+
+## N5.12 — Golden-reference diff and service discovery coverage
+
+This version adds `scl-diff` for comparing ARIEC61850-generated IID/SCL files against a trusted golden export such as IEDScout, and `mms-service-discover` for producing an online IEC 61850 service coverage bundle. The goal is to measure structural gaps explicitly instead of guessing from IEDScout warning messages.

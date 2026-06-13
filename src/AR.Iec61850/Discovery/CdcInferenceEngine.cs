@@ -42,6 +42,14 @@ public static class CdcInferenceEngine
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        if (Iec61850StandardModelRegistry.TryResolve(lnClass, doName, out var standardDefinition))
+        {
+            return Result(
+                standardDefinition.Cdc,
+                standardDefinition.Confidence,
+                evidence.Append($"standard registry match: {standardDefinition.LogicalNodeClass}.{standardDefinition.DataObjectName} -> {standardDefinition.Cdc} ({standardDefinition.Description})"));
+        }
+
         if (string.Equals(doName, "NamPlt", StringComparison.OrdinalIgnoreCase))
             return Result("LPL", 0.96, evidence.Append("standard logical-node nameplate DO"));
 

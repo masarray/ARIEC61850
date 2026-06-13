@@ -457,3 +457,28 @@ The command writes the SCL file plus `*.scl-export-report.json`, `*.scl-export-s
 `mms-model-discover` and `mms-scl-export` now include a structured control-block inventory for SCL-oriented discovery. GO/SV/SG/LG functional-constraint attributes, plus relay variants such as `LLN0.SP.SGCB`, are grouped into candidate `GSEControl`, `SampledValueControl`, `SettingControl`, and `LogControl` entries. The discovery bundle writes `control-block-inventory.json` and the SCL exporter can emit conservative control-block shells with warnings when exact DatSet/address/ID/timing values have not been read yet.
 
 Edition 1 export is intentionally deferred. The current focus is a complete live discovery model that can feed Edition 2 / 2.1-ready IID/CID generation, connection reuse, and eventually SCL-backed simulation.
+
+### IEDScout-clean SCL export profile
+
+`mms-scl-export` now defaults to an IEDScout-friendly connection profile.  The generated SCL keeps LD/LN, DataSet, ReportControl, and safe DataTypeTemplates, while control service parameters and optional unproven configuration attributes are moved to `*.scl-excluded-attributes.json`.
+
+```powershell
+ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-scl-export 192.16.1.157 --port 102 --ied-name OCR7SR12 --ap-name AP1 --scl-export-profile iedscout-connection --output out/scl/OCR7SR12.generated.iid
+```
+
+Use `--scl-export-profile full-model` for a broader audit model, or `--scl-export-profile simulator-seed` when preparing a future ARIEC61850 server/simulator seed.
+
+### Standard-discovery SCL profile
+
+For full online model-discovery progress, use the standard-discovery/full-model profile instead of the IEDScout connection-clean profile:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-scl-export 192.16.1.157 --port 102 --ied-name OCR7SR12 --ap-name AP1 --scl-export-profile standard-discovery --ld-name-mode auto --read-datasets true --read-types false --output out/scl/OCR7SR12.standard-discovery.iid
+```
+
+This profile intentionally keeps more live-discovered structure. It may be larger than an IEDScout-saved IID because ARIEC61850 preserves generated templates and evidence-oriented structure rather than minimizing the file. Ed2 enum CDCs such as `ENS` are exported with generated `EnumType` definitions instead of plain integer `stVal` leaves.
+
+
+## N5.12 — Golden-reference diff and service discovery coverage
+
+This version adds `scl-diff` for comparing ARIEC61850-generated IID/SCL files against a trusted golden export such as IEDScout, and `mms-service-discover` for producing an online IEC 61850 service coverage bundle. The goal is to measure structural gaps explicitly instead of guessing from IEDScout warning messages.

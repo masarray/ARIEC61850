@@ -7,6 +7,7 @@ using AR.Iec61850.Monitoring;
 using AR.Iec61850.SampledValues;
 using AR.Iec61850.Scl;
 using AR.Iec61850.Scl.Export;
+using AR.Iec61850.Scl.Analysis;
 using AR.Iec61850.Transports;
 using AR.Iec61850.Transports.Npcap;
 using System.Diagnostics;
@@ -30,6 +31,7 @@ internal static class Cli
             return args[0] switch
             {
                 "inspect-scl" => InspectScl(args[1..]),
+                "scl-diff" => SclDiff(args[1..]),
                 "generate-pcap" => await GeneratePcapAsync(args[1..]).ConfigureAwait(false),
                 "inspect-pcap" => InspectPcap(args[1..]),
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
@@ -38,6 +40,7 @@ internal static class Cli
                 "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "mms-model-discover" => await MmsModelDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-scl-export" => await MmsSclExportAsync(args[1..]).ConfigureAwait(false),
+                "mms-service-discover" => await MmsServiceDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-find" => await MmsFindAsync(args[1..]).ConfigureAwait(false),
                 "mms-resolve" => await MmsResolveAsync(args[1..]).ConfigureAwait(false),
                 "mms-read-smart" => await MmsReadSmartAsync(args[1..]).ConfigureAwait(false),
@@ -107,6 +110,39 @@ internal static class Cli
         Console.WriteLine($"Conflicts: {document.Conflicts.Count}");
         foreach (var conflict in document.Conflicts)
             Console.WriteLine($"  CONFLICT {conflict.Kind} {conflict.Key}: {conflict.Description}");
+
+        return 0;
+    }
+
+
+    private static int SclDiff(string[] args)
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("scl-diff requires <golden.scl> <candidate.scl>.");
+
+        var options = CliOptions.Parse(args[2..]);
+        var output = options.Get("output", Path.Combine("out", "scl-diff"));
+        var files = SclGoldenDiffAnalyzer.WriteReport(args[0], args[1], output);
+        var report = SclGoldenDiffAnalyzer.Analyze(args[0], args[1]);
+
+        Console.WriteLine("SCL golden diff complete.");
+        Console.WriteLine($"  Golden: {Path.GetFullPath(args[0])}");
+        Console.WriteLine($"  Candidate: {Path.GetFullPath(args[1])}");
+        Console.WriteLine($"  Output: {Path.GetFullPath(output)}");
+        Console.WriteLine("  Files:");
+        foreach (var file in files)
+            Console.WriteLine($"    {Path.GetFullPath(file)}");
+
+        Console.WriteLine("Summary:");
+        Console.WriteLine($"  LD missing/extra: {report.LogicalDevices.MissingInCandidate.Count}/{report.LogicalDevices.ExtraInCandidate.Count}");
+        Console.WriteLine($"  LN missing/extra: {report.LogicalNodes.MissingInCandidate.Count}/{report.LogicalNodes.ExtraInCandidate.Count}");
+        Console.WriteLine($"  DataSets missing/extra: {report.DataSets.MissingInCandidate.Count}/{report.DataSets.ExtraInCandidate.Count}");
+        Console.WriteLine($"  Reports missing/extra: {report.Reports.MissingInCandidate.Count}/{report.Reports.ExtraInCandidate.Count}");
+        Console.WriteLine($"  GOOSE missing/extra: {report.GooseControls.MissingInCandidate.Count}/{report.GooseControls.ExtraInCandidate.Count}");
+        Console.WriteLine($"  SV missing/extra: {report.SampledValueControls.MissingInCandidate.Count}/{report.SampledValueControls.ExtraInCandidate.Count}");
+        Console.WriteLine($"  Setting groups missing/extra: {report.SettingControls.MissingInCandidate.Count}/{report.SettingControls.ExtraInCandidate.Count}");
+        Console.WriteLine($"  CDC differences: {report.CdcDifferences.Count}");
+        Console.WriteLine($"  Service capability differences: {report.ServiceCapabilityDifferences.Count}");
 
         return 0;
     }
@@ -429,6 +465,100 @@ internal static class Cli
 
 
 
+
+    private static async Task<int> MmsServiceDiscoverAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-service-discover requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        var timeoutMs = options.GetInt("timeout-ms", 120000);
+        var maxReportProbes = options.GetInt("max-report-probes", 286);
+        var readDataSets = options.GetBool("read-datasets", true);
+        var readTypes = options.GetBool("read-types", false);
+        var maxTypeReads = options.GetInt("max-type-reads", 128);
+        var typeReadSource = options.Get("type-read-source", "datasets");
+        var iedName = options.Get("ied-name", string.Empty);
+        var apName = options.Get("ap-name", "AP1");
+        var output = options.Get("output", Path.Combine("out", "service-discovery"));
+
+        await using var session = new MmsClientSession();
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: full online service discovery coverage (read-only; no RCB writes).");
+        await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), cts.Token).ConfigureAwait(false);
+        Console.WriteLine($"Association: {session.State}");
+        if (!string.IsNullOrWhiteSpace(session.LastHandshakeMessage))
+            Console.WriteLine($"  {session.LastHandshakeMessage}");
+
+        var discovery = await session.DiscoverAsync(
+            probeReportAttributes: true,
+            maxReportAttributeProbes: maxReportProbes,
+            cancellationToken: cts.Token).ConfigureAwait(false);
+
+        Console.WriteLine(discovery.IedDirectory.Summary);
+        Console.WriteLine(discovery.ReportInventory.Summary);
+        Console.WriteLine($"FC counts: {FormatFcCounts(discovery.IedDirectory.CountByFunctionalConstraint())}");
+
+        IReadOnlyList<MmsDataSetDirectoryResult> dataSetDirectories = Array.Empty<MmsDataSetDirectoryResult>();
+        if (readDataSets && discovery.ReportInventory.DataSets.Count > 0)
+        {
+            Console.WriteLine($"Reading DataSet directories: {discovery.ReportInventory.DataSets.Count} candidate(s).");
+            dataSetDirectories = await session.GetDataSetDirectoriesAsync(
+                discovery.ReportInventory.DataSets.Select(x => x.Reference),
+                discovery.IedDirectory,
+                cts.Token).ConfigureAwait(false);
+            foreach (var dataSet in dataSetDirectories.Take(10))
+                Console.WriteLine($"  {(dataSet.IsSuccess ? "OK" : "FAIL")} {dataSet.Summary}");
+            if (dataSetDirectories.Count > 10)
+                Console.WriteLine($"  ... {dataSetDirectories.Count - 10} more DataSet result(s).");
+        }
+
+        IReadOnlyList<MmsVariableAccessAttributesResult> variableTypes = Array.Empty<MmsVariableAccessAttributesResult>();
+        if (readTypes)
+        {
+            var typeCandidates = BuildTypeReadCandidates(discovery, dataSetDirectories, typeReadSource)
+                .Take(maxTypeReads <= 0 ? int.MaxValue : maxTypeReads)
+                .ToArray();
+            Console.WriteLine($"Reading MMS variable access attributes: {typeCandidates.Length} candidate(s), source={typeReadSource}, max={maxTypeReads}.");
+            variableTypes = await session.GetVariableAccessAttributesBatchAsync(typeCandidates, maxTypeReads, cts.Token).ConfigureAwait(false);
+            foreach (var type in variableTypes.Take(10))
+                Console.WriteLine($"  {(type.IsSuccess ? "OK" : "FAIL")} {type.Summary}");
+            if (variableTypes.Count > 10)
+                Console.WriteLine($"  ... {variableTypes.Count - 10} more type result(s).");
+        }
+
+        var document = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions
+            {
+                Host = host,
+                Port = port,
+                IedName = iedName,
+                AccessPointName = apName
+            },
+            dataSetDirectories,
+            variableTypes);
+
+        var files = new List<string>();
+        files.AddRange(LiveIedModelDiscoveryExporter.WriteBundle(document, output));
+        files.AddRange(LiveIedServiceDiscoveryReportBuilder.WriteFiles(document, output));
+
+        var coverage = LiveIedServiceDiscoveryReportBuilder.Build(document);
+        Console.WriteLine("Service discovery complete.");
+        Console.WriteLine(document.Summary);
+        foreach (var item in coverage.Services)
+            Console.WriteLine($"  {item.Name}: {item.Status} count={item.Count} evidence={item.Evidence}");
+        Console.WriteLine("Evidence written:");
+        foreach (var file in files)
+            Console.WriteLine($"  {Path.GetFullPath(file)}");
+
+        return 0;
+    }
+
     private static async Task<int> MmsSclExportAsync(string[] args)
     {
         if (args.Length < 1)
@@ -445,7 +575,7 @@ internal static class Cli
         var typeReadSource = options.Get("type-read-source", "both");
         var iedName = options.Get("ied-name", string.Empty);
         var apName = options.Get("ap-name", "AP1");
-        var profile = options.Get("profile", "connection");
+        var profile = options.Get("scl-export-profile", options.Get("profile", "iedscout-connection"));
         var output = options.Get("output", Path.Combine("out", "scl", "live-ied.generated.iid"));
         var subnet = options.Get("ip-subnet", "255.255.255.0");
         var gateway = options.Get("ip-gateway", "0.0.0.0");
@@ -456,6 +586,9 @@ internal static class Cli
         var osiTsel = options.Get("osi-tsel", "0001");
         var includeOsi = options.GetBool("include-osi", true);
         var writeDiscoveryBundle = options.GetBool("write-discovery", true);
+        var requestedProfile = LiveIedSclExportProfileParser.Parse(profile);
+        var writeConnectionCompanion = options.GetBool("write-connection-companion", requestedProfile != LiveIedSclExportProfile.IedScoutConnection);
+        var connectionCompanionOutput = options.Get("connection-output", MakeProfileOutputPath(output, "iedscout-connection"));
         var ldNameMode = ParseLogicalDeviceNameMode(options.Get("ld-name-mode", "auto"));
 
         await using var session = new MmsClientSession();
@@ -521,12 +654,10 @@ internal static class Cli
             dataSetDirectories,
             variableTypes);
 
-        var export = LiveIedSclExporter.WriteFiles(
-            document,
-            output,
-            new LiveIedSclExportOptions
+        LiveIedSclExportOptions CreateSclExportOptions(string profileName)
+            => new()
             {
-                Profile = profile,
+                Profile = profileName,
                 IpAddress = host,
                 IpSubnet = subnet,
                 IpGateway = gateway,
@@ -537,7 +668,21 @@ internal static class Cli
                 OsiTsel = osiTsel,
                 IncludeDefaultOsiParameters = includeOsi,
                 LogicalDeviceNameMode = ldNameMode
-            });
+            };
+
+        var export = LiveIedSclExporter.WriteFiles(
+            document,
+            output,
+            CreateSclExportOptions(profile));
+
+        LiveIedSclExportResult? connectionCompanion = null;
+        if (writeConnectionCompanion && requestedProfile != LiveIedSclExportProfile.IedScoutConnection)
+        {
+            connectionCompanion = LiveIedSclExporter.WriteFiles(
+                document,
+                connectionCompanionOutput,
+                CreateSclExportOptions("iedscout-connection"));
+        }
 
         if (writeDiscoveryBundle)
         {
@@ -549,12 +694,35 @@ internal static class Cli
         Console.WriteLine($"  SCL: {Path.GetFullPath(export.SclPath)}");
         Console.WriteLine($"  Report: {Path.GetFullPath(export.ReportPath)}");
         Console.WriteLine($"  Summary: {Path.GetFullPath(export.SummaryPath)}");
-        Console.WriteLine($"  Counts: LD={export.LogicalDeviceCount}, LN={export.LogicalNodeCount}, DataSets={export.DataSetCount}, RCB={export.ReportControlCount}, GoCB={export.GooseControlBlockCount}, SVCB={export.SampledValueControlBlockCount}, SGCB={export.SettingGroupControlCount}, LCB={export.LogControlCount}, LNodeType={export.LNodeTypeCount}, DOType={export.DoTypeCount}, DAType={export.DaTypeCount}, warnings={export.Warnings.Count}.");
+        if (!string.IsNullOrWhiteSpace(export.ExcludedAttributesPath))
+            Console.WriteLine($"  Excluded: {Path.GetFullPath(export.ExcludedAttributesPath)}");
+        Console.WriteLine($"  Counts: LD={export.LogicalDeviceCount}, LN={export.LogicalNodeCount}, DataSets={export.DataSetCount}, RCB={export.ReportControlCount}, GoCB={export.GooseControlBlockCount}, SVCB={export.SampledValueControlBlockCount}, SGCB={export.SettingGroupControlCount}, LCB={export.LogControlCount}, LNodeType={export.LNodeTypeCount}, DOType={export.DoTypeCount}, DAType={export.DaTypeCount}, excludedAttrs={export.ExcludedAttributes.Count}, warnings={export.Warnings.Count}.");
+        if (connectionCompanion is not null)
+        {
+            Console.WriteLine("IEDScout connection companion generated.");
+            Console.WriteLine($"  Connection SCL: {Path.GetFullPath(connectionCompanion.SclPath)}");
+            Console.WriteLine($"  Connection excluded: {Path.GetFullPath(connectionCompanion.ExcludedAttributesPath)}");
+            Console.WriteLine($"  Connection counts: DOType={connectionCompanion.DoTypeCount}, DAType={connectionCompanion.DaTypeCount}, excludedAttrs={connectionCompanion.ExcludedAttributes.Count}, warnings={connectionCompanion.Warnings.Count}.");
+            Console.WriteLine("  Use the companion file for IEDScout online connect/read-all checks; use the main file for full standard discovery review.");
+        }
         Console.WriteLine("Round-trip check:");
         var parsed = new SclParser().Load(output);
         Console.WriteLine($"  Parsed SCL: IED={parsed.Ieds.Count}, DataSets={parsed.DataSets.Count}, Reports={parsed.ReportControls.Count}, GOOSE={parsed.GooseStreams.Count}, SV={parsed.SampledValuesStreams.Count}, warnings={parsed.Warnings.Count}.");
 
         return 0;
+    }
+
+    private static string MakeProfileOutputPath(string outputPath, string profileSuffix)
+    {
+        var directory = Path.GetDirectoryName(outputPath);
+        var fileName = Path.GetFileNameWithoutExtension(outputPath);
+        var extension = Path.GetExtension(outputPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = "live-ied.generated";
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = ".iid";
+
+        return Path.Combine(directory ?? string.Empty, $"{fileName}.{profileSuffix}{extension}");
     }
 
     private static LiveIedSclLogicalDeviceNameMode ParseLogicalDeviceNameMode(string value)
@@ -3202,6 +3370,7 @@ internal static class Cli
         Console.WriteLine();
         Console.WriteLine("Usage:");
         Console.WriteLine("  inspect-scl <file.scd|file.cid|file.icd|file.iid>");
+        Console.WriteLine("  scl-diff <golden.scl|golden.iid> <candidate.scl|candidate.iid> [--output out/scl-diff]");
         Console.WriteLine("  generate-pcap <scl-file> <output.pcap> [--source-mac XX:XX:XX:XX:XX:XX] [--sv-frames N] [--goose-frames N]");
         Console.WriteLine("  inspect-pcap <file.pcap>");
         Console.WriteLine("  stream-pcap <file.pcap> [--delay-ms N] [--limit N]");
@@ -3209,7 +3378,8 @@ internal static class Cli
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output out/ied-model-discovery]");
-        Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--profile connection] [--ld-name-mode auto|keep] [--output out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
+        Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile iedscout-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output out/scl/live-ied.iedscout-connection.iid] [--ld-name-mode auto|keep] [--output out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
+        Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-types false] [--ied-name NAME] [--ap-name AP1] [--output out/service-discovery]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
         Console.WriteLine("  mms-read-smart <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000]");
@@ -3226,6 +3396,7 @@ internal static class Cli
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-scl samples/scl/minimal-station.scd");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- scl-diff samples/scl/OCR7SR12.iid out/scl/OCR7SR12.standard-discovery.iid --output out/scl-diff/OCR7SR12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- generate-pcap samples/scl/minimal-station.scd out/processbus-demo.pcap");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-pcap out/processbus-demo.pcap");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap out/processbus-demo.pcap --delay-ms 50 --limit 12");
@@ -3233,7 +3404,8 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.168.1.10 --port 102 --max-report-probes 16");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.168.1.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.168.1.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output out/ied-model-discovery");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.168.1.10 --ied-name OCR7SR12 --profile connection --ld-name-mode auto --output out/scl/OCR7SR12.generated.iid");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.168.1.10 --ied-name OCR7SR12 --scl-export-profile iedscout-connection --ld-name-mode auto --output out/scl/OCR7SR12.generated.iid");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.168.1.10 --ied-name OCR7SR12 --read-types false --output out/service-discovery/OCR7SR12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-find 192.168.1.10 XCBR --fc ST --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-read-smart 192.168.1.10 OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f");

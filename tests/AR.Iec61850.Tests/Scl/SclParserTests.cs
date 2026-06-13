@@ -10,7 +10,7 @@ public sealed class SclParserTests
         var document = LoadMinimalStation();
 
         Assert.Equal("AR_MINIMAL_STATION", document.HeaderId);
-        Assert.Equal(SclEdition.Edition1, document.Edition);
+        Assert.Equal(SclEdition.Edition2, document.Edition);
         Assert.Single(document.Ieds);
         Assert.Equal("MU01", document.Ieds[0].Name);
         Assert.Equal(2, document.DataSets.Count);
@@ -64,6 +64,21 @@ public sealed class SclParserTests
 
         Assert.Contains(document.Conflicts, c => c.Kind == "IED" && c.Key == "MU01");
         Assert.DoesNotContain(document.Warnings, w => w.Contains("missing DataSet", StringComparison.OrdinalIgnoreCase));
+    }
+
+
+    [Fact]
+    public void Parser_Detects_Edition_From_Root_Version_Not_Historical_Namespace()
+    {
+        const string xml = """
+        <SCL xmlns="http://www.iec.ch/61850/2003/SCL" version="2007" revision="B">
+          <Header id="ED2_TEST" version="1" revision="0" />
+        </SCL>
+        """;
+
+        var document = new SclParser().Parse(xml, "ed2.iid");
+
+        Assert.Equal(SclEdition.Edition2, document.Edition);
     }
 
     internal static SclDocument LoadMinimalStation()

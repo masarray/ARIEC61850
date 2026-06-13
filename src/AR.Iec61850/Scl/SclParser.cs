@@ -422,19 +422,32 @@ public sealed class SclParser
 
     private static SclEdition DetectEdition(XElement root)
     {
+        var version = Attr(root, "version");
+        var revision = Attr(root, "revision");
+        var release = Attr(root, "release");
         var ns = root.Name.NamespaceName.ToLowerInvariant();
 
-        if (ns.Contains("2003", StringComparison.Ordinal))
+        // IEC 61850 SCL keeps the historical namespace URI http://www.iec.ch/61850/2003/SCL
+        // even for Edition 2 family files.  Do not classify by namespace alone.
+        if (string.Equals(version, "2007", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(revision, "B", StringComparison.OrdinalIgnoreCase) &&
+            (string.Equals(release, "4", StringComparison.OrdinalIgnoreCase) || string.Equals(release, "4A", StringComparison.OrdinalIgnoreCase)))
+            return SclEdition.Edition21;
+
+        if (string.Equals(version, "2007", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(revision, "B", StringComparison.OrdinalIgnoreCase))
+            return SclEdition.Edition2;
+
+        if (string.Equals(version, "2003", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(revision, "A", StringComparison.OrdinalIgnoreCase))
             return SclEdition.Edition1;
 
         if (ns.Contains("2007b4", StringComparison.Ordinal) ||
             ns.Contains("ed2.1", StringComparison.Ordinal) ||
             ns.Contains("edition2.1", StringComparison.Ordinal))
-        {
             return SclEdition.Edition21;
-        }
 
-        if (ns.Contains("2007", StringComparison.Ordinal) || ns.Contains("scl", StringComparison.Ordinal))
+        if (ns.Contains("scl", StringComparison.Ordinal))
             return SclEdition.Edition2;
 
         return SclEdition.Unknown;

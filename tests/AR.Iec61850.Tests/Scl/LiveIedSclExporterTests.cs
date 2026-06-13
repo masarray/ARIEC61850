@@ -343,7 +343,8 @@ public sealed class LiveIedSclExporterTests
 
         var beh = document.Descendants(ns + "DOType").Single(x => x.Attribute("id")?.Value == "DO_INS_LLN0_Beh");
         var behStVal = beh.Elements(ns + "DA").Single(x => x.Attribute("name")?.Value == "stVal");
-        Assert.Equal("INT32", behStVal.Attribute("bType")?.Value);
+        Assert.Equal("Enum", behStVal.Attribute("bType")?.Value);
+        Assert.Equal("ARIEC61850_BehaviourKind", behStVal.Attribute("type")?.Value);
 
         var op = document.Descendants(ns + "DOType").Single(x => x.Attribute("id")?.Value == "DO_ACT_PTOC_Op");
         var opGeneral = op.Elements(ns + "DA").Single(x => x.Attribute("name")?.Value == "general");
@@ -433,6 +434,206 @@ public sealed class LiveIedSclExporterTests
         Assert.Single(parsed.SampledValuesStreams);
         Assert.Equal("IED1LD0/LLN0$GO$gcbA01", parsed.GooseStreams[0].ControlBlockReference);
         Assert.Equal("IED1LD0/LLN0$SV$msvcb01", parsed.SampledValuesStreams[0].ControlBlockReference);
+    }
+
+
+    [Fact]
+    public void Exporter_IedScoutConnectionProfile_Excludes_Control_Service_And_Optional_Config_Attributes()
+    {
+        var discovery = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "OCR7SR12CTRL",
+                    LogicalNode = "Q0CSWI1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Pos.stVal",
+                    MmsItemName = "Q0CSWI1$ST$Pos$stVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "OCR7SR12CTRL",
+                    LogicalNode = "Q0CSWI1",
+                    FunctionalConstraint = "CO",
+                    DataObjectPath = "Pos.Oper.ctlVal",
+                    MmsItemName = "Q0CSWI1$CO$Pos$Oper$ctlVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "OCR7SR12CTRL",
+                    LogicalNode = "Q0CSWI1",
+                    FunctionalConstraint = "CO",
+                    DataObjectPath = "Pos.SBOw.Check",
+                    MmsItemName = "Q0CSWI1$CO$Pos$SBOw$Check"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "OCR7SR12CTRL",
+                    LogicalNode = "Q0CSWI1",
+                    FunctionalConstraint = "CO",
+                    DataObjectPath = "Pos.origin",
+                    MmsItemName = "Q0CSWI1$CO$Pos$origin"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "OCR7SR12MEAS",
+                    LogicalNode = "MMXU1",
+                    FunctionalConstraint = "MX",
+                    DataObjectPath = "PhV.phsA.cVal.mag.f",
+                    MmsItemName = "MMXU1$MX$PhV$phsA$cVal$mag$f"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "OCR7SR12MEAS",
+                    LogicalNode = "MMXU1",
+                    FunctionalConstraint = "CF",
+                    DataObjectPath = "PhV.phsA.units.SIUnit",
+                    MmsItemName = "MMXU1$CF$PhV$phsA$units$SIUnit"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "OCR7SR12MEAS",
+                    LogicalNode = "MMXU1",
+                    FunctionalConstraint = "CF",
+                    DataObjectPath = "PhV.phsA.units",
+                    MmsItemName = "MMXU1$CF$PhV$phsA$units"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "OCR7SR12MEAS",
+                    LogicalNode = "MMXU1",
+                    FunctionalConstraint = "CF",
+                    DataObjectPath = "PhV.phsA.db",
+                    MmsItemName = "MMXU1$CF$PhV$phsA$db"
+                }
+            ])
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions { Host = "192.0.2.10", IedName = "OCR7SR12", AccessPointName = "AP1" });
+
+        var xml = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "iedscout-connection", IpAddress = "192.0.2.10" }).ToString();
+
+        Assert.Contains("<DA name=\"stVal\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<BDA name=\"f\"", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Oper", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SBOw", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("origin", xml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("units", xml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SIUnit", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("db\"", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Exporter_FullModelProfile_Keeps_Control_Service_Attributes_For_Simulator_Seed_Workflows()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.10",
+            IedName = "IED1",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "LD0",
+                    Inst = "LD0",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "Q0CSWI1",
+                            Prefix = "Q0",
+                            LnClass = "CSWI",
+                            LnInst = "1",
+                            ProposedLnTypeId = "LN_CSWI_Q0CSWI1",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = "LD0/Q0CSWI1.Pos",
+                                    Name = "Pos",
+                                    ProposedDoTypeId = "DO_DPC_CSWI_Pos",
+                                    InferredCdc = "DPC",
+                                    CdcConfidence = 0.94,
+                                    ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.High,
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel { AttributePath = "stVal", FunctionalConstraint = "ST", SclBType = "INT32" },
+                                        new LiveIedDataAttributeModel { AttributePath = "Oper.ctlVal", FunctionalConstraint = "CO", SclBType = "INT32" }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var xml = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model", IpAddress = "192.0.2.10" }).ToString();
+
+        Assert.Contains("Oper", xml, StringComparison.Ordinal);
+        Assert.Contains("ctlVal", xml, StringComparison.Ordinal);
+    }
+
+
+    [Fact]
+    public void Exporter_InsCdc_Uses_Enum_BType_And_EnumType_For_Status_Value()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.10",
+            IedName = "IED1",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "IED1CTRL",
+                    Inst = "IED1CTRL",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "LLN0",
+                            LnClass = "LLN0",
+                            ProposedLnTypeId = "LN_LLN0",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = "IED1CTRL/LLN0.Beh",
+                                    Name = "Beh",
+                                    ProposedDoTypeId = "DO_INS_LLN0_Beh",
+                                    InferredCdc = "INS",
+                                    CdcConfidence = 0.94,
+                                    ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.High,
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel { AttributePath = "stVal", FunctionalConstraint = "ST", SclBType = "INT32" },
+                                        new LiveIedDataAttributeModel { AttributePath = "q", FunctionalConstraint = "ST", SclBType = "Quality" },
+                                        new LiveIedDataAttributeModel { AttributePath = "t", FunctionalConstraint = "ST", SclBType = "Timestamp" }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var xml = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model", IpAddress = "192.0.2.10" }).ToString();
+
+        Assert.Contains("cdc=\"INS\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<DA name=\"stVal\" fc=\"ST\" bType=\"Enum\" type=\"ARIEC61850_BehaviourKind\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<EnumType id=\"ARIEC61850_BehaviourKind\">", xml, StringComparison.Ordinal);
     }
 
 }

@@ -61,7 +61,9 @@ public static class LiveIedSclExporter
         var report = BuildReport(model, options, context, sclPath);
         var reportPath = Path.ChangeExtension(sclPath, ".scl-export-report.json");
         var summaryPath = Path.ChangeExtension(sclPath, ".scl-export-summary.md");
+        var excludedPath = Path.ChangeExtension(sclPath, ".scl-excluded-attributes.json");
         File.WriteAllText(reportPath, JsonSerializer.Serialize(report, JsonOptions), Encoding.UTF8);
+        File.WriteAllText(excludedPath, JsonSerializer.Serialize(report.ExcludedAttributes, JsonOptions), Encoding.UTF8);
         File.WriteAllText(summaryPath, BuildMarkdown(model, report), Encoding.UTF8);
 
         return new LiveIedSclExportResult
@@ -71,6 +73,7 @@ public static class LiveIedSclExporter
             SclPath = sclPath,
             ReportPath = reportPath,
             SummaryPath = summaryPath,
+            ExcludedAttributesPath = excludedPath,
             LogicalDeviceCount = report.LogicalDeviceCount,
             LogicalNodeCount = report.LogicalNodeCount,
             DataSetCount = report.DataSetCount,
@@ -84,6 +87,7 @@ public static class LiveIedSclExporter
             DaTypeCount = report.DaTypeCount,
             EnumTypeCount = report.EnumTypeCount,
             Warnings = report.Warnings,
+            ExcludedAttributes = report.ExcludedAttributes,
             DataSetMappings = report.DataSetMappings,
             ReportMappings = report.ReportMappings,
             ControlBlockMappings = report.ControlBlockMappings
@@ -121,7 +125,7 @@ public static class LiveIedSclExporter
         => new()
         {
             GeneratedAtUtc = DateTimeOffset.UtcNow,
-            Profile = options.Profile,
+            Profile = LiveIedSclExportProfileParser.ToProfileName(options.ResolvedProfile),
             SclPath = sclPath,
             LogicalDeviceCount = model.LogicalDevices.Count,
             LogicalNodeCount = model.LogicalDevices.SelectMany(x => x.LogicalNodes).Count(),
@@ -136,6 +140,7 @@ public static class LiveIedSclExporter
             DaTypeCount = context.DaTypes.Count,
             EnumTypeCount = context.EnumTypes.Count,
             Warnings = MergeWarnings(model, context),
+            ExcludedAttributes = context.ExcludedAttributes.ToArray(),
             DataSetMappings = context.DataSetMappings.ToArray(),
             ReportMappings = context.ReportMappings.ToArray(),
             ControlBlockMappings = context.ControlBlockMappings.ToArray()
@@ -571,13 +576,34 @@ public static class LiveIedSclExporter
                         continue;
                     }
 
-                    if (!options.IncludeLowConfidenceTypes && dataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.Low or LiveIedDiscoveryConfidenceLevel.Unknown)
+                    var resolvedProfile = options.ResolvedProfile;
+                    if ((!options.IncludeLowConfidenceTypes || resolvedProfile == LiveIedSclExportProfile.IedScoutConnection) && dataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.Low or LiveIedDiscoveryConfidenceLevel.Unknown)
+                    {
+                        context.Warnings.Add(new LiveIedSclExportWarning
+                        {
+                            Code = "LowConfidenceDataObjectSkipped",
+                            Reference = dataObject.Reference,
+                            Message = "Data object was omitted from the IEDScout connection SCL profile because CDC/type inference confidence is low. It remains available in full discovery evidence."
+                        });
                         continue;
+                    }
+
+                    var filteredAttributes = FilterExportAttributes(dataObject, options, context).ToArray();
+                    if (resolvedProfile == LiveIedSclExportProfile.IedScoutConnection && filteredAttributes.Length == 0)
+                    {
+                        context.Warnings.Add(new LiveIedSclExportWarning
+                        {
+                            Code = "ConnectionProfileDataObjectSkipped",
+                            Reference = dataObject.Reference,
+                            Message = "All discovered attributes for this data object were classified as unsafe/noisy for an IEDScout-clean connection SCL profile. The object is retained in companion discovery JSON."
+                        });
+                        continue;
+                    }
 
                     var doTypeId = MakeUniqueId(context, dataObject.ProposedDoTypeId);
                     context.DataObjectTypeIds[dataObject.Reference] = doTypeId;
                     lNodeType.Add(new XElement(Scl + "DO", new XAttribute("name", SafeXmlName(dataObject.Name)), new XAttribute("type", doTypeId)));
-                    context.DoTypes.Add(BuildDoType(dataObject, doTypeId, context));
+                    context.DoTypes.Add(BuildDoType(dataObject, doTypeId, context, filteredAttributes, ln.LnClass));
                 }
 
                 context.LNodeTypes.Add(lNodeType);
@@ -588,7 +614,35 @@ public static class LiveIedSclExporter
         return context;
     }
 
-    private static XElement BuildDoType(LiveIedDataObjectModel dataObject, string doTypeId, LiveIedSclBuildContext context)
+    private static IEnumerable<LiveIedDataAttributeModel> FilterExportAttributes(
+        LiveIedDataObjectModel dataObject,
+        LiveIedSclExportOptions options,
+        LiveIedSclBuildContext context)
+    {
+        var profile = options.ResolvedProfile;
+        var profileName = LiveIedSclExportProfileParser.ToProfileName(profile);
+        foreach (var attribute in dataObject.Attributes)
+        {
+            var decision = SclAttributeExportClassifier.Evaluate(profile, dataObject, attribute);
+            if (decision.Include)
+            {
+                yield return attribute;
+                continue;
+            }
+
+            context.ExcludedAttributes.Add(new LiveIedSclExcludedAttribute
+            {
+                Profile = profileName,
+                DataObjectReference = dataObject.Reference,
+                AttributePath = attribute.AttributePath,
+                FunctionalConstraint = attribute.FunctionalConstraint,
+                ReasonCode = decision.ReasonCode,
+                Reason = decision.Reason
+            });
+        }
+    }
+
+    private static XElement BuildDoType(LiveIedDataObjectModel dataObject, string doTypeId, LiveIedSclBuildContext context, IReadOnlyCollection<LiveIedDataAttributeModel>? exportAttributes = null, string logicalNodeClass = "")
     {
         var cdc = dataObject.InferredCdc.Trim();
         if (!CdcInferenceEngine.IsKnownCdc(cdc))
@@ -603,7 +657,7 @@ public static class LiveIedSclExporter
         }
 
         var doType = new XElement(Scl + "DOType", new XAttribute("id", doTypeId), new XAttribute("cdc", cdc));
-        var tree = TypeTreeNode.Build(dataObject.Attributes);
+        var tree = TypeTreeNode.Build(exportAttributes ?? dataObject.Attributes);
         if (tree.Children.Count == 0)
         {
             context.Warnings.Add(new LiveIedSclExportWarning
@@ -616,15 +670,26 @@ public static class LiveIedSclExporter
         }
 
         foreach (var child in tree.Children.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
-            doType.Add(BuildDaElement(child, doTypeId, context, cdc, isRootDa: true));
+            doType.Add(BuildDaElement(child, doTypeId, context, cdc, dataObject.Name, logicalNodeClass, isRootDa: true));
 
         return doType;
     }
 
-    private static XElement BuildDaElement(TypeTreeNode node, string ownerTypeId, LiveIedSclBuildContext context, string cdc, bool isRootDa)
+    private static XElement BuildDaElement(TypeTreeNode node, string ownerTypeId, LiveIedSclBuildContext context, string cdc, string dataObjectName, string logicalNodeClass, bool isRootDa)
     {
         if (node.Children.Count == 0)
         {
+            if (Iec61850StandardEnumRegistry.TryResolve(logicalNodeClass, dataObjectName, cdc, node.Name, out var enumDefinition))
+            {
+                var enumTypeId = EnsureEnumType(context, enumDefinition);
+                return new XElement(
+                    Scl + (isRootDa ? "DA" : "BDA"),
+                    new XAttribute("name", SafeXmlName(node.Name)),
+                    isRootDa ? new XAttribute("fc", string.IsNullOrWhiteSpace(node.Fc) ? "ST" : node.Fc) : null,
+                    new XAttribute("bType", "Enum"),
+                    new XAttribute("type", enumTypeId));
+            }
+
             var bType = NormalizeBType(node.BType, node.Name, node.Path, cdc);
             return new XElement(
                 Scl + (isRootDa ? "DA" : "BDA"),
@@ -637,7 +702,7 @@ public static class LiveIedSclExporter
         context.DataAttributeTypeIds[$"{ownerTypeId}|{node.Path}"] = daTypeId;
         var daType = new XElement(Scl + "DAType", new XAttribute("id", daTypeId));
         foreach (var child in node.Children.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
-            daType.Add(BuildDaElement(child, daTypeId, context, cdc, isRootDa: false));
+            daType.Add(BuildDaElement(child, daTypeId, context, cdc, dataObjectName, logicalNodeClass, isRootDa: false));
         context.DaTypes.Add(daType);
 
         return new XElement(
@@ -646,6 +711,26 @@ public static class LiveIedSclExporter
             isRootDa ? new XAttribute("fc", string.IsNullOrWhiteSpace(node.Fc) ? "ST" : node.Fc) : null,
             new XAttribute("bType", "Struct"),
             new XAttribute("type", daTypeId));
+    }
+
+    private static string EnsureEnumType(LiveIedSclBuildContext context, Iec61850StandardEnumDefinition definition)
+    {
+        if (context.EnumTypeIds.TryGetValue(definition.Id, out var existingId))
+            return existingId;
+
+        var enumTypeId = MakeUniqueId(context, definition.Id);
+        context.EnumTypeIds[definition.Id] = enumTypeId;
+        var enumType = new XElement(Scl + "EnumType", new XAttribute("id", enumTypeId));
+        foreach (var value in definition.Values.OrderBy(x => x.Ord))
+        {
+            enumType.Add(new XElement(
+                Scl + "EnumVal",
+                new XAttribute("ord", value.Ord.ToString(CultureInfo.InvariantCulture)),
+                SafeXmlName(value.Symbol)));
+        }
+
+        context.EnumTypes.Add(enumType);
+        return enumTypeId;
     }
 
     private static void EnsureReferencedMemberTypes(LiveIedModelDiscoveryDocument model, LiveIedSclBuildContext context)
@@ -731,6 +816,27 @@ public static class LiveIedSclExporter
             sb.AppendLine($"| ... | ... | ... | {result.ControlBlockMappings.Count - 80} more item(s) in JSON report | ");
         sb.AppendLine();
 
+        sb.AppendLine("## IEDScout Connection Profile Exclusions");
+        sb.AppendLine();
+        if (result.ExcludedAttributes.Count == 0)
+        {
+            sb.AppendLine("No attributes were excluded by the selected SCL export profile.");
+        }
+        else
+        {
+            sb.AppendLine("| Reason | Count |");
+            sb.AppendLine("| --- | ---: |");
+            foreach (var group in result.ExcludedAttributes.GroupBy(x => x.ReasonCode).OrderByDescending(x => x.Count()).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+                sb.AppendLine($"| {Escape(group.Key)} | {group.Count().ToString(CultureInfo.InvariantCulture)} |");
+            sb.AppendLine();
+            sb.AppendLine("| Data object | Attribute | FC | Reason |");
+            sb.AppendLine("| --- | --- | --- | --- |");
+            foreach (var excluded in result.ExcludedAttributes.Take(80))
+                sb.AppendLine($"| {Escape(excluded.DataObjectReference)} | {Escape(excluded.AttributePath)} | {Escape(excluded.FunctionalConstraint)} | {Escape(excluded.ReasonCode)} |");
+            if (result.ExcludedAttributes.Count > 80)
+                sb.AppendLine($"| ... | ... | ... | {result.ExcludedAttributes.Count - 80} more excluded attribute(s) in JSON report | ");
+        }
+        sb.AppendLine();
         sb.AppendLine("## Safety Notes");
         sb.AppendLine();
         sb.AppendLine("- This SCL is reconstructed from live IEC 61850/MMS discovery, not the original vendor ICD.");
@@ -967,7 +1073,8 @@ public static class LiveIedSclExporter
             {
                 "SPS" or "SPC" or "ACT" => "BOOLEAN",
                 "DPS" or "DPC" => "Dbpos",
-                "INS" or "INC" or "ENS" or "ENC" or "BCR" => "INT32",
+                "INS" or "INC" or "BCR" => "INT32",
+                "ENS" or "ENC" or "ENG" => "Enum",
                 _ => string.Empty
             };
         }
@@ -1106,7 +1213,7 @@ public static class LiveIedSclExporter
             var path = string.Empty;
             foreach (var segment in segments)
             {
-                path = string.IsNullOrWhiteSpace(path) ? segment : $"{path}_{segment}";
+                path = string.IsNullOrWhiteSpace(path) ? segment : $"{path}.{segment}";
                 if (!current._children.TryGetValue(segment, out var child))
                 {
                     child = new TypeTreeNode(segment, path);

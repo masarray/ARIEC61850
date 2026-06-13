@@ -6,6 +6,10 @@ on:
     paths:
       - "landing/**"
       - "docs/**"
+      - "404.html"
+      - "robots.txt"
+      - "sitemap.xml"
+      - ".nojekyll"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -36,6 +40,8 @@ jobs:
           mkdir -p _site/docs
           cp -R landing/. _site/
           cp -R docs/. _site/docs/
+          cp .nojekyll _site/.nojekyll
+          cp 404.html robots.txt sitemap.xml _site/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

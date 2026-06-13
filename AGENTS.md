@@ -1,8 +1,7 @@
 # AGENTS
 
 This file defines the working discipline for every human or AI agent modifying
-`ARIEC61850`. The purpose is to keep the stack from becoming a demo that fails
-halfway. Follow this file before writing code.
+`ARIEC61850`. The purpose is to keep the stack protocol-accurate, source-clean, and safe for public development. Follow this file before writing code.
 
 ## 1. Mission
 
@@ -269,7 +268,7 @@ Rules:
 Expected diagnostic language:
 
 ```text
-Reference: OCR7SR12MEAS/MMXU1.PhV.phsA.cVal.mag.f
+Reference: IED1LD0/MMXU1.PhV.phsA.cVal.mag.f
 Resolved FC: MX
 Source: LiveMms
 Confidence: 100
@@ -279,7 +278,7 @@ MMS item: MMXU1$MX$PhV$phsA$cVal$mag$f
 If ambiguous:
 
 ```text
-Reference: OCR7SR12CTRL/XCBR1.Pos
+Reference: IED1LD0/XCBR1.Pos
 Candidates:
   ST: XCBR1$ST$Pos$stVal/q/t
   CO: XCBR1$CO$Pos$Oper/SBO/Cancel
@@ -536,8 +535,8 @@ Examples:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-scl .\samples\scl\minimal-station.scd
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\out\demo.pcap
-dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\out\demo.pcap
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\demo.pcap
+dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\.artifacts\out\demo.pcap
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.16.1.157 --port 102 --timeout-ms 20000 --max-report-probes 16
 ```
 

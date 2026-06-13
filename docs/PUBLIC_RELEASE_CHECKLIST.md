@@ -6,7 +6,9 @@ Run this before pushing to a public repository.
 
 ```powershell
 git status --short
-dotnet clean .\ARIEC61850.slnx
+dotnet clean .\ARIEC61850.sln
+.\scripts\clean-local-artifacts.cmd
+.\scripts\verify-source-clean.cmd
 ```
 
 Confirm these folders are not staged:
@@ -16,6 +18,7 @@ Confirm these folders are not staged:
 bin/
 obj/
 out/
+.artifacts/
 artifacts/
 evidence/
 captures/
@@ -24,9 +27,9 @@ captures/
 ## Build validation
 
 ```powershell
-dotnet restore .\ARIEC61850.slnx
-dotnet build .\ARIEC61850.slnx -c Release
-dotnet test .\ARIEC61850.slnx -c Release --no-build
+dotnet restore .\ARIEC61850.sln
+dotnet build .\ARIEC61850.sln -c Release
+dotnet test .\ARIEC61850.sln -c Release --no-build
 ```
 
 ## Public text scan
@@ -36,8 +39,8 @@ Search for accidental unrelated product names, generated evidence, private IP no
 ## Release package
 
 ```powershell
-pwsh .\scripts\publish-windows-singlefile.ps1 -Version 0.1.0
-pwsh .\scripts\verify-release-package.ps1 -PackagePath .\artifacts\release\ARIEC61850-SvPublisher-v0.1.0-win-x64-single-exe.zip -Version 0.1.0
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0
+.\scripts\verify-release-package.cmd -PackagePath .\.artifacts\release\ARIEC61850-SvPublisher-v0.1.0-win-x64-single-exe.zip -Version 0.1.0
 ```
 
-Do not commit anything from `artifacts/release`.
+Do not commit anything from `.artifacts/release`.

@@ -15,4 +15,4 @@ landing/        → website root
 docs/           → website documentation files
 ```
 
-The workflow runs on pushes to `main` that change `landing`, `docs`, or the workflow itself. It can also be started manually from the Actions tab.
+The workflow runs on pushes to `main` that change `landing`, `docs`, root static assets such as `404.html`, `robots.txt`, `sitemap.xml`, or the workflow itself. It can also be started manually from the Actions tab.

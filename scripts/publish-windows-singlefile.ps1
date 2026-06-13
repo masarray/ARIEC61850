@@ -5,13 +5,12 @@
   Builds a Windows x64 single-file portable release for the ARIEC61850 WPF SV Publisher.
 
 .DESCRIPTION
-  The script restores, builds, tests, publishes apps/AR.Iec61850.SvPublisher as
-  a self-contained single EXE, creates a small ZIP package, and writes SHA256
-  checksums. Generated output is written to artifacts/release and must not be
-  committed.
+  Restores, builds, tests, publishes apps/AR.Iec61850.SvPublisher as a self-contained
+  single EXE, creates a ZIP package, and writes SHA256 checksums. Generated output
+  is written to .artifacts/release and must not be committed.
 
 .EXAMPLE
-  pwsh ./scripts/publish-windows-singlefile.ps1 -Version 0.1.0
+  powershell.exe -ExecutionPolicy Bypass -File .\scripts\publish-windows-singlefile.ps1 -Version 0.1.0
 #>
 [CmdletBinding()]
 param(
@@ -26,7 +25,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$ArtifactRoot = Join-Path $RepoRoot "artifacts"
+$ArtifactRoot = Join-Path $RepoRoot ".artifacts"
 $ReleaseRoot = Join-Path $ArtifactRoot "release"
 $PublishRoot = Join-Path $ReleaseRoot "publish"
 $PackageRoot = Join-Path $ReleaseRoot "ARIEC61850-SvPublisher-v$Version-$Runtime-single-exe"
@@ -52,11 +51,11 @@ try {
 
     New-Item -ItemType Directory -Force -Path $PublishRoot, $PackageRoot | Out-Null
 
-    dotnet restore .\ARIEC61850.slnx
-    dotnet build .\ARIEC61850.slnx -c $Configuration --no-restore
+    dotnet restore .\ARIEC61850.sln
+    dotnet build .\ARIEC61850.sln -c $Configuration --no-restore
 
     if (-not $SkipTests) {
-        dotnet test .\ARIEC61850.slnx -c $Configuration --no-build --verbosity normal
+        dotnet test .\ARIEC61850.sln -c $Configuration --no-build --verbosity normal
     }
 
     dotnet publish .\apps\AR.Iec61850.SvPublisher\AR.Iec61850.SvPublisher.csproj `

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AR.Iec61850.Transports.Npcap")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+199791cd0e192c56c8f76b6889750e3390c97314")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ee4ca50c7d542f5b0d906d56979f0576dac58b79")]
 [assembly: System.Reflection.AssemblyProductAttribute("AR.Iec61850.Transports.Npcap")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AR.Iec61850.Transports.Npcap")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

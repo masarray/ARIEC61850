@@ -8,6 +8,7 @@ on:
       - "apps/**"
       - "tests/**"
       - "samples/**"
+      - "*.sln"
       - "*.slnx"
       - "Directory.Build.props"
       - ".github/workflows/dotnet-ci.yml"
@@ -32,11 +33,15 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Verify source tree is clean
+        shell: pwsh
+        run: ./scripts/verify-source-clean.ps1
+
       - name: Restore
-        run: dotnet restore ARIEC61850.slnx
+        run: dotnet restore ARIEC61850.sln
 
       - name: Build
-        run: dotnet build ARIEC61850.slnx -c Release --no-restore
+        run: dotnet build ARIEC61850.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test ARIEC61850.slnx -c Release --no-build --verbosity normal
+        run: dotnet test ARIEC61850.sln -c Release --no-build --verbosity normal

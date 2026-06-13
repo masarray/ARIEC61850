@@ -5,19 +5,19 @@ ARIEC61850 includes a Windows single-file packaging script for the WPF Sampled V
 ## Local packaging
 
 ```powershell
-pwsh .\scripts\publish-windows-singlefile.ps1 -Version 0.1.0
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0
 ```
 
 Output location:
 
 ```text
-artifacts/release/
+.artifacts/release/
 ├─ ARIEC61850-SvPublisher-v0.1.0-win-x64-single-exe.zip
 ├─ AR.Iec61850.SvPublisher-v0.1.0-win-x64.exe
 └─ SHA256SUMS.txt
 ```
 
-`artifacts/` is ignored by Git.
+`.artifacts/` is ignored by Git.
 
 ## GitHub Actions packaging
 
@@ -31,7 +31,7 @@ The workflow:
 
 1. checks out the repository;
 2. installs .NET 8;
-3. restores, builds, and tests `ARIEC61850.slnx`;
+3. restores, builds, and tests `ARIEC61850.sln`;
 4. publishes `apps/AR.Iec61850.SvPublisher` as a self-contained Windows x64 single EXE;
 5. verifies the package structure;
 6. uploads the EXE, ZIP, and SHA256 file as workflow artifacts;

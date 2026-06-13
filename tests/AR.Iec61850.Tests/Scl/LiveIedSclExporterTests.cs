@@ -111,7 +111,7 @@ public sealed class LiveIedSclExporterTests
             [
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12PROT",
+                    Domain = "IED1LD0",
                     LogicalNode = "LLN0",
                     FunctionalConstraint = "BR",
                     DataObjectPath = "brcbA01.RptEna",
@@ -119,7 +119,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12PROT",
+                    Domain = "IED1LD0",
                     LogicalNode = "A50PTOC1",
                     FunctionalConstraint = "ST",
                     DataObjectPath = "Op.stVal",
@@ -129,35 +129,35 @@ public sealed class LiveIedSclExporterTests
         };
         discovery.ReportInventory.DataSets.Add(new MmsDataSetCandidate
         {
-            Domain = "OCR7SR12PROT",
+            Domain = "IED1LD0",
             LogicalNode = "LLN0",
             Name = "DataSet",
-            Reference = "OCR7SR12PROT/LLN0.DataSet"
+            Reference = "IED1LD0/LLN0.DataSet"
         });
         discovery.ReportInventory.ReportControls.Add(new MmsReportControlCandidate
         {
-            Domain = "OCR7SR12PROT",
+            Domain = "IED1LD0",
             LogicalNode = "LLN0",
             Name = "brcbA01",
-            Reference = "OCR7SR12PROT/LLN0.BR.brcbA01",
+            Reference = "IED1LD0/LLN0.BR.brcbA01",
             Buffered = true,
-            DataSetReference = "OCR7SR12PROT/LLN0.DataSet",
-            ReportId = "OCR7SR12PROT/LLN0$BR$brcbA01",
+            DataSetReference = "IED1LD0/LLN0.DataSet",
+            ReportId = "IED1LD0/LLN0$BR$brcbA01",
             ConfRev = "1"
         });
         var dataSet = new MmsDataSetDirectoryResult
         {
             IsSuccess = true,
-            DataSetReference = "OCR7SR12PROT/LLN0.DataSet",
+            DataSetReference = "IED1LD0/LLN0.DataSet",
             Members =
             [
                 new MmsDataSetDirectoryMember
                 {
-                    Domain = "OCR7SR12PROT",
+                    Domain = "IED1LD0",
                     LogicalNode = "A50PTOC1",
                     FunctionalConstraint = "ST",
                     DataObjectPath = "Op",
-                    UserReference = "OCR7SR12PROT/A50PTOC1.Op",
+                    UserReference = "IED1LD0/A50PTOC1.Op",
                     MmsItemName = "A50PTOC1$ST$Op"
                 }
             ]
@@ -165,7 +165,7 @@ public sealed class LiveIedSclExporterTests
 
         var model = LiveIedModelDiscoveryBuilder.Build(
             discovery,
-            new LiveIedModelDiscoveryBuildOptions { Host = "192.0.2.10", IedName = "OCR7SR12", AccessPointName = "AP1" },
+            new LiveIedModelDiscoveryBuildOptions { Host = "192.0.2.10", IedName = "IED1", AccessPointName = "AP1" },
             [dataSet]);
 
         var xml = LiveIedSclExporter.BuildDocument(model, new LiveIedSclExportOptions { IpAddress = "192.0.2.10" }).ToString();
@@ -177,8 +177,8 @@ public sealed class LiveIedSclExporterTests
 
         Assert.Equal("PROT", lDevice.Attribute("inst")?.Value);
         Assert.Equal("PROT", fcda.Attribute("ldInst")?.Value);
-        Assert.Equal("OCR7SR12PROT/LLN0$DataSet", parsed.DataSets[0].Reference);
-        Assert.Equal("OCR7SR12PROT/LLN0$BR$brcbA01", parsed.ReportControls[0].ControlBlockReference);
+        Assert.Equal("IED1LD0/LLN0$DataSet", parsed.DataSets[0].Reference);
+        Assert.Equal("IED1LD0/LLN0$BR$brcbA01", parsed.ReportControls[0].ControlBlockReference);
     }
 
     [Fact]
@@ -187,13 +187,13 @@ public sealed class LiveIedSclExporterTests
         var model = new LiveIedModelDiscoveryDocument
         {
             Host = "192.0.2.10",
-            IedName = "OCR7SR12",
+            IedName = "IED1",
             LogicalDevices =
             [
                 new LiveIedLogicalDeviceModel
                 {
-                    MmsDomain = "OCR7SR12PROT",
-                    Inst = "OCR7SR12PROT",
+                    MmsDomain = "IED1LD0",
+                    Inst = "IED1LD0",
                     LogicalNodes =
                     [
                         new LiveIedLogicalNodeModel
@@ -217,7 +217,7 @@ public sealed class LiveIedSclExporterTests
         var document = XDocument.Parse(xml);
         var ns = document.Root!.Name.Namespace;
 
-        Assert.Equal("OCR7SR12PROT", document.Descendants(ns + "LDevice").Single().Attribute("inst")?.Value);
+        Assert.Equal("IED1LD0", document.Descendants(ns + "LDevice").Single().Attribute("inst")?.Value);
     }
 
     [Fact]
@@ -446,7 +446,7 @@ public sealed class LiveIedSclExporterTests
             [
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12CTRL",
+                    Domain = "IED1LD0",
                     LogicalNode = "Q0CSWI1",
                     FunctionalConstraint = "ST",
                     DataObjectPath = "Pos.stVal",
@@ -454,7 +454,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12CTRL",
+                    Domain = "IED1LD0",
                     LogicalNode = "Q0CSWI1",
                     FunctionalConstraint = "CO",
                     DataObjectPath = "Pos.Oper.ctlVal",
@@ -462,7 +462,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12CTRL",
+                    Domain = "IED1LD0",
                     LogicalNode = "Q0CSWI1",
                     FunctionalConstraint = "CO",
                     DataObjectPath = "Pos.SBOw.Check",
@@ -470,7 +470,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12CTRL",
+                    Domain = "IED1LD0",
                     LogicalNode = "Q0CSWI1",
                     FunctionalConstraint = "CO",
                     DataObjectPath = "Pos.origin",
@@ -478,7 +478,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12MEAS",
+                    Domain = "IED1LD0",
                     LogicalNode = "MMXU1",
                     FunctionalConstraint = "MX",
                     DataObjectPath = "PhV.phsA.cVal.mag.f",
@@ -486,7 +486,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12MEAS",
+                    Domain = "IED1LD0",
                     LogicalNode = "MMXU1",
                     FunctionalConstraint = "CF",
                     DataObjectPath = "PhV.phsA.units.SIUnit",
@@ -494,7 +494,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12MEAS",
+                    Domain = "IED1LD0",
                     LogicalNode = "MMXU1",
                     FunctionalConstraint = "CF",
                     DataObjectPath = "PhV.phsA.units",
@@ -502,7 +502,7 @@ public sealed class LiveIedSclExporterTests
                 },
                 new MmsFcResolvedPoint
                 {
-                    Domain = "OCR7SR12MEAS",
+                    Domain = "IED1LD0",
                     LogicalNode = "MMXU1",
                     FunctionalConstraint = "CF",
                     DataObjectPath = "PhV.phsA.db",
@@ -513,7 +513,7 @@ public sealed class LiveIedSclExporterTests
 
         var model = LiveIedModelDiscoveryBuilder.Build(
             discovery,
-            new LiveIedModelDiscoveryBuildOptions { Host = "192.0.2.10", IedName = "OCR7SR12", AccessPointName = "AP1" });
+            new LiveIedModelDiscoveryBuildOptions { Host = "192.0.2.10", IedName = "IED1", AccessPointName = "AP1" });
 
         var xml = LiveIedSclExporter.BuildDocument(
             model,

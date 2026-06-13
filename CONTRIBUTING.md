@@ -17,8 +17,8 @@ boundary.
 Before opening a pull request:
 
 ```powershell
-dotnet build .\ARIEC61850.slnx -c Release
-dotnet test .\ARIEC61850.slnx -c Release --no-build
+dotnet build .\ARIEC61850.sln -c Release
+dotnet test .\ARIEC61850.sln -c Release --no-build
 ```
 
 Add or update tests for:

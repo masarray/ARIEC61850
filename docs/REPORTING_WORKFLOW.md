@@ -54,7 +54,7 @@ The final enable action should be explicit and should avoid changing an already-
 Generated report evidence should go to ignored local folders such as:
 
 ```text
-out/
+.artifacts/out/
 evidence/
 captures/
 ```

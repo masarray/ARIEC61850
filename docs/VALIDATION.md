@@ -5,9 +5,9 @@
 Run these before every public push:
 
 ```powershell
-dotnet restore .\ARIEC61850.slnx
-dotnet build .\ARIEC61850.slnx -c Release
-dotnet test .\ARIEC61850.slnx -c Release --no-build
+dotnet restore .\ARIEC61850.sln
+dotnet build .\ARIEC61850.sln -c Release
+dotnet test .\ARIEC61850.sln -c Release --no-build
 ```
 
 ## Manual lab checks

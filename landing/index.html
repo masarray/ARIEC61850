@@ -36,11 +36,11 @@
       </div>
       <div class="hero-panel" aria-label="Protocol workflow summary">
         <div class="terminal-bar"><span></span><span></span><span></span></div>
-        <pre><code>dotnet restore .\ARIEC61850.slnx
+        <pre><code>dotnet restore .\ARIEC61850.sln
 
-dotnet test .\ARIEC61850.slnx -c Release
+dotnet test .\ARIEC61850.sln -c Release
 
-mms-report-plan 192.168.1.10 --only-safe
+mms-report-plan 192.0.2.10 --only-safe
 
 publish-sv-live sample.scd --dry-run</code></pre>
       </div>
@@ -97,7 +97,7 @@ publish-sv-live sample.scd --dry-run</code></pre>
         <h2>Windows WPF single-file package.</h2>
         <p>The release workflow publishes the SV Publisher as a self-contained Windows x64 EXE and also creates a small ZIP with license and quick-start docs.</p>
       </div>
-      <pre class="code-block"><code>pwsh .\scripts\publish-windows-singlefile.ps1 -Version 0.1.0</code></pre>
+      <pre class="code-block"><code>.\scripts\publish-windows-singlefile.cmd -Version 0.1.0</code></pre>
     </section>
   </main>
 

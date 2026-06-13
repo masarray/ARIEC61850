@@ -70,22 +70,26 @@ jobs:
           "prerelease=$preRelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "draft=$draft" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
+      - name: Verify source tree is clean
+        shell: pwsh
+        run: ./scripts/verify-source-clean.ps1
+
       - name: Build single-file WPF package
         shell: pwsh
         run: ./scripts/publish-windows-singlefile.ps1 -Version '${{ steps.release.outputs.version }}'
 
       - name: Verify release package
         shell: pwsh
-        run: ./scripts/verify-release-package.ps1 -PackagePath "artifacts/release/ARIEC61850-SvPublisher-v${{ steps.release.outputs.version }}-win-x64-single-exe.zip" -Version '${{ steps.release.outputs.version }}'
+        run: ./scripts/verify-release-package.ps1 -PackagePath ".artifacts/release/ARIEC61850-SvPublisher-v${{ steps.release.outputs.version }}-win-x64-single-exe.zip" -Version '${{ steps.release.outputs.version }}'
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ARIEC61850-SvPublisher-v${{ steps.release.outputs.version }}-win-x64-single-exe
           path: |
-            artifacts/release/AR.Iec61850.SvPublisher-v${{ steps.release.outputs.version }}-win-x64.exe
-            artifacts/release/ARIEC61850-SvPublisher-v${{ steps.release.outputs.version }}-win-x64-single-exe.zip
-            artifacts/release/SHA256SUMS.txt
+            .artifacts/release/AR.Iec61850.SvPublisher-v${{ steps.release.outputs.version }}-win-x64.exe
+            .artifacts/release/ARIEC61850-SvPublisher-v${{ steps.release.outputs.version }}-win-x64-single-exe.zip
+            .artifacts/release/SHA256SUMS.txt
 
       - name: Create or update GitHub Release
         if: steps.release.outputs.publish_release == 'true'
@@ -95,13 +99,13 @@ jobs:
         run: |
           $tag = '${{ steps.release.outputs.tag }}'
           $version = '${{ steps.release.outputs.version }}'
-          $exe = "artifacts/release/AR.Iec61850.SvPublisher-v$version-win-x64.exe"
-          $zip = "artifacts/release/ARIEC61850-SvPublisher-v$version-win-x64-single-exe.zip"
-          $sha = "artifacts/release/SHA256SUMS.txt"
+          $exe = ".artifacts/release/AR.Iec61850.SvPublisher-v$version-win-x64.exe"
+          $zip = ".artifacts/release/ARIEC61850-SvPublisher-v$version-win-x64-single-exe.zip"
+          $sha = ".artifacts/release/SHA256SUMS.txt"
           $target = '${{ github.sha }}'
 
           $notes = "# ARIEC61850 SV Publisher v$version`n`nWindows x64 self-contained single-file WPF package for IEC 61850 Sampled Values lab publishing.`n`n## Assets`n`n- AR.Iec61850.SvPublisher-v$version-win-x64.exe`n- ARIEC61850-SvPublisher-v$version-win-x64-single-exe.zip`n- SHA256SUMS.txt`n`nNpcap is required on the target Windows machine for live raw Ethernet traffic. Use only on isolated lab networks."
-          $notesFile = "artifacts/release/RELEASE_NOTES_GENERATED.md"
+          $notesFile = ".artifacts/release/RELEASE_NOTES_GENERATED.md"
           $notes | Set-Content -Path $notesFile -Encoding UTF8
 
           $releaseFlags = @()

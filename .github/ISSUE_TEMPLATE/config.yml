@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Safety note
+    url: https://github.com/masarray/ARIEC61850/security/policy
+    about: Do not post sensitive exploit or production-network details in a public issue.

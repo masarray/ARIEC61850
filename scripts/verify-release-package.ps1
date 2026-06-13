@@ -39,16 +39,16 @@ try {
         }
     }
 
-    $NestedBuildOutput = Get-ChildItem -Path $TempRoot -Recurse -Directory | Where-Object {
-        $_.Name -in @("bin", "obj", ".vs", "out", "artifacts")
+    $ForbiddenDirectories = Get-ChildItem -Path $TempRoot -Recurse -Directory | Where-Object {
+        $_.Name -in @("bin", "obj", ".vs", "out", "artifacts", ".artifacts", "evidence", "captures", "pcaps")
     }
 
     if ($Missing.Count -gt 0) {
         throw ("Package is missing required files:`n" + ($Missing -join "`n"))
     }
 
-    if ($NestedBuildOutput.Count -gt 0) {
-        throw ("Package contains forbidden generated folders:`n" + (($NestedBuildOutput | ForEach-Object FullName) -join "`n"))
+    if ($ForbiddenDirectories.Count -gt 0) {
+        throw ("Package contains forbidden generated folders:`n" + (($ForbiddenDirectories | ForEach-Object FullName) -join "`n"))
     }
 
     Write-Host "Release package structure OK:" -ForegroundColor Green

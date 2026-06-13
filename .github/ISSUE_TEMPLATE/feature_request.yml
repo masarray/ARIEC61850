@@ -1,0 +1,19 @@
+name: Feature request
+description: Propose a protocol, tooling, or documentation improvement
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the engineering workflow, protocol behavior, or user need.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Include safety and validation considerations when active network traffic is involved.
+    validations:
+      required: true

@@ -53,7 +53,7 @@ public sealed class SclGoldenDiffAnalyzerTests
         var report = includeReport ? "<ReportControl name=\"brcbA01\" buffered=\"true\" indexed=\"false\" datSet=\"DataSet\" confRev=\"1\" />" : string.Empty;
         return $$"""
             <SCL version="2007" revision="B" xmlns="http://www.iec.ch/61850/2003/SCL">
-              <IED name="OCR7SR12">
+              <IED name="IED1">
                 <Services><DynAssociation /><GetDirectory /></Services>
                 <AccessPoint name="AP1">
                   <Server>

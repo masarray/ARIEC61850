@@ -3,7 +3,7 @@
      xmlns:sxy="http://www.iec.ch/61850/2003/SCLcoordinates"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.iec.ch/61850/2003/SCL SCL.xsd http://www.iec.ch/61850/2003/SCLcoordinates">
-    <Header id="project"/>
+    <Header id="AR_GENERIC_SV_SAMPLE" version="1" revision="A"/>
     <Communication>
         <SubNetwork name="SubNetName" desc="SubNetDesc" type="8-MMS">
             <ConnectedAP iedName="MU01_4I_4V_1" apName="LD0">
@@ -38,7 +38,7 @@
             </ConnectedAP>
         </SubNetwork>
     </Communication>
-    <IED name="MU01_4I_4V_1" desc="MUdesc" type="MUtype" manufacturer="MUmanufacturer" configVersion="G">
+    <IED name="MU01_4I_4V_1" desc="Generic merging unit" type="MergingUnit" manufacturer="AR" configVersion="G">
         <AccessPoint name="LD0">
             <Server>
                 <LDevice desc="Std conformance" inst="MU01">
@@ -61,7 +61,7 @@
                             <FCDA ldInst="MU01" prefix="" lnClass="TVTR" lnInst="4" doName="VolSv" daName="instMag.i" fc="MX" />
                             <FCDA ldInst="MU01" prefix="" lnClass="TVTR" lnInst="4" doName="VolSv" daName="q" fc="MX" />
                         </DataSet>
-                        <SampledValueControl multicast="true" name="MSVCB01" datSet="PhsMeas1" confRev="1" smvID="OMICRON_CMC_SV1" smpRate="4000" smpMod="SmpPerSec" nofASDU="1">
+                        <SampledValueControl multicast="true" name="MSVCB01" datSet="PhsMeas1" confRev="1" smvID="MU01_SV1" smpRate="4000" smpMod="SmpPerSec" nofASDU="1">
                             <SmvOpts refreshTime="false" sampleSynchronized="true" sampleRate="false" dataSet="false" security="false" synchSourceId="false"/>
                         </SampledValueControl>
                     </LN0>
@@ -77,7 +77,7 @@
             </Server>
         </AccessPoint>
     </IED>
-    <IED name="MU01_4I_4V_2" desc="MUdesc" type="MUtype" manufacturer="MUmanufacturer" configVersion="G">
+    <IED name="MU01_4I_4V_2" desc="Generic merging unit" type="MergingUnit" manufacturer="AR" configVersion="G">
         <AccessPoint name="LD0">
             <Server>
                 <LDevice desc="Std conformance" inst="MU01">
@@ -100,7 +100,7 @@
                             <FCDA ldInst="MU01" prefix="" lnClass="TVTR" lnInst="4" doName="VolSv" daName="instMag.i" fc="MX" />
                             <FCDA ldInst="MU01" prefix="" lnClass="TVTR" lnInst="4" doName="VolSv" daName="q" fc="MX" />
                         </DataSet>
-                        <SampledValueControl multicast="true" name="MSVCB01" datSet="PhsMeas1" confRev="1" smvID="OMICRON_CMC_SV2" smpRate="4000" smpMod="SmpPerSec" nofASDU="1">
+                        <SampledValueControl multicast="true" name="MSVCB01" datSet="PhsMeas1" confRev="1" smvID="MU01_SV2" smpRate="4000" smpMod="SmpPerSec" nofASDU="1">
                             <SmvOpts refreshTime="false" sampleSynchronized="true" sampleRate="false" dataSet="false" security="false" synchSourceId="false"/>
                         </SampledValueControl>
                     </LN0>
@@ -116,7 +116,7 @@
             </Server>
         </AccessPoint>
     </IED>
-    <IED name="MU01_4I_4V_3" desc="MUdesc" type="MUtype" manufacturer="MUmanufacturer" configVersion="G">
+    <IED name="MU01_4I_4V_3" desc="Generic merging unit" type="MergingUnit" manufacturer="AR" configVersion="G">
         <AccessPoint name="LD0">
             <Server>
                 <LDevice desc="Std conformance" inst="MU01">
@@ -139,7 +139,7 @@
                             <FCDA ldInst="MU01" prefix="" lnClass="TVTR" lnInst="4" doName="VolSv" daName="instMag.i" fc="MX" />
                             <FCDA ldInst="MU01" prefix="" lnClass="TVTR" lnInst="4" doName="VolSv" daName="q" fc="MX" />
                         </DataSet>
-                        <SampledValueControl multicast="true" name="MSVCB01" datSet="PhsMeas1" confRev="1" smvID="OMICRON_CMC_SV3" smpRate="4000" smpMod="SmpPerSec" nofASDU="1">
+                        <SampledValueControl multicast="true" name="MSVCB01" datSet="PhsMeas1" confRev="1" smvID="MU01_SV3" smpRate="4000" smpMod="SmpPerSec" nofASDU="1">
                             <SmvOpts refreshTime="false" sampleSynchronized="true" sampleRate="false" dataSet="false" security="false" synchSourceId="false"/>
                         </SampledValueControl>
                     </LN0>

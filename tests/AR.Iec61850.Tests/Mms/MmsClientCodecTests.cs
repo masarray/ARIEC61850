@@ -51,14 +51,14 @@ public class MmsClientCodecTests
     {
         var response = BuildReadResponse(
             invokeId: 23,
-            MmsDataValue.VisibleString("OCR7SR12PROT/LLN0$BR$brcbA01"));
+            MmsDataValue.VisibleString("IED1LD0/LLN0$BR$brcbA01"));
 
         var result = MmsReadResponseDecoder.DecodeSingleVariable(response, expectedInvokeId: 23);
 
         Assert.True(result.IsSuccess, result.Message);
         Assert.NotNull(result.Value);
         Assert.Equal(MmsDataKind.VisibleString, result.Value.Kind);
-        Assert.Equal("OCR7SR12PROT/LLN0$BR$brcbA01", result.Value.Value);
+        Assert.Equal("IED1LD0/LLN0$BR$brcbA01", result.Value.Value);
     }
 
 

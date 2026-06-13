@@ -1,0 +1,45 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.Cli", "apps\AR.Iec61850.Cli\AR.Iec61850.Cli.csproj", "{9B3BEF6F-2945-46EC-8B9F-4C118F27F86B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.SvPublisher", "apps\AR.Iec61850.SvPublisher\AR.Iec61850.SvPublisher.csproj", "{49560545-7AA9-44AC-8196-9D6D98241B04}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850", "src\AR.Iec61850\AR.Iec61850.csproj", "{05261652-315F-4B52-89D3-7F9E26DF018D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.Transports.Npcap", "src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj", "{2294F7F2-6229-4578-B300-0ECBD8EC11CE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.Tests", "tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj", "{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9B3BEF6F-2945-46EC-8B9F-4C118F27F86B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B3BEF6F-2945-46EC-8B9F-4C118F27F86B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B3BEF6F-2945-46EC-8B9F-4C118F27F86B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B3BEF6F-2945-46EC-8B9F-4C118F27F86B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{49560545-7AA9-44AC-8196-9D6D98241B04}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49560545-7AA9-44AC-8196-9D6D98241B04}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49560545-7AA9-44AC-8196-9D6D98241B04}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49560545-7AA9-44AC-8196-9D6D98241B04}.Release|Any CPU.Build.0 = Release|Any CPU
+		{05261652-315F-4B52-89D3-7F9E26DF018D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{05261652-315F-4B52-89D3-7F9E26DF018D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{05261652-315F-4B52-89D3-7F9E26DF018D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{05261652-315F-4B52-89D3-7F9E26DF018D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2294F7F2-6229-4578-B300-0ECBD8EC11CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2294F7F2-6229-4578-B300-0ECBD8EC11CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2294F7F2-6229-4578-B300-0ECBD8EC11CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2294F7F2-6229-4578-B300-0ECBD8EC11CE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

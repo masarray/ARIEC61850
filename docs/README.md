@@ -7,7 +7,7 @@ This folder contains the public engineering documentation for ARIEC61850.
 - [Quick Start](QUICK_START.md) - build, test, run CLI examples, and package the WPF publisher.
 - [Architecture](ARCHITECTURE.md) - repository layout and main runtime layers.
 - [MMS Reporting Workflow](REPORTING_WORKFLOW.md) - safe RCB/DataSet/reporting flow.
-- [GOOSE Engine Audit](GOOSE_ENGINE_AUDIT.md) - GOOSE capability, libiec61850 comparison, validation, and next roadmap.
+- [GOOSE Engine Audit](GOOSE_ENGINE_AUDIT.md) - GOOSE capability, low-level stack comparison, validation, and next roadmap.
 - [Release Packaging](RELEASE_PACKAGING.md) - Windows single-file WPF release workflow.
 - [Validation](VALIDATION.md) - current validation scope and local checks.
 - [Troubleshooting](TROUBLESHOOTING.md) - common build/runtime issues.

@@ -11,15 +11,29 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$Names = @(".artifacts", "artifacts", "out", "evidence", "captures", "pcaps", "reports", "logs", ".vs", "bin", "obj", "TestResults")
-$Extensions = @("*.dll", "*.exe", "*.pdb", "*.deps.json", "*.runtimeconfig.json", "*.pcap", "*.pcapng", "*.etl", "*.binlog", "*.log")
+$Names = @(".artifacts", "artifacts", "out", "evidence", "captures", "pcaps", "reports", "logs", ".vs", ".idea", ".dotnet_home", "bin", "obj", "TestResults", "coverage", "publish", "release")
+$Extensions = @("*.dll", "*.exe", "*.pdb", "*.deps.json", "*.runtimeconfig.json", "*.nupkg", "*.snupkg", "*.pcap", "*.pcapng", "*.etl", "*.binlog", "*.log", "*.tmp", "*.cache")
+
+function Test-InRepoWorktree {
+    param([Parameter(Mandatory=$true)][string]$Path)
+
+    $FullPath = (Resolve-Path -LiteralPath $Path).Path
+    if (-not $FullPath.StartsWith($RepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    $relative = $FullPath.Substring($RepoRoot.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    return -not ($relative -eq ".git" -or $relative.StartsWith(".git\", [System.StringComparison]::OrdinalIgnoreCase) -or $relative.StartsWith(".git/", [System.StringComparison]::OrdinalIgnoreCase))
+}
 
 $Targets = @()
 foreach ($Name in $Names) {
-    $Targets += Get-ChildItem -Path $RepoRoot -Recurse -Force -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $Name }
+    $Targets += Get-ChildItem -Path $RepoRoot -Recurse -Force -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq $Name -and (Test-InRepoWorktree $_.FullName) }
 }
 foreach ($Pattern in $Extensions) {
-    $Targets += Get-ChildItem -Path $RepoRoot -Recurse -Force -File -Filter $Pattern -ErrorAction SilentlyContinue
+    $Targets += Get-ChildItem -Path $RepoRoot -Recurse -Force -File -Filter $Pattern -ErrorAction SilentlyContinue |
+        Where-Object { Test-InRepoWorktree $_.FullName }
 }
 
 $Targets = $Targets | Sort-Object FullName -Unique
@@ -31,7 +45,7 @@ if ($Preview) {
 
 foreach ($Target in $Targets) {
     if ($PSCmdlet.ShouldProcess($Target.FullName, "Remove")) {
-        Remove-Item $Target.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $Target.FullName -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 

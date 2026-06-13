@@ -36,6 +36,7 @@ internal static class Cli
                 "inspect-pcap" => InspectPcap(args[1..]),
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
                 "list-adapters" => ListAdapters(),
+                "goose-subscribe-live" => await GooseSubscribeLiveAsync(args[1..]).ConfigureAwait(false),
                 "mms-discover" => await MmsDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "mms-model-discover" => await MmsModelDiscoverAsync(args[1..]).ConfigureAwait(false),
@@ -253,6 +254,113 @@ internal static class Cli
         return 0;
     }
 
+    private static async Task<int> GooseSubscribeLiveAsync(string[] args)
+    {
+        var options = CliOptions.Parse(args);
+        var adapterSelector = options.GetRequired("adapter");
+        var adapter = NpcapAdapterCatalog.ResolveAdapterInfo(adapterSelector);
+        var monitor = CreateProcessBusMonitor(options);
+        var filter = options.Get("filter", "ether proto 0x88b8");
+        var continuous = options.GetBool("continuous", fallback: false);
+        var durationSeconds = options.GetDouble("duration-sec", continuous ? 0 : 60);
+        if (durationSeconds < 0)
+            throw new ArgumentException("--duration-sec must be greater than or equal to 0.");
+
+        var frameLimit = options.GetInt("frames", 0);
+        if (frameLimit < 0)
+            throw new ArgumentException("--frames must be greater than or equal to 0.");
+
+        var statusIntervalMs = options.GetInt("status-ms", 1000);
+        if (statusIntervalMs < 0)
+            throw new ArgumentException("--status-ms must be greater than or equal to 0.");
+
+        var readTimeoutMs = options.GetInt("read-timeout-ms", 1000);
+        if (readTimeoutMs <= 0)
+            throw new ArgumentException("--read-timeout-ms must be greater than 0.");
+
+        var bufferCapacity = options.GetInt("buffer-capacity", 4096);
+        if (bufferCapacity <= 0)
+            throw new ArgumentException("--buffer-capacity must be greater than 0.");
+
+        Console.WriteLine("Mode: live GOOSE subscriber (read-only raw Ethernet capture).");
+        Console.WriteLine($"Adapter: [{adapter.Index}] MAC={adapter.MacAddress?.ToString() ?? "-"} {TextOrDash(adapter.Description)}");
+        Console.WriteLine($"Filter: {filter}");
+        Console.WriteLine($"Duration: {(durationSeconds <= 0 ? "continuous" : $"{durationSeconds.ToString("0.###", CultureInfo.InvariantCulture)}s")} frameLimit={(frameLimit <= 0 ? "none" : frameLimit.ToString(CultureInfo.InvariantCulture))}");
+        if (options.TryGet("scl", out var sclPath) && !string.IsNullOrWhiteSpace(sclPath))
+            Console.WriteLine($"SCL binding: {Path.GetFullPath(sclPath)}");
+        else
+            Console.WriteLine("SCL binding: none; GOOSE values will be semantically anonymous.");
+
+        using var source = new NpcapProcessBusFrameSource(adapterSelector);
+        using var stop = new CancellationTokenSource();
+        if (durationSeconds > 0)
+            stop.CancelAfter(TimeSpan.FromSeconds(durationSeconds));
+
+        ConsoleCancelEventHandler? cancelHandler = null;
+        cancelHandler = (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            stop.Cancel();
+            Console.WriteLine();
+            Console.WriteLine("Stop requested; finishing current GOOSE capture loop.");
+        };
+        Console.CancelKeyPress += cancelHandler;
+
+        long capturedFrames = 0;
+        long gooseFrames = 0;
+        long otherFrames = 0;
+        var startedTicks = Stopwatch.GetTimestamp();
+        var nextStatusTicks = startedTicks + StatusIntervalTicks(statusIntervalMs);
+
+        try
+        {
+            var captureOptions = new ProcessBusCaptureOptions
+            {
+                Filter = filter,
+                ReadTimeoutMilliseconds = readTimeoutMs,
+                BufferCapacity = bufferCapacity
+            };
+
+            await foreach (var captured in source.CaptureAsync(captureOptions, stop.Token).ConfigureAwait(false))
+            {
+                capturedFrames++;
+                var streamEvent = monitor.Observe(captured.Timestamp, captured.Frame);
+                if (streamEvent.Kind != ProcessBusEventKind.Goose)
+                {
+                    otherFrames++;
+                    continue;
+                }
+
+                gooseFrames++;
+                Console.WriteLine(FormatStreamEvent(streamEvent));
+
+                if (frameLimit > 0 && gooseFrames >= frameLimit)
+                    break;
+
+                var nowTicks = Stopwatch.GetTimestamp();
+                if (statusIntervalMs > 0 && nowTicks >= nextStatusTicks)
+                {
+                    Console.WriteLine($"  status captured={capturedFrames} goose={gooseFrames} streams={monitor.Summaries.Count(s => s.Kind == ProcessBusEventKind.Goose)} elapsed={Stopwatch.GetElapsedTime(startedTicks).TotalSeconds:0.###}s");
+                    nextStatusTicks = nowTicks + StatusIntervalTicks(statusIntervalMs);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            Console.CancelKeyPress -= cancelHandler;
+        }
+
+        var elapsed = Stopwatch.GetElapsedTime(startedTicks);
+        Console.WriteLine($"GOOSE live subscriber complete: captured={capturedFrames} goose={gooseFrames} other={otherFrames} elapsed={elapsed.TotalSeconds:0.###}s streams={monitor.Summaries.Count}");
+        foreach (var summary in monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.Goose).OrderBy(s => s.AppId))
+            Console.WriteLine(FormatMonitorSummary(summary));
+
+        return 0;
+    }
+
     private static ProcessBusStreamMonitor CreateProcessBusMonitor(CliOptions options)
     {
         if (!options.TryGet("scl", out var sclPath) || string.IsNullOrWhiteSpace(sclPath))
@@ -275,7 +383,7 @@ internal static class Cli
         }
 
         Console.WriteLine();
-        Console.WriteLine("Use the adapter index with publish-sv-live or publish-goose-live --adapter <index>.");
+        Console.WriteLine("Use the adapter index with publish-sv-live, publish-goose-live, or goose-subscribe-live --adapter <index>.");
         return 0;
     }
 
@@ -3721,6 +3829,9 @@ internal static class Cli
             : "frames=continuous";
     }
 
+    private static long StatusIntervalTicks(int statusIntervalMilliseconds)
+        => (long)Math.Round(Math.Max(1, statusIntervalMilliseconds) * Stopwatch.Frequency / 1000.0);
+
     private static string FormatLivePublishProgress(
         long sent,
         long? frameLimit,
@@ -4693,6 +4804,7 @@ internal static class Cli
         Console.WriteLine("  inspect-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50]");
         Console.WriteLine("  stream-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50] [--delay-ms N] [--limit N]");
         Console.WriteLine("  list-adapters");
+        Console.WriteLine("  goose-subscribe-live --adapter <index|name> [--scl file.scd|file.cid|file.icd|file.iid] [--duration-sec 60] [--frames N] [--filter \"ether proto 0x88b8\"] [--continuous]");
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/ied-model-discovery]");
@@ -4719,6 +4831,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd --delay-ms 50 --limit 12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl samples/scl/minimal-station.scd --duration-sec 30");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.0.2.10 --port 102 --max-report-probes 16");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.0.2.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.0.2.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output .artifacts/out/ied-model-discovery");

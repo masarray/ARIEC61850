@@ -28,6 +28,7 @@ Recommended manual checks before a release:
 - run SV publish dry-run mode;
 - run GOOSE publish dry-run mode;
 - list Npcap adapters on a Windows lab PC;
+- run read-only live GOOSE subscribe on a mirrored or isolated lab adapter;
 - publish bounded SV traffic on an isolated lab adapter;
 - publish bounded GOOSE traffic on an isolated lab adapter;
 - run MMS discovery against a simulator or lab IED;

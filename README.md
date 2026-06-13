@@ -35,7 +35,7 @@ Implemented areas include:
 - TCP/TPKT/COTP/ACSE/MMS association foundation.
 - MMS model discovery, FC-aware path resolution, smart read, dataset directory inspection.
 - RCB discovery, report planning, guarded report enable, GI trigger, receive loop, diagnostics, and evidence export.
-- GOOSE frame builder/parser, SCL-backed publisher profiles, publisher session, PCAP sniffer diagnostics, `stNum`/`sqNum`/TAL supervision, and changed-value summaries.
+- GOOSE frame builder/parser, SCL-backed publisher profiles, publisher session, PCAP sniffer diagnostics, live subscriber command, `stNum`/`sqNum`/TAL supervision, and changed-value summaries.
 - Sampled Values frame builder/parser, payload generation, payload decode, and WPF publisher workspace.
 - PCAP writer/reader/inspector and stream playback helpers.
 - Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
@@ -46,7 +46,7 @@ Experimental or future areas:
 - full buffered report recovery and replay workflows;
 - MMS file/log/setting-group/control model services;
 - MMS server / IED simulator;
-- live raw GOOSE/SV subscriber CLI loops on top of the Npcap receive path;
+- live raw SV subscriber CLI loop on top of the Npcap receive path;
 - IEC 62351 security profile;
 - formal third-party conformance testing.
 
@@ -113,6 +113,14 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\
 ```
 
 Live GOOSE publishing requires `--yes` and must only be used on an isolated lab adapter.
+
+Run a read-only live GOOSE subscriber on a lab adapter:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl .\samples\scl\minimal-station.scd --duration-sec 30
+```
+
+Without `--scl`, the subscriber still decodes traffic but reports values as semantically anonymous.
 
 ## Windows single-file WPF package
 

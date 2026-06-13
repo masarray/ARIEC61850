@@ -4,7 +4,7 @@
 
 - .NET 8 SDK.
 - Windows for the WPF app and Npcap-backed live Ethernet transport.
-- Npcap when using live raw Ethernet process-bus publishing.
+- Npcap when using live raw Ethernet process-bus publishing or capture.
 - An isolated lab adapter, TAP, or test switch for active GOOSE/SV traffic.
 
 ## 2. Build and test
@@ -35,6 +35,12 @@ List available adapters:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- list-adapters
+```
+
+Run a read-only live GOOSE subscriber:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl .\samples\scl\minimal-station.scd --duration-sec 30
 ```
 
 Run an SV publish dry run:

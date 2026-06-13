@@ -6,18 +6,13 @@ Status date: 2026-06-14
 
 GOOSE support must become more than a frame encoder/decoder. For a commissioning tool, the useful behavior is SCL-aware discovery, stream supervision, event evidence, and safe publishing with protocol state that can be inspected.
 
-This audit is based on public product/API material and local validation:
-
-- libiec61850 GOOSE subscriber API: https://support.mz-automation.de/doc/libiec61850/c/latest/group__goose__api__group.html
-- DigSubAnalyzer: https://github.com/masarray/DigSubAnalyzer
-- OMICRON IEDScout: https://www.omicronenergy.com/en/products/iedscout/
-- OMICRON StationScout: https://www.omicronenergy.com/en/products/stationscout/
+This audit is based on public IEC 61850 process-bus behavior, public tool capability descriptions, and local validation.
 
 No third-party IEC 61850 stack is vendored as a runtime dependency.
 
 ## Capability target
 
-The target is a smart GOOSE stack that can support products in the same problem space as IEDScout and StationScout:
+The target is a smart GOOSE stack that can support professional commissioning, simulation, and process-bus troubleshooting tools:
 
 - import SCL and build publish/subscribe profiles;
 - discover streams from passive traffic;
@@ -49,20 +44,28 @@ CLI:
 - `inspect-pcap` GOOSE summary now shows TAL, state-change count, retransmission count, jumps, duplicates, regressions, timeouts, value-change count, and changed-value summary.
 - `stream-pcap` now shows per-frame GOOSE sequence status, TAL, SCL binding, value count, changed count, changed summary, and diagnostics.
 
+## N5.20 source patch
+
+- Added `IProcessBusFrameSource`, `ProcessBusCapturedFrame`, and `ProcessBusCaptureOptions` so receive-side process-bus traffic is a typed core contract instead of app-specific SharpPcap logic.
+- Added `NpcapProcessBusFrameSource` with bounded-channel delivery, adapter filter support, cancellation cleanup, and best-effort adapter shutdown.
+- Added `goose-subscribe-live --adapter <index|name>` CLI. It captures GOOSE traffic with the default BPF filter `ether proto 0x88b8`, feeds frames into `ProcessBusStreamMonitor`, and prints the same SCL-aware event and summary diagnostics used by `stream-pcap`.
+- Added deterministic in-memory frame-source tests for subscriber consumers.
+
 Tests:
 
 - SCL-bound GOOSE retransmission.
 - Valid GOOSE state change with changed values.
 - Invalid value change without state-number increment.
 - TAL expiry.
+- In-memory process-bus frame source ordering and cancellation.
 
-## Comparison with libiec61850
+## Comparison with common low-level stacks
 
-libiec61850 provides a strong low-level C API for GOOSE subscription. Its public API exposes filtering by destination MAC and APPID, validity and parse-error state, `stNum`, `sqNum`, `test`, `confRev`, `ndsCom`, TimeAllowedToLive, timestamp, VLAN, and DataSet values. It also documents the expected `stNum` and `sqNum` relationship: `sqNum` increases for consecutive messages without state change and resets when `stNum` increases.
+Common low-level IEC 61850 stacks provide strong raw GOOSE receiver/subscriber APIs. A good baseline exposes filtering by destination MAC and APPID, validity and parse-error state, `stNum`, `sqNum`, `test`, `confRev`, `ndsCom`, TimeAllowedToLive, timestamp, VLAN, and DataSet values. The expected `stNum` and `sqNum` relationship is also fundamental: `sqNum` increases for consecutive messages without state change and resets when `stNum` increases.
 
-ARIEC61850 is still behind libiec61850 in these areas:
+ARIEC61850 is still behind mature low-level stacks in these areas:
 
-- no live GOOSE receiver loop exposed as a ready CLI command yet;
+- live GOOSE receiver loop is source-implemented but still needs compile validation in an unrestricted restore environment and live adapter soak evidence;
 - no R-GOOSE receiver/publisher;
 - no hardened multi-threaded live subscriber lifecycle;
 - no formal conformance evidence;
@@ -73,12 +76,12 @@ ARIEC61850 is moving beyond a raw subscriber API in these areas:
 - SCL-bound semantic diagnostics are part of the monitor result;
 - value-change summaries are compared against the GOOSE state machine;
 - ambiguous or anonymous traffic remains visible instead of being silently dropped;
-- the same monitor model supports PCAP replay now and can be reused by the future live receive loop;
+- the same monitor model supports PCAP replay and live adapter receive;
 - publisher dry-run and active publish share the same state-machine path.
 
-## DigSubAnalyzer learning
+## Passive analyzer learning
 
-DigSubAnalyzer is receive-only and raw-passive. Its useful product lessons for ARIEC61850 are:
+Receive-only raw-passive analyzers provide useful product lessons for ARIEC61850:
 
 - show adapter, APPID, stream ID, source MAC, sequence continuity, and timing confidence as evidence;
 - avoid claiming certification-grade timing from ordinary software timestamps;
@@ -87,9 +90,9 @@ DigSubAnalyzer is receive-only and raw-passive. Its useful product lessons for A
 
 ARIEC61850 now adopts the same evidence-first posture for GOOSE, while remaining a full stack that can also publish in isolated labs.
 
-## IEDScout and StationScout learning
+## Engineering tool learning
 
-Public OMICRON material emphasizes workflows that visualize SCL, trace signals, compare configuration with live traffic, inspect activity, and simulate IEDs/GOOSE for testing. The stack direction should therefore prioritize:
+Professional engineering tools emphasize workflows that visualize SCL, trace signals, compare configuration with live traffic, inspect activity, and simulate IEDs/GOOSE for testing. The stack direction should therefore prioritize:
 
 - SCL and live traffic comparison;
 - clear PASS/WARNING/FAIL/UNKNOWN diagnostics per stream;
@@ -125,7 +128,7 @@ Observed PCAP evidence:
 
 Next safe patches:
 
-1. Add `goose-subscribe-live` CLI using Npcap receive and `ProcessBusStreamMonitor`.
+1. Validate `goose-subscribe-live` compile and live adapter capture in an unrestricted restore environment.
 2. Add bounded capture evidence export: JSON summary, event log, and optional CSV values.
 3. Add live MMS GoCB discovery/readback for `GoEna`, `GoID`, `DatSet`, `ConfRev`, `NdsCom`, `MinTime`, `MaxTime`, and `DstAddress`.
 4. Add quality bit decoding for common GOOSE quality values.
@@ -136,6 +139,8 @@ Next safe patches:
 
 ## Claim boundary
 
-Current claim: SCL-backed GOOSE frame generation, PCAP decode, passive stream monitoring, state/retransmission diagnostics, TAL supervision, and bounded lab publishing are implemented and unit tested.
+Current validated claim: SCL-backed GOOSE frame generation, PCAP decode, passive stream monitoring, state/retransmission diagnostics, TAL supervision, and bounded lab publishing are implemented and unit tested.
 
-Do not claim yet: formal IEC 61850 conformance, production-grade timing proof, live adapter subscriber CLI readiness, R-GOOSE support, or broad vendor interoperability.
+Source-level but not yet validated in this local sandbox: live adapter GOOSE subscriber CLI and Npcap receive source.
+
+Do not claim yet: formal IEC 61850 conformance, production-grade timing proof, live adapter subscriber soak readiness, R-GOOSE support, or broad vendor interoperability.

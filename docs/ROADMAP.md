@@ -12,7 +12,8 @@
 
 Remaining before claiming live subscriber usability:
 
-- Add adapter receive loops for GOOSE/SV using the Npcap transport.
+- Validate the source-level `goose-subscribe-live` Npcap receive loop with unrestricted restore/build and live adapter evidence.
+- Add SV subscriber loop over the same receive abstraction.
 - Add live GoCB MMS discovery/readback for `GoEna`, `GoID`, `DatSet`, `ConfRev`, `NdsCom`, `MinTime`, `MaxTime`, and `DstAddress`.
 - Add long-running capture evidence from real relays and simulator interop.
 
@@ -23,7 +24,7 @@ Remaining before claiming live subscriber usability:
 - Add a reporting runtime workspace with report timeline, sequence diagnostics, GI indicator, and evidence export.
 - Expand multi-vendor reporting soak tests.
 - Improve WPF SV Publisher release packaging and UX polish.
-- Add live GOOSE/SV subscriber CLI loops over Npcap receive.
+- Add evidence export for live GOOSE subscribe and then extend the same pattern to SV subscribe.
 
 ## Mid term
 

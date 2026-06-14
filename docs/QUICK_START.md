@@ -211,3 +211,11 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-server-readonly-profile --ste
 
 This command needs no IED and no network adapter. It builds a virtual IED model from the simulator profile and exercises read-only directory, read, DataSet read, and write-guard probes.
 
+## MMS listener skeleton self-probe
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .\.artifacts\out\mms-listener-skeleton.md --json .\.artifacts\out\mms-listener-skeleton.json
+```
+
+This command starts a loopback TCP listener, sends deterministic read-only probe requests, verifies directory/read/DataSet responses, confirms write rejection, and exits. It is a listener/session lifecycle harness, not a full MMS PDU server yet.
+

@@ -4,6 +4,20 @@ ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The pr
 
 ## Current source milestone
 
+### N5.30 - MMS listener skeleton profile foundation
+
+- Added `MmsReadOnlyListenerSkeleton`, a loopback TCP listener harness that exercises the server-side request lifecycle before the live MMS PDU decoder is attached.
+- Added `MmsReadOnlyListenerSkeletonProfile`, a typed evidence contract for bound endpoint, accepted connection count, request count, response status, write-guard verification, diagnostics, and probe steps.
+- Added `mms-listener-skeleton-profile`, a CLI command that starts an ephemeral loopback listener, runs deterministic read-only probes, and exports Markdown/JSON evidence.
+- Added deterministic unit tests for listener self-probe, invalid target handling, write guard verification, and Markdown evidence.
+- Kept the scope explicit: this is a transport/session skeleton and JSON-line probe harness, not a full MMS PDU listener yet.
+
+Validation command for the new milestone:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .\.artifacts\out\mms-listener-skeleton.md --json .\.artifacts\out\mms-listener-skeleton.json
+```
+
 
 ### N5.28 - Sampled Values diagnostics profile foundation
 
@@ -112,13 +126,14 @@ A public release is allowed only when these gates are true:
 - Add stream registry, sample counter continuity, sample-rate detection, ASDU/layout checks, RMS, phasor, jitter/dropout, and PTP-correlation hooks.
 - Keep the current SV publisher/injector as a test harness for the analyzer.
 
-### N5.30 - Read-only MMS server alpha
+### N5.31 - TPKT/COTP/ACSE/MMS read-only listener alpha
 
-- Add TCP/TPKT/COTP/ACSE/MMS accept path.
-- Serve domains, variables, access attributes, and named variable lists from a simulator model.
+- Attach TPKT framing to the listener skeleton.
+- Add COTP connection confirm and ACSE associate response.
+- Add MMS initiate response and confirmed read-directory/read request dispatch.
 - Keep write/control disabled until read-only discovery and report readback are stable.
 
-### N5.31 - Simulator bridge
+### N5.32 - Simulator bridge
 
 - Map simulator profiles into MMS server model, GOOSE publisher profiles, and SV publisher profiles.
 - Add scenario scheduler for value changes, quality changes, timestamp faults, report triggers, GOOSE transitions, and SV disturbances.

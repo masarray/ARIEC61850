@@ -233,5 +233,11 @@ Generate the first server-side virtual IED evidence profile:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-server-readonly-profile --steps 5 --output .\.artifacts\out\mms-server-readonly.md --json .\.artifacts\out\mms-server-readonly.json
 ```
 
+MMS listener skeleton self-probe:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .\.artifacts\out\mms-listener-skeleton.md --json .\.artifacts\out\mms-listener-skeleton.json
+```
+
 This is an offline alpha server model. It validates logical-device directory, logical-node directory, point reads, DataSet reads, RCB exposure, and read-only write rejection before a live TCP/MMS listener is added.
 

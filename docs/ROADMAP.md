@@ -112,13 +112,14 @@ A public release is allowed only when these gates are true:
 - Add stream registry, sample counter continuity, sample-rate detection, ASDU/layout checks, RMS, phasor, jitter/dropout, and PTP-correlation hooks.
 - Keep the current SV publisher/injector as a test harness for the analyzer.
 
-### N5.30 - Read-only MMS server alpha
+### N5.31 - TPKT/COTP/ACSE/MMS read-only listener alpha
 
-- Add TCP/TPKT/COTP/ACSE/MMS accept path.
-- Serve domains, variables, access attributes, and named variable lists from a simulator model.
+- Attach TPKT framing to the listener skeleton.
+- Add COTP connection confirm and ACSE associate response.
+- Add MMS initiate response and confirmed read-directory/read request dispatch.
 - Keep write/control disabled until read-only discovery and report readback are stable.
 
-### N5.31 - Simulator bridge
+### N5.32 - Simulator bridge
 
 - Map simulator profiles into MMS server model, GOOSE publisher profiles, and SV publisher profiles.
 - Add scenario scheduler for value changes, quality changes, timestamp faults, report triggers, GOOSE transitions, and SV disturbances.
@@ -138,6 +139,14 @@ ARIEC61850 engine repo
 ```
 
 Product repos can later consume the engine as project references or NuGet packages without pulling protocol logic into UI code.
+
+## N5.30 — MMS Listener Skeleton Profile
+
+The engine now has a loopback TCP listener skeleton for the read-only virtual IED service handler. It can be tested without hardware using `mms-listener-skeleton-profile`, and it validates listener bind, accepted connection, request dispatch, read-only service responses, write rejection, and Markdown/JSON evidence.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .\.artifacts\out\mms-listener-skeleton.md --json .\.artifacts\out\mms-listener-skeleton.json
+```
 
 ## N5.29 — MMS Read-Only Server Alpha
 

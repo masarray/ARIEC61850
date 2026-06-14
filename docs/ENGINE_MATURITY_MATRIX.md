@@ -13,7 +13,7 @@ This matrix is the public engineering checklist for growing ARIEC61850 from prot
 | GOOSE | Encode/decode/publish/subscribe basics | Expected-vs-observed diagnostics | SCL-bound forensic engine |
 | Sampled Values | Encode/decode/publish/injector basics | Subscriber/analyzer engine | RMS/phasor/timing/continuity diagnostics |
 | SCL | Parser/exporter/diff basics | Deep type-template and communication resolver | Station dataflow graph and mapping validator |
-| Simulation | Offline deterministic profile engine | Read-only MMS server adapter | Virtual IED with reports, GOOSE, SV scenarios |
+| Simulation | Offline profile + read-only server model + loopback TCP listener skeleton | TPKT/COTP/ACSE/MMS read-only listener alpha | Virtual IED with reports, GOOSE, SV scenarios |
 | File/log/setting | Not yet mature | Read-only client browser first | Typed ACSI services with guarded writes |
 | Security diagnostics | Not a base feature yet | Rule-based semantic checks | Explainable cyber/semantic findings without black-box claims |
 
@@ -95,4 +95,20 @@ Maturity impact: process-bus SV moves from visibility to actionable engineering 
 ## Server-side milestone
 
 - MMS read-only server alpha: implemented as offline virtual IED profile + high-level service handler.
-- Next maturity gate: live TCP/TPKT/COTP/ACSE/MMS listener skeleton with read-only service mapping.
+- MMS listener skeleton profile: implemented as loopback TCP listener lifecycle + JSON-line probe harness + write guard evidence.
+- Next maturity gate: attach TPKT/COTP/ACSE/MMS decoding/encoding to the read-only listener while preserving the same service contract.
+
+
+## N5.30 — MMS Listener Skeleton Profile
+
+This milestone adds the first live transport boundary for the simulator-backed server model. The listener binds to a loopback TCP endpoint, accepts a client session, dispatches deterministic read-only service requests, verifies write rejection, and exports Markdown/JSON evidence.
+
+```text
+virtual IED profile
+→ read-only service handler
+→ TCP listener skeleton
+→ loopback probe
+→ listener evidence
+```
+
+Scope boundary: the harness intentionally uses a JSON-line probe protocol. The next milestone should replace the probe decoder with TPKT/COTP/ACSE/MMS request handling while keeping the same read-only service semantics.

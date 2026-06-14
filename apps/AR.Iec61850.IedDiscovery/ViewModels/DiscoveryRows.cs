@@ -59,33 +59,6 @@ public sealed class IedExplorerNode : ObservableObject
     public ObservableCollection<IedExplorerNode> Children { get; } = new();
 }
 
-public sealed class DataAttributeDetailRow : ObservableObject
-{
-    private string _value = "-";
-    private string _quality = "-";
-    private string _timestamp = "-";
-    private string _status = "not read";
-
-    public DataAttributeDetailRow(string name, string fc, string type, string reference, string source)
-    {
-        Name = name;
-        Fc = fc;
-        Type = type;
-        Reference = reference;
-        Source = source;
-    }
-
-    public string Name { get; }
-    public string Fc { get; }
-    public string Type { get; }
-    public string Reference { get; }
-    public string Source { get; }
-    public string Value { get => _value; set => SetProperty(ref _value, value); }
-    public string Quality { get => _quality; set => SetProperty(ref _quality, value); }
-    public string Timestamp { get => _timestamp; set => SetProperty(ref _timestamp, value); }
-    public string Status { get => _status; set => SetProperty(ref _status, value); }
-}
-
 public sealed class MonitorSignalRow : ObservableObject
 {
     private string _value = "-";

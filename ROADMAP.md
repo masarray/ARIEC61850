@@ -241,3 +241,25 @@ The first usable WPF harness exposes the engine profiles without moving protocol
 ## N5.40 IED Discovery Workbench Shell
 
 The first usable IED discovery shell is now available in `apps/AR.Iec61850.IedDiscovery`. It adds a compact command bar, asynchronous Discover IED dialog flow, DO-level explorer, DA detail grid, pinned Activity Monitor, status-history ring buffer, and generated SCL export from the live model. The app remains a thin WPF harness over the engine.
+
+## N5.41 — IED Discovery Data Browser + RCB Dialog
+
+The IED Discovery harness now adds an expandable data-object detail browser and a real Enable RCB dialog. Manual reads no longer leave structured MMS values as single raw `Struct(...)` strings; the UI can expand structures into child rows such as `stVal`, `q`, `t`, `Oper`, `SBOw`, and decoded quality flags. The report dialog exposes DataSet selection, trigger options, optional fields, integrity period, GI choice, and a guarded monitor workflow while keeping protocol logic inside the engine.
+
+
+### N5.41.2 — IEC 61850 Value Binding Engine
+
+Adds schema-driven DA value binding for the IED Discovery Workbench. Structured MMS values are now bound through IEC 61850 metadata, CDC templates, quality/timestamp decoders, and control-operation templates instead of positional index guesses.
+
+## N5.41.3 display refinement
+
+- IED Discovery detail view now follows a semantic child-row display policy: Quality and timestamp are rendered as IEC 61850 child rows, not noisy flat columns; common SAS logical nodes are prioritized in the explorer.
+
+
+
+## N5.41.4 Smart Value Reading & Identity Resolver
+
+- Engine-owned IED identity resolver and LD alias display.
+- Smart LN/DO read planning and collapsed DO summary values.
+- Recursive semantic decoding for nested q/t, vector, analogue and control structures.
+- WPF remains a presenter; IEC 61850 value semantics stay in the stack engine.

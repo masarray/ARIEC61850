@@ -24,6 +24,7 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     private string _selectedHeader = "No object selected";
     private string _selectedSubHeader = "Select an LD/LN/DO/DataSet/RCB from the left explorer.";
     private IedExplorerNode? _selectedNode;
+    private DataAttributeDetailRow? _selectedDetailRow;
     private LiveIedModelDiscoveryDocument? _lastDocument;
     private MmsReportSessionProfile? _lastReportProfile;
 
@@ -45,21 +46,23 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     public string SelectedHeader { get => _selectedHeader; set => SetProperty(ref _selectedHeader, value); }
     public string SelectedSubHeader { get => _selectedSubHeader; set => SetProperty(ref _selectedSubHeader, value); }
     public IedExplorerNode? SelectedNode { get => _selectedNode; set { if (SetProperty(ref _selectedNode, value)) RaiseCommandState(); } }
+    public DataAttributeDetailRow? SelectedDetailRow { get => _selectedDetailRow; set { if (SetProperty(ref _selectedDetailRow, value)) RaiseCommandState(); } }
     public LiveIedModelDiscoveryDocument? LastDocument { get => _lastDocument; set { if (SetProperty(ref _lastDocument, value)) RaiseCommandState(); } }
     public MmsReportSessionProfile? LastReportProfile { get => _lastReportProfile; set => SetProperty(ref _lastReportProfile, value); }
 
     public bool HasModel => LastDocument != null || ExplorerNodes.Count > 0;
     public bool CanClose => IsBusy || IsConnected;
-    public bool CanRead => !IsBusy && IsConnected && SelectedNode != null && SelectedNode.Kind is (ExplorerNodeKind.DataObject or ExplorerNodeKind.DataSet or ExplorerNodeKind.ReportControl or ExplorerNodeKind.LogicalNode);
-    public bool CanReadAll => !IsBusy && IsConnected && LastDocument != null;
+    public bool CanRead => !IsBusy && IsConnected && IsOnline && SelectedNode != null && SelectedNode.Kind is (ExplorerNodeKind.DataObject or ExplorerNodeKind.DataSet or ExplorerNodeKind.ReportControl or ExplorerNodeKind.LogicalNode);
+    public bool CanReadAll => !IsBusy && IsConnected && IsOnline && LastDocument != null;
     public bool CanExport => LastDocument != null;
     public bool CanPin => !IsBusy && SelectedNode != null && SelectedNode.Kind is (ExplorerNodeKind.DataObject or ExplorerNodeKind.DataSet or ExplorerNodeKind.ReportControl or ExplorerNodeKind.LogicalNode);
-    public bool CanEnableReport => !IsBusy && IsConnected && SelectedNode?.Kind == ExplorerNodeKind.ReportControl;
-    public bool CanControl => !IsBusy && IsConnected && SelectedNode?.Kind == ExplorerNodeKind.DataObject && IsControlCandidate(SelectedNode);
+    public bool CanEnableReport => !IsBusy && IsConnected && IsOnline && SelectedNode?.Kind == ExplorerNodeKind.ReportControl;
+    public bool CanControl => !IsBusy && IsConnected && IsOnline && SelectedNode?.Kind == ExplorerNodeKind.DataObject && IsControlCandidate(SelectedNode);
 
     public ObservableCollection<MetricRow> Metrics { get; } = new();
     public ObservableCollection<IedExplorerNode> ExplorerNodes { get; } = new();
     public ObservableCollection<DataAttributeDetailRow> DetailRows { get; } = new();
+    public List<DataAttributeDetailRow> DetailRootRows { get; } = new();
     public ObservableCollection<MonitorSignalRow> MonitorSignals { get; } = new();
     public ObservableCollection<StatusHistoryRow> StatusHistory { get; } = new();
     public ObservableCollection<LogicalDeviceRow> LogicalDevices { get; } = new();
@@ -76,15 +79,36 @@ public sealed class IedDiscoveryViewModel : ObservableObject
         Warnings.Clear();
         ExplorerNodes.Clear();
         DetailRows.Clear();
+        DetailRootRows.Clear();
         MonitorSignals.Clear();
         Summary = "Discovery cleared.";
         ReportProfileSummary = "No report session profile planned yet.";
         SelectedHeader = "No object selected";
         SelectedSubHeader = "Select an LD/LN/DO/DataSet/RCB from the left explorer.";
         SelectedNode = null;
+        SelectedDetailRow = null;
         LastDocument = null;
         LastReportProfile = null;
         RaiseCommandState();
+    }
+
+
+    public void ReplaceDetailRows(IEnumerable<DataAttributeDetailRow> roots)
+    {
+        SelectedDetailRow = null;
+        DetailRootRows.Clear();
+        DetailRootRows.AddRange(roots);
+        RefreshDetailRows();
+    }
+
+    public void RefreshDetailRows()
+    {
+        var selected = DetailRows.FirstOrDefault(x => ReferenceEquals(x, SelectedDetailRow));
+        DetailRows.Clear();
+        foreach (var row in DetailRowFlattener.Flatten(DetailRootRows))
+            DetailRows.Add(row);
+        if (selected != null && DetailRows.Contains(selected))
+            SelectedDetailRow = selected;
     }
 
     public void AddStatus(string severity, string code, string description)

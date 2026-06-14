@@ -287,3 +287,8 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- workbench-evidence-pack --scl .\s
 ```
 
 The generated folder contains a review `README.md`, `manifest.json`, and per-profile Markdown/JSON artifacts. See `docs/WORKBENCH_EVIDENCE_PACK.md`.
+
+## N5.41.3 display refinement
+
+- IED Discovery detail view now follows a semantic child-row display policy: Quality and timestamp are rendered as IEC 61850 child rows, not noisy flat columns; common SAS logical nodes are prioritized in the explorer.
+

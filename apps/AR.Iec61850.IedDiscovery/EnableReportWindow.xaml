@@ -1,0 +1,126 @@
+<Window x:Class="AR.Iec61850.IedDiscovery.EnableReportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Enable Report" Height="520" Width="560" MinHeight="500" MinWidth="520"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" FontFamily="Segoe UI" Background="#F8FAFC">
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#1F2937" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="BorderBrush" Value="#AAB7C5" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="4,1" />
+            <Setter Property="BorderBrush" Value="#AAB7C5" />
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="100" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+            <Setter Property="Background" Value="#1769B3" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="18,4" />
+        </Style>
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="90" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+            <Setter Property="Padding" Value="18,4" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="110" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="32" />
+                <RowDefinition Height="32" />
+                <RowDefinition Height="32" />
+                <RowDefinition Height="32" />
+                <RowDefinition Height="32" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Report:" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding ReportReference}" VerticalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Row="1" Text="Report ID:" VerticalAlignment="Center" />
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ReportId, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="2" Text="DataSet:" VerticalAlignment="Center" />
+            <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding DataSets}" SelectedItem="{Binding SelectedDataSet}" IsEditable="True" />
+            <TextBlock Grid.Row="3" Text="State:" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding CurrentState}" VerticalAlignment="Center" Foreground="#475467" />
+            <TextBlock Grid.Row="4" Text="Mode:" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ModeText}" VerticalAlignment="Center" Foreground="#475467" />
+        </Grid>
+
+        <Border Grid.Row="1" Height="1" Background="#CBD5E1" Margin="0,10,0,10" />
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="Trigger options" FontWeight="SemiBold" />
+            <StackPanel Grid.Row="1" Margin="0,6,18,0">
+                <CheckBox Content="Data change" IsChecked="{Binding TrgDataChange}" Margin="0,4" />
+                <CheckBox Content="Quality change" IsChecked="{Binding TrgQualityChange}" Margin="0,4" />
+                <CheckBox Content="Data update" IsChecked="{Binding TrgDataUpdate}" Margin="0,4" />
+                <CheckBox Content="Integrity" IsChecked="{Binding TrgIntegrity}" Margin="0,4" />
+                <CheckBox Content="General Interrogation" IsChecked="{Binding TrgGeneralInterrogation}" Margin="0,4" />
+            </StackPanel>
+
+            <TextBlock Grid.Column="1" Text="Optional fields" FontWeight="SemiBold" />
+            <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,6,0,0">
+                <CheckBox Content="Sequence number" IsChecked="{Binding OptSequenceNumber}" Margin="0,4" />
+                <CheckBox Content="Time of entry" IsChecked="{Binding OptTimeOfEntry}" Margin="0,4" />
+                <CheckBox Content="Reason for inclusion" IsChecked="{Binding OptReasonForInclusion}" Margin="0,4" />
+                <CheckBox Content="DataSet name" IsChecked="{Binding OptDataSetName}" Margin="0,4" />
+                <CheckBox Content="Data reference" IsChecked="{Binding OptDataReference}" Margin="0,4" />
+                <CheckBox Content="Buffer overflow" IsChecked="{Binding OptBufferOverflow}" Margin="0,4" />
+                <CheckBox Content="Entry ID" IsChecked="{Binding OptEntryId}" Margin="0,4" />
+                <CheckBox Content="Configuration revision" IsChecked="{Binding OptConfRev}" Margin="0,4" />
+            </StackPanel>
+
+            <Grid Grid.Row="2" Grid.ColumnSpan="2" Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Integrity period (ms):" VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" Text="{Binding IntegrityPeriodMs}" />
+            </Grid>
+            <CheckBox Grid.Row="3" Grid.ColumnSpan="2" Content="Perform General Interrogation after enable" IsChecked="{Binding PerformGeneralInterrogation}" Margin="0,12,0,0" />
+        </Grid>
+
+        <DockPanel Grid.Row="3" Margin="0,12,0,0">
+            <TextBlock DockPanel.Dock="Left" Text="{Binding ValidationMessage}" Foreground="#475467" VerticalAlignment="Center" TextWrapping="Wrap" Width="260" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Style="{StaticResource SecondaryButton}" Content="Default" Click="Default_Click" />
+                <Button Style="{StaticResource SecondaryButton}" Content="Validate" Click="Validate_Click" />
+                <Button Style="{StaticResource PrimaryButton}" Content="Enable" Click="Enable_Click" IsEnabled="{Binding CanEnable}" />
+                <Button Style="{StaticResource SecondaryButton}" Content="Cancel" Click="Cancel_Click" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

@@ -44,6 +44,7 @@ Implemented areas include:
 - PCAP writer/reader/inspector and stream playback helpers.
 - Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
 - WPF IED Discovery workspace for live MMS model/DataSet/RCB snapshot export.
+- IED Discovery data browser with expandable MMS structure rows and guarded Enable RCB dialog.
 - Offline IED Simulator foundation with deterministic point values, DataSets, RCB profiles, and JSON export.
 - WPF Engineering Workbench Alpha that orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and evidence-pack export.
 - Engineering-profile facade that converts live discovery into capability assessment, report-lab readiness, diagnostics, and Markdown evidence.
@@ -310,3 +311,18 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- workbench-evidence-pack --scl .\s
 ```
 
 This command generates `README.md`, `manifest.json`, and per-profile Markdown/JSON artifacts for SCL engineering, process-bus binding, GOOSE diagnostics, SV diagnostics, MMS read-only loopback, and public-alpha readiness.
+
+
+### N5.41.2 — IEC 61850 Value Binding Engine
+
+Adds schema-driven DA value binding for the IED Discovery Workbench. Structured MMS values are now bound through IEC 61850 metadata, CDC templates, quality/timestamp decoders, and control-operation templates instead of positional index guesses.
+
+## N5.41.3 display refinement
+
+- IED Discovery detail view now follows a semantic child-row display policy: Quality and timestamp are rendered as IEC 61850 child rows, not noisy flat columns; common SAS logical nodes are prioritized in the explorer.
+
+
+
+### Smart Value Reading Engine
+
+The IED Discovery Workbench now uses an engine-owned value presentation layer for IED identity resolution, logical-device aliases, FC-aware read targets, collapsed DO summaries, and recursive semantic decoding of `q`, `t`, vector/analogue, and control structures. The WPF app renders the engine output and does not guess MMS structure positions.

@@ -181,3 +181,11 @@ N5.39 adds a structured Workbench evidence pack. This raises usability and relea
 ## N5.40 IED Discovery Workbench Shell
 
 The first usable IED discovery shell is now available in `apps/AR.Iec61850.IedDiscovery`. It adds a compact command bar, asynchronous Discover IED dialog flow, DO-level explorer, DA detail grid, pinned Activity Monitor, status-history ring buffer, and generated SCL export from the live model. The app remains a thin WPF harness over the engine.
+
+
+## N5.41.4 Smart Value Reading & Identity Resolver
+
+- Engine-owned IED identity resolver and LD alias display.
+- Smart LN/DO read planning and collapsed DO summary values.
+- Recursive semantic decoding for nested q/t, vector, analogue and control structures.
+- WPF remains a presenter; IEC 61850 value semantics stay in the stack engine.

@@ -189,15 +189,21 @@
                 <Border Grid.Row="1" BorderBrush="#C5D0DD" BorderThickness="0,0,0,1" Padding="10,7" Background="White">
                     <TextBlock Text="{Binding SelectedSubHeader}" Foreground="#405166" FontSize="12" TextWrapping="Wrap" />
                 </Border>
-                <DataGrid Grid.Row="2" ItemsSource="{Binding DetailRows}" SelectionMode="Single" x:Name="DetailGrid">
+                <DataGrid Grid.Row="2" ItemsSource="{Binding DetailRows}" SelectionMode="Single" x:Name="DetailGrid" SelectedItem="{Binding SelectedDetailRow, Mode=TwoWay}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="1.15*" />
+                        <DataGridTemplateColumn Header="Name" Width="1.15*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <DockPanel LastChildFill="True">
+                                        <Button DockPanel.Dock="Left" Content="{Binding ExpanderGlyph}" Visibility="{Binding ExpanderVisibility}" Click="DetailRowExpander_Click" Width="18" Height="18" Padding="0" Margin="0,0,2,0" BorderThickness="0" Background="Transparent" Foreground="#334155" Cursor="Hand" />
+                                        <TextBlock Text="{Binding Name}" Margin="{Binding NameMargin}" FontWeight="{Binding NameWeight}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="FC" Binding="{Binding Fc}" Width="54" />
-                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="110" />
-                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="1.4*" />
-                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="90" />
-                        <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp}" Width="150" />
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="120" />
+                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="105" />
+                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="2.1*" />
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>

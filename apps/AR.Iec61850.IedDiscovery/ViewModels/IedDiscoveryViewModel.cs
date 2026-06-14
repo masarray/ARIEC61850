@@ -54,7 +54,7 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     public MmsReportSessionProfile? LastReportProfile { get => _lastReportProfile; set => SetProperty(ref _lastReportProfile, value); }
 
     public bool HasModel => LastDocument != null || ExplorerNodes.Count > 0;
-    public bool CanClose => IsBusy || IsConnected;
+    public bool CanClose => IsBusy || IsConnected || HasModel;
     public bool CanRead => !IsBusy && IsConnected && IsOnline && SelectedNode != null && SelectedNode.Kind is (ExplorerNodeKind.DataObject or ExplorerNodeKind.DataSet or ExplorerNodeKind.ReportControl or ExplorerNodeKind.LogicalNode);
     public bool CanReadAll => !IsBusy && IsConnected && IsOnline && LastDocument != null;
     public bool CanExport => LastDocument != null;

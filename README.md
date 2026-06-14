@@ -328,3 +328,11 @@ Adds schema-driven DA value binding for the IED Discovery Workbench. Structured 
 The IED Discovery Workbench now uses an engine-owned value presentation layer for IED identity resolution, logical-device aliases, FC-aware read targets, collapsed DO summaries, and recursive semantic decoding of `q`, `t`, vector/analogue, and control structures. The WPF app renders the engine output and does not guess MMS structure positions.
 
 - N5.41.5: IED Discovery smart monitoring/report readiness adds Online state gating, live polling Activity Monitor, report-driven monitor updates, and static/dynamic/occupied RCB presentation.
+
+
+## N5.41.6 IED Discovery session workflow fixes
+
+- Smart RCB fallback in WPF report enable flow.
+- Close IED clears explorer and panels.
+- Save discovered model defaults to IID-oriented engine export.
+- Open SCL projects offline SCL into the same explorer/detail visual shape as live discovery.

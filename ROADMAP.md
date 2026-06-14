@@ -265,3 +265,11 @@ Adds schema-driven DA value binding for the IED Discovery Workbench. Structured 
 - Smart LN/DO read planning and collapsed DO summary values.
 - Recursive semantic decoding for nested q/t, vector, analogue and control structures.
 - WPF remains a presenter; IEC 61850 value semantics stay in the stack engine.
+
+
+## N5.41.6 IED Discovery session workflow fixes
+
+- Smart RCB fallback in WPF report enable flow.
+- Close IED clears explorer and panels.
+- Save discovered model defaults to IID-oriented engine export.
+- Open SCL projects offline SCL into the same explorer/detail visual shape as live discovery.

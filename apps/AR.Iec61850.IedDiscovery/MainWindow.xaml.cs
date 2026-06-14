@@ -176,11 +176,13 @@ public partial class MainWindow : Window
 
         try
         {
-            var profile = new SclEngineeringProfileBuilder().Load(dialog.FileName);
-            PopulateSclProfile(profile);
+            var projected = SclLiveModelProjectionBuilder.Load(dialog.FileName);
+            Populate(projected);
+            _lastDiscovery = null;
+            _lastDataSetDirectories = Array.Empty<MmsDataSetDirectoryResult>();
             _viewModel.IsConnected = false;
             _viewModel.IsOnline = false;
-            _viewModel.AddStatus("Info", "SCL_OPENED", $"Loaded SCL engineering profile: {Path.GetFileName(dialog.FileName)}.");
+            _viewModel.AddStatus("Info", "SCL_OPENED", $"Loaded offline SCL model projection: {Path.GetFileName(dialog.FileName)}.");
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
@@ -198,9 +200,9 @@ public partial class MainWindow : Window
 
         var dialog = new SaveFileDialog
         {
-            Title = "Save discovered IED as SCL",
-            Filter = "SCL document (*.scd)|*.scd|All files (*.*)|*.*",
-            FileName = $"{SafeFile(_viewModel.LastDocument.IedName)}-discovered.scd"
+            Title = "Save discovered IED model as IID",
+            Filter = "IID capability/update file (*.iid)|*.iid|CID configured IED file (*.cid)|*.cid|SCL document (*.scd)|*.scd|All files (*.*)|*.*",
+            FileName = $"{SafeFile(_viewModel.LastDocument.IedName)}-discovered.iid"
         };
         if (dialog.ShowDialog(this) != true)
             return;
@@ -212,10 +214,10 @@ public partial class MainWindow : Window
                 dialog.FileName,
                 new LiveIedSclExportOptions
                 {
-                    Profile = "full-model",
+                    Profile = "safe-connection",
                     IpAddress = _viewModel.Host
                 });
-            _viewModel.AddStatus("Info", "SCL_EXPORTED", $"Saved SCL plus export evidence: {result.SclPath}");
+            _viewModel.AddStatus("Info", "SCL_EXPORTED", $"Saved IID/SCL model with engine export evidence: {result.SclPath}");
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException)
         {
@@ -227,7 +229,9 @@ public partial class MainWindow : Window
     {
         _cancellation?.Cancel();
         await CloseSessionAsync().ConfigureAwait(true);
-        _viewModel.AddStatus("Info", "IED_CLOSED", "IED session closed. Offline tree remains available for inspection.");
+        _viewModel.ClearResults();
+        _lastDiscovery = null;
+        _viewModel.AddStatus("Info", "IED_CLOSED", "IED session closed and explorer/panels were cleared.");
     }
 
     private void Online_Click(object sender, RoutedEventArgs e)
@@ -329,25 +333,7 @@ public partial class MainWindow : Window
         }
 
         var isDynamicSlot = string.IsNullOrWhiteSpace(rcb.DataSetReference);
-        var plan = isDynamicSlot
-            ? MmsReportSubscriptionPlanner.BuildDynamicPlan(
-                _lastDiscovery.ReportInventory,
-                _lastDiscovery.IedDirectory,
-                BuildDynamicReportPoints(rcb),
-                preferredLogicalDevice: rcb.Domain,
-                preferredRcbReference: rcb.Reference,
-                dataSetName: "AR_DYN_DS01",
-                strictRcb: true,
-                allowUrCbFallback: false,
-                allowPollingFallback: false)
-            : MmsReportSubscriptionPlanner.BuildStaticPlan(
-                _lastDiscovery.ReportInventory,
-                _lastDataSetDirectories,
-                preferredRcbReference: rcb.Reference,
-                preferredDataSetReference: dialogVm.SelectedDataSet,
-                strictRcb: true,
-                allowUrCbFallback: false,
-                allowPollingFallback: false);
+        var plan = BuildSmartReportPlan(rcb, dialogVm.SelectedDataSet, isDynamicSlot);
 
         if (!plan.IsReady)
         {
@@ -408,6 +394,88 @@ public partial class MainWindow : Window
             _cancellation?.Dispose();
             _cancellation = null;
         }
+    }
+
+    private MmsReportSubscriptionPlan BuildSmartReportPlan(LiveIedReportControlModel selectedRcb, string selectedDataSet, bool preferDynamic)
+    {
+        if (_lastDiscovery == null)
+            return new MmsReportSubscriptionPlan
+            {
+                Status = MmsReportSubscriptionPlanStatus.Blocked,
+                Blockers = new[] { "No live discovery inventory is available." }
+            };
+
+        if (preferDynamic)
+        {
+            var points = BuildDynamicReportPoints(selectedRcb);
+            var strictDynamic = MmsReportSubscriptionPlanner.BuildDynamicPlan(
+                _lastDiscovery.ReportInventory,
+                _lastDiscovery.IedDirectory,
+                points,
+                preferredLogicalDevice: selectedRcb.Domain,
+                preferredRcbReference: selectedRcb.Reference,
+                dataSetName: "AR_DYN_DS01",
+                strictRcb: true,
+                allowUrCbFallback: true,
+                allowPollingFallback: false);
+            if (strictDynamic.IsReady)
+                return strictDynamic;
+
+            var sameLdDynamic = MmsReportSubscriptionPlanner.BuildDynamicPlan(
+                _lastDiscovery.ReportInventory,
+                _lastDiscovery.IedDirectory,
+                points,
+                preferredLogicalDevice: selectedRcb.Domain,
+                preferredRcbReference: null,
+                dataSetName: "AR_DYN_DS01",
+                strictRcb: false,
+                allowUrCbFallback: true,
+                allowPollingFallback: false);
+            if (sameLdDynamic.IsReady)
+                return sameLdDynamic;
+
+            return MmsReportSubscriptionPlanner.BuildDynamicPlan(
+                _lastDiscovery.ReportInventory,
+                _lastDiscovery.IedDirectory,
+                points,
+                preferredLogicalDevice: null,
+                preferredRcbReference: null,
+                dataSetName: "AR_DYN_DS01",
+                strictRcb: false,
+                allowUrCbFallback: true,
+                allowPollingFallback: false);
+        }
+
+        var strictStatic = MmsReportSubscriptionPlanner.BuildStaticPlan(
+            _lastDiscovery.ReportInventory,
+            _lastDataSetDirectories,
+            preferredRcbReference: selectedRcb.Reference,
+            preferredDataSetReference: selectedDataSet,
+            strictRcb: true,
+            allowUrCbFallback: true,
+            allowPollingFallback: false);
+        if (strictStatic.IsReady)
+            return strictStatic;
+
+        var sameDataSetStatic = MmsReportSubscriptionPlanner.BuildStaticPlan(
+            _lastDiscovery.ReportInventory,
+            _lastDataSetDirectories,
+            preferredRcbReference: null,
+            preferredDataSetReference: selectedDataSet,
+            strictRcb: false,
+            allowUrCbFallback: true,
+            allowPollingFallback: false);
+        if (sameDataSetStatic.IsReady)
+            return sameDataSetStatic;
+
+        return MmsReportSubscriptionPlanner.BuildStaticPlan(
+            _lastDiscovery.ReportInventory,
+            _lastDataSetDirectories,
+            preferredRcbReference: null,
+            preferredDataSetReference: null,
+            strictRcb: false,
+            allowUrCbFallback: true,
+            allowPollingFallback: false);
     }
 
     private IReadOnlyList<string> BuildDynamicReportPoints(LiveIedReportControlModel rcb)

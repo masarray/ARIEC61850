@@ -224,3 +224,14 @@ This milestone adds a read-only SV diagnostic engine. It turns SCL expected SV s
 dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --goose-frames 0 --sv-scenario diagnostic
 dotnet run --project .\apps\AR.Iec61850.Cli -- sv-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --output .\.artifacts\out\sv-diagnostics.md --json .\.artifacts\out\sv-diagnostics.json
 ```
+
+### MMS read-only virtual server profile
+
+Generate the first server-side virtual IED evidence profile:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-server-readonly-profile --steps 5 --output .\.artifacts\out\mms-server-readonly.md --json .\.artifacts\out\mms-server-readonly.json
+```
+
+This is an offline alpha server model. It validates logical-device directory, logical-node directory, point reads, DataSet reads, RCB exposure, and read-only write rejection before a live TCP/MMS listener is added.
+

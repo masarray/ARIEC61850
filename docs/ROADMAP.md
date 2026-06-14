@@ -138,3 +138,8 @@ ARIEC61850 engine repo
 ```
 
 Product repos can later consume the engine as project references or NuGet packages without pulling protocol logic into UI code.
+
+## N5.29 — MMS Read-Only Server Alpha
+
+The engine now has an offline server-side model profile that converts the simulator profile into a read-only virtual IED. It can be tested without hardware using `mms-server-readonly-profile`, and it validates directory, read, DataSet read, RCB exposure, and write rejection.
+

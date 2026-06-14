@@ -13,6 +13,7 @@ using AR.Iec61850.Scl;
 using AR.Iec61850.Scl.Export;
 using AR.Iec61850.Scl.Analysis;
 using AR.Iec61850.Scl.Engineering;
+using AR.Iec61850.Simulation;
 using AR.Iec61850.Transports;
 using AR.Iec61850.Transports.Npcap;
 using System.Diagnostics;
@@ -49,6 +50,7 @@ internal static class Cli
                 "mms-discover" => await MmsDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-engine-profile" => await MmsEngineProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-report-readiness-profile" => await MmsReportReadinessProfileAsync(args[1..]).ConfigureAwait(false),
+                "mms-server-readonly-profile" => MmsServerReadOnlyProfile(args[1..]),
                 "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "mms-model-discover" => await MmsModelDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-scl-export" => await MmsSclExportAsync(args[1..]).ConfigureAwait(false),
@@ -455,6 +457,92 @@ internal static class Cli
         }
 
         return profile.IsHealthy ? 0 : 3;
+    }
+
+
+    private static int MmsServerReadOnlyProfile(string[] args)
+    {
+        var options = CliOptions.Parse(args);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var steps = options.GetInt("steps", 0);
+        var profileName = options.Get("name", "ARIEC61850 Virtual IED");
+        var readTarget = options.Get("read", "IED1LD0/XCBR1.Pos.stVal");
+        var dataSetTarget = options.Get("dataset", "IED1LD0/LLN0.dsStatus");
+        var rawLimit = options.GetInt("raw-limit", 30);
+
+        var simulatorProfile = IedSimulatorProfile.CreateDefaultFeederProfile();
+        var engine = new IedSimulatorEngine(simulatorProfile);
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 0; i < steps; i++)
+            engine.Step(now.AddMilliseconds(i * 20));
+
+        var snapshot = engine.CreateSnapshot(DateTimeOffset.UtcNow);
+        var profile = new MmsReadOnlyServerModelBuilder().Build(
+            simulatorProfile,
+            snapshot,
+            new MmsReadOnlyServerProfileOptions
+            {
+                ServerName = profileName,
+                Port = port,
+                IncludeSelfTest = true
+            });
+
+        var session = new MmsReadOnlyServerSession(profile);
+        var directory = session.Handle(new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetLogicalDeviceDirectory });
+        var read = session.Handle(new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Read, Target = readTarget });
+        var dataSet = session.Handle(new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.ReadDataSet, Target = dataSetTarget });
+        var writeReject = session.Handle(new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Write, Target = readTarget, Value = "test" });
+
+        Console.WriteLine(profile.Summary);
+        Console.WriteLine($"Mode: read-only virtual MMS server model (offline alpha; no TCP listener).");
+        Console.WriteLine($"Port profile: {port}");
+        Console.WriteLine();
+        Console.WriteLine("Directory probe:");
+        Console.WriteLine($"  {directory.Summary}");
+        foreach (var item in directory.Items.Take(rawLimit))
+            Console.WriteLine($"  LD {item}");
+        WriteLimitNotice(directory.Items.Count, rawLimit, "logical device row(s)");
+
+        Console.WriteLine();
+        Console.WriteLine("Read probe:");
+        Console.WriteLine($"  {read.Summary}");
+        foreach (var value in read.Values)
+            Console.WriteLine($"  {value.Reference} = {value.Value} q={value.Quality} t={value.TimestampUtc:yyyy-MM-dd HH:mm:ss.fff}Z");
+
+        Console.WriteLine();
+        Console.WriteLine("DataSet probe:");
+        Console.WriteLine($"  {dataSet.Summary}");
+        foreach (var value in dataSet.Values.Take(rawLimit))
+            Console.WriteLine($"  {value.Reference} = {value.Value} q={value.Quality}");
+        WriteLimitNotice(dataSet.Values.Count, rawLimit, "DataSet value row(s)");
+
+        Console.WriteLine();
+        Console.WriteLine("Write guard:");
+        Console.WriteLine($"  {writeReject.Summary}");
+
+        Console.WriteLine();
+        Console.WriteLine("Self-test:");
+        foreach (var step in profile.SelfTestSteps)
+            Console.WriteLine($"  {(step.IsSuccess ? "OK" : "FAIL")} {step.Operation} {TextOrDash(step.Target)} - {step.Message}");
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown MMS server profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"JSON MMS server profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.IsReady && read.IsSuccess && dataSet.IsSuccess && !writeReject.IsSuccess ? 0 : 3;
     }
 
     private static int InspectPcap(string[] args)
@@ -5432,6 +5520,7 @@ internal static class Cli
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
         Console.WriteLine("  mms-engine-profile <host-or-ip> [--port 102] [--timeout-ms 30000] [--max-report-probes N] [--read-datasets true] [--output profile.md] [--json profile.json]");
         Console.WriteLine("  mms-report-readiness-profile <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--dataset LD/LLN0.DataSet] [--strict-rcb] [--allow-urcb-fallback true|false] [--duration-sec 60] [--gi true|false] [--output report-readiness.md] [--json report-readiness.json] [--session-json session-profile.json]");
+        Console.WriteLine("  mms-server-readonly-profile [--port 102] [--name NAME] [--steps N] [--read LD/LN.DO.da] [--dataset LD/LLN0.DataSet] [--output mms-server.md] [--json mms-server.json]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile safe-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output .artifacts/out/scl/live-ied.safe-connection.iid] [--ld-name-mode auto|keep] [--output .artifacts/out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
@@ -5467,6 +5556,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.0.2.10 --port 102 --max-report-probes 16");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-engine-profile 192.0.2.10 --output .artifacts/out/engineering-profile.md --json .artifacts/out/engineering-profile.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --output .artifacts/out/report-readiness.md --json .artifacts/out/report-readiness.json --session-json .artifacts/out/report-session-profile.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-server-readonly-profile --steps 5 --output .artifacts/out/mms-server-readonly.md --json .artifacts/out/mms-server-readonly.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.0.2.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.0.2.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output .artifacts/out/ied-model-discovery");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-export-profile safe-connection --ld-name-mode auto --output .artifacts/out/scl/demo-ied.generated.iid");

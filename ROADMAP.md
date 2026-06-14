@@ -138,3 +138,22 @@ ARIEC61850 engine repo
 ```
 
 Product repos can later consume the engine as project references or NuGet packages without pulling protocol logic into UI code.
+
+## N5.29 — MMS Read-Only Server Alpha
+
+Status: implemented as an offline server-model profile and high-level service handler.
+
+Deliverables:
+
+- virtual IED server profile from simulator model;
+- logical-device and logical-node directory handler;
+- point read and DataSet read handler;
+- RCB directory exposure;
+- variable-attribute summary;
+- read-only write rejection;
+- Markdown/JSON evidence;
+- CLI command `mms-server-readonly-profile`;
+- unit tests for server model and service handler.
+
+Next server-side milestone: add TPKT/COTP/ACSE/MMS listener skeleton while keeping read-only semantics.
+

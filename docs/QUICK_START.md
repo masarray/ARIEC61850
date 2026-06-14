@@ -202,3 +202,12 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- sv-diagnostics-profile .\samples\
 ```
 
 Expected result: the command should report SV findings for sample-counter, synchronization, payload, and model-alignment conditions and write Markdown/JSON evidence under `.artifacts\out`.
+
+## MMS read-only virtual server profile
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-server-readonly-profile --steps 5 --output .\.artifacts\out\mms-server-readonly.md --json .\.artifacts\out\mms-server-readonly.json
+```
+
+This command needs no IED and no network adapter. It builds a virtual IED model from the simulator profile and exercises read-only directory, read, DataSet read, and write-guard probes.
+

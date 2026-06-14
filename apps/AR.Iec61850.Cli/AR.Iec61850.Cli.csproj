@@ -1,8 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AR.Iec61850\AR.Iec61850.csproj" />
     <ProjectReference Include="..\..\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" />
+    <ProjectReference Include="..\..\src\AR.Iec61850.Simulation\AR.Iec61850.Simulation.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

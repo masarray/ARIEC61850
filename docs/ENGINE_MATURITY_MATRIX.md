@@ -91,3 +91,8 @@ SCL expected SV stream
 ```
 
 Maturity impact: process-bus SV moves from visibility to actionable engineering diagnostics.
+
+## Server-side milestone
+
+- MMS read-only server alpha: implemented as offline virtual IED profile + high-level service handler.
+- Next maturity gate: live TCP/TPKT/COTP/ACSE/MMS listener skeleton with read-only service mapping.

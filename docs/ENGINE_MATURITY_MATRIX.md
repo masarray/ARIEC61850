@@ -126,3 +126,13 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --out
 ## N5.32 - MMS Handshake Listener Profile
 
 Status: source milestone. The engine now includes a loopback OSI listener probe that validates TCP listener lifecycle, TPKT frame exchange, COTP CR/CC handshake, COTP Data TPDU reception, and ACSE/MMS association payload inspection. This remains a transport skeleton, not a full MMS server. The next protocol milestone is ACSE AARE + MMS initiate response.
+
+## N5.33 MMS Association Response Profile
+
+N5.33 adds a loopback server-side association response probe. The engine now accepts a TPKT/COTP transport association, receives an ACSE/MMS associate request payload, sends a deterministic ACSE AARE + MMS InitiateResponse profile, and exports Markdown/JSON evidence. This remains a safe protocol gate before live confirmed MMS request dispatch.
+
+Test command:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
+```

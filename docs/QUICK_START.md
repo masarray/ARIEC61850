@@ -235,3 +235,10 @@ N5.32 moves the handshake foundation from offline codec proof into a loopback li
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-listener-profile --port 0 --output .\.artifacts\out\mms-handshake-listener.md --json .\.artifacts\out\mms-handshake-listener.json
 ```
 
+### MMS association response profile
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
+```
+
+This loopback probe verifies TPKT/COTP transport, ACSE AARE response generation, and MMS InitiateResponse marker inspection before live confirmed MMS request dispatch.

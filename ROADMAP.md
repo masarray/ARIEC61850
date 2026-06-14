@@ -180,3 +180,12 @@ N5.31 adds an offline handshake codec evidence path for the server-side roadmap.
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
 ```
 
+## N5.33 MMS Association Response Profile
+
+N5.33 adds a loopback server-side association response probe. The engine now accepts a TPKT/COTP transport association, receives an ACSE/MMS associate request payload, sends a deterministic ACSE AARE + MMS InitiateResponse profile, and exports Markdown/JSON evidence. This remains a safe protocol gate before live confirmed MMS request dispatch.
+
+Test command:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
+```

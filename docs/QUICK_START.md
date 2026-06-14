@@ -147,3 +147,8 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.
 ```
 
 This command is also read-only. It produces acceptance gates, RCB candidate ranking, a selected static report plan, and a guarded report-session profile that future product apps can consume.
+
+
+## N5.25 — SCL Deep Engineering Profile
+
+This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.

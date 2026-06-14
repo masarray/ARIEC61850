@@ -180,3 +180,8 @@ Licensed under the [Apache License 2.0](LICENSE).
 ## Safety note
 
 Active MMS writes, report enable operations, GOOSE publishing, and Sampled Values publishing must be used only in isolated labs or approved test networks. Do not publish process-bus traffic into an operational substation network without an approved test plan and isolation boundary.
+
+
+## N5.25 — SCL Deep Engineering Profile
+
+This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.

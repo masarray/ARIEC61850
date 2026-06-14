@@ -45,3 +45,8 @@ live/synthetic discovery + DataSet directories
 ```
 
 The profile is considered ready only when model discovery, DataSet directory member mapping, RCB selection, and member-map gates are satisfied. `RptEna` and `GI` are still live-write actions and must remain behind explicit caller confirmation.
+
+
+## N5.25 — SCL Deep Engineering Profile
+
+This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.

@@ -9,6 +9,7 @@ using AR.Iec61850.SampledValues;
 using AR.Iec61850.Scl;
 using AR.Iec61850.Scl.Export;
 using AR.Iec61850.Scl.Analysis;
+using AR.Iec61850.Scl.Engineering;
 using AR.Iec61850.Transports;
 using AR.Iec61850.Transports.Npcap;
 using System.Diagnostics;
@@ -33,6 +34,7 @@ internal static class Cli
             {
                 "inspect-scl" => InspectScl(args[1..]),
                 "scl-diff" => SclDiff(args[1..]),
+                "scl-engineering-profile" => SclEngineeringProfile(args[1..]),
                 "generate-pcap" => await GeneratePcapAsync(args[1..]).ConfigureAwait(false),
                 "inspect-pcap" => InspectPcap(args[1..]),
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
@@ -117,6 +119,62 @@ internal static class Cli
 
         return 0;
     }
+
+
+    private static int SclEngineeringProfile(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("scl-engineering-profile requires <scl-file>.");
+
+        var options = CliOptions.Parse(args[1..]);
+        var profile = new SclEngineeringProfileBuilder().Load(args[0]);
+        var rawLimit = options.GetInt("raw-limit", 20);
+
+        Console.WriteLine("SCL engineering profile complete.");
+        Console.WriteLine($"  Source: {Path.GetFullPath(args[0])}");
+        Console.WriteLine($"  IEDs: {profile.Ieds.Count}");
+        Console.WriteLine($"  Access points: {profile.AccessPoints.Count}");
+        Console.WriteLine($"  Logical devices: {profile.LogicalDevices.Count}");
+        Console.WriteLine($"  Logical nodes: {profile.LogicalNodes.Count}");
+        Console.WriteLine($"  DataSets: {profile.DataSetCount}");
+        Console.WriteLine($"  Reports: {profile.ReportControlCount}");
+        Console.WriteLine($"  GOOSE: {profile.GooseStreamCount}");
+        Console.WriteLine($"  SV: {profile.SampledValuesStreamCount}");
+        Console.WriteLine($"  ExtRef: {profile.ExternalReferenceCount}");
+        Console.WriteLine();
+        Console.WriteLine("Capability matrix:");
+        Console.WriteLine($"  Server model: {FormatBool(profile.Capabilities.HasServerModel)}");
+        Console.WriteLine($"  DataSet engineering: {FormatBool(profile.Capabilities.HasDataSets)}");
+        Console.WriteLine($"  Report engineering: {FormatBool(profile.Capabilities.HasReports)}");
+        Console.WriteLine($"  GOOSE engineering: {FormatBool(profile.Capabilities.HasGoose)}");
+        Console.WriteLine($"  SV engineering: {FormatBool(profile.Capabilities.HasSampledValues)}");
+        Console.WriteLine($"  ExtRef mapping: {FormatBool(profile.Capabilities.HasExternalReferences)}");
+        Console.WriteLine($"  Control objects: {FormatBool(profile.Capabilities.HasControlObjects)}");
+        Console.WriteLine($"  Setting groups: {FormatBool(profile.Capabilities.HasSettingGroups)}");
+        Console.WriteLine();
+        Console.WriteLine("Findings:");
+        foreach (var finding in TakeWithLimit(profile.Findings, rawLimit))
+            Console.WriteLine($"  {finding.Severity} {finding.Code}: {finding.Message}");
+        WriteLimitNotice(profile.Findings.Count, rawLimit, "finding(s)");
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown engineering profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"JSON engineering profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.Findings.Any(f => string.Equals(f.Severity, "High", StringComparison.OrdinalIgnoreCase)) ? 3 : 0;
+    }
+
+    private static string FormatBool(bool value) => value ? "yes" : "no";
 
 
     private static int SclDiff(string[] args)
@@ -4983,6 +5041,7 @@ internal static class Cli
         Console.WriteLine("Usage:");
         Console.WriteLine("  inspect-scl <file.scd|file.cid|file.icd|file.iid>");
         Console.WriteLine("  scl-diff <golden.scl|golden.iid> <candidate.scl|candidate.iid> [--output .artifacts/out/scl-diff]");
+        Console.WriteLine("  scl-engineering-profile <scl-file> [--output .artifacts/out/scl-profile.md] [--json .artifacts/out/scl-profile.json] [--raw-limit 20]");
         Console.WriteLine("  generate-pcap <scl-file> <output.pcap> [--source-mac XX:XX:XX:XX:XX:XX] [--sv-frames N] [--goose-frames N]");
         Console.WriteLine("  inspect-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50]");
         Console.WriteLine("  stream-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50] [--delay-ms N] [--limit N]");
@@ -5012,6 +5071,7 @@ internal static class Cli
         Console.WriteLine("Examples:");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-scl samples/scl/minimal-station.scd");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- scl-diff samples/scl/minimal-station.scd .artifacts/out/scl/demo-ied.standard-discovery.iid --output .artifacts/out/scl-diff/demo-ied");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- scl-engineering-profile samples/scl/minimal-station.scd --output .artifacts/out/scl-profile.md --json .artifacts/out/scl-profile.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- generate-pcap samples/scl/minimal-station.scd .artifacts/out/processbus-demo.pcap");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd --delay-ms 50 --limit 12");

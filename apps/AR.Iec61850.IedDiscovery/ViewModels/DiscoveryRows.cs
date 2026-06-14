@@ -61,25 +61,47 @@ public sealed class IedExplorerNode : ObservableObject
 
 public sealed class MonitorSignalRow : ObservableObject
 {
+    private string _source;
     private string _value = "-";
     private string _quality = "-";
     private string _timestamp = "-";
     private string _age = "-";
     private string _status = "pinned";
+    private DateTimeOffset? _lastUpdated;
 
-    public MonitorSignalRow(string reference, string source)
+    public MonitorSignalRow(string reference, string functionalConstraint, string source, string displayName = "")
     {
         Reference = reference;
-        Source = source;
+        FunctionalConstraint = functionalConstraint;
+        _source = source;
+        DisplayName = string.IsNullOrWhiteSpace(displayName) ? reference : displayName;
     }
 
     public string Reference { get; }
-    public string Source { get; }
+    public string FunctionalConstraint { get; }
+    public string DisplayName { get; }
+    public string Source { get => _source; set => SetProperty(ref _source, value); }
     public string Value { get => _value; set => SetProperty(ref _value, value); }
     public string Quality { get => _quality; set => SetProperty(ref _quality, value); }
     public string Timestamp { get => _timestamp; set => SetProperty(ref _timestamp, value); }
     public string Age { get => _age; set => SetProperty(ref _age, value); }
     public string Status { get => _status; set => SetProperty(ref _status, value); }
+
+    public void MarkUpdated(DateTimeOffset timestamp)
+    {
+        _lastUpdated = timestamp;
+        Timestamp = timestamp.ToLocalTime().ToString("HH:mm:ss");
+        Age = "0 s";
+    }
+
+    public void RefreshAge(DateTimeOffset now)
+    {
+        if (_lastUpdated == null)
+            return;
+
+        var seconds = Math.Max(0, (int)Math.Round((now - _lastUpdated.Value).TotalSeconds));
+        Age = seconds < 60 ? $"{seconds} s" : $"{seconds / 60} min";
+    }
 }
 
 public sealed record StatusHistoryRow(DateTimeOffset Time, string Severity, string Code, string Description)

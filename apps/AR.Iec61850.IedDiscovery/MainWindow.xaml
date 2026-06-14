@@ -120,7 +120,7 @@
                 <Border DockPanel.Dock="Left" Width="1" Background="#CAD5E2" Margin="10,4" />
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Style="{StaticResource ToolbarButton}" Click="Online_Click" IsEnabled="{Binding IsConnected}">
-                        <StackPanel><TextBlock Text="🔌" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Online"/></StackPanel>
+                        <StackPanel><TextBlock Text="{Binding OnlineIcon}" Foreground="{Binding OnlineBrush}" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="{Binding OnlineLabel}"/></StackPanel>
                     </Button>
                     <Button Style="{StaticResource ToolbarButton}" Click="Read_Click" IsEnabled="{Binding CanRead}">
                         <StackPanel><TextBlock Text="📖" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Read"/></StackPanel>
@@ -221,9 +221,9 @@
                 </Border>
                 <DataGrid Grid.Row="1" ItemsSource="{Binding MonitorSignals}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Signal" Binding="{Binding Reference}" Width="1.5*" />
-                        <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="80" />
-                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="100" />
+                        <DataGridTextColumn Header="Signal" Binding="{Binding DisplayName}" Width="1.5*" />
+                        <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="70" />
+                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="120" />
                         <DataGridTextColumn Header="Q" Binding="{Binding Quality}" Width="60" />
                         <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="70" />
                     </DataGrid.Columns>
@@ -235,7 +235,7 @@
                         <ComboBoxItem Content="1 s" />
                         <ComboBoxItem Content="5 s" />
                     </ComboBox>
-                    <TextBlock DockPanel.Dock="Right" Text="Report-driven monitor follows a later milestone.  " VerticalAlignment="Center" Foreground="#667085" FontSize="11" />
+                    <TextBlock DockPanel.Dock="Right" Text="Polling monitor active when Online. Reports update this panel after RCB enable.  " VerticalAlignment="Center" Foreground="#667085" FontSize="11" />
                 </DockPanel>
             </Grid>
         </Grid>

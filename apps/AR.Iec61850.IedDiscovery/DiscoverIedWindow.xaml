@@ -57,8 +57,8 @@
                         <TextBox Grid.Column="1" Text="{Binding Host, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Grid.Row="1" Text="Port" Margin="0,8,0,0" VerticalAlignment="Center" />
                         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Port}" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="2" Text="Name" Margin="0,8,0,0" VerticalAlignment="Center" />
-                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Name}" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="2" Text="IED name" Margin="0,8,0,0" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Name}" IsReadOnly="True" ToolTip="Discovered from the IED model after a successful connection." Margin="0,8,0,0" />
                         <TextBlock Grid.Row="3" Text="Timeout" Margin="0,8,0,0" VerticalAlignment="Center" />
                         <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding TimeoutMs}" Margin="0,8,0,0" />
                     </Grid>

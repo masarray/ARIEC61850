@@ -39,7 +39,10 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     public bool ReadVariableTypes { get => _readVariableTypes; set => SetProperty(ref _readVariableTypes, value); }
     public bool IsBusy { get => _isBusy; set { if (SetProperty(ref _isBusy, value)) RaiseCommandState(); } }
     public bool IsConnected { get => _isConnected; set { if (SetProperty(ref _isConnected, value)) RaiseCommandState(); } }
-    public bool IsOnline { get => _isOnline; set => SetProperty(ref _isOnline, value); }
+    public bool IsOnline { get => _isOnline; set { if (SetProperty(ref _isOnline, value)) { RaiseCommandState(); OnPropertyChanged(nameof(OnlineLabel)); OnPropertyChanged(nameof(OnlineIcon)); OnPropertyChanged(nameof(OnlineBrush)); } } }
+    public string OnlineLabel => IsOnline ? "Online" : "Offline";
+    public string OnlineIcon => IsOnline ? "●" : "●";
+    public string OnlineBrush => IsOnline ? "#16A34A" : "#DC2626";
     public string Status { get => _status; set => SetProperty(ref _status, value); }
     public string Summary { get => _summary; set => SetProperty(ref _summary, value); }
     public string ReportProfileSummary { get => _reportProfileSummary; set => SetProperty(ref _reportProfileSummary, value); }
@@ -130,6 +133,9 @@ public sealed class IedDiscoveryViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPin));
         OnPropertyChanged(nameof(CanEnableReport));
         OnPropertyChanged(nameof(CanControl));
+        OnPropertyChanged(nameof(OnlineLabel));
+        OnPropertyChanged(nameof(OnlineIcon));
+        OnPropertyChanged(nameof(OnlineBrush));
     }
 
     private static bool IsControlCandidate(IedExplorerNode node)

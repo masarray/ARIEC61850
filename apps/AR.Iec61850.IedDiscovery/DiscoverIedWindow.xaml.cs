@@ -65,7 +65,7 @@ public partial class DiscoverIedWindow : Window
 
     private void Discover_Click(object sender, RoutedEventArgs e)
     {
-        ConnectionProfileStore.Save(new ConnectionProfileRow(ViewModel.Host, ViewModel.Port, ViewModel.Name, ViewModel.TimeoutMs));
+        // Recent connection is saved after successful discovery with the resolved IED identity.
         DialogResult = true;
     }
 

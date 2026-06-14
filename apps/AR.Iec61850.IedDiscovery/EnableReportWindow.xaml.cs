@@ -40,14 +40,18 @@ public sealed class EnableReportDialogViewModel : ObservableObject
     private string _integrityPeriodMs = "0";
     private string _validationMessage = "Validate before enabling. Guarded enable writes RptEna and cleans up after the monitor window.";
     private bool _performGeneralInterrogation;
+    private readonly bool _isDynamicSlot;
 
     public EnableReportDialogViewModel(LiveIedReportControlModel rcb, IEnumerable<string> dataSets)
     {
+        _isDynamicSlot = string.IsNullOrWhiteSpace(rcb.DataSetReference);
         ReportReference = rcb.Reference;
         ReportId = string.IsNullOrWhiteSpace(rcb.ReportId) ? rcb.Reference : rcb.ReportId;
-        SelectedDataSet = rcb.DataSetReference;
+        SelectedDataSet = _isDynamicSlot ? "<dynamic: temporary DataSet from pinned/priority signals>" : rcb.DataSetReference;
         CurrentState = $"Enabled={TextOrDash(rcb.EnabledState)}, Reserved={TextOrDash(rcb.ReservationState)}, ConfRev={TextOrDash(rcb.ConfRev)}, BufTm={TextOrDash(rcb.BufferTimeMs)} ms";
-        ModeText = rcb.Buffered ? "Buffered report control block" : "Unbuffered report control block";
+        ModeText = (rcb.Buffered ? "Buffered" : "Unbuffered") + (_isDynamicSlot ? " dynamic report slot" : " static report control block");
+        if (_isDynamicSlot)
+            DataSets.Add(SelectedDataSet);
         foreach (var ds in dataSets.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
             DataSets.Add(ds);
         if (!string.IsNullOrWhiteSpace(SelectedDataSet) && !DataSets.Contains(SelectedDataSet))
@@ -64,7 +68,8 @@ public sealed class EnableReportDialogViewModel : ObservableObject
     public string IntegrityPeriodMs { get => _integrityPeriodMs; set => SetProperty(ref _integrityPeriodMs, value); }
     public string ValidationMessage { get => _validationMessage; set => SetProperty(ref _validationMessage, value); }
     public bool PerformGeneralInterrogation { get => _performGeneralInterrogation; set => SetProperty(ref _performGeneralInterrogation, value); }
-    public bool CanEnable => !string.IsNullOrWhiteSpace(SelectedDataSet);
+    public bool IsDynamicSlot => _isDynamicSlot;
+    public bool CanEnable => _isDynamicSlot || !string.IsNullOrWhiteSpace(SelectedDataSet);
 
     public bool TrgDataChange { get; set; }
     public bool TrgQualityChange { get; set; }
@@ -103,7 +108,7 @@ public sealed class EnableReportDialogViewModel : ObservableObject
 
     public bool Validate()
     {
-        if (string.IsNullOrWhiteSpace(SelectedDataSet))
+        if (!_isDynamicSlot && string.IsNullOrWhiteSpace(SelectedDataSet))
         {
             ValidationMessage = "Select a DataSet before enabling this report.";
             return false;
@@ -115,7 +120,9 @@ public sealed class EnableReportDialogViewModel : ObservableObject
             return false;
         }
 
-        ValidationMessage = "Ready. Enable starts a guarded report monitor and writes RptEna only after validation.";
+        ValidationMessage = _isDynamicSlot
+            ? "Ready. Enable creates a temporary dynamic DataSet from pinned/priority signals, binds the RCB, then starts guarded monitoring."
+            : "Ready. Enable starts a guarded report monitor and writes RptEna only after validation.";
         return true;
     }
 

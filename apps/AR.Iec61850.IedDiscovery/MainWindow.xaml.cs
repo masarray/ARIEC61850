@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using AR.Iec61850.Binding;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.IedDiscovery.ViewModels;
@@ -20,12 +21,25 @@ public partial class MainWindow : Window
     private AR.Iec61850.Mms.MmsDiscoveryResult? _lastDiscovery;
     private Iec61850DiscoveredIdentity? _identity;
     private IReadOnlyList<MmsDataSetDirectoryResult> _lastDataSetDirectories = Array.Empty<MmsDataSetDirectoryResult>();
+    private readonly DispatcherTimer _monitorTimer;
+    private bool _monitorPollInProgress;
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = _viewModel;
+        _monitorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _monitorTimer.Tick += MonitorTimer_Tick;
+        _monitorTimer.Start();
         _viewModel.AddStatus("Info", "READY", "IED Discovery Workbench is ready. Use Discover IED to connect or Open SCL for offline inspection.");
+    }
+
+    protected override async void OnClosed(EventArgs e)
+    {
+        _monitorTimer.Stop();
+        _cancellation?.Cancel();
+        await CloseSessionAsync().ConfigureAwait(true);
+        base.OnClosed(e);
     }
 
     private async void Discover_Click(object sender, RoutedEventArgs e)
@@ -238,10 +252,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var baseRows = _viewModel.SelectedDetailRow != null
-            ? new[] { _viewModel.SelectedDetailRow }
-            : _viewModel.DetailRootRows.Take(32).ToArray();
-        var selectedRows = ExpandReadableRows(baseRows).Take(256).ToArray();
+        var selectedRows = BuildSmartReadableRowsForSelection().Take(128).ToArray();
         if (selectedRows.Length == 0)
         {
             _viewModel.AddStatus("Warning", "READ_NO_TARGET", "Select a DO or DA row before reading.");
@@ -264,7 +275,6 @@ public partial class MainWindow : Window
                 if (result.IsSuccess)
                 {
                     MmsValueDetailTreeBuilder.ApplyReadValue(target, result.Value, target.Reference);
-                    _viewModel.RefreshDetailRows();
                 }
                 else
                 {
@@ -318,14 +328,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(
-            _lastDiscovery.ReportInventory,
-            _lastDataSetDirectories,
-            preferredRcbReference: rcb.Reference,
-            preferredDataSetReference: dialogVm.SelectedDataSet,
-            strictRcb: true,
-            allowUrCbFallback: false,
-            allowPollingFallback: false);
+        var isDynamicSlot = string.IsNullOrWhiteSpace(rcb.DataSetReference);
+        var plan = isDynamicSlot
+            ? MmsReportSubscriptionPlanner.BuildDynamicPlan(
+                _lastDiscovery.ReportInventory,
+                _lastDiscovery.IedDirectory,
+                BuildDynamicReportPoints(rcb),
+                preferredLogicalDevice: rcb.Domain,
+                preferredRcbReference: rcb.Reference,
+                dataSetName: "AR_DYN_DS01",
+                strictRcb: true,
+                allowUrCbFallback: false,
+                allowPollingFallback: false)
+            : MmsReportSubscriptionPlanner.BuildStaticPlan(
+                _lastDiscovery.ReportInventory,
+                _lastDataSetDirectories,
+                preferredRcbReference: rcb.Reference,
+                preferredDataSetReference: dialogVm.SelectedDataSet,
+                strictRcb: true,
+                allowUrCbFallback: false,
+                allowPollingFallback: false);
 
         if (!plan.IsReady)
         {
@@ -336,8 +358,10 @@ public partial class MainWindow : Window
         }
 
         var confirm = MessageBox.Show(this,
-            $"This will start a guarded report monitor for {rcb.Reference}.\n\nThe workflow writes RptEna=true, optionally GI=true, listens briefly, then attempts cleanup with RptEna=false. Continue?",
-            "Guarded Enable RCB",
+            isDynamicSlot
+                ? $"This will create a temporary dynamic DataSet ({plan.DataSetReference}), bind {rcb.Reference}, enable reports, optionally GI, then clean up. Continue?"
+                : $"This will start a guarded report monitor for {rcb.Reference}.\n\nThe workflow writes RptEna=true, optionally GI=true, listens briefly, then attempts cleanup with RptEna=false. Continue?",
+            isDynamicSlot ? "Guarded Dynamic RCB" : "Guarded Enable RCB",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes)
@@ -347,12 +371,23 @@ public partial class MainWindow : Window
         _cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         try
         {
-            _viewModel.AddStatus("Info", "RCB_ENABLE_START", $"Starting guarded report enable for {rcb.Reference} using {dialogVm.SelectedDataSet}.");
-            var result = await _activeSession.RunGuardedStaticReportSessionAsync(
-                plan,
-                TimeSpan.FromSeconds(10),
-                triggerGeneralInterrogation: dialogVm.PerformGeneralInterrogation,
-                cancellationToken: _cancellation.Token).ConfigureAwait(true);
+            _viewModel.AddStatus("Info", "RCB_ENABLE_START", $"Starting guarded {(isDynamicSlot ? "dynamic" : "static")} report enable for {rcb.Reference} using {plan.DataSetReference}.");
+            var result = isDynamicSlot
+                ? await _activeSession.RunGuardedDynamicReportSessionAsync(
+                    plan,
+                    TimeSpan.FromSeconds(10),
+                    triggerGeneralInterrogation: dialogVm.PerformGeneralInterrogation,
+                    deleteDataSetOnCleanup: true,
+                    cancellationToken: _cancellation.Token,
+                    directory: _lastDiscovery.IedDirectory).ConfigureAwait(true)
+                : await _activeSession.RunGuardedStaticReportSessionAsync(
+                    plan,
+                    TimeSpan.FromSeconds(10),
+                    triggerGeneralInterrogation: dialogVm.PerformGeneralInterrogation,
+                    cancellationToken: _cancellation.Token).ConfigureAwait(true);
+
+            foreach (var report in result.Reports.Take(8))
+                ApplyReportFrameToMonitor(report);
 
             var severity = result.IsSuccess ? "Info" : "Error";
             _viewModel.AddStatus(severity, result.IsSuccess ? "RCB_ENABLE_COMPLETE" : "RCB_ENABLE_FAILED", result.Message);
@@ -375,6 +410,73 @@ public partial class MainWindow : Window
         }
     }
 
+    private IReadOnlyList<string> BuildDynamicReportPoints(LiveIedReportControlModel rcb)
+    {
+        var pinned = _viewModel.MonitorSignals
+            .Where(x => !string.IsNullOrWhiteSpace(x.Reference))
+            .Select(x => x.Reference)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(32)
+            .ToArray();
+        if (pinned.Length > 0)
+            return pinned;
+
+        if (_lastDiscovery == null)
+            return Array.Empty<string>();
+
+        return _lastDiscovery.IedDirectory.Points
+            .Where(x => string.Equals(x.Domain, rcb.Domain, StringComparison.OrdinalIgnoreCase))
+            .Where(x => x.FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase) || x.FunctionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase))
+            .Where(x => x.DataObjectPath.EndsWith("stVal", StringComparison.OrdinalIgnoreCase) ||
+                        x.DataObjectPath.EndsWith("general", StringComparison.OrdinalIgnoreCase) ||
+                        x.DataObjectPath.EndsWith("mag.f", StringComparison.OrdinalIgnoreCase) ||
+                        x.DataObjectPath.EndsWith("cVal.mag.f", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => DynamicPointPriority(x.DataObjectPath))
+            .ThenBy(x => x.UserReference, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.UserReference)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(16)
+            .ToArray();
+    }
+
+    private static int DynamicPointPriority(string path)
+    {
+        var text = path.ToUpperInvariant();
+        if (text.Contains("POS.STVAL", StringComparison.OrdinalIgnoreCase))
+            return 0;
+        if (text.Contains("STR.GENERAL", StringComparison.OrdinalIgnoreCase))
+            return 1;
+        if (text.Contains("OP.GENERAL", StringComparison.OrdinalIgnoreCase))
+            return 2;
+        if (text.Contains("A.", StringComparison.OrdinalIgnoreCase) || text.Contains("PHV.", StringComparison.OrdinalIgnoreCase))
+            return 10;
+        return 100;
+    }
+
+    private void ApplyReportFrameToMonitor(MmsReportFrame frame)
+    {
+        foreach (var value in frame.Values)
+        {
+            var reference = value.MemberReference;
+            var fc = value.Member?.FunctionalConstraint ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(reference))
+                continue;
+
+            var signal = _viewModel.MonitorSignals.FirstOrDefault(x => string.Equals(x.Reference, reference, StringComparison.OrdinalIgnoreCase));
+            if (signal == null)
+            {
+                signal = new MonitorSignalRow(reference, fc, "report", ShortReference(reference));
+                _viewModel.MonitorSignals.Add(signal);
+            }
+
+            signal.Source = "report";
+            signal.Value = value.DisplayValue;
+            signal.Quality = value.FailureCode.HasValue ? "failed" : "-";
+            signal.Status = value.ReasonSummary;
+            signal.MarkUpdated(frame.ReceivedAt);
+        }
+    }
+
     private void Control_Click(object sender, RoutedEventArgs e)
     {
         var reference = _viewModel.SelectedNode?.Reference ?? "-";
@@ -388,17 +490,131 @@ public partial class MainWindow : Window
 
     private void Pin_Click(object sender, RoutedEventArgs e)
     {
-        var reference = _viewModel.SelectedDetailRow != null && !string.IsNullOrWhiteSpace(_viewModel.SelectedDetailRow.Reference)
-            ? _viewModel.SelectedDetailRow.Reference
-            : _viewModel.SelectedNode?.Reference ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(reference))
+        var row = ResolvePinRow();
+        if (row == null)
+        {
+            _viewModel.AddStatus("Warning", "PIN_NO_SIGNAL", "Select a readable DA row, DO summary row, or DataSet member before pinning.");
+            return;
+        }
+
+        var reference = row.Reference;
+        if (_viewModel.MonitorSignals.Any(x => string.Equals(x.Reference, reference, StringComparison.OrdinalIgnoreCase) && string.Equals(x.FunctionalConstraint, row.Fc, StringComparison.OrdinalIgnoreCase)))
             return;
 
-        if (_viewModel.MonitorSignals.Any(x => string.Equals(x.Reference, reference, StringComparison.OrdinalIgnoreCase)))
+        var displayName = string.IsNullOrWhiteSpace(row.Name) ? reference : $"{ShortReference(reference)}";
+        var signal = new MonitorSignalRow(reference, row.Fc, _viewModel.IsOnline ? "polling" : "manual", displayName)
+        {
+            Value = row.Value,
+            Quality = row.Quality,
+            Status = "pinned"
+        };
+        _viewModel.MonitorSignals.Add(signal);
+        _viewModel.AddStatus("Info", "SIGNAL_PINNED", $"Pinned signal to Activity Monitor: {reference} [{row.Fc}]");
+    }
+
+    private DataAttributeDetailRow? ResolvePinRow()
+    {
+        if (_viewModel.SelectedDetailRow != null)
+        {
+            if (IsReadableRow(_viewModel.SelectedDetailRow))
+                return _viewModel.SelectedDetailRow;
+
+            var child = ExpandReadableRows(new[] { _viewModel.SelectedDetailRow })
+                .OrderBy(PinPriority)
+                .FirstOrDefault();
+            if (child != null)
+                return child;
+        }
+
+        return _viewModel.DetailRootRows
+            .SelectMany(row => ExpandReadableRows(new[] { row }))
+            .OrderBy(PinPriority)
+            .FirstOrDefault();
+    }
+
+    private static int PinPriority(DataAttributeDetailRow row)
+    {
+        var name = row.Name.ToUpperInvariant();
+        return name switch
+        {
+            "STVAL" => 0,
+            "GENERAL" => 1,
+            "CVAL" => 2,
+            "INSTCVAL" => 3,
+            "MAG" => 4,
+            "F" => 5,
+            "Q" => 30,
+            "T" => 31,
+            _ => row.Fc.Equals("ST", StringComparison.OrdinalIgnoreCase) ? 10 : row.Fc.Equals("MX", StringComparison.OrdinalIgnoreCase) ? 20 : 100
+        };
+    }
+
+    private async void MonitorTimer_Tick(object? sender, EventArgs e)
+    {
+        var now = DateTimeOffset.Now;
+        foreach (var signal in _viewModel.MonitorSignals)
+            signal.RefreshAge(now);
+
+        if (!_viewModel.IsConnected || !_viewModel.IsOnline || _activeSession == null || _viewModel.MonitorSignals.Count == 0 || _monitorPollInProgress)
             return;
 
-        _viewModel.MonitorSignals.Add(new MonitorSignalRow(reference, _viewModel.IsOnline ? "polling" : "manual"));
-        _viewModel.AddStatus("Info", "SIGNAL_PINNED", $"Pinned signal to Activity Monitor: {reference}");
+        _monitorPollInProgress = true;
+        try
+        {
+            var signals = _viewModel.MonitorSignals.Take(16).ToArray();
+            foreach (var signal in signals)
+            {
+                if (string.IsNullOrWhiteSpace(signal.Reference) || string.IsNullOrWhiteSpace(signal.FunctionalConstraint))
+                    continue;
+
+                try
+                {
+                    var result = await _activeSession.ReadSingleVariableAsync(MmsObjectReference.Parse(signal.Reference, signal.FunctionalConstraint), CancellationToken.None).ConfigureAwait(true);
+                    if (result.IsSuccess)
+                    {
+                        signal.Value = MmsDataValueRenderer.ToCompactString(result.Value, signal.Reference);
+                        signal.Quality = MonitorQualityFromValue(signal.Reference, result.Value);
+                        signal.Source = "polling";
+                        signal.Status = "live";
+                        signal.MarkUpdated(DateTimeOffset.Now);
+                    }
+                    else
+                    {
+                        signal.Value = result.Message;
+                        signal.Quality = "-";
+                        signal.Status = "failed";
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
+                {
+                    signal.Value = ex.Message;
+                    signal.Quality = "-";
+                    signal.Status = "failed";
+                }
+            }
+        }
+        finally
+        {
+            _monitorPollInProgress = false;
+        }
+    }
+
+    private static string MonitorQualityFromValue(string reference, MmsDataValue? value)
+    {
+        if (value == null)
+            return "-";
+        if (reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase))
+        {
+            var quality = Iec61850QualityDecoder.Decode(value);
+            return quality.IsDecoded ? quality.Validity : "-";
+        }
+        return "-";
+    }
+
+    private static string ShortReference(string reference)
+    {
+        var slash = reference.IndexOf('/');
+        return slash >= 0 && slash < reference.Length - 1 ? reference[(slash + 1)..] : reference;
     }
 
     private void Export_Click(object sender, RoutedEventArgs e)
@@ -446,6 +662,63 @@ public partial class MainWindow : Window
         _viewModel.SelectedDetailRow = row;
         _viewModel.RefreshDetailRows();
         e.Handled = true;
+    }
+
+    private IReadOnlyList<DataAttributeDetailRow> BuildSmartReadableRowsForSelection()
+    {
+        if (_viewModel.SelectedDetailRow != null)
+            return ExpandReadableRows(new[] { _viewModel.SelectedDetailRow })
+                .OrderBy(PinPriority)
+                .ToArray();
+
+        var allRows = _viewModel.DetailRootRows.ToArray();
+        if (_viewModel.SelectedNode?.Model is LiveIedLogicalNodeModel logicalNode)
+        {
+            var targets = Iec61850SmartReadPlanBuilder.BuildForLogicalNode(logicalNode, maxDataObjects: 24);
+            var rows = targets
+                .Select(target => FindDetailRowByReference(allRows, target.Reference, target.FunctionalConstraint))
+                .Where(row => row != null)
+                .Cast<DataAttributeDetailRow>()
+                .DistinctBy(row => row.Reference + "|" + row.Fc, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (rows.Length > 0)
+                return rows;
+        }
+
+        if (_viewModel.SelectedNode?.Model is LiveIedDataObjectModel dataObject)
+        {
+            var targets = Iec61850SmartReadPlanBuilder.BuildForDataObject(dataObject);
+            var rows = targets
+                .Select(target => FindDetailRowByReference(allRows, target.Reference, target.FunctionalConstraint))
+                .Where(row => row != null)
+                .Cast<DataAttributeDetailRow>()
+                .DistinctBy(row => row.Reference + "|" + row.Fc, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (rows.Length > 0)
+                return rows;
+        }
+
+        return ExpandReadableRows(allRows)
+            .OrderBy(PinPriority)
+            .ToArray();
+    }
+
+    private static DataAttributeDetailRow? FindDetailRowByReference(IEnumerable<DataAttributeDetailRow> rows, string reference, string fc)
+    {
+        foreach (var row in rows)
+        {
+            if (string.Equals(row.Reference, reference, StringComparison.OrdinalIgnoreCase) &&
+                (string.IsNullOrWhiteSpace(fc) || string.Equals(row.Fc, fc, StringComparison.OrdinalIgnoreCase)))
+            {
+                return row;
+            }
+
+            var child = FindDetailRowByReference(row.Children, reference, fc);
+            if (child != null)
+                return child;
+        }
+
+        return null;
     }
 
     private static IEnumerable<DataAttributeDetailRow> ExpandReadableRows(IEnumerable<DataAttributeDetailRow> roots)
@@ -546,8 +819,16 @@ public partial class MainWindow : Window
         {
             var ldTitle = Iec61850IdentityResolver.DisplayLogicalDevice(identity, byDomain.Key);
             var ld = new IedExplorerNode(ldTitle, ExplorerNodeKind.LogicalDevice, byDomain.Key, byDomain.Key) { IsExpanded = true };
+            var knownDataSetReferences = document.DataSets.Select(x => x.Reference).ToArray();
             foreach (var rcb in byDomain.OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase))
-                ld.Children.Add(new IedExplorerNode(rcb.Name, ExplorerNodeKind.ReportControl, rcb.Reference, rcb.Buffered ? "BRCB" : "URCB") { Model = rcb, Status = StatusMarker(rcb.Status) });
+            {
+                var presentation = MmsReportPresentationBuilder.Build(rcb, knownDataSetReferences);
+                ld.Children.Add(new IedExplorerNode(rcb.Name, ExplorerNodeKind.ReportControl, rcb.Reference, presentation.ModeLabel)
+                {
+                    Model = rcb,
+                    Status = presentation.TreeStatus
+                });
+            }
             reports.Children.Add(ld);
         }
         root.Children.Add(reports);
@@ -685,17 +966,24 @@ public partial class MainWindow : Window
                     rows.Add(new DataAttributeDetailRow(dataSet.Name, "-", "DataSet", dataSet.Reference, "directory not read") { Status = $"{dataSet.MemberCount} member(s)" });
                 break;
             case LiveIedReportControlModel rcb:
+            {
+                var presentation = MmsReportPresentationBuilder.Build(rcb, _viewModel.LastDocument?.DataSets.Select(x => x.Reference).ToArray());
+                AddDetail(rows, "Mode", "RP", "Report", rcb.Reference, presentation.ModeLabel);
+                AddDetail(rows, "Availability", "RP", "Status", rcb.Reference, presentation.DetailStatus);
                 AddDetail(rows, "Enabled", "RP", "Boolean", rcb.Reference + ".RptEna", rcb.EnabledState);
                 AddDetail(rows, "Reserved", "RP", "Boolean", rcb.Reference + ".Resv", rcb.ReservationState);
-                AddDetail(rows, "Owner", "RP", "VisibleString", rcb.Reference + ".Owner", "-");
+                AddDetail(rows, "Owner", "RP", "VisibleString", rcb.Reference + ".Owner", "not present");
                 AddDetail(rows, "Report ID", "RP", "VisibleString", rcb.Reference + ".RptID", rcb.ReportId);
-                AddDetail(rows, "DataSet", "RP", "ObjectReference", rcb.Reference + ".DatSet", rcb.DataSetReference);
+                AddDetail(rows, "DataSet", "RP", "ObjectReference", rcb.Reference + ".DatSet", string.IsNullOrWhiteSpace(rcb.DataSetReference) ? "dynamic slot" : rcb.DataSetReference);
                 AddDetail(rows, "Trigger options", "RP", "BitString", rcb.Reference + ".TrgOps", FormatBitStringSummary(rcb.TriggerOptions, ReportBitStringKind.TriggerOptions));
                 AddDetail(rows, "Optional fields", "RP", "BitString", rcb.Reference + ".OptFlds", FormatBitStringSummary(rcb.OptionalFields, ReportBitStringKind.OptionalFields));
                 AddDetail(rows, "Configuration revision", "RP", "Unsigned", rcb.Reference + ".ConfRev", rcb.ConfRev);
                 AddDetail(rows, "Buffer time (ms)", "RP", "Unsigned", rcb.Reference + ".BufTm", rcb.BufferTimeMs);
                 AddDetail(rows, "Integrity period (ms)", "RP", "Unsigned", rcb.Reference + ".IntgPd", rcb.IntegrityPeriodMs);
+                foreach (var warning in presentation.Warnings.Take(4))
+                    AddDetail(rows, "Readiness note", "RP", "Finding", rcb.Reference, warning);
                 break;
+            }
             case LiveIedControlBlockModel cb:
                 AddDetail(rows, "Kind", "-", cb.Kind, cb.Reference, cb.Kind);
                 AddDetail(rows, "DataSet", "-", "ObjectReference", cb.Reference, cb.DataSetReference);

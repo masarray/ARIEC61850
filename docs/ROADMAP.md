@@ -237,7 +237,9 @@ Adds schema-driven DA value binding for the IED Discovery Workbench. Structured 
 
 
 
-## N5.41.4 Smart Value Reading & Identity Resolver
+## N5.41.4
+- N5.41.5: IED Discovery smart monitoring/report readiness adds Online state gating, live polling Activity Monitor, report-driven monitor updates, and static/dynamic/occupied RCB presentation.
+ Smart Value Reading & Identity Resolver
 
 - Engine-owned IED identity resolver and LD alias display.
 - Smart LN/DO read planning and collapsed DO summary values.

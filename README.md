@@ -195,3 +195,21 @@ This milestone adds a read-only process-bus binding engine. It compares expected
 dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
 dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
 ```
+
+## N5.26 — Expected-vs-Observed Process-Bus Binding
+
+This milestone adds a read-only process-bus binding engine. It compares expected GOOSE/SV streams from SCL against observed PCAP traffic and produces typed Markdown/JSON evidence for missing streams, unexpected streams, APPID/MAC/VLAN/confRev mismatch, and sequence/timing anomalies.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
+dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
+```
+
+## N5.27 — GOOSE Diagnostics Profile
+
+This milestone adds a read-only GOOSE diagnostic engine. It turns SCL expected GOOSE streams and PCAP/live observed summaries into typed findings for missing/extra publishers, APPID/MAC/VLAN/confRev mismatch, DataSet value-count mismatch, `stNum`/`sqNum` anomalies, supervision timeout, test/needs-commissioning flags, and suspicious value changes without state-number increment.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic
+dotnet run --project .\apps\AR.Iec61850.Cli -- goose-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --output .\.artifacts\out\goose-diagnostics.md --json .\.artifacts\out\goose-diagnostics.json
+```

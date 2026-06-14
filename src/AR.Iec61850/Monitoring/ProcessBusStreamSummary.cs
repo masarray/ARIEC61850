@@ -116,6 +116,7 @@ public sealed class ProcessBusStreamSummary
         out string changedSummary)
     {
         PacketCount++;
+        LastDecodedValueCount = valueDisplays.Count;
         LastDiagnostics = diagnostics.ToArray();
 
         var mutableChangedIndexes = new bool[valueDisplays.Count];

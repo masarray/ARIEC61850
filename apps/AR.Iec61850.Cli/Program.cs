@@ -1,6 +1,7 @@
 using AR.Iec61850.Capture;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Diagnostics.Binding;
+using AR.Iec61850.Diagnostics.Goose;
 using AR.Iec61850.Ethernet;
 using AR.Iec61850.Engineering;
 using AR.Iec61850.Goose;
@@ -37,6 +38,7 @@ internal static class Cli
                 "scl-diff" => SclDiff(args[1..]),
                 "scl-engineering-profile" => SclEngineeringProfile(args[1..]),
                 "process-bus-binding-profile" => ProcessBusBindingProfile(args[1..]),
+                "goose-diagnostics-profile" => GooseDiagnosticsProfile(args[1..]),
                 "generate-pcap" => await GeneratePcapAsync(args[1..]).ConfigureAwait(false),
                 "inspect-pcap" => InspectPcap(args[1..]),
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
@@ -220,13 +222,17 @@ internal static class Cli
         var sourceMac = MacAddress.Parse(options.Get("source-mac", "02:00:00:00:99:01"));
         var svFrames = options.GetInt("sv-frames", 16);
         var gooseFrames = options.GetInt("goose-frames", 4);
+        var gooseScenario = options.Get("goose-scenario", "normal");
         var startTime = DateTimeOffset.UtcNow;
 
         var document = new SclParser().Load(args[0]);
         var packets = new List<PcapPacket>();
 
         AppendSampledValuesPackets(document, sourceMac, svFrames, startTime, packets);
-        await AppendGoosePacketsAsync(document, sourceMac, gooseFrames, startTime.AddMilliseconds(1), packets).ConfigureAwait(false);
+        if (gooseScenario.Equals("diagnostic", StringComparison.OrdinalIgnoreCase) || gooseScenario.Equals("anomaly", StringComparison.OrdinalIgnoreCase))
+            AppendGooseDiagnosticPackets(document, sourceMac, Math.Max(gooseFrames, 6), startTime.AddMilliseconds(1), packets);
+        else
+            await AppendGoosePacketsAsync(document, sourceMac, gooseFrames, startTime.AddMilliseconds(1), packets).ConfigureAwait(false);
 
         packets.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
         PcapWriter.WriteAll(args[1], packets);
@@ -234,6 +240,7 @@ internal static class Cli
         Console.WriteLine($"Wrote {packets.Count} Ethernet frames to {Path.GetFullPath(args[1])}");
         Console.WriteLine($"  SV frames: {packets.Count(p => IsEtherType(p.Frame, EthernetConstants.SampledValuesEtherType))}");
         Console.WriteLine($"  GOOSE frames: {packets.Count(p => IsEtherType(p.Frame, EthernetConstants.GooseEtherType))}");
+        Console.WriteLine($"  GOOSE scenario: {gooseScenario}");
         Console.WriteLine("Open the PCAP in Wireshark or feed it to a playback/analyzer tool.");
         return 0;
     }
@@ -302,6 +309,75 @@ internal static class Cli
         }
 
         return profile.IsReady ? 0 : 3;
+    }
+
+
+    private static int GooseDiagnosticsProfile(string[] args)
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("goose-diagnostics-profile requires <scl-file> <pcap-file>.");
+
+        var sclPath = args[0];
+        var pcapPath = args[1];
+        var options = CliOptions.Parse(args[2..]);
+        var rawLimit = options.GetInt("raw-limit", 30);
+        var nominalHz = options.GetDouble("nominal-hz", 50);
+
+        var engineeringProfile = new SclEngineeringProfileBuilder().Load(sclPath);
+        var document = new SclParser().Load(sclPath);
+        var monitor = new ProcessBusStreamMonitor(document, nominalHz);
+        var packets = PcapReader.ReadAll(pcapPath);
+        var gooseFrames = 0;
+        var otherFrames = 0;
+
+        foreach (var packet in packets)
+        {
+            var streamEvent = monitor.Observe(packet);
+            if (streamEvent.Kind == ProcessBusEventKind.Goose)
+                gooseFrames++;
+            else
+                otherFrames++;
+        }
+
+        var profile = new GooseDiagnosticsProfileBuilder().Build(engineeringProfile, monitor.Summaries, Path.GetFileName(sclPath));
+
+        Console.WriteLine("GOOSE diagnostics profile complete.");
+        Console.WriteLine($"  SCL: {Path.GetFullPath(sclPath)}");
+        Console.WriteLine($"  PCAP: {Path.GetFullPath(pcapPath)}");
+        Console.WriteLine($"  Packets: {packets.Count}");
+        Console.WriteLine($"  Decoded GOOSE frames: {gooseFrames}");
+        Console.WriteLine($"  Non-GOOSE/other frames: {otherFrames}");
+        Console.WriteLine($"  Expected streams: {profile.ExpectedStreamCount}");
+        Console.WriteLine($"  Observed streams: {profile.ObservedStreamCount}");
+        Console.WriteLine($"  Bound streams: {profile.BoundStreamCount}");
+        Console.WriteLine($"  Healthy streams: {profile.HealthyStreamCount}");
+        Console.WriteLine($"  High findings: {profile.HighCount}");
+        Console.WriteLine($"  Warning findings: {profile.WarningCount}");
+        Console.WriteLine($"  Sequence anomalies: {profile.SequenceAnomalyCount}");
+        Console.WriteLine($"  Supervision issues: {profile.SupervisionIssueCount}");
+        Console.WriteLine($"  Healthy: {FormatBool(profile.IsHealthy)}");
+        Console.WriteLine();
+
+        Console.WriteLine("Findings:");
+        foreach (var finding in TakeWithLimit(profile.Findings, rawLimit))
+            Console.WriteLine($"  {finding.Severity} {finding.Code}: {finding.Message} Recommendation: {finding.Recommendation}");
+        WriteLimitNotice(profile.Findings.Count, rawLimit, "finding(s)");
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown GOOSE diagnostics profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"JSON GOOSE diagnostics profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.IsHealthy ? 0 : 3;
     }
 
     private static int InspectPcap(string[] args)
@@ -4017,6 +4093,76 @@ internal static class Cli
         }
     }
 
+
+    private static void AppendGooseDiagnosticPackets(
+        SclDocument document,
+        MacAddress sourceMac,
+        int frameCount,
+        DateTimeOffset startTime,
+        ICollection<PcapPacket> packets)
+    {
+        if (frameCount <= 0)
+            return;
+
+        var profiles = GoosePublisherProfile.CreateMany(document);
+        foreach (var profile in profiles)
+        {
+            var eventTimestamp = startTime;
+            var normalValues = BuildGooseStateValues(profile.Entries, eventTimestamp, state: false, stateIndex: 0);
+            var changedValues = BuildGooseStateValues(profile.Entries, eventTimestamp.AddMilliseconds(1500), state: true, stateIndex: 1);
+            var tailValues = BuildGooseStateValues(profile.Entries, eventTimestamp.AddMilliseconds(1600), state: true, stateIndex: 2);
+
+            var scripted = new[]
+            {
+                BuildGoosePacket(profile, sourceMac, normalValues, startTime, stateNumber: 2, sequenceNumber: 0, test: false, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildGoosePacket(profile, sourceMac, normalValues, startTime.AddMilliseconds(100), stateNumber: 2, sequenceNumber: 1, test: false, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildGoosePacket(profile, sourceMac, normalValues, startTime.AddMilliseconds(200), stateNumber: 2, sequenceNumber: 4, test: false, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildGoosePacket(profile, sourceMac, changedValues, startTime.AddMilliseconds(1500), stateNumber: 2, sequenceNumber: 5, test: true, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildGoosePacket(profile, sourceMac, changedValues, startTime.AddMilliseconds(1600), stateNumber: 1, sequenceNumber: 0, test: false, needsCommissioning: true, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildGoosePacket(profile, sourceMac, tailValues.Take(Math.Max(0, tailValues.Count - 1)).ToArray(), startTime.AddMilliseconds(1700), stateNumber: 3, sequenceNumber: 0, test: false, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision + 1U)
+            };
+
+            foreach (var packet in scripted.Take(Math.Max(1, frameCount)))
+                packets.Add(packet);
+        }
+    }
+
+    private static PcapPacket BuildGoosePacket(
+        GoosePublisherProfile profile,
+        MacAddress sourceMac,
+        IReadOnlyList<MmsDataValue> values,
+        DateTimeOffset timestamp,
+        uint stateNumber,
+        uint sequenceNumber,
+        bool test,
+        bool needsCommissioning,
+        uint configurationRevision)
+    {
+        var frame = new GooseFrame
+        {
+            Destination = profile.Destination,
+            Source = sourceMac,
+            Vlan = profile.Vlan,
+            AppId = profile.AppId,
+            Pdu = new GoosePdu
+            {
+                GoCbRef = profile.Stream.ControlBlockReference,
+                TimeAllowedToLiveMilliseconds = profile.Stream.MaxTimeMilliseconds == 0 ? 1000U : profile.Stream.MaxTimeMilliseconds,
+                DataSetReference = profile.Stream.DataSetReference,
+                GoId = string.IsNullOrWhiteSpace(profile.Stream.GoId) ? profile.Stream.ControlName : profile.Stream.GoId,
+                Timestamp = new Iec61850UtcTime(timestamp, Quality: 0),
+                StateNumber = stateNumber,
+                SequenceNumber = sequenceNumber,
+                Test = test,
+                ConfigurationRevision = configurationRevision,
+                NeedsCommissioning = needsCommissioning,
+                Values = values
+            }
+        };
+
+        return new PcapPacket(timestamp, GooseFrameBuilder.BuildEthernetFrame(frame));
+    }
+
     private static IReadOnlyList<MmsDataValue> BuildGooseStateValues(
         IReadOnlyList<SclDataSetEntry> entries,
         DateTimeOffset eventTimestamp,
@@ -5111,7 +5257,8 @@ internal static class Cli
         Console.WriteLine("  scl-diff <golden.scl|golden.iid> <candidate.scl|candidate.iid> [--output .artifacts/out/scl-diff]");
         Console.WriteLine("  scl-engineering-profile <scl-file> [--output .artifacts/out/scl-profile.md] [--json .artifacts/out/scl-profile.json] [--raw-limit 20]");
         Console.WriteLine("  process-bus-binding-profile <scl-file> <pcap-file> [--output .artifacts/out/process-bus-binding.md] [--json .artifacts/out/process-bus-binding.json] [--nominal-hz 50] [--raw-limit 30]");
-        Console.WriteLine("  generate-pcap <scl-file> <output.pcap> [--source-mac XX:XX:XX:XX:XX:XX] [--sv-frames N] [--goose-frames N]");
+        Console.WriteLine("  goose-diagnostics-profile <scl-file> <pcap-file> [--output .artifacts/out/goose-diagnostics.md] [--json .artifacts/out/goose-diagnostics.json] [--nominal-hz 50] [--raw-limit 30]");
+        Console.WriteLine("  generate-pcap <scl-file> <output.pcap> [--source-mac XX:XX:XX:XX:XX:XX] [--sv-frames N] [--goose-frames N] [--goose-scenario normal|diagnostic]");
         Console.WriteLine("  inspect-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50]");
         Console.WriteLine("  stream-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50] [--delay-ms N] [--limit N]");
         Console.WriteLine("  list-adapters");
@@ -5144,6 +5291,8 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- generate-pcap samples/scl/minimal-station.scd .artifacts/out/processbus-demo.pcap");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- process-bus-binding-profile samples/scl/minimal-station.scd .artifacts/out/processbus-demo.pcap --output .artifacts/out/process-bus-binding.md --json .artifacts/out/process-bus-binding.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- generate-pcap samples/scl/minimal-station.scd .artifacts/out/goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- goose-diagnostics-profile samples/scl/minimal-station.scd .artifacts/out/goose-diagnostic-demo.pcap --output .artifacts/out/goose-diagnostics.md --json .artifacts/out/goose-diagnostics.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd --delay-ms 50 --limit 12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl samples/scl/minimal-station.scd --duration-sec 30");

@@ -4,6 +4,22 @@ ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The pr
 
 ## Current source milestone
 
+
+### N5.27 - GOOSE diagnostics profile foundation
+
+- Added `GooseDiagnosticsProfile`, a typed evidence contract for GOOSE health, sequence integrity, supervision, flag status, and SCL-to-traffic consistency.
+- Added `GooseDiagnosticsProfileBuilder` with deterministic findings for missing/extra publishers, APPID/MAC/VLAN/confRev mismatch, DataSet value-count mismatch, `stNum`/`sqNum` gaps or regressions, supervision timeout, test flag, needs-commissioning flag, and suspicious value changes without a state-number increment.
+- Added `goose-diagnostics-profile`, a read-only CLI command that consumes `<scl-file> <pcap-file>` and exports Markdown/JSON diagnostic evidence.
+- Extended `generate-pcap` with `--goose-scenario diagnostic` so the GOOSE finding engine can be tested offline without IED hardware.
+- Added deterministic unit tests for healthy, missing, unexpected, sequence/supervision anomaly, flag detection, and Markdown evidence paths.
+
+Validation command for the new milestone:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic
+dotnet run --project .\apps\AR.Iec61850.Cli -- goose-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --output .\.artifacts\out\goose-diagnostics.md --json .\.artifacts\out\goose-diagnostics.json
+```
+
 ### N5.26 - Expected-vs-observed process-bus binding foundation
 
 - Added `ExpectedObservedBindingProfile`, a typed evidence contract that compares SCL expected GOOSE/SV streams against observed PCAP/live process-bus summaries.
@@ -67,12 +83,6 @@ A public release is allowed only when these gates are true:
 | Evidence | Discovery/report/process-bus commands can export repeatable JSON/Markdown evidence |
 
 ## Near-term engine roadmap
-
-### N5.27 - GOOSE/SV diagnostics hardening
-
-- Promote the new binding profile into a richer GOOSE/SV finding engine.
-- Add duplicate publisher, missing publisher, unexpected publisher, replay-suspicion, flood/storm, TTL expiry, retransmission timing, sample-rate, ASDU/layout, and SV continuity findings.
-- Add live-capture output path in addition to the PCAP evidence path.
 
 ### N5.28 - Report industrial hardening
 

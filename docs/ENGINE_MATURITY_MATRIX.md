@@ -63,3 +63,17 @@ SCL expected GOOSE/SV stream
 ```
 
 This is the foundation for later GOOSE forensic diagnostics, SV analyzer diagnostics, station dataflow validation, and simulator verification.
+
+
+## N5.27 — GOOSE Diagnostics Profile
+
+This milestone promotes GOOSE from basic decode/binding into an explainable diagnostic profile. It provides typed findings for missing expected publishers, unexpected observed publishers, APPID/MAC/VLAN/confRev mismatch, DataSet value-count mismatch, `stNum`/`sqNum` gaps and regressions, duplicate frames, supervision timeout, test flag, needs-commissioning flag, and suspicious value changes without a state-number increment.
+
+```text
+SCL expected GOOSE stream
+→ observed PCAP/live GOOSE summary
+→ sequence/supervision semantic checks
+→ Markdown/JSON evidence
+```
+
+Maturity impact: process-bus GOOSE moves from visibility to actionable engineering diagnostics.

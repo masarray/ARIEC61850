@@ -168,3 +168,20 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\sam
 ```
 
 This command is read-only and is the first offline test path for expected-vs-observed GOOSE/SV diagnostics.
+
+
+## N5.27 — GOOSE Diagnostics Profile
+
+Generate an offline diagnostic PCAP with deterministic GOOSE anomalies:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic
+```
+
+Run the read-only GOOSE diagnostic evidence command:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- goose-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --output .\.artifacts\out\goose-diagnostics.md --json .\.artifacts\out\goose-diagnostics.json
+```
+
+Expected result: the command should report GOOSE findings for sequence/supervision/flag conditions and write Markdown/JSON evidence under `.artifacts\out`.

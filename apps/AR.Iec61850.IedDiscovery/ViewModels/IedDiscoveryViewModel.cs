@@ -25,6 +25,8 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     private string _selectedSubHeader = "Select an LD/LN/DO/DataSet/RCB from the left explorer.";
     private IedExplorerNode? _selectedNode;
     private DataAttributeDetailRow? _selectedDetailRow;
+    private MonitorSignalRow? _selectedMonitorSignal;
+    private bool _isReportMonitorActive;
     private LiveIedModelDiscoveryDocument? _lastDocument;
     private MmsReportSessionProfile? _lastReportProfile;
 
@@ -50,6 +52,9 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     public string SelectedSubHeader { get => _selectedSubHeader; set => SetProperty(ref _selectedSubHeader, value); }
     public IedExplorerNode? SelectedNode { get => _selectedNode; set { if (SetProperty(ref _selectedNode, value)) RaiseCommandState(); } }
     public DataAttributeDetailRow? SelectedDetailRow { get => _selectedDetailRow; set { if (SetProperty(ref _selectedDetailRow, value)) RaiseCommandState(); } }
+    public MonitorSignalRow? SelectedMonitorSignal { get => _selectedMonitorSignal; set { if (SetProperty(ref _selectedMonitorSignal, value)) RaiseCommandState(); } }
+    public bool IsReportMonitorActive { get => _isReportMonitorActive; set { if (SetProperty(ref _isReportMonitorActive, value)) { RaiseCommandState(); OnPropertyChanged(nameof(EnableRcbLabel)); } } }
+    public string EnableRcbLabel => IsReportMonitorActive ? "Stop RCB" : "Enable RCB";
     public LiveIedModelDiscoveryDocument? LastDocument { get => _lastDocument; set { if (SetProperty(ref _lastDocument, value)) RaiseCommandState(); } }
     public MmsReportSessionProfile? LastReportProfile { get => _lastReportProfile; set => SetProperty(ref _lastReportProfile, value); }
 
@@ -59,7 +64,8 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     public bool CanReadAll => !IsBusy && IsConnected && IsOnline && LastDocument != null;
     public bool CanExport => LastDocument != null;
     public bool CanPin => !IsBusy && SelectedNode != null && SelectedNode.Kind is (ExplorerNodeKind.DataObject or ExplorerNodeKind.DataSet or ExplorerNodeKind.ReportControl or ExplorerNodeKind.LogicalNode);
-    public bool CanEnableReport => !IsBusy && IsConnected && IsOnline && SelectedNode?.Kind == ExplorerNodeKind.ReportControl;
+    public bool CanUnpin => !IsBusy && (SelectedMonitorSignal != null || MonitorSignals.Count > 0);
+    public bool CanEnableReport => !IsBusy && IsConnected && IsOnline && (IsReportMonitorActive || SelectedNode?.Kind == ExplorerNodeKind.ReportControl);
     public bool CanControl => !IsBusy && IsConnected && IsOnline && SelectedNode?.Kind == ExplorerNodeKind.DataObject && IsControlCandidate(SelectedNode);
 
     public ObservableCollection<MetricRow> Metrics { get; } = new();
@@ -84,6 +90,8 @@ public sealed class IedDiscoveryViewModel : ObservableObject
         DetailRows.Clear();
         DetailRootRows.Clear();
         MonitorSignals.Clear();
+        SelectedMonitorSignal = null;
+        IsReportMonitorActive = false;
         Summary = "Discovery cleared.";
         ReportProfileSummary = "No report session profile planned yet.";
         SelectedHeader = "No object selected";
@@ -131,7 +139,9 @@ public sealed class IedDiscoveryViewModel : ObservableObject
         OnPropertyChanged(nameof(CanReadAll));
         OnPropertyChanged(nameof(CanExport));
         OnPropertyChanged(nameof(CanPin));
+        OnPropertyChanged(nameof(CanUnpin));
         OnPropertyChanged(nameof(CanEnableReport));
+        OnPropertyChanged(nameof(EnableRcbLabel));
         OnPropertyChanged(nameof(CanControl));
         OnPropertyChanged(nameof(OnlineLabel));
         OnPropertyChanged(nameof(OnlineIcon));

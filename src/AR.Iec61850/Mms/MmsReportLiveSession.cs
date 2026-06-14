@@ -1005,19 +1005,18 @@ public sealed partial class MmsClientSession
             rcbSnapshots.Add(afterEnableSnapshot);
             AddRcbStateChecks(verificationChecks, afterEnableSnapshot, expectedRptEna: true, expectedDataSet: plan.DataSetReference, stage: "after-enable");
 
-            if (triggerGeneralInterrogation && rcb.Attributes.Contains("GI", StringComparer.OrdinalIgnoreCase))
+            if (triggerGeneralInterrogation)
             {
                 var gi = await WriteReportAttributeAsync(rcb, "GI", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(gi);
                 if (!gi.IsSuccess)
-                    warnings.Add("GI=true write failed. Waiting for spontaneous/integrity reports only.");
+                    warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
             }
 
             Func<CancellationToken, Task<MmsReportAttributeWriteStep>>? periodicGiWriter = null;
             if (triggerGeneralInterrogation &&
                 periodicGeneralInterrogationInterval.HasValue &&
-                periodicGeneralInterrogationInterval.Value > TimeSpan.Zero &&
-                rcb.Attributes.Contains("GI", StringComparer.OrdinalIgnoreCase))
+                periodicGeneralInterrogationInterval.Value > TimeSpan.Zero)
             {
                 periodicGiWriter = async token =>
                 {
@@ -1215,12 +1214,12 @@ public sealed partial class MmsClientSession
             rcbSnapshots.Add(afterEnableSnapshot);
             AddRcbStateChecks(verificationChecks, afterEnableSnapshot, expectedRptEna: true, expectedDataSet: plan.DataSetReference, stage: "after-enable");
 
-            if (triggerGeneralInterrogation && rcb.Attributes.Contains("GI", StringComparer.OrdinalIgnoreCase))
+            if (triggerGeneralInterrogation)
             {
                 var gi = await WriteReportAttributeAsync(rcb, "GI", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(gi);
                 if (!gi.IsSuccess)
-                    warnings.Add("GI=true write failed. Waiting for spontaneous/integrity reports only.");
+                    warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
             }
 
             var received = await ReceiveInformationReportsAsync(plan.Members, listenDuration, cancellationToken).ConfigureAwait(false);

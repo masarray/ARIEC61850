@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.IedDiscovery.ViewModels;
+using AR.Iec61850.Mms;
 
 namespace AR.Iec61850.IedDiscovery;
 
@@ -43,12 +44,18 @@ public sealed class EnableReportDialogViewModel : ObservableObject
     private readonly bool _isDynamicSlot;
 
     public EnableReportDialogViewModel(LiveIedReportControlModel rcb, IEnumerable<string> dataSets)
+        : this(ToCandidate(rcb), dataSets)
+    {
+    }
+
+    public EnableReportDialogViewModel(MmsReportControlCandidate rcb, IEnumerable<string> dataSets)
     {
         _isDynamicSlot = string.IsNullOrWhiteSpace(rcb.DataSetReference);
         ReportReference = rcb.Reference;
         ReportId = string.IsNullOrWhiteSpace(rcb.ReportId) ? rcb.Reference : rcb.ReportId;
         SelectedDataSet = _isDynamicSlot ? "<dynamic: temporary DataSet from pinned/priority signals>" : rcb.DataSetReference;
-        CurrentState = $"Enabled={TextOrDash(rcb.EnabledState)}, Reserved={TextOrDash(rcb.ReservationState)}, ConfRev={TextOrDash(rcb.ConfRev)}, BufTm={TextOrDash(rcb.BufferTimeMs)} ms";
+        var reservation = rcb.Buffered ? $"ResvTms={TextOrDash(rcb.ReservationTimeSeconds)}" : $"Resv={TextOrDash(rcb.ReservationState)}";
+        CurrentState = $"RptEna={TextOrDash(rcb.EnabledState)}, {reservation}, DatSet={TextOrDash(rcb.DataSetReference)}, ConfRev={TextOrDash(rcb.ConfRev)}, BufTm={TextOrDash(rcb.BufferTimeMs)} ms";
         ModeText = (rcb.Buffered ? "Buffered" : "Unbuffered") + (_isDynamicSlot ? " dynamic report slot" : " static report control block");
         if (_isDynamicSlot)
             DataSets.Add(SelectedDataSet);
@@ -58,6 +65,28 @@ public sealed class EnableReportDialogViewModel : ObservableObject
             DataSets.Insert(0, SelectedDataSet);
         ApplyDefaults();
     }
+
+    private static MmsReportControlCandidate ToCandidate(LiveIedReportControlModel rcb)
+        => new()
+        {
+            Domain = rcb.Domain,
+            LogicalNode = rcb.LogicalNode,
+            FunctionalConstraint = rcb.Buffered ? "BR" : "RP",
+            Name = rcb.Name,
+            Reference = rcb.Reference,
+            Buffered = rcb.Buffered,
+            DataSetReference = rcb.DataSetReference,
+            ReportId = rcb.ReportId,
+            ConfRev = rcb.ConfRev,
+            TriggerOptions = rcb.TriggerOptions,
+            OptionalFields = rcb.OptionalFields,
+            BufferTimeMs = rcb.BufferTimeMs,
+            IntegrityPeriodMs = rcb.IntegrityPeriodMs,
+            EnabledState = rcb.EnabledState,
+            ReservationState = rcb.ReservationState,
+            ReservationTimeSeconds = rcb.ReservationTimeSeconds,
+            Status = rcb.Status
+        };
 
     public string ReportReference { get; }
     public ObservableCollection<string> DataSets { get; } = new();

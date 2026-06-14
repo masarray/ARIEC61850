@@ -129,13 +129,16 @@
                         <StackPanel><TextBlock Text="📚" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Read all"/></StackPanel>
                     </Button>
                     <Button Style="{StaticResource ToolbarButton}" Click="EnableRcb_Click" IsEnabled="{Binding CanEnableReport}">
-                        <StackPanel><TextBlock Text="☊" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Enable RCB"/></StackPanel>
+                        <StackPanel><TextBlock Text="☊" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="{Binding EnableRcbLabel}"/></StackPanel>
                     </Button>
                     <Button Style="{StaticResource ToolbarButton}" Click="Control_Click" IsEnabled="{Binding CanControl}">
                         <StackPanel><TextBlock Text="⚡" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Control"/></StackPanel>
                     </Button>
                     <Button Style="{StaticResource ToolbarButton}" Click="Pin_Click" IsEnabled="{Binding CanPin}">
                         <StackPanel><TextBlock Text="📌" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Pin"/></StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ToolbarButton}" Click="Unpin_Click" IsEnabled="{Binding CanUnpin}">
+                        <StackPanel><TextBlock Text="⌫" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Unpin"/></StackPanel>
                     </Button>
                     <Button Style="{StaticResource ToolbarButton}" Click="Export_Click" IsEnabled="{Binding CanExport}">
                         <StackPanel><TextBlock Text="⤓" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Export"/></StackPanel>
@@ -219,7 +222,7 @@
                 <Border Style="{StaticResource PanelHeader}">
                     <TextBlock Text="Activity Monitor" Foreground="White" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" />
                 </Border>
-                <DataGrid Grid.Row="1" ItemsSource="{Binding MonitorSignals}">
+                <DataGrid Grid.Row="1" ItemsSource="{Binding MonitorSignals}" SelectedItem="{Binding SelectedMonitorSignal, Mode=TwoWay}">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Signal" Binding="{Binding DisplayName}" Width="1.5*" />
                         <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="70" />

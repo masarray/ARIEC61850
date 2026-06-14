@@ -336,3 +336,11 @@ The IED Discovery Workbench now uses an engine-owned value presentation layer fo
 - Close IED clears explorer and panels.
 - Save discovered model defaults to IID-oriented engine export.
 - Open SCL projects offline SCL into the same explorer/detail visual shape as live discovery.
+
+
+## N5.41.7 IED Discovery Reporting Repair
+
+- Live RCB runtime refresh before detail display and enable planning.
+- Static/dynamic report planning now uses refreshed RCB state.
+- Explicit Pin and Unpin activity monitor workflow.
+- Report group summaries expose locked/static/dynamic state.

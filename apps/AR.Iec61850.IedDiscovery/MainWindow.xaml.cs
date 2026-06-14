@@ -314,8 +314,29 @@ public partial class MainWindow : Window
 
     private async void EnableRcb_Click(object sender, RoutedEventArgs e)
     {
-        if (_viewModel.SelectedNode?.Model is not LiveIedReportControlModel rcb)
+        if (_viewModel.IsReportMonitorActive)
+        {
+            _viewModel.AddStatus("Info", "RCB_MONITOR_STOP", "Report monitor stop requested. The guarded monitor will clean up RptEna/Resv on completion.");
+            _cancellation?.Cancel();
             return;
+        }
+
+        var selectedReference = _viewModel.SelectedNode?.Reference ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(selectedReference))
+            return;
+
+        if (_activeSession == null || _lastDiscovery == null || !_viewModel.IsConnected || !_viewModel.IsOnline)
+        {
+            _viewModel.AddStatus("Warning", "RCB_ENABLE_NOT_CONNECTED", "No active online MMS session is available for guarded report enable.");
+            return;
+        }
+
+        var rcb = await RefreshReportControlRuntimeAsync(selectedReference, updateUi: true).ConfigureAwait(true);
+        if (rcb == null)
+        {
+            _viewModel.AddStatus("Error", "RCB_ENABLE_NO_CANDIDATE", $"Selected report control {selectedReference} was not found in the live report inventory.");
+            return;
+        }
 
         var dataSets = _viewModel.LastDocument?.DataSets.Select(x => x.Reference) ?? Array.Empty<string>();
         var dialogVm = new EnableReportDialogViewModel(rcb, dataSets);
@@ -326,12 +347,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_activeSession == null || _lastDiscovery == null || !_viewModel.IsConnected)
-        {
-            _viewModel.AddStatus("Warning", "RCB_ENABLE_NOT_CONNECTED", "No active live MMS session is available for guarded report enable.");
-            return;
-        }
-
+        // Re-probe immediately before planning. RCB ownership can change while the dialog is open.
+        rcb = await RefreshReportControlRuntimeAsync(rcb.Reference, updateUi: true).ConfigureAwait(true) ?? rcb;
         var isDynamicSlot = string.IsNullOrWhiteSpace(rcb.DataSetReference);
         var plan = BuildSmartReportPlan(rcb, dialogVm.SelectedDataSet, isDynamicSlot);
 
@@ -343,46 +360,62 @@ public partial class MainWindow : Window
             return;
         }
 
+        var actualRcb = plan.ReportControl ?? rcb;
+        var actualDynamic = plan.Mode == MmsReportSubscriptionPlanMode.DynamicDataSet;
         var confirm = MessageBox.Show(this,
-            isDynamicSlot
-                ? $"This will create a temporary dynamic DataSet ({plan.DataSetReference}), bind {rcb.Reference}, enable reports, optionally GI, then clean up. Continue?"
-                : $"This will start a guarded report monitor for {rcb.Reference}.\n\nThe workflow writes RptEna=true, optionally GI=true, listens briefly, then attempts cleanup with RptEna=false. Continue?",
-            isDynamicSlot ? "Guarded Dynamic RCB" : "Guarded Enable RCB",
+            actualDynamic
+                ? $"This will create a temporary dynamic DataSet ({plan.DataSetReference}), bind {actualRcb.Reference}, enable reports, optionally GI, listen briefly, then clean up. Continue?"
+                : $"This will start a guarded report monitor for {actualRcb.Reference}.\n\nThe workflow writes RptEna=true, optionally GI=true, listens briefly, then attempts cleanup with RptEna=false. Continue?",
+            actualDynamic ? "Guarded Dynamic RCB" : "Guarded Enable RCB",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes)
             return;
 
         _viewModel.IsBusy = true;
-        _cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        _viewModel.IsReportMonitorActive = true;
+        _cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(75));
         try
         {
-            _viewModel.AddStatus("Info", "RCB_ENABLE_START", $"Starting guarded {(isDynamicSlot ? "dynamic" : "static")} report enable for {rcb.Reference} using {plan.DataSetReference}.");
-            var result = isDynamicSlot
+            _viewModel.AddStatus("Info", "RCB_ENABLE_START", $"Starting guarded {plan.Mode} report enable for {actualRcb.Reference} using {plan.DataSetReference}. Selected by Smart RCB policy: {plan.RcbSelection.SelectedRcbReference}.");
+            foreach (var warning in plan.Warnings.Take(5))
+                _viewModel.AddStatus("Warning", "RCB_PLAN_WARNING", warning);
+
+            var result = actualDynamic
                 ? await _activeSession.RunGuardedDynamicReportSessionAsync(
                     plan,
-                    TimeSpan.FromSeconds(10),
+                    TimeSpan.FromSeconds(30),
                     triggerGeneralInterrogation: dialogVm.PerformGeneralInterrogation,
                     deleteDataSetOnCleanup: true,
                     cancellationToken: _cancellation.Token,
                     directory: _lastDiscovery.IedDirectory).ConfigureAwait(true)
                 : await _activeSession.RunGuardedStaticReportSessionAsync(
                     plan,
-                    TimeSpan.FromSeconds(10),
+                    TimeSpan.FromSeconds(30),
                     triggerGeneralInterrogation: dialogVm.PerformGeneralInterrogation,
-                    cancellationToken: _cancellation.Token).ConfigureAwait(true);
+                    cancellationToken: _cancellation.Token,
+                    pollDirectory: _lastDiscovery.IedDirectory,
+                    pollReferences: _viewModel.MonitorSignals.Select(x => x.Reference).Take(16).ToArray(),
+                    pollInterval: TimeSpan.FromSeconds(1)).ConfigureAwait(true);
 
-            foreach (var report in result.Reports.Take(8))
+            foreach (var report in result.Reports.Take(32))
                 ApplyReportFrameToMonitor(report);
+            foreach (var poll in result.PollReads.Take(32))
+                ApplyPollReadToMonitor(poll);
+
+            foreach (var snapshot in result.Verification.RcbSnapshots.TakeLast(4))
+                _viewModel.AddStatus(snapshot.IsSuccess ? "Info" : "Warning", "RCB_SNAPSHOT", snapshot.Summary);
 
             var severity = result.IsSuccess ? "Info" : "Error";
-            _viewModel.AddStatus(severity, result.IsSuccess ? "RCB_ENABLE_COMPLETE" : "RCB_ENABLE_FAILED", result.Message);
-            foreach (var warning in result.Warnings.Take(5))
+            _viewModel.AddStatus(severity, result.IsSuccess ? "RCB_ENABLE_COMPLETE" : "RCB_ENABLE_FAILED", result.Message + " " + result.Verification.Summary);
+            foreach (var warning in result.Warnings.Take(8))
                 _viewModel.AddStatus("Warning", "RCB_ENABLE_WARNING", warning);
+
+            await RefreshReportControlRuntimeAsync(actualRcb.Reference, updateUi: true).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
-            _viewModel.AddStatus("Warning", "RCB_ENABLE_CANCELLED", "Guarded report enable was cancelled or timed out.");
+            _viewModel.AddStatus("Warning", "RCB_ENABLE_CANCELLED", "Guarded report enable was cancelled or timed out. Cleanup is attempted by the report session engine.");
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
@@ -391,12 +424,13 @@ public partial class MainWindow : Window
         finally
         {
             _viewModel.IsBusy = false;
+            _viewModel.IsReportMonitorActive = false;
             _cancellation?.Dispose();
             _cancellation = null;
         }
     }
 
-    private MmsReportSubscriptionPlan BuildSmartReportPlan(LiveIedReportControlModel selectedRcb, string selectedDataSet, bool preferDynamic)
+    private MmsReportSubscriptionPlan BuildSmartReportPlan(MmsReportControlCandidate selectedRcb, string selectedDataSet, bool preferDynamic)
     {
         if (_lastDiscovery == null)
             return new MmsReportSubscriptionPlan
@@ -478,7 +512,7 @@ public partial class MainWindow : Window
             allowPollingFallback: false);
     }
 
-    private IReadOnlyList<string> BuildDynamicReportPoints(LiveIedReportControlModel rcb)
+    private IReadOnlyList<string> BuildDynamicReportPoints(MmsReportControlCandidate rcb)
     {
         var pinned = _viewModel.MonitorSignals
             .Where(x => !string.IsNullOrWhiteSpace(x.Reference))
@@ -519,6 +553,105 @@ public partial class MainWindow : Window
         if (text.Contains("A.", StringComparison.OrdinalIgnoreCase) || text.Contains("PHV.", StringComparison.OrdinalIgnoreCase))
             return 10;
         return 100;
+    }
+
+    private async Task<MmsReportControlCandidate?> RefreshReportControlRuntimeAsync(string reference, bool updateUi)
+    {
+        if (_activeSession == null || _lastDiscovery == null || string.IsNullOrWhiteSpace(reference))
+            return FindReportControlCandidate(reference);
+
+        var candidate = FindReportControlCandidate(reference);
+        if (candidate == null)
+            return null;
+
+        try
+        {
+            await _activeSession.ProbeReportControlAttributesAsync(candidate, CancellationToken.None).ConfigureAwait(true);
+            if (!string.IsNullOrWhiteSpace(candidate.DataSetReference) &&
+                !_lastDataSetDirectories.Any(x => string.Equals(NormalizeReportReference(x.DataSetReference), NormalizeReportReference(candidate.DataSetReference), StringComparison.OrdinalIgnoreCase)))
+            {
+                var directory = await _activeSession.GetDataSetDirectoriesAsync(
+                    new[] { candidate.DataSetReference },
+                    _lastDiscovery.IedDirectory,
+                    CancellationToken.None).ConfigureAwait(true);
+                _lastDataSetDirectories = _lastDataSetDirectories
+                    .Concat(directory)
+                    .GroupBy(x => NormalizeReportReference(x.DataSetReference), StringComparer.OrdinalIgnoreCase)
+                    .Select(x => x.First())
+                    .ToArray();
+            }
+
+            _viewModel.AddStatus("Info", "RCB_RUNTIME_READ", $"RCB runtime snapshot: {candidate.Reference} RptEna={TextOrDash(candidate.EnabledState)} DatSet={TextOrDash(candidate.DataSetReference)} Resv={TextOrDash(candidate.ReservationState)} ResvTms={TextOrDash(candidate.ReservationTimeSeconds)}.");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
+        {
+            _viewModel.AddStatus("Warning", "RCB_RUNTIME_READ_FAILED", $"{candidate.Reference}: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        if (updateUi && _viewModel.SelectedNode?.Kind == ExplorerNodeKind.ReportControl &&
+            string.Equals(_viewModel.SelectedNode.Reference, reference, StringComparison.OrdinalIgnoreCase))
+        {
+            PopulateDetails(_viewModel.SelectedNode);
+        }
+
+        return candidate;
+    }
+
+    private MmsReportControlCandidate? FindReportControlCandidate(string reference)
+    {
+        if (_lastDiscovery == null)
+            return null;
+
+        var normalized = NormalizeReportReference(reference);
+        return _lastDiscovery.ReportInventory.ReportControls
+            .FirstOrDefault(x => NormalizeReportReference(x.Reference).Equals(normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static MmsReportControlCandidate ToCandidate(LiveIedReportControlModel rcb)
+        => new()
+        {
+            Domain = rcb.Domain,
+            LogicalNode = rcb.LogicalNode,
+            FunctionalConstraint = rcb.Buffered ? "BR" : "RP",
+            Name = rcb.Name,
+            Reference = rcb.Reference,
+            Buffered = rcb.Buffered,
+            DataSetReference = rcb.DataSetReference,
+            ReportId = rcb.ReportId,
+            ConfRev = rcb.ConfRev,
+            TriggerOptions = rcb.TriggerOptions,
+            OptionalFields = rcb.OptionalFields,
+            BufferTimeMs = rcb.BufferTimeMs,
+            IntegrityPeriodMs = rcb.IntegrityPeriodMs,
+            EnabledState = rcb.EnabledState,
+            ReservationState = rcb.ReservationState,
+            ReservationTimeSeconds = rcb.ReservationTimeSeconds,
+            Status = rcb.Status
+        };
+
+    private static string NormalizeReportReference(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.');
+
+    private static string TextOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+
+    private void ApplyPollReadToMonitor(MmsReportPollRead poll)
+    {
+        if (!poll.IsSuccess || string.IsNullOrWhiteSpace(poll.SelectedReference))
+            return;
+
+        var signal = _viewModel.MonitorSignals.FirstOrDefault(x => string.Equals(x.Reference, poll.SelectedReference, StringComparison.OrdinalIgnoreCase));
+        if (signal == null)
+        {
+            signal = new MonitorSignalRow(poll.SelectedReference, poll.FunctionalConstraint, "poll", ShortReference(poll.SelectedReference));
+            _viewModel.MonitorSignals.Add(signal);
+        }
+
+        signal.Source = "poll";
+        signal.Value = poll.DisplayValue;
+        signal.Quality = "-";
+        signal.Status = poll.Message;
+        signal.MarkUpdated(poll.ReadAt);
     }
 
     private void ApplyReportFrameToMonitor(MmsReportFrame frame)
@@ -578,6 +711,27 @@ public partial class MainWindow : Window
         };
         _viewModel.MonitorSignals.Add(signal);
         _viewModel.AddStatus("Info", "SIGNAL_PINNED", $"Pinned signal to Activity Monitor: {reference} [{row.Fc}]");
+    }
+
+    private void Unpin_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = _viewModel.SelectedMonitorSignal;
+        if (selected == null)
+        {
+            var row = ResolvePinRow();
+            if (row != null)
+                selected = _viewModel.MonitorSignals.FirstOrDefault(x => string.Equals(x.Reference, row.Reference, StringComparison.OrdinalIgnoreCase) && string.Equals(x.FunctionalConstraint, row.Fc, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (selected == null)
+        {
+            _viewModel.AddStatus("Warning", "UNPIN_NO_SIGNAL", "Select a pinned monitor signal before unpinning.");
+            return;
+        }
+
+        _viewModel.MonitorSignals.Remove(selected);
+        _viewModel.SelectedMonitorSignal = null;
+        _viewModel.AddStatus("Info", "SIGNAL_UNPINNED", $"Removed pinned signal from Activity Monitor: {selected.Reference} [{selected.FunctionalConstraint}]");
     }
 
     private DataAttributeDetailRow? ResolvePinRow()
@@ -719,6 +873,9 @@ public partial class MainWindow : Window
         _viewModel.SelectedNode = node;
         PopulateDetails(node);
         _viewModel.RaiseCommandState();
+
+        if (node.Kind == ExplorerNodeKind.ReportControl && _viewModel.IsConnected && _viewModel.IsOnline)
+            _ = RefreshReportControlRuntimeAsync(node.Reference, updateUi: true);
     }
 
     private void DetailRowExpander_Click(object sender, RoutedEventArgs e)
@@ -1001,6 +1158,12 @@ public partial class MainWindow : Window
             _ => node.Subtitle
         };
 
+        if (TryPopulateReportGroupRows(node, rows))
+        {
+            _viewModel.ReplaceDetailRows(rows);
+            return;
+        }
+
         switch (node.Model)
         {
             case LiveIedDataObjectModel dataObject:
@@ -1035,23 +1198,13 @@ public partial class MainWindow : Window
                 break;
             case LiveIedReportControlModel rcb:
             {
-                var presentation = MmsReportPresentationBuilder.Build(rcb, _viewModel.LastDocument?.DataSets.Select(x => x.Reference).ToArray());
-                AddDetail(rows, "Mode", "RP", "Report", rcb.Reference, presentation.ModeLabel);
-                AddDetail(rows, "Availability", "RP", "Status", rcb.Reference, presentation.DetailStatus);
-                AddDetail(rows, "Enabled", "RP", "Boolean", rcb.Reference + ".RptEna", rcb.EnabledState);
-                AddDetail(rows, "Reserved", "RP", "Boolean", rcb.Reference + ".Resv", rcb.ReservationState);
-                AddDetail(rows, "Owner", "RP", "VisibleString", rcb.Reference + ".Owner", "not present");
-                AddDetail(rows, "Report ID", "RP", "VisibleString", rcb.Reference + ".RptID", rcb.ReportId);
-                AddDetail(rows, "DataSet", "RP", "ObjectReference", rcb.Reference + ".DatSet", string.IsNullOrWhiteSpace(rcb.DataSetReference) ? "dynamic slot" : rcb.DataSetReference);
-                AddDetail(rows, "Trigger options", "RP", "BitString", rcb.Reference + ".TrgOps", FormatBitStringSummary(rcb.TriggerOptions, ReportBitStringKind.TriggerOptions));
-                AddDetail(rows, "Optional fields", "RP", "BitString", rcb.Reference + ".OptFlds", FormatBitStringSummary(rcb.OptionalFields, ReportBitStringKind.OptionalFields));
-                AddDetail(rows, "Configuration revision", "RP", "Unsigned", rcb.Reference + ".ConfRev", rcb.ConfRev);
-                AddDetail(rows, "Buffer time (ms)", "RP", "Unsigned", rcb.Reference + ".BufTm", rcb.BufferTimeMs);
-                AddDetail(rows, "Integrity period (ms)", "RP", "Unsigned", rcb.Reference + ".IntgPd", rcb.IntegrityPeriodMs);
-                foreach (var warning in presentation.Warnings.Take(4))
-                    AddDetail(rows, "Readiness note", "RP", "Finding", rcb.Reference, warning);
+                var candidate = FindReportControlCandidate(rcb.Reference) ?? ToCandidate(rcb);
+                AddReportControlDetails(rows, candidate);
                 break;
             }
+            case MmsReportControlCandidate rcb:
+                AddReportControlDetails(rows, rcb);
+                break;
             case LiveIedControlBlockModel cb:
                 AddDetail(rows, "Kind", "-", cb.Kind, cb.Reference, cb.Kind);
                 AddDetail(rows, "DataSet", "-", "ObjectReference", cb.Reference, cb.DataSetReference);
@@ -1067,6 +1220,75 @@ public partial class MainWindow : Window
         }
 
         _viewModel.ReplaceDetailRows(rows);
+    }
+
+    private bool TryPopulateReportGroupRows(IedExplorerNode node, List<DataAttributeDetailRow> rows)
+    {
+        if (_lastDiscovery == null)
+            return false;
+
+        if (node.Kind == ExplorerNodeKind.Section && node.Title.Equals("Reports", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var rcb in _lastDiscovery.ReportInventory.ReportControls.OrderBy(x => x.Domain, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.LogicalNode, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+                AddReportListRow(rows, rcb);
+            _viewModel.SelectedHeader = $"{_identity?.DisplayName ?? _viewModel.Host} • Reports";
+            _viewModel.SelectedSubHeader = "Report Control Blocks. Lock means enabled/reserved by another client; check means static DataSet is mapped; diamond means dynamic slot.";
+            return true;
+        }
+
+        if (node.Kind == ExplorerNodeKind.LogicalDevice &&
+            _lastDiscovery.ReportInventory.ReportControls.Any(x => x.Domain.Equals(node.Reference, StringComparison.OrdinalIgnoreCase)) &&
+            node.Model == null)
+        {
+            foreach (var rcb in _lastDiscovery.ReportInventory.ReportControls.Where(x => x.Domain.Equals(node.Reference, StringComparison.OrdinalIgnoreCase)).OrderBy(x => x.LogicalNode, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+                AddReportListRow(rows, rcb);
+            _viewModel.SelectedHeader = $"{_identity?.DisplayName ?? _viewModel.Host} • Reports • {node.Title}";
+            _viewModel.SelectedSubHeader = "Report Control Blocks in this Logical Device. Select an RCB row in the explorer to read full runtime status.";
+            return true;
+        }
+
+        return false;
+    }
+
+    private void AddReportListRow(ICollection<DataAttributeDetailRow> rows, MmsReportControlCandidate rcb)
+    {
+        var knownDataSets = _lastDataSetDirectories.Select(x => x.DataSetReference).Concat(_viewModel.LastDocument?.DataSets.Select(x => x.Reference) ?? Array.Empty<string>()).ToArray();
+        var presentation = MmsReportPresentationBuilder.Build(rcb, knownDataSets);
+        var row = new DataAttributeDetailRow(rcb.Name, rcb.FunctionalConstraint, rcb.Mode, rcb.Reference, "ReportList")
+        {
+            Value = presentation.DetailStatus,
+            Status = presentation.StatusIcon
+        };
+        row.ReplaceChildren(new[]
+        {
+            new DataAttributeDetailRow("RptEna", "RP", "Boolean", rcb.Reference + ".RptEna", "ReportList", row.Level + 1) { Value = TextOrDash(rcb.EnabledState) },
+            new DataAttributeDetailRow(rcb.Buffered ? "ResvTms" : "Resv", "RP", rcb.Buffered ? "Integer" : "Boolean", rcb.Reference + (rcb.Buffered ? ".ResvTms" : ".Resv"), "ReportList", row.Level + 1) { Value = rcb.Buffered ? TextOrDash(rcb.ReservationTimeSeconds) : TextOrDash(rcb.ReservationState) },
+            new DataAttributeDetailRow("DatSet", "RP", "ObjectReference", rcb.Reference + ".DatSet", "ReportList", row.Level + 1) { Value = string.IsNullOrWhiteSpace(rcb.DataSetReference) ? "dynamic slot" : rcb.DataSetReference },
+            new DataAttributeDetailRow("ConfRev", "RP", "Unsigned", rcb.Reference + ".ConfRev", "ReportList", row.Level + 1) { Value = TextOrDash(rcb.ConfRev) }
+        }, expand: false);
+        rows.Add(row);
+    }
+
+    private void AddReportControlDetails(ICollection<DataAttributeDetailRow> rows, MmsReportControlCandidate rcb)
+    {
+        var knownDataSets = _lastDataSetDirectories.Select(x => x.DataSetReference).Concat(_viewModel.LastDocument?.DataSets.Select(x => x.Reference) ?? Array.Empty<string>()).ToArray();
+        var presentation = MmsReportPresentationBuilder.Build(rcb, knownDataSets);
+        AddDetail(rows, "Mode", rcb.FunctionalConstraint, "Report", rcb.Reference, presentation.ModeLabel);
+        AddDetail(rows, "Availability", rcb.FunctionalConstraint, "Status", rcb.Reference, presentation.DetailStatus);
+        AddDetail(rows, "Enabled", rcb.FunctionalConstraint, "Boolean", rcb.Reference + ".RptEna", rcb.EnabledState);
+        AddDetail(rows, rcb.Buffered ? "Reservation time" : "Reserved", rcb.FunctionalConstraint, rcb.Buffered ? "Integer" : "Boolean", rcb.Reference + (rcb.Buffered ? ".ResvTms" : ".Resv"), rcb.Buffered ? rcb.ReservationTimeSeconds : rcb.ReservationState);
+        AddDetail(rows, "Owner", rcb.FunctionalConstraint, "VisibleString", rcb.Reference + ".Owner", "not present");
+        AddDetail(rows, "Report ID", rcb.FunctionalConstraint, "VisibleString", rcb.Reference + ".RptID", rcb.ReportId);
+        AddDetail(rows, "DataSet", rcb.FunctionalConstraint, "ObjectReference", rcb.Reference + ".DatSet", string.IsNullOrWhiteSpace(rcb.DataSetReference) ? "dynamic slot" : rcb.DataSetReference);
+        AddDetail(rows, "Trigger options", rcb.FunctionalConstraint, "BitString", rcb.Reference + ".TrgOps", FormatBitStringSummary(rcb.TriggerOptions, ReportBitStringKind.TriggerOptions));
+        AddDetail(rows, "Optional fields", rcb.FunctionalConstraint, "BitString", rcb.Reference + ".OptFlds", FormatBitStringSummary(rcb.OptionalFields, ReportBitStringKind.OptionalFields));
+        AddDetail(rows, "Configuration revision", rcb.FunctionalConstraint, "Unsigned", rcb.Reference + ".ConfRev", rcb.ConfRev);
+        AddDetail(rows, "Buffer time (ms)", rcb.FunctionalConstraint, "Unsigned", rcb.Reference + ".BufTm", rcb.BufferTimeMs);
+        AddDetail(rows, "Integrity period (ms)", rcb.FunctionalConstraint, "Unsigned", rcb.Reference + ".IntgPd", rcb.IntegrityPeriodMs);
+        foreach (var warning in presentation.Warnings.Take(4))
+            AddDetail(rows, "Readiness note", rcb.FunctionalConstraint, "Finding", rcb.Reference, warning);
+        foreach (var diagnostic in rcb.ProbeDiagnostics.TakeLast(4))
+            AddDetail(rows, "Probe note", rcb.FunctionalConstraint, "Finding", rcb.Reference, diagnostic);
     }
 
     private static IEnumerable<LiveIedLogicalNodeModel> OrderLogicalNodes(IEnumerable<LiveIedLogicalNodeModel> logicalNodes)

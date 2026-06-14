@@ -23,6 +23,7 @@ ARIEC61850
 │  ├─ AR.Iec61850.Cli
 │  ├─ AR.Iec61850.IedDiscovery
 │  ├─ AR.Iec61850.IedSimulator
+│  ├─ AR.Iec61850.EngineeringWorkbench
 │  └─ AR.Iec61850.SvPublisher
 ├─ tests
 │  └─ AR.Iec61850.Tests
@@ -66,6 +67,8 @@ ARIEC61850
 `apps/AR.Iec61850.IedDiscovery` is the WPF workspace for live MMS model discovery, DataSet directory inspection, RCB inventory, and JSON evidence export.
 
 `apps/AR.Iec61850.IedSimulator` is the WPF offline simulator workspace. It validates model and runtime UX before a network MMS server is implemented.
+
+`apps/AR.Iec61850.EngineeringWorkbench` is a read-only WPF harness over the engine profiles. It orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and evidence export without embedding protocol logic in the UI.
 
 ### Test layer
 

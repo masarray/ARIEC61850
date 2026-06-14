@@ -166,3 +166,8 @@ The server lifecycle now includes a deterministic confirmed-request dispatch pat
 ## N5.37 Public Alpha Readiness
 
 The `public-alpha-readiness-profile` command is the aggregate release gate for the developer-preview engine. It validates SCL engineering, process-bus expected-vs-observed logic, GOOSE/SV diagnostics, and read-only MMS loopback in one Markdown/JSON evidence artifact.
+
+
+## Workbench usability gate
+
+N5.38 adds a WPF Engineering Workbench Alpha. This does not change protocol conformance level by itself, but it raises usability maturity because SCL, PCAP diagnostics, MMS loopback and evidence can now be exercised without remembering individual CLI commands.

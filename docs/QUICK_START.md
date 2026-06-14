@@ -109,6 +109,12 @@ Offline IED simulator workspace:
 dotnet run --project .\apps\AR.Iec61850.IedSimulator -c Release
 ```
 
+Read-only engineering workbench alpha:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench -c Release
+```
+
 The current simulator workspace is intentionally offline. It provides deterministic point values, DataSets, RCB profiles, and JSON export. A network MMS server is a later phase after the model/runtime core is stable.
 
 ## 6. Build a WPF app as a single EXE
@@ -117,6 +123,7 @@ The current simulator workspace is intentionally offline. It provides determinis
 .\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App SvPublisher
 .\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App IedDiscovery
 .\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App IedSimulator
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App EngineeringWorkbench
 ```
 
 The output is created under `.artifacts/release`. The folder is ignored by Git and should not be committed.
@@ -264,3 +271,11 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- public-alpha-readiness-profile --
 ```
 
 A passing result means the engine alpha gates are green: SCL engineering, synthetic process-bus binding, GOOSE/SV diagnostics, and read-only MMS loopback.
+
+## Run the WPF Engineering Workbench Alpha
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench
+```
+
+Use it as a read-only harness: open an SCL file, optionally add a PCAP, run the workbench, review findings, and export Markdown/JSON evidence.

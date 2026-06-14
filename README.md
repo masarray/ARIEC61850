@@ -21,6 +21,7 @@ This repository is intentionally source-first and public-release safe: generated
 | WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher / injector workspace |
 | WPF app | `apps/AR.Iec61850.IedDiscovery` | Live IED discovery workspace for MMS model, DataSet, and RCB inventory |
 | WPF app | `apps/AR.Iec61850.IedSimulator` | Offline IED simulator workspace for deterministic profile, values, DataSets, and RCB planning |
+| WPF app | `apps/AR.Iec61850.EngineeringWorkbench` | Read-only engineering workbench for SCL, PCAP diagnostics, MMS loopback, and evidence export |
 | Simulation library | `src/AR.Iec61850.Simulation` | In-memory IED profile and deterministic point/event simulation foundation |
 | Tests | `tests/AR.Iec61850.Tests` | Automated unit and protocol-shape tests |
 | Samples | `samples/scl` | Small SCL files for local validation and examples |
@@ -44,6 +45,7 @@ Implemented areas include:
 - Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
 - WPF IED Discovery workspace for live MMS model/DataSet/RCB snapshot export.
 - Offline IED Simulator foundation with deterministic point values, DataSets, RCB profiles, and JSON export.
+- WPF Engineering Workbench Alpha that orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and evidence export.
 - Engineering-profile facade that converts live discovery into capability assessment, report-lab readiness, diagnostics, and Markdown evidence.
 - Report-readiness profile engine that produces acceptance gates, RCB candidate ranking, selected static report plan, and guarded session-profile JSON before any RCB write.
 
@@ -79,6 +81,7 @@ Build the WPF apps directly:
 dotnet build .\apps\AR.Iec61850.SvPublisher\AR.Iec61850.SvPublisher.csproj -c Release
 dotnet build .\apps\AR.Iec61850.IedDiscovery\AR.Iec61850.IedDiscovery.csproj -c Release
 dotnet build .\apps\AR.Iec61850.IedSimulator\AR.Iec61850.IedSimulator.csproj -c Release
+dotnet build .\apps\AR.Iec61850.EngineeringWorkbench\AR.Iec61850.EngineeringWorkbench.csproj -c Release
 ```
 
 ## Quick examples
@@ -143,6 +146,7 @@ Local packaging:
 
 ```powershell
 .\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App SvPublisher
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App EngineeringWorkbench
 ```
 
 The script builds and tests the solution, publishes the selected WPF app as a self-contained Windows x64 single EXE, and creates release assets under `.artifacts/release`.
@@ -288,3 +292,13 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- public-alpha-readiness-profile --
 ```
 
 This gate combines SCL engineering, expected-vs-observed process-bus diagnostics, GOOSE/SV healthy baselines, and the read-only MMS loopback alpha. It is an alpha readiness evidence artifact, not a conformance claim.
+
+### WPF Engineering Workbench Alpha
+
+The repository now includes a read-only WPF harness for exercising the engine profiles from one workflow:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench
+```
+
+It opens an SCL file, optionally observes a PCAP, runs SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and exports Markdown/JSON evidence. See `docs/ENGINEERING_WORKBENCH_ALPHA.md`.

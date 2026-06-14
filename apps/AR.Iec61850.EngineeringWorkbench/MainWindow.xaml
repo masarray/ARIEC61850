@@ -1,0 +1,264 @@
+<Window x:Class="AR.Iec61850.EngineeringWorkbench.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ARIEC61850 Engineering Workbench" Height="860" Width="1360" MinHeight="760" MinWidth="1180"
+        Background="#F3F6FB" FontFamily="Segoe UI">
+    <Window.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="CornerRadius" Value="18" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+        <Style x:Key="MetricCard" TargetType="Border">
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="#F8FAFC" />
+            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="Margin" Value="6" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="MinHeight" Value="34" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="MinHeight" Value="34" />
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="CanUserDeleteRows" Value="False" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="GridLinesVisibility" Value="None" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="RowHeight" Value="32" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="White" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="360" />
+            <ColumnDefinition Width="18" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0">
+            <TextBlock Text="Engineering Workbench" FontSize="27" FontWeight="SemiBold" Foreground="#0F172A" />
+            <TextBlock Text="SCL, process-bus diagnostics, MMS loopback and evidence in one read-only harness." TextWrapping="Wrap" Margin="0,4,0,18" Foreground="#64748B" />
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Project inputs" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <TextBlock Text="SCL file" Margin="0,14,0,4" Foreground="#64748B" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Browse" Click="BrowseScl_Click" />
+                        <TextBox Text="{Binding SclPath, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <TextBlock Text="PCAP file (optional)" Margin="0,8,0,4" Foreground="#64748B" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Browse" Click="BrowsePcap_Click" />
+                        <TextBox Text="{Binding PcapPath, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Nominal Hz" VerticalAlignment="Center" Foreground="#64748B" />
+                        <TextBox Grid.Column="1" Text="{Binding NominalFrequencyHz, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Actions" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Content="Run workbench" Click="RunWorkbench_Click" Background="#0F766E" Foreground="White" BorderBrush="#0F766E" />
+                        <Button Content="Public alpha gate" Click="RunPublicAlpha_Click" Background="#1D4ED8" Foreground="White" BorderBrush="#1D4ED8" />
+                        <Button Content="Export evidence" Click="ExportEvidence_Click" />
+                        <Button Content="Clear" Click="Clear_Click" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,10,0,0" Foreground="#475569" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Evidence folder" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <DockPanel Margin="0,12,0,0">
+                        <Button DockPanel.Dock="Right" Content="Choose" Click="BrowseEvidenceFolder_Click" />
+                        <TextBox Text="{Binding EvidenceFolder, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <TextBlock Text="Markdown and JSON are exported as separate profile artifacts. PDF packaging remains a later milestone." TextWrapping="Wrap" Margin="0,10,0,0" Foreground="#64748B" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Safety posture" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#64748B" Text="This workbench is read-only by design. It runs static SCL analysis, PCAP diagnostics, synthetic public-alpha gates, and MMS loopback probes. It does not perform control/write operations on external IEDs." />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="14" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Style="{StaticResource Card}" Margin="0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="480" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Engine profile summary" FontSize="22" FontWeight="SemiBold" Foreground="#0F172A" />
+                        <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,6,0,0" Foreground="#64748B" />
+                        <TextBlock Text="{Binding ActiveTabHint}" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="#0F766E" />
+                    </StackPanel>
+                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Metrics}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel MinWidth="92">
+                                        <TextBlock Text="{Binding Value}" FontSize="20" FontWeight="SemiBold" Foreground="#0F172A" />
+                                        <TextBlock Text="{Binding Label}" Foreground="#64748B" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+
+            <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0">
+                <TabItem Header="Findings">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding Findings}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                                <DataGridTextColumn Header="Area" Binding="{Binding Area}" Width="130" />
+                                <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="190" />
+                                <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="2*" />
+                                <DataGridTextColumn Header="Recommendation" Binding="{Binding Recommendation}" Width="2*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="SCL">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding LogicalNodes}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Reference" Binding="{Binding Reference}" Width="2*" />
+                                <DataGridTextColumn Header="Class" Binding="{Binding LnClass}" Width="90" />
+                                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="120" />
+                                <DataGridTextColumn Header="DataSets" Binding="{Binding DataSets}" Width="90" />
+                                <DataGridTextColumn Header="Reports" Binding="{Binding Reports}" Width="90" />
+                                <DataGridTextColumn Header="GOOSE" Binding="{Binding Goose}" Width="90" />
+                                <DataGridTextColumn Header="SV" Binding="{Binding SampledValues}" Width="90" />
+                                <DataGridTextColumn Header="ExtRef" Binding="{Binding ExtRefs}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="Binding">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding ProcessBusRows}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="80" />
+                                <DataGridTextColumn Header="Expected" Binding="{Binding Expected}" Width="2*" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="130" />
+                                <DataGridTextColumn Header="APPID" Binding="{Binding AppId}" Width="90" />
+                                <DataGridTextColumn Header="Destination" Binding="{Binding Destination}" Width="140" />
+                                <DataGridTextColumn Header="VLAN" Binding="{Binding Vlan}" Width="80" />
+                                <DataGridTextColumn Header="ConfRev" Binding="{Binding ConfRev}" Width="90" />
+                                <DataGridTextColumn Header="Packets" Binding="{Binding Packets}" Width="80" />
+                                <DataGridTextColumn Header="Findings" Binding="{Binding Findings}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="GOOSE">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding GooseRows}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                                <DataGridTextColumn Header="Expected" Binding="{Binding Expected}" Width="2*" />
+                                <DataGridTextColumn Header="Observed" Binding="{Binding Observed}" Width="2*" />
+                                <DataGridTextColumn Header="APPID" Binding="{Binding AppId}" Width="90" />
+                                <DataGridTextColumn Header="Packets" Binding="{Binding Packets}" Width="80" />
+                                <DataGridTextColumn Header="stNum" Binding="{Binding State}" Width="80" />
+                                <DataGridTextColumn Header="sqNum" Binding="{Binding Sequence}" Width="80" />
+                                <DataGridTextColumn Header="Gaps" Binding="{Binding Gaps}" Width="70" />
+                                <DataGridTextColumn Header="Dup" Binding="{Binding Duplicates}" Width="70" />
+                                <DataGridTextColumn Header="TTL" Binding="{Binding Timeouts}" Width="70" />
+                                <DataGridTextColumn Header="Score" Binding="{Binding Score}" Width="70" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="SV">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding SampledValuesRows}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                                <DataGridTextColumn Header="Expected" Binding="{Binding Expected}" Width="2*" />
+                                <DataGridTextColumn Header="Observed" Binding="{Binding Observed}" Width="2*" />
+                                <DataGridTextColumn Header="APPID" Binding="{Binding AppId}" Width="90" />
+                                <DataGridTextColumn Header="Packets" Binding="{Binding Packets}" Width="80" />
+                                <DataGridTextColumn Header="smpCnt" Binding="{Binding SampleCount}" Width="100" />
+                                <DataGridTextColumn Header="Gaps" Binding="{Binding Gaps}" Width="70" />
+                                <DataGridTextColumn Header="Missed" Binding="{Binding Missed}" Width="70" />
+                                <DataGridTextColumn Header="Dup" Binding="{Binding Duplicates}" Width="70" />
+                                <DataGridTextColumn Header="Late" Binding="{Binding OutOfOrder}" Width="70" />
+                                <DataGridTextColumn Header="Sync" Binding="{Binding Sync}" Width="80" />
+                                <DataGridTextColumn Header="Score" Binding="{Binding Score}" Width="70" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="MMS Loopback">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding MmsGates}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Gate" Binding="{Binding Gate}" Width="200" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                                <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="Evidence">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding Evidence}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Artifact" Binding="{Binding Artifact}" Width="220" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+            </TabControl>
+        </Grid>
+    </Grid>
+</Window>

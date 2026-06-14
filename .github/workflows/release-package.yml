@@ -16,6 +16,7 @@ on:
           - SvPublisher
           - IedDiscovery
           - IedSimulator
+          - EngineeringWorkbench
       publish_release:
         description: "Create or update GitHub Release"
         type: boolean
@@ -94,7 +95,7 @@ jobs:
         shell: pwsh
         run: |
           $app = '${{ steps.release.outputs.app }}'
-          $packageName = if ($app -eq 'SvPublisher') { 'ARIEC61850-SvPublisher' } elseif ($app -eq 'IedDiscovery') { 'ARIEC61850-IedDiscovery' } else { 'ARIEC61850-IedSimulator' }
+          $packageName = if ($app -eq 'SvPublisher') { 'ARIEC61850-SvPublisher' } elseif ($app -eq 'IedDiscovery') { 'ARIEC61850-IedDiscovery' } elseif ($app -eq 'IedSimulator') { 'ARIEC61850-IedSimulator' } else { 'ARIEC61850-EngineeringWorkbench' }
           ./scripts/verify-release-package.ps1 -PackagePath ".artifacts/release/$packageName-v${{ steps.release.outputs.version }}-win-x64-single-exe.zip" -Version '${{ steps.release.outputs.version }}' -App $app
 
       - name: Upload workflow artifacts

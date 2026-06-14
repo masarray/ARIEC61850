@@ -26,6 +26,7 @@ dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release
 dotnet build .\apps\AR.Iec61850.SvPublisher\AR.Iec61850.SvPublisher.csproj -c Release
 dotnet build .\apps\AR.Iec61850.IedDiscovery\AR.Iec61850.IedDiscovery.csproj -c Release
 dotnet build .\apps\AR.Iec61850.IedSimulator\AR.Iec61850.IedSimulator.csproj -c Release
+dotnet build .\apps\AR.Iec61850.EngineeringWorkbench\AR.Iec61850.EngineeringWorkbench.csproj -c Release
 ```
 
 Recommended manual checks:

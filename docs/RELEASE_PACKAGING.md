@@ -8,6 +8,7 @@ ARIEC61850 includes a Windows single-file packaging script for the WPF workspace
 .\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App SvPublisher
 .\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App IedDiscovery
 .\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App IedSimulator
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App EngineeringWorkbench
 ```
 
 Supported `-App` values:
@@ -17,13 +18,16 @@ Supported `-App` values:
 | `SvPublisher` | `AR.Iec61850.SvPublisher.exe` | Sampled Values publisher / injector workspace |
 | `IedDiscovery` | `AR.Iec61850.IedDiscovery.exe` | Live MMS model, DataSet, RCB, and discovery evidence workspace |
 | `IedSimulator` | `AR.Iec61850.IedSimulator.exe` | Offline simulator profile, values, DataSets, and RCB planning workspace |
+| `EngineeringWorkbench` | `AR.Iec61850.EngineeringWorkbench.exe` | Read-only SCL, process-bus diagnostics, MMS loopback, and evidence workspace |
 
 Output location example:
 
 ```text
 .artifacts/release/
 ├─ ARIEC61850-IedDiscovery-v0.1.0-win-x64-single-exe.zip
+├─ ARIEC61850-EngineeringWorkbench-v0.1.0-win-x64-single-exe.zip
 ├─ AR.Iec61850.IedDiscovery-v0.1.0-win-x64.exe
+├─ AR.Iec61850.EngineeringWorkbench-v0.1.0-win-x64.exe
 └─ SHA256SUMS.txt
 ```
 

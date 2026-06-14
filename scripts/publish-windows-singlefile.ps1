@@ -15,7 +15,7 @@
 [CmdletBinding()]
 param(
     [string]$Version = "0.1.0",
-    [ValidateSet("SvPublisher", "IedDiscovery", "IedSimulator")]
+    [ValidateSet("SvPublisher", "IedDiscovery", "IedSimulator", "EngineeringWorkbench")]
     [string]$App = "SvPublisher",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
@@ -47,6 +47,13 @@ $Apps = @{
         PackageName = "ARIEC61850-IedSimulator"
         DisplayName = "ARIEC61850 IED Simulator"
         Note = "Offline IED profile, point runtime, DataSet, and RCB planning workspace."
+    }
+    EngineeringWorkbench = @{
+        Project = "apps\AR.Iec61850.EngineeringWorkbench\AR.Iec61850.EngineeringWorkbench.csproj"
+        Exe = "AR.Iec61850.EngineeringWorkbench.exe"
+        PackageName = "ARIEC61850-EngineeringWorkbench"
+        DisplayName = "ARIEC61850 Engineering Workbench"
+        Note = "Read-only SCL, process-bus diagnostics, MMS loopback, and evidence workspace."
     }
 }
 

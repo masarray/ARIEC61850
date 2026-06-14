@@ -39,8 +39,8 @@ Search for accidental unrelated product names, generated evidence, private IP no
 ## Release package
 
 ```powershell
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0
-.\scripts\verify-release-package.cmd -PackagePath .\.artifacts\release\ARIEC61850-SvPublisher-v0.1.0-win-x64-single-exe.zip -Version 0.1.0
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App EngineeringWorkbench
+.\scripts\verify-release-package.cmd -PackagePath .\.artifacts\release\ARIEC61850-EngineeringWorkbench-v0.1.0-win-x64-single-exe.zip -Version 0.1.0 -App EngineeringWorkbench
 ```
 
 Do not commit anything from `.artifacts/release`.

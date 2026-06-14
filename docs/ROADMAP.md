@@ -194,3 +194,10 @@ Server-side progress moves beyond association response. The loopback listener no
 ## N5.37 — Public Alpha Readiness Profile
 
 The next release gate adds `public-alpha-readiness-profile`, an aggregate engine-only evidence command that validates SCL engineering, process-bus binding, GOOSE/SV diagnostics, and read-only MMS loopback before tagging a developer-preview alpha.
+
+
+## N5.38 — Engineering Workbench Alpha
+
+Status: implemented in this milestone.
+
+The workbench is a read-only WPF harness over the engine profile builders. It validates the engine from a usable workflow before final product apps are split/refined.

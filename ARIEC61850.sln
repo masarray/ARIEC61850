@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.IedDiscovery", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.IedSimulator", "apps\AR.Iec61850.IedSimulator\AR.Iec61850.IedSimulator.csproj", "{C3D12F10-2A81-43A6-9BBA-FB789E6641E2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.EngineeringWorkbench", "apps\AR.Iec61850.EngineeringWorkbench\AR.Iec61850.EngineeringWorkbench.csproj", "{7B46B7B7-DF3F-4F3A-9DC9-E49AF0D97B61}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.Simulation", "src\AR.Iec61850.Simulation\AR.Iec61850.Simulation.csproj", "{D1D3776B-E6D0-4F46-832B-78D04C94E83C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850", "src\AR.Iec61850\AR.Iec61850.csproj", "{05261652-315F-4B52-89D3-7F9E26DF018D}"
@@ -56,6 +58,10 @@ Global
 		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B46B7B7-DF3F-4F3A-9DC9-E49AF0D97B61}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B46B7B7-DF3F-4F3A-9DC9-E49AF0D97B61}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B46B7B7-DF3F-4F3A-9DC9-E49AF0D97B61}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B46B7B7-DF3F-4F3A-9DC9-E49AF0D97B61}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

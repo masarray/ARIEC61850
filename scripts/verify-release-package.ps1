@@ -8,7 +8,7 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$PackagePath,
-    [ValidateSet("SvPublisher", "IedDiscovery", "IedSimulator")]
+    [ValidateSet("SvPublisher", "IedDiscovery", "IedSimulator", "EngineeringWorkbench")]
     [string]$App = "SvPublisher",
     [string]$Version = "0.1.0"
 )
@@ -19,6 +19,7 @@ $ExeByApp = @{
     SvPublisher = "AR.Iec61850.SvPublisher.exe"
     IedDiscovery = "AR.Iec61850.IedDiscovery.exe"
     IedSimulator = "AR.Iec61850.IedSimulator.exe"
+    EngineeringWorkbench = "AR.Iec61850.EngineeringWorkbench.exe"
 }
 
 $ResolvedPackage = (Resolve-Path $PackagePath).Path

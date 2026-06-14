@@ -56,6 +56,8 @@ internal static class Cli
                 "mms-handshake-listener-profile" => await MmsHandshakeListenerProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-association-response-profile" => await MmsAssociationResponseProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-confirmed-request-skeleton-profile" => await MmsConfirmedRequestSkeletonProfileAsync(args[1..]).ConfigureAwait(false),
+                "mms-confirmed-request-ber-profile" => await MmsConfirmedRequestBerProfileAsync(args[1..]).ConfigureAwait(false),
+                "mms-readonly-loopback-profile" => await MmsReadOnlyLoopbackProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "mms-model-discover" => await MmsModelDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-scl-export" => await MmsSclExportAsync(args[1..]).ConfigureAwait(false),
@@ -701,6 +703,153 @@ internal static class Cli
             EnsureOutputDirectory(jsonPath);
             File.WriteAllText(jsonPath, profile.ToJson());
             Console.WriteLine($"JSON MMS confirmed-request skeleton profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.IsReady ? 0 : 3;
+    }
+
+
+    private static async Task<int> MmsConfirmedRequestBerProfileAsync(string[] args)
+    {
+        var options = CliOptions.Parse(args);
+        var port = options.GetInt("port", 0);
+        if (port is < 0 or > 65535)
+            throw new ArgumentException("--port must be 0..65535. Use 0 for an ephemeral loopback port.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 5000);
+        if (timeoutMs <= 0)
+            throw new ArgumentException("--timeout-ms must be greater than 0.");
+
+        var steps = options.GetInt("steps", 0);
+        if (steps < 0)
+            throw new ArgumentException("--steps must be greater than or equal to 0.");
+
+        var associationProfile = options.Get("association-profile", "BalancedApTitle");
+        var responseProfile = options.Get("response-profile", "DeterministicInitiateResponse");
+        var profile = await new MmsConfirmedRequestBerProfileBuilder().RunLoopbackProbeAsync(
+            new MmsConfirmedRequestBerOptions
+            {
+                Port = port,
+                ProbeTimeoutMilliseconds = timeoutMs,
+                SimulationSteps = steps,
+                AssociationProfileName = associationProfile,
+                ResponseProfileName = responseProfile
+            }).ConfigureAwait(false);
+
+        Console.WriteLine("MMS confirmed-request BER dispatch profile");
+        Console.WriteLine("Mode: loopback OSI listener probe (TPKT/COTP + ACSE AARE/MMS InitiateResponse + native MMS BER confirmed-request read-only dispatch).");
+        Console.WriteLine($"BER dispatch readiness: {(profile.IsReady ? "READY" : "BLOCKED")}");
+        Console.WriteLine($"Bound port: {profile.BoundPort}");
+        Console.WriteLine($"Accepted connections: {profile.AcceptedConnectionCount}");
+        Console.WriteLine($"Requests: {profile.RequestCount} serverOk={profile.ServerSuccessCount} serverFail={profile.ServerFailureCount} clientDecoded={profile.ClientDecodeSuccessCount}");
+        Console.WriteLine($"Write guard verified: {profile.WriteGuardVerified.ToString().ToLowerInvariant()}");
+        Console.WriteLine();
+        Console.WriteLine("BER dispatch gates:");
+        Console.WriteLine($"  TPKT exchange verified: {profile.TpktExchangeVerified.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  COTP connection confirmed: {profile.CotpConnectionConfirmed.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  Association request observed: {profile.ClientAssociateRequestObserved.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  Association response accepted: {profile.ClientAssociateResponseAccepted.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  Native BER request decoded: {profile.NativeBerRequestDecoded.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  Native BER response encoded: {profile.NativeBerResponseEncoded.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  Client native response decoded: {profile.ClientNativeResponseDecoded.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  Directory dispatch verified: {profile.DirectoryDispatchVerified.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  Read dispatch verified: {profile.ReadDispatchVerified.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  DataSet directory dispatch verified: {profile.DataSetDirectoryDispatchVerified.ToString().ToLowerInvariant()}");
+        Console.WriteLine();
+        Console.WriteLine("Probe results:");
+        foreach (var result in profile.ProbeResults)
+            Console.WriteLine($"  {(result.IsTransportSuccess ? "OK" : "FAIL")} {result.Kind} invoke={result.InvokeId} {TextOrDash(result.Target)} - serverSuccess={result.IsServerSuccess.ToString().ToLowerInvariant()} clientDecode={result.IsClientDecodeSuccess.ToString().ToLowerInvariant()} {result.Message}");
+
+        if (profile.Findings.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Findings:");
+            foreach (var finding in profile.Findings)
+                Console.WriteLine($"  - {finding}");
+        }
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown MMS confirmed-request BER dispatch profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, profile.ToJson());
+            Console.WriteLine($"JSON MMS confirmed-request BER dispatch profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.IsReady ? 0 : 3;
+    }
+
+    private static async Task<int> MmsReadOnlyLoopbackProfileAsync(string[] args)
+    {
+        var options = CliOptions.Parse(args);
+        var port = options.GetInt("port", 0);
+        if (port is < 0 or > 65535)
+            throw new ArgumentException("--port must be 0..65535. Use 0 for an ephemeral loopback port.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 5000);
+        if (timeoutMs <= 0)
+            throw new ArgumentException("--timeout-ms must be greater than 0.");
+
+        var steps = options.GetInt("steps", 0);
+        if (steps < 0)
+            throw new ArgumentException("--steps must be greater than or equal to 0.");
+
+        var associationProfile = options.Get("association-profile", "BalancedApTitle");
+        var responseProfile = options.Get("response-profile", "DeterministicInitiateResponse");
+        var serverName = options.Get("name", "ARIEC61850 Virtual IED");
+        var profile = await new MmsReadOnlyServerLoopbackProfileBuilder().RunAsync(
+            new MmsReadOnlyServerLoopbackOptions
+            {
+                Port = port,
+                ProbeTimeoutMilliseconds = timeoutMs,
+                SimulationSteps = steps,
+                AssociationProfileName = associationProfile,
+                ResponseProfileName = responseProfile,
+                ServerName = serverName
+            }).ConfigureAwait(false);
+
+        Console.WriteLine("MMS read-only server loopback alpha profile");
+        Console.WriteLine("Mode: virtual IED model + TPKT/COTP + ACSE response + native MMS BER confirmed-request dispatch.");
+        Console.WriteLine($"Loopback server readiness: {(profile.IsReady ? "READY" : "BLOCKED")}");
+        Console.WriteLine($"Bound port: {profile.BoundPort}");
+        Console.WriteLine($"Model: LD={profile.LogicalDeviceCount} LN={profile.LogicalNodeCount} points={profile.PointCount} DataSets={profile.DataSetCount} RCB={profile.ReportControlBlockCount}");
+        Console.WriteLine($"Requests: {profile.RequestCount} serverOk={profile.ServerSuccessCount} serverFail={profile.ServerFailureCount} clientDecoded={profile.ClientDecodeSuccessCount}");
+        Console.WriteLine($"Read-only guard ready: {profile.ReadOnlyGuardReady.ToString().ToLowerInvariant()}");
+        Console.WriteLine();
+        Console.WriteLine("Readiness gates:");
+        foreach (var gate in profile.Gates)
+            Console.WriteLine($"  {(gate.IsPass ? "PASS" : "FAIL")} {gate.Name} - {gate.Message}");
+        Console.WriteLine();
+        Console.WriteLine("Service operations:");
+        foreach (var operation in profile.Operations)
+            Console.WriteLine($"  {(operation.IsReady ? "READY" : "BLOCKED")} {operation.Name} [{operation.Access}] - {operation.Notes}");
+
+        if (profile.Findings.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Findings:");
+            foreach (var finding in profile.Findings)
+                Console.WriteLine($"  - {finding}");
+        }
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown MMS read-only server loopback alpha profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, profile.ToJson());
+            Console.WriteLine($"JSON MMS read-only server loopback alpha profile: {Path.GetFullPath(jsonPath)}");
         }
 
         return profile.IsReady ? 0 : 3;
@@ -5844,6 +5993,8 @@ internal static class Cli
         Console.WriteLine("  mms-handshake-listener-profile [--port 0] [--timeout-ms 5000] [--association-profile BalancedApTitle|LegacyMinimal] [--output .artifacts/out/mms-handshake-listener.md] [--json .artifacts/out/mms-handshake-listener.json]");
         Console.WriteLine("  mms-association-response-profile [--port 0] [--timeout-ms 5000] [--association-profile BalancedApTitle|LegacyMinimal] [--response-profile DeterministicInitiateResponse|CompactInitiateResponse] [--output .artifacts/out/mms-association-response.md] [--json .artifacts/out/mms-association-response.json]");
         Console.WriteLine("  mms-confirmed-request-skeleton-profile [--port 0] [--timeout-ms 5000] [--steps N] [--output .artifacts/out/mms-confirmed-request-skeleton.md] [--json .artifacts/out/mms-confirmed-request-skeleton.json]");
+        Console.WriteLine("  mms-confirmed-request-ber-profile [--port 0] [--timeout-ms 5000] [--steps N] [--output .artifacts/out/mms-confirmed-request-ber.md] [--json .artifacts/out/mms-confirmed-request-ber.json]");
+        Console.WriteLine("  mms-readonly-loopback-profile [--port 0] [--timeout-ms 5000] [--steps N] [--name NAME] [--output .artifacts/out/mms-readonly-loopback.md] [--json .artifacts/out/mms-readonly-loopback.json]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile safe-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output .artifacts/out/scl/live-ied.safe-connection.iid] [--ld-name-mode auto|keep] [--output .artifacts/out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
@@ -5885,6 +6036,8 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-handshake-listener-profile --port 0 --output .artifacts/out/mms-handshake-listener.md --json .artifacts/out/mms-handshake-listener.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .artifacts/out/mms-association-response.md --json .artifacts/out/mms-association-response.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-confirmed-request-skeleton-profile --port 0 --output .artifacts/out/mms-confirmed-request-skeleton.md --json .artifacts/out/mms-confirmed-request-skeleton.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-confirmed-request-ber-profile --port 0 --output .artifacts/out/mms-confirmed-request-ber.md --json .artifacts/out/mms-confirmed-request-ber.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-readonly-loopback-profile --port 0 --output .artifacts/out/mms-readonly-loopback.md --json .artifacts/out/mms-readonly-loopback.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.0.2.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.0.2.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output .artifacts/out/ied-model-discovery");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-export-profile safe-connection --ld-name-mode auto --output .artifacts/out/scl/demo-ied.generated.iid");

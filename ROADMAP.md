@@ -194,3 +194,18 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile 
 ## N5.34 — MMS Confirmed Request Skeleton Profile
 
 Server-side progress moves beyond association response. The loopback listener now accepts confirmed-request skeleton envelopes over COTP Data TPDU frames, dispatches read-only operations to the virtual server model, returns confirmed-response skeleton envelopes, and verifies the write guard. This remains intentionally pre-BER for confirmed MMS services; the next maturity step is live MMS ConfirmedRequest BER dispatch.
+
+
+## N5.35 — MMS Confirmed Request BER Dispatch Foundation
+
+- Added a loopback profile that carries native MMS BER ConfirmedRequest payloads after TPKT/COTP/ACSE association.
+- Dispatches read-only GetNameList, Read, GetNamedVariableListAttributes, and Write-rejection probes against the virtual IED model.
+- Exports Markdown/JSON evidence and keeps scope explicit: not yet a complete MMS server, but the first native BER confirmed-request dispatch path.
+
+
+## N5.36 — MMS Read-Only Server Loopback Alpha
+
+- Added a unified read-only server loopback alpha profile that combines the virtual IED model, TPKT/COTP association, ACSE AARE/MMS InitiateResponse profile, and native MMS BER confirmed-request dispatch.
+- Validates model readiness, directory/read/DataSet dispatch, client response decoding, and write rejection guard in a single Markdown/JSON evidence artifact.
+- Keeps scope explicit: still not a complete live MMS server, but now the server-side path has a unified readiness gate suitable for public alpha hardening.
+

@@ -266,10 +266,14 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile 
 This loopback probe verifies TPKT/COTP transport, ACSE AARE response generation, and MMS InitiateResponse marker inspection before live confirmed MMS request dispatch.
 
 
-### MMS confirmed-request skeleton profile
+### MMS confirmed-request and read-only loopback profiles
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-confirmed-request-skeleton-profile --port 0 --output .\.artifacts\out\mms-confirmed-request-skeleton.md --json .\.artifacts\out\mms-confirmed-request-skeleton.json
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-confirmed-request-ber-profile --port 0 --output .\.artifacts\out\mms-confirmed-request-ber.md --json .\.artifacts\out\mms-confirmed-request-ber.json
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-readonly-loopback-profile --port 0 --output .\.artifacts\out\mms-readonly-loopback.md --json .\.artifacts\out\mms-readonly-loopback.json
 ```
 
-This loopback probe validates TCP/TPKT/COTP association plus read-only confirmed-request dispatch using deterministic skeleton envelopes. It is a server-path milestone, not a full MMS ConfirmedRequest BER server claim.
+The skeleton profile validates the request lifecycle with deterministic internal envelopes. The BER profile upgrades that path to native MMS BER confirmed-request payloads. The read-only loopback alpha profile unifies virtual model readiness, association response, native BER dispatch, and write guard evidence into one server-side readiness gate.

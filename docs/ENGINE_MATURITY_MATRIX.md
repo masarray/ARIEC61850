@@ -141,3 +141,23 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile 
 ## N5.34 confirmed-request skeleton gate
 
 The server lifecycle now includes a deterministic confirmed-request dispatch path after ACSE/MMS association. The profile validates directory/read/DataSet request dispatch and write rejection over TPKT/COTP loopback frames. Full MMS ConfirmedRequest BER decoding remains a future maturity gate.
+
+
+## N5.35 — MMS Confirmed Request BER Dispatch Foundation
+
+- Added a loopback profile that carries native MMS BER ConfirmedRequest payloads after TPKT/COTP/ACSE association.
+- Dispatches read-only GetNameList, Read, GetNamedVariableListAttributes, and Write-rejection probes against the virtual IED model.
+- Exports Markdown/JSON evidence and keeps scope explicit: not yet a complete MMS server, but the first native BER confirmed-request dispatch path.
+
+
+## N5.36 — MMS Read-Only Server Loopback Alpha
+
+| Area | Maturity |
+| --- | --- |
+| Virtual IED model | Read-only alpha readiness gate |
+| TPKT/COTP listener path | Loopback verified |
+| ACSE/MMS association response | Deterministic profile verified |
+| MMS BER confirmed-request dispatch | Read-only GetNameList / Read / DataSet directory / Write rejection verified |
+| Safety posture | Write guard enforced |
+| Product claim | Server-side alpha; not yet full live MMS server conformance |
+

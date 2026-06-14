@@ -136,3 +136,8 @@ Test command:
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
 ```
+
+
+## N5.34 confirmed-request skeleton gate
+
+The server lifecycle now includes a deterministic confirmed-request dispatch path after ACSE/MMS association. The profile validates directory/read/DataSet request dispatch and write rejection over TPKT/COTP loopback frames. Full MMS ConfirmedRequest BER decoding remains a future maturity gate.

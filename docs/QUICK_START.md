@@ -242,3 +242,12 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile 
 ```
 
 This loopback probe verifies TPKT/COTP transport, ACSE AARE response generation, and MMS InitiateResponse marker inspection before live confirmed MMS request dispatch.
+
+
+### MMS confirmed-request skeleton profile
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-confirmed-request-skeleton-profile --port 0 --output .\.artifacts\out\mms-confirmed-request-skeleton.md --json .\.artifacts\out\mms-confirmed-request-skeleton.json
+```
+
+This loopback probe validates TCP/TPKT/COTP association plus read-only confirmed-request dispatch using deterministic skeleton envelopes. It is a server-path milestone, not a full MMS ConfirmedRequest BER server claim.

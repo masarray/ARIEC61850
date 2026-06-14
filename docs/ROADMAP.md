@@ -169,3 +169,8 @@ Test command:
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
 ```
+
+
+## N5.34 — MMS Confirmed Request Skeleton Profile
+
+Server-side progress moves beyond association response. The loopback listener now accepts confirmed-request skeleton envelopes over COTP Data TPDU frames, dispatches read-only operations to the virtual server model, returns confirmed-response skeleton envelopes, and verifies the write guard. This remains intentionally pre-BER for confirmed MMS services; the next maturity step is live MMS ConfirmedRequest BER dispatch.

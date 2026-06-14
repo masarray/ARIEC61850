@@ -209,3 +209,8 @@ Server-side progress moves beyond association response. The loopback listener no
 - Validates model readiness, directory/read/DataSet dispatch, client response decoding, and write rejection guard in a single Markdown/JSON evidence artifact.
 - Keeps scope explicit: still not a complete live MMS server, but now the server-side path has a unified readiness gate suitable for public alpha hardening.
 
+
+
+## N5.37 — Public Alpha Readiness Profile
+
+The next release gate adds `public-alpha-readiness-profile`, an aggregate engine-only evidence command that validates SCL engineering, process-bus binding, GOOSE/SV diagnostics, and read-only MMS loopback before tagging a developer-preview alpha.

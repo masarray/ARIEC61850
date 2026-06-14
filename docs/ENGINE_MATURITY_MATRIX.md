@@ -161,3 +161,8 @@ The server lifecycle now includes a deterministic confirmed-request dispatch pat
 | Safety posture | Write guard enforced |
 | Product claim | Server-side alpha; not yet full live MMS server conformance |
 
+
+
+## N5.37 Public Alpha Readiness
+
+The `public-alpha-readiness-profile` command is the aggregate release gate for the developer-preview engine. It validates SCL engineering, process-bus expected-vs-observed logic, GOOSE/SV diagnostics, and read-only MMS loopback in one Markdown/JSON evidence artifact.

@@ -255,3 +255,12 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-readonly-loopback-profile --p
 ```
 
 The skeleton profile validates the request lifecycle with deterministic internal envelopes. The BER profile upgrades that path to native MMS BER confirmed-request payloads. The read-only loopback alpha profile unifies virtual model readiness, association response, native BER dispatch, and write guard evidence into one server-side readiness gate.
+
+
+## Public alpha readiness gate
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- public-alpha-readiness-profile --output .\.artifacts\out\public-alpha-readiness.md --json .\.artifacts\out\public-alpha-readiness.json
+```
+
+A passing result means the engine alpha gates are green: SCL engineering, synthetic process-bus binding, GOOSE/SV diagnostics, and read-only MMS loopback.

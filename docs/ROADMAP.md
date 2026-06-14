@@ -4,6 +4,27 @@ ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The pr
 
 ## Current source milestone
 
+### N5.26 - Expected-vs-observed process-bus binding foundation
+
+- Added `ExpectedObservedBindingProfile`, a typed evidence contract that compares SCL expected GOOSE/SV streams against observed PCAP/live process-bus summaries.
+- Added `ExpectedObservedBindingProfileBuilder` with deterministic findings for missing expected streams, unexpected observed streams, APPID/MAC/VLAN/confRev mismatch, DataSet value-count mismatch when available, and sequence/timing anomalies.
+- Added `process-bus-binding-profile`, a read-only CLI command that consumes `<scl-file> <pcap-file>` and exports Markdown/JSON evidence.
+- Added deterministic unit tests for exact binding, missing expected streams, unexpected observed streams, partial mismatch detection, and Markdown evidence.
+- This is the first bridge from static SCL engineering into observed process-bus traffic, preparing the engine for full GOOSE/SV diagnostics and station-level mapping validation.
+
+Validation command for the new milestone:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
+dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
+```
+
+### N5.25 - SCL engineering profile foundation
+
+- Added an offline SCL engineering profile engine that extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings.
+- Added `scl-engineering-profile`, an offline CLI command that exports Markdown/JSON profile evidence without requiring live hardware.
+- Added tests for SCL profile extraction, ExtRef mapping, service declaration extraction, incomplete process-bus binding detection, and Markdown generation.
+
 ### N5.24 - Report readiness profile foundation
 
 - Added a static report readiness profile builder that turns live discovery + DataSet directory evidence into acceptance gates, RCB candidate ranking, selected static report plan, diagnostics, and guarded session profile JSON.
@@ -11,12 +32,6 @@ ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The pr
 - Added `Iec61850Client.DiscoverStaticReportReadinessProfileAsync(...)` so product apps can request a report profile without touching low-level MMS session classes.
 - Added `mms-report-readiness-profile`, a read-only CLI command that can export Markdown, JSON readiness evidence, and a guarded report-session profile.
 - Added deterministic unit tests for ready, blocked, occupied, reserved, and Markdown evidence cases.
-
-Validation command for the new milestone:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --output .artifacts/out/report-readiness.md --json .artifacts/out/report-readiness.json --session-json .artifacts/out/report-session-profile.json
-```
 
 ### N5.23 - Engine hygiene and engineering-profile foundation
 
@@ -53,31 +68,18 @@ A public release is allowed only when these gates are true:
 
 ## Near-term engine roadmap
 
-### N5.25 - ACSI service facade hardening
+### N5.27 - GOOSE/SV diagnostics hardening
 
-- Expand `Iec61850Client` into explicit service groups: model browser, data reader, DataSet client, report client, and file/log/setting placeholders.
-- Add service-result contracts for all public engine calls.
-- Add a deterministic fake session interface so high-level service workflows can be tested without a live IED.
-- Add profile JSON export/import for engineering and report readiness profiles.
+- Promote the new binding profile into a richer GOOSE/SV finding engine.
+- Add duplicate publisher, missing publisher, unexpected publisher, replay-suspicion, flood/storm, TTL expiry, retransmission timing, sample-rate, ASDU/layout, and SV continuity findings.
+- Add live-capture output path in addition to the PCAP evidence path.
 
-### N5.26 - SCL deep model phase 1
-
-- Resolve `DataTypeTemplates`: `LNodeType`, `DOType`, `DAType`, `EnumType`.
-- Parse and normalize `Services`, `Communication`, `ConnectedAP`, `Address/P`, `GSE`, `SMV`, `Inputs/ExtRef`, and `ClientLN`.
-- Generate expected-vs-observed models for reports, GOOSE, SV, and DataSets.
-
-### N5.27 - Report industrial hardening
+### N5.28 - Report industrial hardening
 
 - Implement explicit URCB/BRCB state machine.
 - Handle `Resv`, `ResvTms`, `Owner`, `EntryID`, `PurgeBuf`, `BufOvfl`, `TrgOps`, `OptFlds`, `BufTm`, and `IntgPd` as first-class typed fields.
 - Add report member-order validation using DataSet directory evidence.
 - Add report loss, duplicate, stale timestamp, and GI-result diagnostics.
-
-### N5.28 - GOOSE diagnostics engine
-
-- Add SCL-bound expected stream profiles.
-- Add `stNum/sqNum` state machine, TTL expiry, retransmission timing, VLAN/AppID/MAC/confRev checks, and expected-vs-observed matching.
-- Add PCAP replay findings for missing publisher, duplicate publisher, unexpected publisher, replay suspicion, and flood/storm patterns.
 
 ### N5.29 - Sampled Values analyzer engine
 

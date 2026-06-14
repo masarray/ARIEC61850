@@ -1,5 +1,6 @@
 using AR.Iec61850.Capture;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Diagnostics.Binding;
 using AR.Iec61850.Ethernet;
 using AR.Iec61850.Engineering;
 using AR.Iec61850.Goose;
@@ -35,6 +36,7 @@ internal static class Cli
                 "inspect-scl" => InspectScl(args[1..]),
                 "scl-diff" => SclDiff(args[1..]),
                 "scl-engineering-profile" => SclEngineeringProfile(args[1..]),
+                "process-bus-binding-profile" => ProcessBusBindingProfile(args[1..]),
                 "generate-pcap" => await GeneratePcapAsync(args[1..]).ConfigureAwait(false),
                 "inspect-pcap" => InspectPcap(args[1..]),
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
@@ -234,6 +236,72 @@ internal static class Cli
         Console.WriteLine($"  GOOSE frames: {packets.Count(p => IsEtherType(p.Frame, EthernetConstants.GooseEtherType))}");
         Console.WriteLine("Open the PCAP in Wireshark or feed it to a playback/analyzer tool.");
         return 0;
+    }
+
+    private static int ProcessBusBindingProfile(string[] args)
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("process-bus-binding-profile requires <scl-file> <pcap-file>.");
+
+        var sclPath = args[0];
+        var pcapPath = args[1];
+        var options = CliOptions.Parse(args[2..]);
+        var rawLimit = options.GetInt("raw-limit", 30);
+        var nominalHz = options.GetDouble("nominal-hz", 50);
+
+        var engineeringProfile = new SclEngineeringProfileBuilder().Load(sclPath);
+        var document = new SclParser().Load(sclPath);
+        var monitor = new ProcessBusStreamMonitor(document, nominalHz);
+        var packets = PcapReader.ReadAll(pcapPath);
+        var decodedFrames = 0;
+        var otherFrames = 0;
+
+        foreach (var packet in packets)
+        {
+            var streamEvent = monitor.Observe(packet);
+            if (streamEvent.Kind == ProcessBusEventKind.Unknown)
+                otherFrames++;
+            else
+                decodedFrames++;
+        }
+
+        var profile = new ExpectedObservedBindingProfileBuilder().Build(engineeringProfile, monitor.Summaries, Path.GetFileName(sclPath));
+
+        Console.WriteLine("Expected-vs-observed process-bus binding complete.");
+        Console.WriteLine($"  SCL: {Path.GetFullPath(sclPath)}");
+        Console.WriteLine($"  PCAP: {Path.GetFullPath(pcapPath)}");
+        Console.WriteLine($"  Packets: {packets.Count}");
+        Console.WriteLine($"  Decoded process-bus frames: {decodedFrames}");
+        Console.WriteLine($"  Other frames: {otherFrames}");
+        Console.WriteLine($"  Expected GOOSE: {profile.ExpectedGooseCount}, observed={profile.ObservedGooseCount}, bound={profile.BoundGooseCount}");
+        Console.WriteLine($"  Expected SV: {profile.ExpectedSampledValuesCount}, observed={profile.ObservedSampledValuesCount}, bound={profile.BoundSampledValuesCount}");
+        Console.WriteLine($"  Missing expected: {profile.MissingExpectedCount}");
+        Console.WriteLine($"  Unexpected observed: {profile.UnexpectedObservedCount}");
+        Console.WriteLine($"  Mismatches: {profile.MismatchCount}");
+        Console.WriteLine($"  Sequence anomalies: {profile.SequenceAnomalyCount}");
+        Console.WriteLine($"  Ready: {FormatBool(profile.IsReady)}");
+        Console.WriteLine();
+
+        Console.WriteLine("Findings:");
+        foreach (var finding in TakeWithLimit(profile.Findings, rawLimit))
+            Console.WriteLine($"  {finding.Severity} {finding.Code}: {finding.Message}");
+        WriteLimitNotice(profile.Findings.Count, rawLimit, "finding(s)");
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown binding profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"JSON binding profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.IsReady ? 0 : 3;
     }
 
     private static int InspectPcap(string[] args)
@@ -5042,6 +5110,7 @@ internal static class Cli
         Console.WriteLine("  inspect-scl <file.scd|file.cid|file.icd|file.iid>");
         Console.WriteLine("  scl-diff <golden.scl|golden.iid> <candidate.scl|candidate.iid> [--output .artifacts/out/scl-diff]");
         Console.WriteLine("  scl-engineering-profile <scl-file> [--output .artifacts/out/scl-profile.md] [--json .artifacts/out/scl-profile.json] [--raw-limit 20]");
+        Console.WriteLine("  process-bus-binding-profile <scl-file> <pcap-file> [--output .artifacts/out/process-bus-binding.md] [--json .artifacts/out/process-bus-binding.json] [--nominal-hz 50] [--raw-limit 30]");
         Console.WriteLine("  generate-pcap <scl-file> <output.pcap> [--source-mac XX:XX:XX:XX:XX:XX] [--sv-frames N] [--goose-frames N]");
         Console.WriteLine("  inspect-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50]");
         Console.WriteLine("  stream-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50] [--delay-ms N] [--limit N]");
@@ -5074,6 +5143,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- scl-engineering-profile samples/scl/minimal-station.scd --output .artifacts/out/scl-profile.md --json .artifacts/out/scl-profile.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- generate-pcap samples/scl/minimal-station.scd .artifacts/out/processbus-demo.pcap");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- inspect-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- process-bus-binding-profile samples/scl/minimal-station.scd .artifacts/out/processbus-demo.pcap --output .artifacts/out/process-bus-binding.md --json .artifacts/out/process-bus-binding.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd --delay-ms 50 --limit 12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl samples/scl/minimal-station.scd --duration-sec 30");

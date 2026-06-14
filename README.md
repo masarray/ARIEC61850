@@ -165,6 +165,7 @@ Do not commit `.artifacts/`, `out/`, `evidence/`, captures, DLL/EXE/PDB files, o
 - [Quick Start](docs/QUICK_START.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [MMS Reporting Workflow](docs/REPORTING_WORKFLOW.md)
+- [Process-Bus Binding Profile](docs/PROCESS_BUS_BINDING_PROFILE.md)
 - [Full Stack Roadmap](docs/FULL_STACK_ROADMAP.md)
 - [GOOSE Engine Audit](docs/GOOSE_ENGINE_AUDIT.md)
 - [Release Packaging](docs/RELEASE_PACKAGING.md)
@@ -185,3 +186,12 @@ Active MMS writes, report enable operations, GOOSE publishing, and Sampled Value
 ## N5.25 — SCL Deep Engineering Profile
 
 This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.
+
+## N5.26 — Expected-vs-Observed Process-Bus Binding
+
+This milestone adds a read-only process-bus binding engine. It compares expected GOOSE/SV streams from SCL against observed PCAP traffic and produces typed Markdown/JSON evidence for missing streams, unexpected streams, APPID/MAC/VLAN/confRev mismatch, and sequence/timing anomalies.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
+dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
+```

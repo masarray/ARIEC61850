@@ -50,3 +50,16 @@ The profile is considered ready only when model discovery, DataSet directory mem
 ## N5.25 — SCL Deep Engineering Profile
 
 This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.
+
+## N5.26 — Expected-vs-Observed Process-Bus Binding
+
+This milestone bridges the SCL engineering profile with observed process-bus summaries from PCAP/live capture. It provides typed findings for missing expected GOOSE/SV streams, unexpected observed streams, APPID/MAC/VLAN/confRev mismatch, optional DataSet value-count mismatch, and sequence/timing anomalies.
+
+```text
+SCL expected GOOSE/SV stream
+→ observed ProcessBusStreamSummary
+→ binding profile
+→ finding/evidence
+```
+
+This is the foundation for later GOOSE forensic diagnostics, SV analyzer diagnostics, station dataflow validation, and simulator verification.

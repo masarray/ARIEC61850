@@ -152,3 +152,19 @@ This command is also read-only. It produces acceptance gates, RCB candidate rank
 ## N5.25 — SCL Deep Engineering Profile
 
 This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.
+
+## N5.26 — Expected-vs-Observed Process-Bus Binding
+
+Generate a deterministic process-bus PCAP from the sample SCL:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
+```
+
+Compare the SCL expected model against the observed PCAP:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
+```
+
+This command is read-only and is the first offline test path for expected-vs-observed GOOSE/SV diagnostics.

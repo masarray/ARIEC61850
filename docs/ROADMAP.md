@@ -152,3 +152,11 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --p
 
 The engine now has an offline server-side model profile that converts the simulator profile into a read-only virtual IED. It can be tested without hardware using `mms-server-readonly-profile`, and it validates directory, read, DataSet read, RCB exposure, and write rejection.
 
+### N5.31 MMS handshake codec profile
+
+N5.31 adds an offline handshake codec evidence path for the server-side roadmap. It validates TPKT framing, COTP CR/CC/Data TPDU handling, and ISO Session / ACSE / MMS association payload inspection before the listener skeleton is upgraded to real MMS PDU handling.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
+```
+

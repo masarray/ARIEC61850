@@ -112,3 +112,12 @@ virtual IED profile
 ```
 
 Scope boundary: the harness intentionally uses a JSON-line probe protocol. The next milestone should replace the probe decoder with TPKT/COTP/ACSE/MMS request handling while keeping the same read-only service semantics.
+
+### N5.31 MMS handshake codec profile
+
+N5.31 adds an offline handshake codec evidence path for the server-side roadmap. It validates TPKT framing, COTP CR/CC/Data TPDU handling, and ISO Session / ACSE / MMS association payload inspection before the listener skeleton is upgraded to real MMS PDU handling.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
+```
+

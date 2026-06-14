@@ -15,10 +15,14 @@ ARIEC61850
 │  │  ├─ Scl / SCL parser and publisher profiles
 │  │  ├─ Capture / PCAP writer/reader
 │  │  └─ Monitoring / stream diagnostics
+│  ├─ AR.Iec61850.Simulation
+│  │  └─ Offline IED profile, point runtime, DataSet, and RCB simulation foundation
 │  └─ AR.Iec61850.Transports.Npcap
 │     └─ Npcap-backed raw Ethernet transport
 ├─ apps
 │  ├─ AR.Iec61850.Cli
+│  ├─ AR.Iec61850.IedDiscovery
+│  ├─ AR.Iec61850.IedSimulator
 │  └─ AR.Iec61850.SvPublisher
 ├─ tests
 │  └─ AR.Iec61850.Tests
@@ -43,6 +47,10 @@ ARIEC61850
 
 `src/AR.Iec61850` contains the reusable implementation: BER, MMS, GOOSE, SV, PCAP, SCL, and diagnostics.
 
+### Simulation layer
+
+`src/AR.Iec61850.Simulation` contains the offline IED simulator foundation. It models logical devices, logical nodes, points, DataSets, RCB profiles, deterministic value changes, and event snapshots without opening a network server.
+
 ### Transport layer
 
 `src/AR.Iec61850.Transports.Npcap` contains live raw Ethernet integration. It is intentionally separate so the core library remains usable without installing Npcap.
@@ -53,8 +61,12 @@ ARIEC61850
 
 ### Desktop layer
 
-`apps/AR.Iec61850.SvPublisher` is the current WPF desktop workspace for Sampled Values publishing.
+`apps/AR.Iec61850.SvPublisher` is the WPF desktop workspace for Sampled Values publishing/injection.
+
+`apps/AR.Iec61850.IedDiscovery` is the WPF workspace for live MMS model discovery, DataSet directory inspection, RCB inventory, and JSON evidence export.
+
+`apps/AR.Iec61850.IedSimulator` is the WPF offline simulator workspace. It validates model and runtime UX before a network MMS server is implemented.
 
 ### Test layer
 
-`tests/AR.Iec61850.Tests` validates codecs, protocol shape, reporting planners, PCAP helpers, SCL parsing, and stream diagnostics.
+`tests/AR.Iec61850.Tests` validates codecs, protocol shape, reporting planners, PCAP helpers, SCL parsing, stream diagnostics, and simulator runtime shape.

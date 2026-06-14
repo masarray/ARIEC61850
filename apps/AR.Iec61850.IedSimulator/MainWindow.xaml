@@ -1,0 +1,159 @@
+<Window x:Class="AR.Iec61850.IedSimulator.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ARIEC61850 IED Simulator" Height="820" Width="1280" MinHeight="720" MinWidth="1120"
+        Background="#F6F7FB" FontFamily="Segoe UI">
+    <Window.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="CornerRadius" Value="18" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="GridLinesVisibility" Value="None" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="RowHeight" Value="34" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Style="{StaticResource Card}" Margin="0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="360" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="IED Simulator Workspace" FontSize="28" FontWeight="SemiBold" Foreground="#111827" />
+                    <TextBlock Text="{Binding ProfileSummary}" Margin="0,6,0,0" Foreground="#64748B" TextWrapping="Wrap" />
+                    <WrapPanel Margin="0,16,0,0">
+                        <Button Content="Start" Click="Start_Click" Background="#2563EB" Foreground="White" BorderBrush="#2563EB" />
+                        <Button Content="Stop" Click="Stop_Click" />
+                        <Button Content="Step once" Click="Step_Click" />
+                        <Button Content="Reset" Click="Reset_Click" />
+                        <Button Content="Export profile" Click="Export_Click" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Status}" Margin="0,12,0,0" Foreground="#475569" TextWrapping="Wrap" />
+                </StackPanel>
+                <ItemsControl Grid.Column="1" ItemsSource="{Binding Metrics}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="12" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" Padding="12" Margin="6">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Value}" FontSize="20" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Label}" Foreground="#64748B" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Style="{StaticResource Card}" Margin="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Live point values" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Points}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Reference" Binding="{Binding Reference}" Width="2*" />
+                            <DataGridTextColumn Header="FC" Binding="{Binding FunctionalConstraint}" Width="70" />
+                            <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="110" />
+                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="110" />
+                            <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="70" />
+                            <DataGridTextColumn Header="Q" Binding="{Binding Quality}" Width="90" />
+                            <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="110" />
+                            <DataGridTextColumn Header="UTC" Binding="{Binding Timestamp}" Width="130" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="14" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource Card}" Margin="0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="DataSets and RCBs" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <TabControl Grid.Row="1" BorderThickness="0">
+                            <TabItem Header="DataSets">
+                                <DataGrid ItemsSource="{Binding DataSets}">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Reference" Binding="{Binding Reference}" Width="*" />
+                                        <DataGridTextColumn Header="Members" Binding="{Binding MemberCount}" Width="90" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                            <TabItem Header="RCB">
+                                <DataGrid ItemsSource="{Binding Reports}">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Reference" Binding="{Binding Reference}" Width="2*" />
+                                        <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="80" />
+                                        <DataGridTextColumn Header="DataSet" Binding="{Binding DataSet}" Width="2*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                        </TabControl>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Generated event stream" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding Events}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="90" />
+                                <DataGridTextColumn Header="Reference" Binding="{Binding Reference}" Width="2*" />
+                                <DataGridTextColumn Header="Change" Binding="{Binding Change}" Width="*" />
+                                <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="110" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

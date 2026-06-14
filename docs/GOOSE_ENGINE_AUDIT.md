@@ -105,9 +105,9 @@ Professional engineering tools emphasize workflows that visualize SCL, trace sig
 Commands run for N5.19:
 
 ```powershell
-dotnet 'C:\Program Files\dotnet\sdk\10.0.301\dotnet.dll' build .\apps\AR.Iec61850.Cli\AR.Iec61850.Cli.csproj -c Release --no-restore --no-incremental
-dotnet 'C:\Program Files\dotnet\sdk\10.0.301\dotnet.dll' build .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-restore --no-incremental
-dotnet 'C:\Program Files\dotnet\sdk\10.0.301\dotnet.dll' test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build
+dotnet build .\apps\AR.Iec61850.Cli\AR.Iec61850.Cli.csproj -c Release --no-restore --no-incremental
+dotnet build .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-restore --no-incremental
+dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build
 dotnet .\.artifacts\bin\AR.Iec61850.Cli\Release\net8.0\AR.Iec61850.Cli.dll generate-pcap .\samples\scl\minimal-station.scd .\out\n5-19-goose-demo.pcap
 dotnet .\.artifacts\bin\AR.Iec61850.Cli\Release\net8.0\AR.Iec61850.Cli.dll inspect-pcap .\out\n5-19-goose-demo.pcap --scl .\samples\scl\minimal-station.scd
 dotnet .\.artifacts\bin\AR.Iec61850.Cli\Release\net8.0\AR.Iec61850.Cli.dll stream-pcap .\out\n5-19-goose-demo.pcap --scl .\samples\scl\minimal-station.scd --delay-ms 0 --limit 20
@@ -141,6 +141,6 @@ Next safe patches:
 
 Current validated claim: SCL-backed GOOSE frame generation, PCAP decode, passive stream monitoring, state/retransmission diagnostics, TAL supervision, and bounded lab publishing are implemented and unit tested.
 
-Source-level but not yet validated in this local sandbox: live adapter GOOSE subscriber CLI and Npcap receive source.
+Source-level and pending lab validation: live adapter GOOSE subscriber CLI and Npcap receive source.
 
 Do not claim yet: formal IEC 61850 conformance, production-grade timing proof, live adapter subscriber soak readiness, R-GOOSE support, or broad vendor interoperability.

@@ -8,10 +8,19 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$PackagePath,
+    [ValidateSet("SvPublisher", "IedDiscovery", "IedSimulator")]
+    [string]$App = "SvPublisher",
     [string]$Version = "0.1.0"
 )
 
 $ErrorActionPreference = "Stop"
+
+$ExeByApp = @{
+    SvPublisher = "AR.Iec61850.SvPublisher.exe"
+    IedDiscovery = "AR.Iec61850.IedDiscovery.exe"
+    IedSimulator = "AR.Iec61850.IedSimulator.exe"
+}
+
 $ResolvedPackage = (Resolve-Path $PackagePath).Path
 $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ariec61850-package-check-" + [System.Guid]::NewGuid().ToString("N"))
 
@@ -20,7 +29,7 @@ try {
     Expand-Archive -Path $ResolvedPackage -DestinationPath $TempRoot -Force
 
     $Required = @(
-        "AR.Iec61850.SvPublisher.exe",
+        $ExeByApp[$App],
         "README-PORTABLE.txt",
         "LICENSE",
         "NOTICE",

@@ -10,9 +10,9 @@
 ## 2. Build and test
 
 ```powershell
-dotnet restore .\ARIEC61850.slnx
-dotnet build .\ARIEC61850.slnx -c Release
-dotnet test .\ARIEC61850.slnx -c Release --no-build
+dotnet restore .\ARIEC61850.sln
+dotnet build .\ARIEC61850.sln -c Release
+dotnet test .\ARIEC61850.sln -c Release --no-build
 ```
 
 ## 3. Run CLI examples
@@ -88,15 +88,40 @@ Run a guarded report monitor and write evidence outside the repository:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.0.2.10 --port 102 --timeout-ms 120000 --rcb IED1LD0/LLN0.RP.rpt01 --duration-sec 60 --evidence .\.artifacts\out\report-session01 --yes
 ```
 
-## 5. Build the WPF publisher as a single EXE
+
+## 5. Run the WPF workspaces
+
+SV publisher / injector workspace:
 
 ```powershell
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0
+dotnet run --project .\apps\AR.Iec61850.SvPublisher -c Release
+```
+
+Live IED discovery workspace:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.IedDiscovery -c Release
+```
+
+Offline IED simulator workspace:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.IedSimulator -c Release
+```
+
+The current simulator workspace is intentionally offline. It provides deterministic point values, DataSets, RCB profiles, and JSON export. A network MMS server is a later phase after the model/runtime core is stable.
+
+## 6. Build a WPF app as a single EXE
+
+```powershell
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App SvPublisher
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App IedDiscovery
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App IedSimulator
 ```
 
 The output is created under `.artifacts/release`. The folder is ignored by Git and should not be committed.
 
-## 6. Keep the source tree clean
+## 7. Keep the source tree clean
 
 Build output is centralized under `.artifacts/` and ignored by Git. To clean and verify the working tree before committing:
 

@@ -1,0 +1,210 @@
+<Window x:Class="AR.Iec61850.IedDiscovery.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ARIEC61850 IED Discovery" Height="820" Width="1280" MinHeight="720" MinWidth="1120"
+        Background="#F4F7FB" FontFamily="Segoe UI">
+    <Window.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="CornerRadius" Value="18" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#E3EAF4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="White" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="CanUserDeleteRows" Value="False" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="GridLinesVisibility" Value="None" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="RowHeight" Value="34" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="White" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="330" />
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0">
+            <TextBlock Text="IED Discovery" FontSize="28" FontWeight="SemiBold" Foreground="#102033" />
+            <TextBlock Text="Native MMS model, DataSet, RCB and evidence explorer" TextWrapping="Wrap" Margin="0,4,0,18" Foreground="#64748B" />
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Connection" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <TextBlock Text="Host / IP" Margin="0,14,0,4" Foreground="#64748B" />
+                    <TextBox Text="{Binding Host, UpdateSourceTrigger=PropertyChanged}" />
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Port" Foreground="#64748B" />
+                            <TextBox Text="{Binding Port}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Timeout ms" Foreground="#64748B" />
+                            <TextBox Text="{Binding TimeoutMs}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Discovery depth" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <CheckBox Content="Probe RCB attributes" IsChecked="{Binding ProbeReportAttributes}" Margin="0,12,0,0" />
+                    <CheckBox Content="Read DataSet directories" IsChecked="{Binding ReadDataSetDirectories}" Margin="0,8,0,0" />
+                    <CheckBox Content="Read variable type signatures" IsChecked="{Binding ReadVariableTypes}" Margin="0,8,0,12" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="RCB probes" Foreground="#64748B" />
+                            <TextBox Text="{Binding MaxReportProbes}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="DataSets" Foreground="#64748B" />
+                            <TextBox Text="{Binding MaxDataSetDirectoryReads}" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="Type reads" Margin="0,10,0,4" Foreground="#64748B" />
+                    <TextBox Text="{Binding MaxTypeReads}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <WrapPanel>
+                        <Button Content="Discover" Click="Discover_Click" Background="#0F766E" Foreground="White" BorderBrush="#0F766E" />
+                        <Button Content="Cancel" Click="Cancel_Click" />
+                        <Button Content="Export discovery" Click="Export_Click" />
+                        <Button Content="Export report profile" Click="ExportProfile_Click" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,14,0,0" Foreground="#475569" />
+                    <TextBlock Text="{Binding ReportProfileSummary}" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="#0F766E" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Safety posture" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#64748B"
+                               Text="Discovery is read-oriented, but live report probing can read RCB attributes and should still be used only on approved lab/test IEDs." />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="16" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Style="{StaticResource Card}" Margin="0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="320" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Live IED model snapshot" FontSize="22" FontWeight="SemiBold" Foreground="#0F172A" />
+                        <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,6,0,0" Foreground="#64748B" />
+                    </StackPanel>
+                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Metrics}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="12" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" Padding="12" Margin="6">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Value}" FontSize="20" FontWeight="SemiBold" Foreground="#0F172A" />
+                                        <TextBlock Text="{Binding Label}" Foreground="#64748B" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+
+            <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0">
+                <TabItem Header="Report Controls">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding ReportControls}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Reference" Binding="{Binding Reference}" Width="2*" />
+                                <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="80" />
+                                <DataGridTextColumn Header="DataSet" Binding="{Binding DataSet}" Width="2*" />
+                                <DataGridTextColumn Header="Enabled" Binding="{Binding EnabledState}" Width="110" />
+                                <DataGridTextColumn Header="Reservation" Binding="{Binding ReservationState}" Width="120" />
+                                <DataGridTextColumn Header="ConfRev" Binding="{Binding ConfRev}" Width="90" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="150" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="DataSets">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding DataSets}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Reference" Binding="{Binding Reference}" Width="2*" />
+                                <DataGridTextColumn Header="Members" Binding="{Binding MemberCount}" Width="90" />
+                                <DataGridTextColumn Header="Reports" Binding="{Binding UsedByReports}" Width="2*" />
+                                <DataGridTextColumn Header="GOOSE" Binding="{Binding UsedByGoose}" Width="*" />
+                                <DataGridTextColumn Header="SV" Binding="{Binding UsedBySv}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="Logical Devices">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding LogicalDevices}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Logical device" Binding="{Binding LogicalDevice}" Width="2*" />
+                                <DataGridTextColumn Header="Logical nodes" Binding="{Binding LogicalNodeCount}" Width="140" />
+                                <DataGridTextColumn Header="FC points" Binding="{Binding PointCount}" Width="140" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+                <TabItem Header="Warnings">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <DataGrid ItemsSource="{Binding Warnings}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="120" />
+                                <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </TabItem>
+            </TabControl>
+        </Grid>
+    </Grid>
+</Window>

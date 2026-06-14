@@ -1,9 +1,12 @@
 <Solution>
   <Folder Name="/apps/">
     <Project Path="apps/AR.Iec61850.Cli/AR.Iec61850.Cli.csproj" />
+    <Project Path="apps/AR.Iec61850.IedDiscovery/AR.Iec61850.IedDiscovery.csproj" />
+    <Project Path="apps/AR.Iec61850.IedSimulator/AR.Iec61850.IedSimulator.csproj" />
     <Project Path="apps/AR.Iec61850.SvPublisher/AR.Iec61850.SvPublisher.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/AR.Iec61850.Simulation/AR.Iec61850.Simulation.csproj" />
     <Project Path="src/AR.Iec61850.Transports.Npcap/AR.Iec61850.Transports.Npcap.csproj" />
     <Project Path="src/AR.Iec61850/AR.Iec61850.csproj" />
   </Folder>

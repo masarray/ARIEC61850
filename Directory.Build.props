@@ -4,17 +4,21 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
 
-    <!-- Keep every local build output outside source project folders. -->
+    <!--
+      Keep compiled binaries outside project folders while leaving intermediate obj folders
+      on the SDK default path. WPF markup compilation creates temporary projects during
+      build; forcing a centralized obj path can make those temporary projects miss their
+      restore assets on .NET SDK 8.x.
+    -->
     <ArtifactsRoot>$(MSBuildThisFileDirectory).artifacts/</ArtifactsRoot>
     <BaseOutputPath>$(ArtifactsRoot)bin/$(MSBuildProjectName)/</BaseOutputPath>
-    <BaseIntermediateOutputPath>$(ArtifactsRoot)obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
-    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
-    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**;$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**</DefaultItemExcludes>
+
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**;$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**;.artifacts/**;artifacts/**;out/**;publish/**;release/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="bin/**/*.cs;obj/**/*.cs" />
-    <EmbeddedResource Remove="bin/**;obj/**" />
-    <None Remove="bin/**;obj/**" />
+    <Compile Remove="bin/**/*.cs;obj/**/*.cs;.artifacts/**/*.cs;artifacts/**/*.cs;out/**/*.cs;publish/**/*.cs;release/**/*.cs" />
+    <EmbeddedResource Remove="bin/**;obj/**;.artifacts/**;artifacts/**;out/**;publish/**;release/**" />
+    <None Remove="bin/**;obj/**;.artifacts/**;artifacts/**;out/**;publish/**;release/**" />
   </ItemGroup>
 </Project>

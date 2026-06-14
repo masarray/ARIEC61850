@@ -8,6 +8,19 @@ Install the .NET 8 SDK and reopen the terminal.
 
 The WPF project targets `net8.0-windows`. Build it on Windows or use the GitHub Actions workflow, which runs on `windows-latest`.
 
+
+## WPF build reports a missing assets file for a temporary markup project
+
+Clean local artifacts and restore again:
+
+```powershell
+.\scripts\clean-local-artifacts.cmd
+dotnet restore .\ARIEC61850.sln
+dotnet build .\ARIEC61850.sln -c Release
+```
+
+The repository keeps WPF intermediate folders on the SDK default path because WPF creates temporary markup projects during compilation. Avoid adding custom `BaseIntermediateOutputPath` or `MSBuildProjectExtensionsPath` values for WPF apps.
+
 ## Live adapter list is empty
 
 Install Npcap, enable the correct adapter, and run from an elevated terminal when required by the machine policy.

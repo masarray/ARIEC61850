@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AR.Iec61850\AR.Iec61850.csproj" />
+    <ProjectReference Include="..\..\src\AR.Iec61850.Simulation\AR.Iec61850.Simulation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -13,3 +13,5 @@ This folder contains the public engineering documentation for ARIEC61850.
 - [Troubleshooting](TROUBLESHOOTING.md) - common build/runtime issues.
 - [Clean-room Policy](CLEAN_ROOM_POLICY.md) - public-source hygiene and implementation boundaries.
 - [Public Release Checklist](PUBLIC_RELEASE_CHECKLIST.md) - pre-push checklist for GitHub release readiness.
+
+- [Full Stack Roadmap](FULL_STACK_ROADMAP.md)

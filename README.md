@@ -18,7 +18,10 @@ This repository is intentionally source-first and public-release safe: generated
 | Core library | `src/AR.Iec61850` | BER, MMS, SCL, GOOSE, SV, PCAP, reporting, diagnostics |
 | Live Ethernet transport | `src/AR.Iec61850.Transports.Npcap` | Npcap-backed raw process-bus transport for Windows lab use |
 | CLI toolkit | `apps/AR.Iec61850.Cli` | SCL inspection, PCAP generation/inspection, MMS discovery/read/reporting commands |
-| WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher workspace |
+| WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher / injector workspace |
+| WPF app | `apps/AR.Iec61850.IedDiscovery` | Live IED discovery workspace for MMS model, DataSet, and RCB inventory |
+| WPF app | `apps/AR.Iec61850.IedSimulator` | Offline IED simulator workspace for deterministic profile, values, DataSets, and RCB planning |
+| Simulation library | `src/AR.Iec61850.Simulation` | In-memory IED profile and deterministic point/event simulation foundation |
 | Tests | `tests/AR.Iec61850.Tests` | Automated unit and protocol-shape tests |
 | Samples | `samples/scl` | Small SCL files for local validation and examples |
 | Docs | `docs` | Quick start, architecture, reporting workflow, validation, release packaging |
@@ -36,16 +39,18 @@ Implemented areas include:
 - MMS model discovery, FC-aware path resolution, smart read, dataset directory inspection.
 - RCB discovery, report planning, guarded report enable, GI trigger, receive loop, diagnostics, and evidence export.
 - GOOSE frame builder/parser, SCL-backed publisher profiles, publisher session, PCAP sniffer diagnostics, live subscriber command, `stNum`/`sqNum`/TAL supervision, and changed-value summaries.
-- Sampled Values frame builder/parser, payload generation, payload decode, and WPF publisher workspace.
+- Sampled Values frame builder/parser, payload generation, payload decode, and WPF publisher/injector workspace.
 - PCAP writer/reader/inspector and stream playback helpers.
 - Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
+- WPF IED Discovery workspace for live MMS model/DataSet/RCB snapshot export.
+- Offline IED Simulator foundation with deterministic point values, DataSets, RCB profiles, and JSON export.
 
 Experimental or future areas:
 
 - multi-vendor long-duration MMS reporting soak evidence;
 - full buffered report recovery and replay workflows;
 - MMS file/log/setting-group/control model services;
-- MMS server / IED simulator;
+- network MMS server for the IED simulator;
 - live raw SV subscriber CLI loop on top of the Npcap receive path;
 - IEC 62351 security profile;
 - formal third-party conformance testing.
@@ -61,15 +66,17 @@ Experimental or future areas:
 ## Build
 
 ```powershell
-dotnet restore .\ARIEC61850.slnx
-dotnet build .\ARIEC61850.slnx -c Release
-dotnet test .\ARIEC61850.slnx -c Release --no-build
+dotnet restore .\ARIEC61850.sln
+dotnet build .\ARIEC61850.sln -c Release
+dotnet test .\ARIEC61850.sln -c Release --no-build
 ```
 
-Build the WPF publisher directly:
+Build the WPF apps directly:
 
 ```powershell
 dotnet build .\apps\AR.Iec61850.SvPublisher\AR.Iec61850.SvPublisher.csproj -c Release
+dotnet build .\apps\AR.Iec61850.IedDiscovery\AR.Iec61850.IedDiscovery.csproj -c Release
+dotnet build .\apps\AR.Iec61850.IedSimulator\AR.Iec61850.IedSimulator.csproj -c Release
 ```
 
 ## Quick examples
@@ -127,16 +134,16 @@ Without `--scl`, the subscriber still decodes traffic but reports values as sema
 Local packaging:
 
 ```powershell
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0
+.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App SvPublisher
 ```
 
-The script builds and tests the solution, publishes `AR.Iec61850.SvPublisher` as a self-contained Windows x64 single EXE, and creates release assets under `.artifacts/release`.
+The script builds and tests the solution, publishes the selected WPF app as a self-contained Windows x64 single EXE, and creates release assets under `.artifacts/release`.
 
 The same packaging flow is available in GitHub Actions through `.github/workflows/release-package.yml`.
 
 ## Keeping the repository clean
 
-All local build output is redirected to `.artifacts/` by `Directory.Build.props`. If Visual Studio or manual commands still leave generated files behind, run:
+Compiled binaries are redirected to `.artifacts/` by `Directory.Build.props`. SDK intermediate folders may still be created locally for WPF markup compilation and are ignored by source control. To reset the working tree after local builds, run:
 
 ```powershell
 .\scripts\clean-local-artifacts.cmd
@@ -150,6 +157,7 @@ Do not commit `.artifacts/`, `out/`, `evidence/`, captures, DLL/EXE/PDB files, o
 - [Quick Start](docs/QUICK_START.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [MMS Reporting Workflow](docs/REPORTING_WORKFLOW.md)
+- [Full Stack Roadmap](docs/FULL_STACK_ROADMAP.md)
 - [GOOSE Engine Audit](docs/GOOSE_ENGINE_AUDIT.md)
 - [Release Packaging](docs/RELEASE_PACKAGING.md)
 - [Validation](docs/VALIDATION.md)

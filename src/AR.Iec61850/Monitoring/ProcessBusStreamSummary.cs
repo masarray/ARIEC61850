@@ -15,6 +15,13 @@ public sealed class ProcessBusStreamSummary
     public ushort? LastSampleCount { get; private set; }
     public ushort? ExpectedNextSampleCount { get; private set; }
     public ushort? SampleCounterWrap { get; private set; }
+    public ushort? LastSampleRate { get; private set; }
+    public ushort? LastSampleMode { get; private set; }
+    public byte? LastSampleSynchronization { get; private set; }
+    public int LastAsduCount { get; private set; }
+    public int LastPayloadBytes { get; private set; }
+    public int PayloadLengthChangeCount { get; private set; }
+    public int SampleSynchronizationIssueCount { get; private set; }
     public int SequenceGapCount { get; private set; }
     public int MissedSampleCount { get; private set; }
     public int DuplicateSampleCount { get; private set; }
@@ -45,11 +52,30 @@ public sealed class ProcessBusStreamSummary
         ushort? sampleCount,
         ushort? sampleCounterWrap,
         int decodedValueCount,
-        IReadOnlyList<string> diagnostics)
+        IReadOnlyList<string> diagnostics,
+        int payloadBytes = 0,
+        ushort? sampleRate = null,
+        ushort? sampleMode = null,
+        byte? sampleSynchronization = null,
+        int asduCount = 0)
     {
         PacketCount++;
         LastDecodedValueCount = decodedValueCount;
         LastDiagnostics = diagnostics.ToArray();
+        LastSampleRate = sampleRate;
+        LastSampleMode = sampleMode;
+        LastSampleSynchronization = sampleSynchronization;
+        LastAsduCount = asduCount;
+
+        if (payloadBytes >= 0)
+        {
+            if (PacketCount > 1 && LastPayloadBytes > 0 && payloadBytes > 0 && payloadBytes != LastPayloadBytes)
+                PayloadLengthChangeCount++;
+            LastPayloadBytes = payloadBytes;
+        }
+
+        if (sampleSynchronization.HasValue && sampleSynchronization.Value != 2)
+            SampleSynchronizationIssueCount++;
 
         if (sampleCounterWrap is > 0)
             SampleCounterWrap ??= sampleCounterWrap;

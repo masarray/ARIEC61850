@@ -77,3 +77,17 @@ SCL expected GOOSE stream
 ```
 
 Maturity impact: process-bus GOOSE moves from visibility to actionable engineering diagnostics.
+
+
+## N5.28 — Sampled Values Diagnostics Profile
+
+This milestone promotes SV from basic publish/decode/binding into an explainable diagnostic profile. It provides typed findings for missing expected streams, unexpected observed streams, APPID/MAC/VLAN/confRev mismatch, `nofASDU` mismatch, sample-rate/sample-mode mismatch, payload decode issues, `smpCnt` gaps, missed samples, duplicates, out-of-order samples, wraps, and `smpSynch` issues.
+
+```text
+SCL expected SV stream
+→ observed PCAP/live SV summary
+→ sample-counter/payload/synchronization semantic checks
+→ Markdown/JSON evidence
+```
+
+Maturity impact: process-bus SV moves from visibility to actionable engineering diagnostics.

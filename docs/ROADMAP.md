@@ -5,6 +5,21 @@ ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The pr
 ## Current source milestone
 
 
+### N5.28 - Sampled Values diagnostics profile foundation
+
+- Added `SampledValuesDiagnosticsProfile`, a typed evidence contract for SV stream health, sample counter continuity, synchronization state, payload length, and SCL-to-traffic consistency.
+- Added `SampledValuesDiagnosticsProfileBuilder` with deterministic findings for missing/extra SV streams, APPID/MAC/VLAN/confRev mismatch, `nofASDU` mismatch, sample-rate/sample-mode mismatch, payload decode issues, `smpCnt` gap/duplicate/out-of-order/wrap, and `smpSynch` issues.
+- Added `sv-diagnostics-profile`, a read-only CLI command that consumes `<scl-file> <pcap-file>` and exports Markdown/JSON diagnostic evidence.
+- Extended `generate-pcap` with `--sv-scenario diagnostic` so the SV finding engine can be tested offline without IED hardware.
+- Added deterministic unit tests for healthy, missing, unexpected, sample-counter anomaly, synchronization/payload anomaly, and Markdown evidence paths.
+
+Validation command for the new milestone:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --goose-frames 0 --sv-scenario diagnostic
+dotnet run --project .\apps\AR.Iec61850.Cli -- sv-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --output .\.artifacts\out\sv-diagnostics.md --json .\.artifacts\out\sv-diagnostics.json
+```
+
 ### N5.27 - GOOSE diagnostics profile foundation
 
 - Added `GooseDiagnosticsProfile`, a typed evidence contract for GOOSE health, sequence integrity, supervision, flag status, and SCL-to-traffic consistency.

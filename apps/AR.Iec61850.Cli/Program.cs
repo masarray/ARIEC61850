@@ -2,6 +2,7 @@ using AR.Iec61850.Capture;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Diagnostics.Binding;
 using AR.Iec61850.Diagnostics.Goose;
+using AR.Iec61850.Diagnostics.SampledValues;
 using AR.Iec61850.Ethernet;
 using AR.Iec61850.Engineering;
 using AR.Iec61850.Goose;
@@ -39,6 +40,7 @@ internal static class Cli
                 "scl-engineering-profile" => SclEngineeringProfile(args[1..]),
                 "process-bus-binding-profile" => ProcessBusBindingProfile(args[1..]),
                 "goose-diagnostics-profile" => GooseDiagnosticsProfile(args[1..]),
+                "sv-diagnostics-profile" => SampledValuesDiagnosticsProfile(args[1..]),
                 "generate-pcap" => await GeneratePcapAsync(args[1..]).ConfigureAwait(false),
                 "inspect-pcap" => InspectPcap(args[1..]),
                 "stream-pcap" => await StreamPcapAsync(args[1..]).ConfigureAwait(false),
@@ -223,12 +225,16 @@ internal static class Cli
         var svFrames = options.GetInt("sv-frames", 16);
         var gooseFrames = options.GetInt("goose-frames", 4);
         var gooseScenario = options.Get("goose-scenario", "normal");
+        var svScenario = options.Get("sv-scenario", "normal");
         var startTime = DateTimeOffset.UtcNow;
 
         var document = new SclParser().Load(args[0]);
         var packets = new List<PcapPacket>();
 
-        AppendSampledValuesPackets(document, sourceMac, svFrames, startTime, packets);
+        if (svScenario.Equals("diagnostic", StringComparison.OrdinalIgnoreCase) || svScenario.Equals("anomaly", StringComparison.OrdinalIgnoreCase))
+            AppendSampledValuesDiagnosticPackets(document, sourceMac, Math.Max(svFrames, 6), startTime, packets);
+        else
+            AppendSampledValuesPackets(document, sourceMac, svFrames, startTime, packets);
         if (gooseScenario.Equals("diagnostic", StringComparison.OrdinalIgnoreCase) || gooseScenario.Equals("anomaly", StringComparison.OrdinalIgnoreCase))
             AppendGooseDiagnosticPackets(document, sourceMac, Math.Max(gooseFrames, 6), startTime.AddMilliseconds(1), packets);
         else
@@ -240,6 +246,7 @@ internal static class Cli
         Console.WriteLine($"Wrote {packets.Count} Ethernet frames to {Path.GetFullPath(args[1])}");
         Console.WriteLine($"  SV frames: {packets.Count(p => IsEtherType(p.Frame, EthernetConstants.SampledValuesEtherType))}");
         Console.WriteLine($"  GOOSE frames: {packets.Count(p => IsEtherType(p.Frame, EthernetConstants.GooseEtherType))}");
+        Console.WriteLine($"  SV scenario: {svScenario}");
         Console.WriteLine($"  GOOSE scenario: {gooseScenario}");
         Console.WriteLine("Open the PCAP in Wireshark or feed it to a playback/analyzer tool.");
         return 0;
@@ -375,6 +382,76 @@ internal static class Cli
             EnsureOutputDirectory(jsonPath);
             File.WriteAllText(jsonPath, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
             Console.WriteLine($"JSON GOOSE diagnostics profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.IsHealthy ? 0 : 3;
+    }
+
+    private static int SampledValuesDiagnosticsProfile(string[] args)
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("sv-diagnostics-profile requires <scl-file> <pcap-file>.");
+
+        var sclPath = args[0];
+        var pcapPath = args[1];
+        var options = CliOptions.Parse(args[2..]);
+        var rawLimit = options.GetInt("raw-limit", 30);
+        var nominalHz = options.GetDouble("nominal-hz", 50);
+
+        var engineeringProfile = new SclEngineeringProfileBuilder().Load(sclPath);
+        var document = new SclParser().Load(sclPath);
+        var monitor = new ProcessBusStreamMonitor(document, nominalHz);
+        var packets = PcapReader.ReadAll(pcapPath);
+        var decodedFrames = 0;
+        var otherFrames = 0;
+
+        foreach (var packet in packets)
+        {
+            var streamEvent = monitor.Observe(packet);
+            if (streamEvent.Kind == ProcessBusEventKind.Unknown)
+                otherFrames++;
+            else
+                decodedFrames++;
+        }
+
+        var profile = new SampledValuesDiagnosticsProfileBuilder().Build(engineeringProfile, monitor.Summaries, Path.GetFileName(sclPath));
+
+        Console.WriteLine("Sampled Values diagnostics profile complete.");
+        Console.WriteLine($"  SCL: {Path.GetFullPath(sclPath)}");
+        Console.WriteLine($"  PCAP: {Path.GetFullPath(pcapPath)}");
+        Console.WriteLine($"  Packets: {packets.Count}");
+        Console.WriteLine($"  Decoded process-bus frames: {decodedFrames}");
+        Console.WriteLine($"  Other frames: {otherFrames}");
+        Console.WriteLine($"  Expected SV streams: {profile.ExpectedStreamCount}");
+        Console.WriteLine($"  Observed SV streams: {profile.ObservedStreamCount}");
+        Console.WriteLine($"  Bound SV streams: {profile.BoundStreamCount}");
+        Console.WriteLine($"  Healthy SV streams: {profile.HealthyStreamCount}");
+        Console.WriteLine($"  High findings: {profile.HighCount}");
+        Console.WriteLine($"  Warning findings: {profile.WarningCount}");
+
+        foreach (var stream in profile.Streams.Take(rawLimit))
+        {
+            Console.WriteLine(
+                $"  [{stream.Status}] expected={TextOrDash(stream.ExpectedControlBlockReference)} observed={TextOrDash(stream.ObservedStreamId)} APPID={FormatAppId(stream.ObservedAppId)} packets={stream.ObservedPacketCount} smpCnt={FormatCounterRange(stream.FirstSampleCount, stream.LastSampleCount)} gaps={stream.SequenceGapCount} missed={stream.MissedSampleCount} dup={stream.DuplicateSampleCount} late={stream.OutOfOrderSampleCount} wraps={stream.WrapCount} payload={stream.ObservedPayloadBytes} sync={stream.LastSampleSynchronization?.ToString(CultureInfo.InvariantCulture) ?? "-"} score={stream.HealthScore} findings={stream.Findings.Count}");
+        }
+        WriteLimitNotice(profile.Streams.Count, rawLimit, "SV stream row(s)");
+
+        foreach (var finding in profile.Findings.Take(rawLimit))
+            Console.WriteLine($"  {finding.Severity} {finding.Code}: {finding.Message} Recommendation: {finding.Recommendation}");
+        WriteLimitNotice(profile.Findings.Count, rawLimit, "finding(s)");
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown SV diagnostics profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"JSON SV diagnostics profile: {Path.GetFullPath(jsonPath)}");
         }
 
         return profile.IsHealthy ? 0 : 3;
@@ -4053,6 +4130,80 @@ internal static class Cli
         }
     }
 
+    private static void AppendSampledValuesDiagnosticPackets(
+        SclDocument document,
+        MacAddress sourceMac,
+        int frameCount,
+        DateTimeOffset startTime,
+        ICollection<PcapPacket> packets)
+    {
+        if (frameCount <= 0)
+            return;
+
+        var profiles = SampledValuesPublisherProfile.CreateMany(document);
+        foreach (var profile in profiles)
+        {
+            var sampleRate = profile.Stream.SampleRate == 0 ? (ushort)4000 : profile.Stream.SampleRate;
+            var sampleMode = TryMapSampleMode(profile.Stream.SampleMode) ?? (ushort)0;
+            var intervalMicros = ResolveSvIntervalMicros(sampleRate);
+            var nominalPayload = profile.BuildDemoPayload(0, sampleRate, 50, new Iec61850UtcTime(startTime, Quality: 0));
+            var shortPayload = nominalPayload.Length > 4 ? nominalPayload.Take(nominalPayload.Length - 4).ToArray() : nominalPayload.Take(Math.Max(0, nominalPayload.Length - 1)).ToArray();
+
+            var scripted = new[]
+            {
+                BuildSampledValuesPacket(profile, sourceMac, sampleCount: 10, timestamp: startTime, samplePayload: nominalPayload, sampleSynchronization: 2, sampleRate: sampleRate, sampleMode: sampleMode, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildSampledValuesPacket(profile, sourceMac, sampleCount: 11, timestamp: startTime.AddTicks(intervalMicros * 10L), samplePayload: nominalPayload, sampleSynchronization: 2, sampleRate: sampleRate, sampleMode: sampleMode, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildSampledValuesPacket(profile, sourceMac, sampleCount: 14, timestamp: startTime.AddTicks(intervalMicros * 20L), samplePayload: nominalPayload, sampleSynchronization: 2, sampleRate: sampleRate, sampleMode: sampleMode, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildSampledValuesPacket(profile, sourceMac, sampleCount: 14, timestamp: startTime.AddTicks(intervalMicros * 30L), samplePayload: nominalPayload, sampleSynchronization: 2, sampleRate: sampleRate, sampleMode: sampleMode, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildSampledValuesPacket(profile, sourceMac, sampleCount: 13, timestamp: startTime.AddTicks(intervalMicros * 40L), samplePayload: nominalPayload, sampleSynchronization: 2, sampleRate: sampleRate, sampleMode: sampleMode, configurationRevision: profile.Stream.ConfigurationRevision),
+                BuildSampledValuesPacket(profile, sourceMac, sampleCount: 15, timestamp: startTime.AddTicks(intervalMicros * 50L), samplePayload: shortPayload, sampleSynchronization: 0, sampleRate: (ushort)(sampleRate + 1), sampleMode: sampleMode, configurationRevision: profile.Stream.ConfigurationRevision)
+            };
+
+            foreach (var packet in scripted.Take(Math.Max(1, frameCount)))
+                packets.Add(packet);
+        }
+    }
+
+    private static PcapPacket BuildSampledValuesPacket(
+        SampledValuesPublisherProfile profile,
+        MacAddress sourceMac,
+        ushort sampleCount,
+        DateTimeOffset timestamp,
+        ReadOnlySpan<byte> samplePayload,
+        byte sampleSynchronization,
+        ushort? sampleRate,
+        ushort? sampleMode,
+        uint configurationRevision)
+    {
+        var frame = new SampledValuesFrame
+        {
+            Destination = profile.Destination,
+            Source = sourceMac,
+            Vlan = profile.Vlan,
+            AppId = profile.AppId,
+            Pdu = new SampledValuesPdu
+            {
+                Asdus =
+                [
+                    new SampledValueAsdu
+                    {
+                        SvId = profile.Stream.SvId,
+                        DataSetReference = profile.Stream.DataSetReference,
+                        SampleCount = sampleCount,
+                        ConfigurationRevision = configurationRevision,
+                        ReferenceTime = new Iec61850UtcTime(timestamp, Quality: 0),
+                        SampleSynchronization = sampleSynchronization,
+                        SampleRate = sampleRate,
+                        SampleMode = sampleMode,
+                        SamplePayload = samplePayload.ToArray()
+                    }
+                ]
+            }
+        };
+
+        return new PcapPacket(timestamp, SampledValuesFrameBuilder.BuildEthernetFrame(frame));
+    }
+
     private static async Task AppendGoosePacketsAsync(
         SclDocument document,
         MacAddress sourceMac,
@@ -4119,7 +4270,7 @@ internal static class Cli
                 BuildGoosePacket(profile, sourceMac, normalValues, startTime.AddMilliseconds(200), stateNumber: 2, sequenceNumber: 4, test: false, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision),
                 BuildGoosePacket(profile, sourceMac, changedValues, startTime.AddMilliseconds(1500), stateNumber: 2, sequenceNumber: 5, test: true, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision),
                 BuildGoosePacket(profile, sourceMac, changedValues, startTime.AddMilliseconds(1600), stateNumber: 1, sequenceNumber: 0, test: false, needsCommissioning: true, configurationRevision: profile.Stream.ConfigurationRevision),
-                BuildGoosePacket(profile, sourceMac, tailValues.Take(Math.Max(0, tailValues.Count - 1)).ToArray(), startTime.AddMilliseconds(1700), stateNumber: 3, sequenceNumber: 0, test: false, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision + 1U)
+                BuildGoosePacket(profile, sourceMac, tailValues.Take(Math.Max(0, tailValues.Count - 1)).ToArray(), startTime.AddMilliseconds(1700), stateNumber: 3, sequenceNumber: 0, test: false, needsCommissioning: false, configurationRevision: profile.Stream.ConfigurationRevision)
             };
 
             foreach (var packet in scripted.Take(Math.Max(1, frameCount)))
@@ -4201,6 +4352,20 @@ internal static class Cli
 
     private static long ResolveSvIntervalMicros(ushort sampleRate)
         => sampleRate == 0 ? 250 : Math.Max(1, 1_000_000L / sampleRate);
+
+    private static ushort? TryMapSampleMode(string sampleMode)
+    {
+        if (string.IsNullOrWhiteSpace(sampleMode))
+            return null;
+
+        return sampleMode.Trim() switch
+        {
+            "SmpPerPeriod" => 0,
+            "SmpPerSec" => 1,
+            "SecPerSmp" => 2,
+            _ => null
+        };
+    }
 
     private static MacAddress ResolveSourceMac(CliOptions options, NpcapAdapterInfo adapter)
     {
@@ -5258,7 +5423,8 @@ internal static class Cli
         Console.WriteLine("  scl-engineering-profile <scl-file> [--output .artifacts/out/scl-profile.md] [--json .artifacts/out/scl-profile.json] [--raw-limit 20]");
         Console.WriteLine("  process-bus-binding-profile <scl-file> <pcap-file> [--output .artifacts/out/process-bus-binding.md] [--json .artifacts/out/process-bus-binding.json] [--nominal-hz 50] [--raw-limit 30]");
         Console.WriteLine("  goose-diagnostics-profile <scl-file> <pcap-file> [--output .artifacts/out/goose-diagnostics.md] [--json .artifacts/out/goose-diagnostics.json] [--nominal-hz 50] [--raw-limit 30]");
-        Console.WriteLine("  generate-pcap <scl-file> <output.pcap> [--source-mac XX:XX:XX:XX:XX:XX] [--sv-frames N] [--goose-frames N] [--goose-scenario normal|diagnostic]");
+        Console.WriteLine("  sv-diagnostics-profile <scl-file> <pcap-file> [--output .artifacts/out/sv-diagnostics.md] [--json .artifacts/out/sv-diagnostics.json] [--nominal-hz 50] [--raw-limit 30]");
+        Console.WriteLine("  generate-pcap <scl-file> <output.pcap> [--source-mac XX:XX:XX:XX:XX:XX] [--sv-frames N] [--goose-frames N] [--sv-scenario normal|diagnostic] [--goose-scenario normal|diagnostic]");
         Console.WriteLine("  inspect-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50]");
         Console.WriteLine("  stream-pcap <file.pcap> [--scl file.scd|file.cid|file.icd|file.iid] [--nominal-hz 50] [--delay-ms N] [--limit N]");
         Console.WriteLine("  list-adapters");
@@ -5293,6 +5459,8 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- process-bus-binding-profile samples/scl/minimal-station.scd .artifacts/out/processbus-demo.pcap --output .artifacts/out/process-bus-binding.md --json .artifacts/out/process-bus-binding.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- generate-pcap samples/scl/minimal-station.scd .artifacts/out/goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- goose-diagnostics-profile samples/scl/minimal-station.scd .artifacts/out/goose-diagnostic-demo.pcap --output .artifacts/out/goose-diagnostics.md --json .artifacts/out/goose-diagnostics.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- generate-pcap samples/scl/minimal-station.scd .artifacts/out/sv-diagnostic-demo.pcap --goose-frames 0 --sv-scenario diagnostic");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- sv-diagnostics-profile samples/scl/minimal-station.scd .artifacts/out/sv-diagnostic-demo.pcap --output .artifacts/out/sv-diagnostics.md --json .artifacts/out/sv-diagnostics.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- stream-pcap .artifacts/out/processbus-demo.pcap --scl samples/scl/minimal-station.scd --delay-ms 50 --limit 12");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl samples/scl/minimal-station.scd --duration-sec 30");

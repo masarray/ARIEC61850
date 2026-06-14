@@ -185,3 +185,20 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- goose-diagnostics-profile .\sampl
 ```
 
 Expected result: the command should report GOOSE findings for sequence/supervision/flag conditions and write Markdown/JSON evidence under `.artifacts\out`.
+
+
+## N5.28 — Sampled Values Diagnostics Profile
+
+Generate an offline diagnostic PCAP with deterministic SV anomalies:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --goose-frames 0 --sv-scenario diagnostic
+```
+
+Run the read-only SV diagnostic evidence command:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- sv-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --output .\.artifacts\out\sv-diagnostics.md --json .\.artifacts\out\sv-diagnostics.json
+```
+
+Expected result: the command should report SV findings for sample-counter, synchronization, payload, and model-alignment conditions and write Markdown/JSON evidence under `.artifacts\out`.

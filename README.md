@@ -166,6 +166,7 @@ Do not commit `.artifacts/`, `out/`, `evidence/`, captures, DLL/EXE/PDB files, o
 - [Architecture](docs/ARCHITECTURE.md)
 - [MMS Reporting Workflow](docs/REPORTING_WORKFLOW.md)
 - [Process-Bus Binding Profile](docs/PROCESS_BUS_BINDING_PROFILE.md)
+- [Sampled Values Diagnostics Profile](docs/SV_DIAGNOSTICS_PROFILE.md)
 - [Full Stack Roadmap](docs/FULL_STACK_ROADMAP.md)
 - [GOOSE Engine Audit](docs/GOOSE_ENGINE_AUDIT.md)
 - [Release Packaging](docs/RELEASE_PACKAGING.md)
@@ -212,4 +213,14 @@ This milestone adds a read-only GOOSE diagnostic engine. It turns SCL expected G
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic
 dotnet run --project .\apps\AR.Iec61850.Cli -- goose-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --output .\.artifacts\out\goose-diagnostics.md --json .\.artifacts\out\goose-diagnostics.json
+```
+
+
+## N5.28 — Sampled Values Diagnostics Profile
+
+This milestone adds a read-only SV diagnostic engine. It turns SCL expected SV streams and PCAP/live observed summaries into typed findings for missing/extra streams, APPID/MAC/VLAN/confRev mismatch, `nofASDU` mismatch, sample-rate/sample-mode mismatch, payload decode issues, `smpCnt` gaps/duplicates/out-of-order samples, wraps, and `smpSynch` issues.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --goose-frames 0 --sv-scenario diagnostic
+dotnet run --project .\apps\AR.Iec61850.Cli -- sv-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --output .\.artifacts\out\sv-diagnostics.md --json .\.artifacts\out\sv-diagnostics.json
 ```

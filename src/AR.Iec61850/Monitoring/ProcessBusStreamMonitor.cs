@@ -70,8 +70,41 @@ public sealed class ProcessBusStreamMonitor
         var profile = asdu is null ? null : FindSampledValuesProfile(frame, asdu);
         var diagnostics = new List<string>();
         IReadOnlyList<SampledValuesDecodedValue> decodedValues = Array.Empty<SampledValuesDecodedValue>();
+
+        if (asdu is null)
+        {
+            diagnostics.Add("SV frame does not contain an ASDU; stream-level payload checks cannot be evaluated.");
+        }
+        else
+        {
+            if (frame.Pdu.Asdus.Count != 1)
+                diagnostics.Add($"SV frame contains {frame.Pdu.Asdus.Count} ASDU(s); current analyzer evaluates the first ASDU.");
+
+            if (asdu.SampleSynchronization != 2)
+                diagnostics.Add($"SV smpSynch is {asdu.SampleSynchronization}; expected synchronized value 2 for normal process-bus evidence.");
+        }
+
         if (profile is not null && asdu is not null)
         {
+            if (profile.Stream.ConfigurationRevision != asdu.ConfigurationRevision)
+                diagnostics.Add($"SV confRev mismatch. SCL={profile.Stream.ConfigurationRevision}, frame={asdu.ConfigurationRevision}.");
+
+            if (!string.Equals(profile.Destination.ToString(), frame.Destination.ToString(), StringComparison.OrdinalIgnoreCase))
+                diagnostics.Add($"SV destination MAC differs from SCL. SCL={profile.Destination}, frame={frame.Destination}.");
+
+            if (profile.Vlan?.VlanId != frame.Vlan?.VlanId)
+                diagnostics.Add($"SV VLAN-ID differs from SCL. SCL={profile.Vlan?.VlanId.ToString() ?? "-"}, frame={frame.Vlan?.VlanId.ToString() ?? "-"}.");
+
+            if (profile.Stream.NoAsdu != 0 && profile.Stream.NoAsdu != frame.Pdu.Asdus.Count)
+                diagnostics.Add($"SV nofASDU mismatch. SCL={profile.Stream.NoAsdu}, frame={frame.Pdu.Asdus.Count}.");
+
+            if (profile.Stream.SampleRate != 0 && asdu.SampleRate.HasValue && profile.Stream.SampleRate != asdu.SampleRate.Value)
+                diagnostics.Add($"SV sample-rate mismatch. SCL={profile.Stream.SampleRate}, frame={asdu.SampleRate.Value}.");
+
+            var expectedMode = TryMapSampleMode(profile.Stream.SampleMode);
+            if (expectedMode.HasValue && asdu.SampleMode.HasValue && expectedMode.Value != asdu.SampleMode.Value)
+                diagnostics.Add($"SV sample-mode mismatch. SCL={expectedMode.Value}, frame={asdu.SampleMode.Value}.");
+
             var decode = SampledValuesPayloadDecoder.Decode(profile.PayloadLayout, asdu.SamplePayload);
             decodedValues = decode.Values;
             diagnostics.AddRange(decode.Diagnostics);
@@ -93,7 +126,12 @@ public sealed class ProcessBusStreamMonitor
             asdu?.SampleCount,
             profile?.ResolveSampleCounterWrap(_nominalFrequencyHz),
             decodedValues.Count,
-            diagnostics);
+            diagnostics,
+            asdu?.SamplePayload.Length ?? 0,
+            asdu?.SampleRate,
+            asdu?.SampleMode,
+            asdu?.SampleSynchronization,
+            frame.Pdu.Asdus.Count);
 
         return new ProcessBusStreamEvent
         {
@@ -247,6 +285,21 @@ public sealed class ProcessBusStreamMonitor
         }
 
         return result;
+    }
+
+
+    private static ushort? TryMapSampleMode(string sampleMode)
+    {
+        if (string.IsNullOrWhiteSpace(sampleMode))
+            return null;
+
+        return sampleMode.Trim() switch
+        {
+            "SmpPerPeriod" => 0,
+            "SmpPerSec" => 1,
+            "SecPerSmp" => 2,
+            _ => null
+        };
     }
 
     private GoosePublisherProfile? FindGooseProfile(GooseFrame frame)

@@ -121,3 +121,8 @@ N5.31 adds an offline handshake codec evidence path for the server-side roadmap.
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
 ```
 
+
+
+## N5.32 - MMS Handshake Listener Profile
+
+Status: source milestone. The engine now includes a loopback OSI listener probe that validates TCP listener lifecycle, TPKT frame exchange, COTP CR/CC handshake, COTP Data TPDU reception, and ACSE/MMS association payload inspection. This remains a transport skeleton, not a full MMS server. The next protocol milestone is ACSE AARE + MMS initiate response.

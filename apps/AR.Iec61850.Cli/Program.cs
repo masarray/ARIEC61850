@@ -53,6 +53,7 @@ internal static class Cli
                 "mms-server-readonly-profile" => MmsServerReadOnlyProfile(args[1..]),
                 "mms-listener-skeleton-profile" => await MmsListenerSkeletonProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-handshake-codec-profile" => MmsHandshakeCodecProfile(args[1..]),
+                "mms-handshake-listener-profile" => await MmsHandshakeListenerProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "mms-model-discover" => await MmsModelDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-scl-export" => await MmsSclExportAsync(args[1..]).ConfigureAwait(false),
@@ -497,6 +498,68 @@ internal static class Cli
         }
 
         return profile.IsServerTransportReady ? 0 : 3;
+    }
+
+
+    private static async Task<int> MmsHandshakeListenerProfileAsync(string[] args)
+    {
+        var options = CliOptions.Parse(args);
+        var port = options.GetInt("port", 0);
+        if (port is < 0 or > 65535)
+            throw new ArgumentException("--port must be 0..65535. Use 0 for an ephemeral loopback port.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 5000);
+        if (timeoutMs <= 0)
+            throw new ArgumentException("--timeout-ms must be greater than 0.");
+
+        var associationProfile = options.Get("association-profile", "BalancedApTitle");
+        var profile = await new MmsHandshakeListenerProfileBuilder().RunLoopbackProbeAsync(
+            new MmsHandshakeListenerOptions
+            {
+                Port = port,
+                ProbeTimeoutMilliseconds = timeoutMs,
+                AssociationProfileName = associationProfile
+            }).ConfigureAwait(false);
+
+        Console.WriteLine("MMS handshake listener profile");
+        Console.WriteLine("Mode: loopback OSI listener probe (TPKT/COTP handshake + ACSE/MMS association payload inspection; no AARE/MMS server response yet).");
+        Console.WriteLine($"Listener readiness: {(profile.IsReady ? "READY" : "BLOCKED")}");
+        Console.WriteLine($"Bound port: {profile.BoundPort}");
+        Console.WriteLine($"Accepted connections: {profile.AcceptedConnectionCount}");
+        Console.WriteLine();
+        Console.WriteLine("Transport gates:");
+        Console.WriteLine($"  TPKT exchange verified: {profile.TpktExchangeVerified.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  COTP connection confirmed: {profile.CotpConnectionConfirmed.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  COTP data observed: {profile.CotpDataObserved.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"  Association payload observed: {profile.AssociationPayloadObserved.ToString().ToLowerInvariant()}");
+        Console.WriteLine();
+        Console.WriteLine("Handshake steps:");
+        foreach (var step in profile.Steps)
+            Console.WriteLine($"  {(step.IsPass ? "OK" : "FAIL")} {step.Side} {step.Layer} - {step.Message}");
+
+        if (profile.Findings.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Findings:");
+            foreach (var finding in profile.Findings)
+                Console.WriteLine($"  - {finding}");
+        }
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown MMS handshake listener profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, profile.ToJson());
+            Console.WriteLine($"JSON MMS handshake listener profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.IsReady ? 0 : 3;
     }
 
     private static int MmsServerReadOnlyProfile(string[] args)
@@ -5634,6 +5697,7 @@ internal static class Cli
         Console.WriteLine("  mms-server-readonly-profile [--port 102] [--name NAME] [--steps N] [--read LD/LN.DO.da] [--dataset LD/LLN0.DataSet] [--output mms-server.md] [--json mms-server.json]");
         Console.WriteLine("  mms-listener-skeleton-profile [--host 127.0.0.1] [--port 0] [--timeout-ms 5000] [--steps N] [--output mms-listener.md] [--json mms-listener.json]");
         Console.WriteLine("  mms-handshake-codec-profile [--output .artifacts/out/mms-handshake-codec.md] [--json .artifacts/out/mms-handshake-codec.json]");
+        Console.WriteLine("  mms-handshake-listener-profile [--port 0] [--timeout-ms 5000] [--association-profile BalancedApTitle|LegacyMinimal] [--output .artifacts/out/mms-handshake-listener.md] [--json .artifacts/out/mms-handshake-listener.json]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile safe-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output .artifacts/out/scl/live-ied.safe-connection.iid] [--ld-name-mode auto|keep] [--output .artifacts/out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
@@ -5672,6 +5736,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-server-readonly-profile --steps 5 --output .artifacts/out/mms-server-readonly.md --json .artifacts/out/mms-server-readonly.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .artifacts/out/mms-listener-skeleton.md --json .artifacts/out/mms-listener-skeleton.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-handshake-codec-profile --output .artifacts/out/mms-handshake-codec.md --json .artifacts/out/mms-handshake-codec.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-handshake-listener-profile --port 0 --output .artifacts/out/mms-handshake-listener.md --json .artifacts/out/mms-handshake-listener.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.0.2.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.0.2.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output .artifacts/out/ied-model-discovery");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-export-profile safe-connection --ld-name-mode auto --output .artifacts/out/scl/demo-ied.generated.iid");

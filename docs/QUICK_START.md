@@ -227,3 +227,11 @@ N5.31 adds an offline handshake codec evidence path for the server-side roadmap.
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
 ```
 
+### N5.32 MMS handshake listener profile
+
+N5.32 moves the handshake foundation from offline codec proof into a loopback listener proof. It accepts a TCP client, receives TPKT/COTP CR, sends COTP CC, receives COTP Data TPDU, and inspects the ACSE/MMS association payload. It still does not claim a full MMS server response.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-listener-profile --port 0 --output .\.artifacts\out\mms-handshake-listener.md --json .\.artifacts\out\mms-handshake-listener.json
+```
+

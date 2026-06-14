@@ -21,7 +21,7 @@ This repository is intentionally source-first and public-release safe: generated
 | WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher / injector workspace |
 | WPF app | `apps/AR.Iec61850.IedDiscovery` | Live IED discovery workspace for MMS model, DataSet, and RCB inventory |
 | WPF app | `apps/AR.Iec61850.IedSimulator` | Offline IED simulator workspace for deterministic profile, values, DataSets, and RCB planning |
-| WPF app | `apps/AR.Iec61850.EngineeringWorkbench` | Read-only engineering workbench for SCL, PCAP diagnostics, MMS loopback, and evidence export |
+| WPF app | `apps/AR.Iec61850.EngineeringWorkbench` | Read-only engineering workbench for SCL, PCAP diagnostics, MMS loopback, and evidence-pack export |
 | Simulation library | `src/AR.Iec61850.Simulation` | In-memory IED profile and deterministic point/event simulation foundation |
 | Tests | `tests/AR.Iec61850.Tests` | Automated unit and protocol-shape tests |
 | Samples | `samples/scl` | Small SCL files for local validation and examples |
@@ -45,7 +45,7 @@ Implemented areas include:
 - Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
 - WPF IED Discovery workspace for live MMS model/DataSet/RCB snapshot export.
 - Offline IED Simulator foundation with deterministic point values, DataSets, RCB profiles, and JSON export.
-- WPF Engineering Workbench Alpha that orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and evidence export.
+- WPF Engineering Workbench Alpha that orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and evidence-pack export.
 - Engineering-profile facade that converts live discovery into capability assessment, report-lab readiness, diagnostics, and Markdown evidence.
 - Report-readiness profile engine that produces acceptance gates, RCB candidate ranking, selected static report plan, and guarded session-profile JSON before any RCB write.
 
@@ -301,4 +301,12 @@ The repository now includes a read-only WPF harness for exercising the engine pr
 dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench
 ```
 
-It opens an SCL file, optionally observes a PCAP, runs SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and exports Markdown/JSON evidence. See `docs/ENGINEERING_WORKBENCH_ALPHA.md`.
+It opens an SCL file, optionally observes a PCAP, runs SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and exports a structured evidence pack. See `docs/ENGINEERING_WORKBENCH_ALPHA.md` and `docs/WORKBENCH_EVIDENCE_PACK.md`.
+
+### Workbench evidence pack CLI
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- workbench-evidence-pack --scl .\samples\scl\minimal-station.scd --output .\.artifacts\workbench-pack
+```
+
+This command generates `README.md`, `manifest.json`, and per-profile Markdown/JSON artifacts for SCL engineering, process-bus binding, GOOSE diagnostics, SV diagnostics, MMS read-only loopback, and public-alpha readiness.

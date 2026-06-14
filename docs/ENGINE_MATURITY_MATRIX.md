@@ -171,3 +171,13 @@ The `public-alpha-readiness-profile` command is the aggregate release gate for t
 ## Workbench usability gate
 
 N5.38 adds a WPF Engineering Workbench Alpha. This does not change protocol conformance level by itself, but it raises usability maturity because SCL, PCAP diagnostics, MMS loopback and evidence can now be exercised without remembering individual CLI commands.
+
+
+## N5.39 Workbench Evidence Pack
+
+N5.39 adds a structured Workbench evidence pack. This raises usability and release-readiness maturity because the same engine profiles used by WPF can now be exported and validated headlessly as a folder containing `README.md`, `manifest.json`, per-profile Markdown/JSON, byte sizes, SHA-256 hashes, and consolidated findings.
+
+
+## N5.40 IED Discovery Workbench Shell
+
+The first usable IED discovery shell is now available in `apps/AR.Iec61850.IedDiscovery`. It adds a compact command bar, asynchronous Discover IED dialog flow, DO-level explorer, DA detail grid, pinned Activity Monitor, status-history ring buffer, and generated SCL export from the live model. The app remains a thin WPF harness over the engine.

@@ -4,6 +4,21 @@ ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The pr
 
 ## Current source milestone
 
+### N5.39 - Workbench evidence pack foundation
+
+- Added `EngineeringWorkbenchEvidencePackBuilder`, a shared engine builder that generates a structured review folder from SCL, optional PCAP, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and optional public-alpha readiness.
+- Added `EngineeringWorkbenchEvidencePack`, a machine-readable evidence manifest with artifact index, file sizes, SHA-256 hashes, summary metrics, and consolidated findings.
+- Added `workbench-evidence-pack`, a headless CLI command that exercises the same evidence-pack path used by the WPF workbench.
+- Upgraded the WPF Engineering Workbench `Export pack` action so the app writes a reproducible folder (`README.md`, `manifest.json`, and per-profile Markdown/JSON) instead of loose exports.
+- Added deterministic tests for evidence-pack generation, manifest/artifact writing, and Markdown artifact-index rendering.
+
+Validation command for the new milestone:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- workbench-evidence-pack --scl .\samples\scl\minimal-station.scd --output .\.artifacts\workbench-pack
+```
+
+
 ### N5.30 - MMS listener skeleton profile foundation
 
 - Added `MmsReadOnlyListenerSkeleton`, a loopback TCP listener harness that exercises the server-side request lifecycle before the live MMS PDU decoder is attached.
@@ -221,3 +236,8 @@ The next release gate adds `public-alpha-readiness-profile`, an aggregate engine
 Status: implemented in this milestone.
 
 The first usable WPF harness exposes the engine profiles without moving protocol logic into the UI. It covers SCL engineering, expected-vs-observed process-bus binding, GOOSE diagnostics, SV diagnostics, MMS read-only loopback, public-alpha readiness, and evidence export. The next UI milestone should add live capture harnessing while keeping all protocol logic in `src`.
+
+
+## N5.40 IED Discovery Workbench Shell
+
+The first usable IED discovery shell is now available in `apps/AR.Iec61850.IedDiscovery`. It adds a compact command bar, asynchronous Discover IED dialog flow, DO-level explorer, DA detail grid, pinned Activity Monitor, status-history ring buffer, and generated SCL export from the live model. The app remains a thin WPF harness over the engine.

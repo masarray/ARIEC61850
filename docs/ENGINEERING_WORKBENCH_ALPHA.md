@@ -15,7 +15,7 @@ SCL file
 → GOOSE diagnostics
 → SV diagnostics
 → read-only MMS loopback alpha
-→ Markdown/JSON evidence export
+→ structured evidence pack export
 ```
 
 ## Run
@@ -33,7 +33,7 @@ The app defaults to `samples/scl/minimal-station.scd` when it can locate the rep
 - GOOSE diagnostics profile: APPID/MAC/VLAN/confRev, stNum/sqNum, duplicates, gaps, and supervision issues.
 - SV diagnostics profile: APPID/MAC/VLAN/confRev, smpCnt continuity, sample synchronization, payload and ASDU checks.
 - MMS read-only loopback profile: server model, association path, BER dispatch, and write guard readiness.
-- Evidence center: Markdown and JSON exports for each profile.
+- Evidence center: structured pack export with `README.md`, `manifest.json`, profile Markdown/JSON, file sizes, and SHA-256 hashes.
 
 ## Safety posture
 
@@ -42,3 +42,8 @@ The workbench is read-only. It does not perform live write/control operations ag
 ## Public-alpha boundary
 
 This app is a harness for proving engine usability. Final product applications should remain separate repositories or separate app projects and consume stable engine APIs rather than duplicating protocol logic.
+
+
+## Evidence pack milestone
+
+N5.39 adds `EngineeringWorkbenchEvidencePackBuilder`, shared by CLI and WPF. The WPF `Export pack` action now writes a review folder instead of loose profile files. The same flow can be tested headlessly with `workbench-evidence-pack`, making the desktop workflow reproducible in CI or terminal validation.

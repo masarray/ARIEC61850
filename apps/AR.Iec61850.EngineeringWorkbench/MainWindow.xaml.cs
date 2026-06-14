@@ -204,28 +204,61 @@ public partial class MainWindow : System.Windows.Window
         }
     }
 
-    private void ExportEvidence_Click(object sender, System.Windows.RoutedEventArgs e)
+    private async void ExportEvidence_Click(object sender, System.Windows.RoutedEventArgs e)
     {
-        var folder = string.IsNullOrWhiteSpace(_viewModel.EvidenceFolder) ? ResolveDefaultEvidenceFolder() : _viewModel.EvidenceFolder;
-        Directory.CreateDirectory(folder);
-        _viewModel.EvidenceFolder = folder;
-        _viewModel.Evidence.Clear();
+        if (_viewModel.IsBusy)
+            return;
 
-        if (_viewModel.LastSclProfile is null && _viewModel.LastPublicAlphaReadinessProfile is null)
+        if (!File.Exists(_viewModel.SclPath))
         {
-            System.Windows.MessageBox.Show(this, "Run the workbench or public alpha gate before exporting evidence.", "No evidence", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(this, "Select a valid SCL file before exporting an evidence pack.", "SCL required", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             return;
         }
 
-        var options = new JsonSerializerOptions { WriteIndented = true };
-        WriteEvidence(folder, "scl-engineering-profile", _viewModel.LastSclProfile?.ToMarkdown(), _viewModel.LastSclProfile, options);
-        WriteEvidence(folder, "process-bus-binding-profile", _viewModel.LastBindingProfile?.ToMarkdown(), _viewModel.LastBindingProfile, options);
-        WriteEvidence(folder, "goose-diagnostics-profile", _viewModel.LastGooseProfile?.ToMarkdown(), _viewModel.LastGooseProfile, options);
-        WriteEvidence(folder, "sv-diagnostics-profile", _viewModel.LastSampledValuesProfile?.ToMarkdown(), _viewModel.LastSampledValuesProfile, options);
-        WriteEvidence(folder, "mms-readonly-loopback-profile", _viewModel.LastMmsLoopbackProfile?.ToMarkdown(), _viewModel.LastMmsLoopbackProfile, options);
-        WriteEvidence(folder, "public-alpha-readiness-profile", _viewModel.LastPublicAlphaReadinessProfile?.ToMarkdown(), _viewModel.LastPublicAlphaReadinessProfile, options);
+        var folder = string.IsNullOrWhiteSpace(_viewModel.EvidenceFolder) ? ResolveDefaultEvidenceFolder() : _viewModel.EvidenceFolder;
+        _viewModel.EvidenceFolder = folder;
+        _viewModel.Evidence.Clear();
+        _viewModel.Status = "Generating evidence pack...";
+        _viewModel.IsBusy = true;
+        _cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-        _viewModel.Status = $"Evidence exported to {folder}";
+        try
+        {
+            var pack = await new EngineeringWorkbenchEvidencePackBuilder().RunAsync(
+                new EngineeringWorkbenchEvidencePackOptions
+                {
+                    SclPath = _viewModel.SclPath,
+                    PcapPath = _viewModel.PcapPath,
+                    OutputFolder = folder,
+                    NominalFrequencyHz = _viewModel.NominalFrequencyHz,
+                    Port = 0,
+                    ProbeTimeoutMilliseconds = 5000,
+                    SimulationSteps = 6,
+                    IncludePublicAlphaReadiness = true
+                },
+                _cancellation.Token);
+
+            foreach (var artifact in pack.Artifacts)
+                _viewModel.Evidence.Add(new EvidenceRow(artifact.RelativePath, artifact.Kind, $"{artifact.SizeBytes} bytes  sha256={artifact.Sha256[..Math.Min(12, artifact.Sha256.Length)]}..."));
+
+            _viewModel.Summary = pack.Summary;
+            _viewModel.Status = $"Evidence pack exported to {pack.OutputFolder}";
+        }
+        catch (OperationCanceledException)
+        {
+            _viewModel.Status = "Evidence pack export cancelled.";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or FormatException or JsonException or ArgumentException)
+        {
+            _viewModel.Status = $"Evidence pack export failed: {ex.GetType().Name}: {ex.Message}";
+            _viewModel.Findings.Add(new FindingRow("High", "evidence", "EVIDENCE_PACK_FAILED", ex.Message));
+        }
+        finally
+        {
+            _viewModel.IsBusy = false;
+            _cancellation?.Dispose();
+            _cancellation = null;
+        }
     }
 
     private void Clear_Click(object sender, System.Windows.RoutedEventArgs e)

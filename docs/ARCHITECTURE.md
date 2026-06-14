@@ -68,7 +68,7 @@ ARIEC61850
 
 `apps/AR.Iec61850.IedSimulator` is the WPF offline simulator workspace. It validates model and runtime UX before a network MMS server is implemented.
 
-`apps/AR.Iec61850.EngineeringWorkbench` is a read-only WPF harness over the engine profiles. It orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and evidence export without embedding protocol logic in the UI.
+`apps/AR.Iec61850.EngineeringWorkbench` is a read-only WPF harness over the engine profiles. It orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and structured evidence-pack export without embedding protocol logic in the UI.
 
 ### Test layer
 

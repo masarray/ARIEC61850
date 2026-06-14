@@ -59,6 +59,7 @@ internal static class Cli
                 "mms-confirmed-request-ber-profile" => await MmsConfirmedRequestBerProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-readonly-loopback-profile" => await MmsReadOnlyLoopbackProfileAsync(args[1..]).ConfigureAwait(false),
                 "public-alpha-readiness-profile" => await PublicAlphaReadinessProfileAsync(args[1..]).ConfigureAwait(false),
+                "workbench-evidence-pack" => await WorkbenchEvidencePackAsync(args[1..]).ConfigureAwait(false),
                 "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "mms-model-discover" => await MmsModelDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-scl-export" => await MmsSclExportAsync(args[1..]).ConfigureAwait(false),
@@ -924,6 +925,74 @@ internal static class Cli
         }
 
         return profile.IsReady ? 0 : 3;
+    }
+
+
+
+    private static async Task<int> WorkbenchEvidencePackAsync(string[] args)
+    {
+        var options = CliOptions.Parse(args);
+        var sclPath = options.Get("scl", Path.Combine("samples", "scl", "minimal-station.scd"));
+        var pcapPath = options.Get("pcap", string.Empty);
+        var outputFolder = options.Get("output", Path.Combine(".artifacts", "workbench-pack"));
+        var port = options.GetInt("port", 0);
+        if (port is < 0 or > 65535)
+            throw new ArgumentException("--port must be 0..65535. Use 0 for an ephemeral loopback port.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 5000);
+        if (timeoutMs <= 0)
+            throw new ArgumentException("--timeout-ms must be greater than 0.");
+
+        var steps = options.GetInt("steps", 6);
+        if (steps < 0)
+            throw new ArgumentException("--steps must be greater than or equal to 0.");
+
+        var nominalHz = options.GetDouble("nominal-hz", 50);
+        var includePublicAlpha = !options.GetBool("no-public-alpha", false);
+        var rawLimit = options.GetInt("raw-limit", 30);
+
+        var profile = await new EngineeringWorkbenchEvidencePackBuilder().RunAsync(
+            new EngineeringWorkbenchEvidencePackOptions
+            {
+                SclPath = sclPath,
+                PcapPath = pcapPath,
+                OutputFolder = outputFolder,
+                Port = port,
+                ProbeTimeoutMilliseconds = timeoutMs,
+                SimulationSteps = steps,
+                NominalFrequencyHz = nominalHz,
+                IncludePublicAlphaReadiness = includePublicAlpha
+            }).ConfigureAwait(false);
+
+        Console.WriteLine("Engineering Workbench evidence pack");
+        Console.WriteLine("Mode: read-only evidence pack for SCL, process-bus diagnostics, MMS loopback, and optional public-alpha readiness.");
+        Console.WriteLine($"Status: {(profile.IsComplete ? "COMPLETE" : "CHECK")}");
+        Console.WriteLine($"Output: {Path.GetFullPath(outputFolder)}");
+        Console.WriteLine($"SCL: {Path.GetFullPath(sclPath)}");
+        Console.WriteLine($"PCAP: {(string.IsNullOrWhiteSpace(pcapPath) ? "not provided" : Path.GetFullPath(pcapPath))}");
+        Console.WriteLine($"Artifacts: {profile.ArtifactCount}");
+        Console.WriteLine($"Findings: blocking={profile.BlockingFindingCount} warnings={profile.WarningFindingCount} total={profile.FindingCount}");
+        Console.WriteLine($"SCL: IED={profile.SclIedCount} LD={profile.SclLogicalDeviceCount} LN={profile.SclLogicalNodeCount} DataSets={profile.SclDataSetCount} Reports={profile.SclReportControlCount}");
+        Console.WriteLine($"Process bus: packets={profile.ObservedPacketCount} decoded={profile.ObservedDecodedFrameCount} binding={(profile.ProcessBusBindingReady ? "ready" : "check")}");
+        Console.WriteLine($"GOOSE: {profile.BoundGooseCount}/{profile.ExpectedGooseCount} healthy={profile.GooseDiagnosticsHealthy.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"SV: {profile.BoundSampledValuesCount}/{profile.ExpectedSampledValuesCount} healthy={profile.SampledValuesDiagnosticsHealthy.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"MMS loopback: ready={profile.ReadOnlyMmsLoopbackReady.ToString().ToLowerInvariant()}");
+        Console.WriteLine($"Public alpha: ready={profile.PublicAlphaReady.ToString().ToLowerInvariant()}");
+        Console.WriteLine();
+        Console.WriteLine("Artifact index:");
+        foreach (var artifact in profile.Artifacts)
+            Console.WriteLine($"  {artifact.Kind} {artifact.RelativePath} bytes={artifact.SizeBytes} sha256={artifact.Sha256[..Math.Min(12, artifact.Sha256.Length)]}...");
+
+        if (profile.Findings.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Findings:");
+            foreach (var finding in TakeWithLimit(profile.Findings, rawLimit))
+                Console.WriteLine($"  {finding.Severity} {finding.Code} [{finding.Area}]: {finding.Message} Recommendation: {finding.Recommendation}");
+            WriteLimitNotice(profile.Findings.Count, rawLimit, "finding(s)");
+        }
+
+        return profile.IsComplete ? 0 : 3;
     }
 
     private static int MmsServerReadOnlyProfile(string[] args)
@@ -6067,6 +6136,7 @@ internal static class Cli
         Console.WriteLine("  mms-confirmed-request-ber-profile [--port 0] [--timeout-ms 5000] [--steps N] [--output .artifacts/out/mms-confirmed-request-ber.md] [--json .artifacts/out/mms-confirmed-request-ber.json]");
         Console.WriteLine("  mms-readonly-loopback-profile [--port 0] [--timeout-ms 5000] [--steps N] [--name NAME] [--output .artifacts/out/mms-readonly-loopback.md] [--json .artifacts/out/mms-readonly-loopback.json]");
         Console.WriteLine("  public-alpha-readiness-profile [--scl samples/scl/minimal-station.scd] [--port 0] [--timeout-ms 5000] [--steps N] [--output .artifacts/out/public-alpha-readiness.md] [--json .artifacts/out/public-alpha-readiness.json]");
+        Console.WriteLine("  workbench-evidence-pack [--scl samples/scl/minimal-station.scd] [--pcap file.pcap] [--output .artifacts/workbench-pack] [--no-public-alpha] [--nominal-hz 50] [--port 0] [--timeout-ms 5000] [--steps N]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/ied-model-discovery]");
         Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile safe-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output .artifacts/out/scl/live-ied.safe-connection.iid] [--ld-name-mode auto|keep] [--output .artifacts/out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
@@ -6111,6 +6181,7 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-confirmed-request-ber-profile --port 0 --output .artifacts/out/mms-confirmed-request-ber.md --json .artifacts/out/mms-confirmed-request-ber.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-readonly-loopback-profile --port 0 --output .artifacts/out/mms-readonly-loopback.md --json .artifacts/out/mms-readonly-loopback.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- public-alpha-readiness-profile --output .artifacts/out/public-alpha-readiness.md --json .artifacts/out/public-alpha-readiness.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- workbench-evidence-pack --scl samples/scl/minimal-station.scd --output .artifacts/workbench-pack");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.0.2.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.0.2.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output .artifacts/out/ied-model-discovery");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-export-profile safe-connection --ld-name-mode auto --output .artifacts/out/scl/demo-ied.generated.iid");

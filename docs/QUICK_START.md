@@ -278,4 +278,12 @@ A passing result means the engine alpha gates are green: SCL engineering, synthe
 dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench
 ```
 
-Use it as a read-only harness: open an SCL file, optionally add a PCAP, run the workbench, review findings, and export Markdown/JSON evidence.
+Use it as a read-only harness: open an SCL file, optionally add a PCAP, run the workbench, review findings, and export a structured evidence pack.
+
+## Generate a Workbench evidence pack from CLI
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- workbench-evidence-pack --scl .\samples\scl\minimal-station.scd --output .\.artifacts\workbench-pack
+```
+
+The generated folder contains a review `README.md`, `manifest.json`, and per-profile Markdown/JSON artifacts. See `docs/WORKBENCH_EVIDENCE_PACK.md`.

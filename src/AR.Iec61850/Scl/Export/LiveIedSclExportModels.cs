@@ -5,7 +5,7 @@ namespace AR.Iec61850.Scl.Export;
 
 public sealed class LiveIedSclExportOptions
 {
-    public string Profile { get; init; } = "iedscout-connection";
+    public string Profile { get; init; } = "safe-connection";
     public string SubNetworkName { get; init; } = "StationBus";
     public string IpAddress { get; init; } = string.Empty;
     public string IpSubnet { get; init; } = "255.255.255.0";
@@ -25,7 +25,7 @@ public sealed class LiveIedSclExportOptions
 
 public enum LiveIedSclExportProfile
 {
-    IedScoutConnection,
+    SafeConnection,
     FullModel,
     SimulatorSeed
 }
@@ -35,19 +35,19 @@ public static class LiveIedSclExportProfileParser
     public static LiveIedSclExportProfile Parse(string value)
         => (value ?? string.Empty).Trim().ToLowerInvariant() switch
         {
-            "" or "connection" or "iedscout" or "iedscout-connection" or "client" => LiveIedSclExportProfile.IedScoutConnection,
+            "" or "connection" or "safe" or "safe-connection" or "client" => LiveIedSclExportProfile.SafeConnection,
             "full" or "full-model" or "model" or "audit" or "standard-discovery" or "discovery" => LiveIedSclExportProfile.FullModel,
             "sim" or "simulator" or "simulator-seed" or "server" => LiveIedSclExportProfile.SimulatorSeed,
-            _ => throw new ArgumentException("SCL export profile must be iedscout-connection, full-model/standard-discovery, or simulator-seed.")
+            _ => throw new ArgumentException("SCL export profile must be safe-connection, full-model/standard-discovery, or simulator-seed.")
         };
 
     public static string ToProfileName(LiveIedSclExportProfile profile)
         => profile switch
         {
-            LiveIedSclExportProfile.IedScoutConnection => "iedscout-connection",
+            LiveIedSclExportProfile.SafeConnection => "safe-connection",
             LiveIedSclExportProfile.FullModel => "full-model",
             LiveIedSclExportProfile.SimulatorSeed => "simulator-seed",
-            _ => "iedscout-connection"
+            _ => "safe-connection"
         };
 }
 

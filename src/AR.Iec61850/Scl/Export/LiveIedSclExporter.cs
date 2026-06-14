@@ -577,25 +577,25 @@ public static class LiveIedSclExporter
                     }
 
                     var resolvedProfile = options.ResolvedProfile;
-                    if ((!options.IncludeLowConfidenceTypes || resolvedProfile == LiveIedSclExportProfile.IedScoutConnection) && dataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.Low or LiveIedDiscoveryConfidenceLevel.Unknown)
+                    if ((!options.IncludeLowConfidenceTypes || resolvedProfile == LiveIedSclExportProfile.SafeConnection) && dataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.Low or LiveIedDiscoveryConfidenceLevel.Unknown)
                     {
                         context.Warnings.Add(new LiveIedSclExportWarning
                         {
                             Code = "LowConfidenceDataObjectSkipped",
                             Reference = dataObject.Reference,
-                            Message = "Data object was omitted from the IEDScout connection SCL profile because CDC/type inference confidence is low. It remains available in full discovery evidence."
+                            Message = "Data object was omitted from the safe-connection SCL profile because CDC/type inference confidence is low. It remains available in full discovery evidence."
                         });
                         continue;
                     }
 
                     var filteredAttributes = FilterExportAttributes(dataObject, options, context).ToArray();
-                    if (resolvedProfile == LiveIedSclExportProfile.IedScoutConnection && filteredAttributes.Length == 0)
+                    if (resolvedProfile == LiveIedSclExportProfile.SafeConnection && filteredAttributes.Length == 0)
                     {
                         context.Warnings.Add(new LiveIedSclExportWarning
                         {
                             Code = "ConnectionProfileDataObjectSkipped",
                             Reference = dataObject.Reference,
-                            Message = "All discovered attributes for this data object were classified as unsafe/noisy for an IEDScout-clean connection SCL profile. The object is retained in companion discovery JSON."
+                            Message = "All discovered attributes for this data object were classified as unsafe/noisy for a safe-connection SCL profile. The object is retained in companion discovery JSON."
                         });
                         continue;
                     }
@@ -816,7 +816,7 @@ public static class LiveIedSclExporter
             sb.AppendLine($"| ... | ... | ... | {result.ControlBlockMappings.Count - 80} more item(s) in JSON report | ");
         sb.AppendLine();
 
-        sb.AppendLine("## IEDScout Connection Profile Exclusions");
+        sb.AppendLine("## Safe-Connection Profile Exclusions");
         sb.AppendLine();
         if (result.ExcludedAttributes.Count == 0)
         {

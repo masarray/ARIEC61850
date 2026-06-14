@@ -15,3 +15,8 @@ This folder contains the public engineering documentation for ARIEC61850.
 - [Public Release Checklist](PUBLIC_RELEASE_CHECKLIST.md) - pre-push checklist for GitHub release readiness.
 
 - [Full Stack Roadmap](FULL_STACK_ROADMAP.md)
+
+## Engine maturity
+
+- [Engine maturity matrix](ENGINE_MATURITY_MATRIX.md)
+- [Roadmap](ROADMAP.md)

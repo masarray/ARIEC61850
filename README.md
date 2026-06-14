@@ -15,7 +15,7 @@ This repository is intentionally source-first and public-release safe: generated
 
 | Area | Project / folder | Purpose |
 |---|---|---|
-| Core library | `src/AR.Iec61850` | BER, MMS, SCL, GOOSE, SV, PCAP, reporting, diagnostics |
+| Core library | `src/AR.Iec61850` | BER, MMS, SCL, GOOSE, SV, PCAP, reporting, diagnostics, engineering-profile facade |
 | Live Ethernet transport | `src/AR.Iec61850.Transports.Npcap` | Npcap-backed raw process-bus transport for Windows lab use |
 | CLI toolkit | `apps/AR.Iec61850.Cli` | SCL inspection, PCAP generation/inspection, MMS discovery/read/reporting commands |
 | WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher / injector workspace |
@@ -24,7 +24,7 @@ This repository is intentionally source-first and public-release safe: generated
 | Simulation library | `src/AR.Iec61850.Simulation` | In-memory IED profile and deterministic point/event simulation foundation |
 | Tests | `tests/AR.Iec61850.Tests` | Automated unit and protocol-shape tests |
 | Samples | `samples/scl` | Small SCL files for local validation and examples |
-| Docs | `docs` | Quick start, architecture, reporting workflow, validation, release packaging |
+| Docs | `docs` | Quick start, architecture, roadmap, engine maturity matrix, reporting workflow, validation, release packaging |
 | Landing page | `landing` | Static GitHub Pages website |
 
 ## Status
@@ -44,6 +44,7 @@ Implemented areas include:
 - Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
 - WPF IED Discovery workspace for live MMS model/DataSet/RCB snapshot export.
 - Offline IED Simulator foundation with deterministic point values, DataSets, RCB profiles, and JSON export.
+- Engineering-profile facade that converts live discovery into capability assessment, report-lab readiness, diagnostics, and Markdown evidence.
 
 Experimental or future areas:
 

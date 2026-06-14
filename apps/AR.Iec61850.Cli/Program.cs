@@ -1,6 +1,7 @@
 using AR.Iec61850.Capture;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Ethernet;
+using AR.Iec61850.Engineering;
 using AR.Iec61850.Goose;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Monitoring;
@@ -38,6 +39,7 @@ internal static class Cli
                 "list-adapters" => ListAdapters(),
                 "goose-subscribe-live" => await GooseSubscribeLiveAsync(args[1..]).ConfigureAwait(false),
                 "mms-discover" => await MmsDiscoverAsync(args[1..]).ConfigureAwait(false),
+                "mms-engine-profile" => await MmsEngineProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-directory" => await MmsDirectoryAsync(args[1..]).ConfigureAwait(false),
                 "mms-model-discover" => await MmsModelDiscoverAsync(args[1..]).ConfigureAwait(false),
                 "mms-scl-export" => await MmsSclExportAsync(args[1..]).ConfigureAwait(false),
@@ -489,6 +491,83 @@ internal static class Cli
     }
 
 
+    private static async Task<int> MmsEngineProfileAsync(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("mms-engine-profile requires <host-or-ip>.");
+
+        var host = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var timeoutMs = options.GetInt("timeout-ms", 30000);
+        if (timeoutMs < 1)
+            throw new ArgumentException("--timeout-ms must be at least 1.");
+
+        var profileOptions = new Iec61850EngineeringProfileOptions
+        {
+            Host = host,
+            Port = port,
+            Timeout = TimeSpan.FromMilliseconds(timeoutMs),
+            ProbeReportAttributes = !options.GetBool("no-report-probe", false),
+            MaxReportAttributeProbes = options.GetInt("max-report-probes", 32),
+            ReadDataSetDirectories = options.GetBool("read-datasets", true),
+            MaxDataSetDirectories = options.GetInt("max-datasets", 32)
+        };
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        await using var client = new Iec61850Client();
+
+        Console.WriteLine($"MMS target: {host}:{port}");
+        Console.WriteLine("Mode: engineering-profile discovery (read-only capability assessment, no RCB writes).");
+
+        var result = await client.DiscoverEngineeringProfileAsync(profileOptions, timeout.Token).ConfigureAwait(false);
+        if (!result.IsSuccess || result.Value == null)
+        {
+            foreach (var diagnostic in result.Diagnostics)
+                Console.Error.WriteLine(diagnostic.Summary);
+            return 2;
+        }
+
+        var profile = result.Value;
+        Console.WriteLine(profile.Summary);
+        Console.WriteLine();
+        Console.WriteLine("Capabilities:");
+        foreach (var capability in profile.Capabilities)
+            Console.WriteLine($"  {capability.Summary}");
+
+        Console.WriteLine();
+        Console.WriteLine("Diagnostics:");
+        foreach (var diagnostic in profile.Diagnostics)
+            Console.WriteLine($"  {diagnostic.Summary}");
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, profile.ToMarkdown());
+            Console.WriteLine($"Markdown profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"JSON profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return 0;
+    }
+
+    private static void EnsureOutputDirectory(string filePath)
+    {
+        var directory = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+    }
+
+
 
     private static async Task<int> MmsModelDiscoverAsync(string[] args)
     {
@@ -506,7 +585,7 @@ internal static class Cli
         var typeReadSource = options.Get("type-read-source", "datasets");
         var output = options.Get("output", Path.Combine("out", "ied-model-discovery"));
         var iedName = options.Get("ied-name", string.Empty);
-        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-iedscout-learned" : iedName);
+        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-safe-learned" : iedName);
         var apName = options.Get("ap-name", "AP1");
 
         await using var session = new MmsClientSession();
@@ -615,7 +694,7 @@ internal static class Cli
         var maxSettingReads = options.GetInt("max-setting-reads", 256);
         var settingReadDelayMs = options.GetInt("setting-read-delay-ms", 10);
         var iedName = options.Get("ied-name", string.Empty);
-        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-iedscout-learned" : iedName);
+        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-safe-learned" : iedName);
         var apName = options.Get("ap-name", "AP1");
         var output = options.Get("output", Path.Combine("out", "service-discovery"));
 
@@ -1675,7 +1754,7 @@ internal static class Cli
         string profileName,
         string conflictPolicy)
     {
-        var normalizedProfile = string.IsNullOrWhiteSpace(profileName) ? "generic-iedscout-learned" : profileName.Trim();
+        var normalizedProfile = string.IsNullOrWhiteSpace(profileName) ? "generic-safe-learned" : profileName.Trim();
         var normalizedPolicy = string.IsNullOrWhiteSpace(conflictPolicy) ? "review-only" : conflictPolicy.Trim().ToLowerInvariant();
         if (normalizedPolicy is not "review-only" and not "prefer-live" and not "prefer-golden")
             normalizedPolicy = "review-only";
@@ -2047,9 +2126,9 @@ internal static class Cli
         var maxTypeReads = options.GetInt("max-type-reads", 512);
         var typeReadSource = options.Get("type-read-source", "both");
         var iedName = options.Get("ied-name", string.Empty);
-        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-iedscout-learned" : iedName);
+        var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-safe-learned" : iedName);
         var apName = options.Get("ap-name", "AP1");
-        var profile = options.Get("scl-export-profile", options.Get("profile", "iedscout-connection"));
+        var profile = options.Get("scl-export-profile", options.Get("profile", "safe-connection"));
         var output = options.Get("output", Path.Combine("out", "scl", "live-ied.generated.iid"));
         var subnet = options.Get("ip-subnet", "255.255.255.0");
         var gateway = options.Get("ip-gateway", "0.0.0.0");
@@ -2061,8 +2140,8 @@ internal static class Cli
         var includeOsi = options.GetBool("include-osi", true);
         var writeDiscoveryBundle = options.GetBool("write-discovery", true);
         var requestedProfile = LiveIedSclExportProfileParser.Parse(profile);
-        var writeConnectionCompanion = options.GetBool("write-connection-companion", requestedProfile != LiveIedSclExportProfile.IedScoutConnection);
-        var connectionCompanionOutput = options.Get("connection-output", MakeProfileOutputPath(output, "iedscout-connection"));
+        var writeConnectionCompanion = options.GetBool("write-connection-companion", requestedProfile != LiveIedSclExportProfile.SafeConnection);
+        var connectionCompanionOutput = options.Get("connection-output", MakeProfileOutputPath(output, "safe-connection"));
         var ldNameMode = ParseLogicalDeviceNameMode(options.Get("ld-name-mode", "auto"));
 
         await using var session = new MmsClientSession();
@@ -2150,12 +2229,12 @@ internal static class Cli
             CreateSclExportOptions(profile));
 
         LiveIedSclExportResult? connectionCompanion = null;
-        if (writeConnectionCompanion && requestedProfile != LiveIedSclExportProfile.IedScoutConnection)
+        if (writeConnectionCompanion && requestedProfile != LiveIedSclExportProfile.SafeConnection)
         {
             connectionCompanion = LiveIedSclExporter.WriteFiles(
                 document,
                 connectionCompanionOutput,
-                CreateSclExportOptions("iedscout-connection"));
+                CreateSclExportOptions("safe-connection"));
         }
 
         if (writeDiscoveryBundle)
@@ -2173,11 +2252,11 @@ internal static class Cli
         Console.WriteLine($"  Counts: LD={export.LogicalDeviceCount}, LN={export.LogicalNodeCount}, DataSets={export.DataSetCount}, RCB={export.ReportControlCount}, GoCB={export.GooseControlBlockCount}, SVCB={export.SampledValueControlBlockCount}, SGCB={export.SettingGroupControlCount}, LCB={export.LogControlCount}, LNodeType={export.LNodeTypeCount}, DOType={export.DoTypeCount}, DAType={export.DaTypeCount}, excludedAttrs={export.ExcludedAttributes.Count}, warnings={export.Warnings.Count}.");
         if (connectionCompanion is not null)
         {
-            Console.WriteLine("IEDScout connection companion generated.");
+            Console.WriteLine("Safe-connection companion generated.");
             Console.WriteLine($"  Connection SCL: {Path.GetFullPath(connectionCompanion.SclPath)}");
             Console.WriteLine($"  Connection excluded: {Path.GetFullPath(connectionCompanion.ExcludedAttributesPath)}");
             Console.WriteLine($"  Connection counts: DOType={connectionCompanion.DoTypeCount}, DAType={connectionCompanion.DaTypeCount}, excludedAttrs={connectionCompanion.ExcludedAttributes.Count}, warnings={connectionCompanion.Warnings.Count}.");
-            Console.WriteLine("  Use the companion file for IEDScout online connect/read-all checks; use the main file for full standard discovery review.");
+            Console.WriteLine("  Use the companion file for safe online connect/read-all checks; use the main file for full standard discovery review.");
         }
         Console.WriteLine("Round-trip check:");
         var parsed = new SclParser().Load(output);
@@ -4806,9 +4885,10 @@ internal static class Cli
         Console.WriteLine("  list-adapters");
         Console.WriteLine("  goose-subscribe-live --adapter <index|name> [--scl file.scd|file.cid|file.icd|file.iid] [--duration-sec 60] [--frames N] [--filter \"ether proto 0x88b8\"] [--continuous]");
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
+        Console.WriteLine("  mms-engine-profile <host-or-ip> [--port 102] [--timeout-ms 30000] [--max-report-probes N] [--read-datasets true] [--output profile.md] [--json profile.json]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/ied-model-discovery]");
-        Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile iedscout-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output .artifacts/out/scl/live-ied.iedscout-connection.iid] [--ld-name-mode auto|keep] [--output .artifacts/out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
+        Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile safe-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output .artifacts/out/scl/live-ied.safe-connection.iid] [--ld-name-mode auto|keep] [--output .artifacts/out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
         Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-source datasets|model|both] [--type-read-strategy safe|dataset-leaf|all] [--type-read-isolated true] [--type-read-quarantine true] [--golden-scl samples/scl/minimal-station.scd] [--learn-types-from-golden true] [--golden-profile-name IED1] [--golden-learning-conflict-policy review-only|prefer-live|prefer-golden] [--max-type-reads 32] [--type-read-delay-ms 50] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/service-discovery]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
@@ -4833,9 +4913,10 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- list-adapters");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl samples/scl/minimal-station.scd --duration-sec 30");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.0.2.10 --port 102 --max-report-probes 16");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-engine-profile 192.0.2.10 --output .artifacts/out/engineering-profile.md --json .artifacts/out/engineering-profile.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.0.2.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.0.2.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output .artifacts/out/ied-model-discovery");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-export-profile iedscout-connection --ld-name-mode auto --output .artifacts/out/scl/demo-ied.generated.iid");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-export-profile safe-connection --ld-name-mode auto --output .artifacts/out/scl/demo-ied.generated.iid");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.0.2.10 --ied-name IED1 --read-files true --read-setting-groups true --read-setting-values false --read-types false --learn-types-from-golden true --output .artifacts/out/service-discovery/demo-ied");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-find 192.0.2.10 XCBR --fc ST --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.0.2.10 IED1LD0/MMXU1.PhV.phsA.cVal.mag.f");

@@ -438,7 +438,7 @@ public sealed class LiveIedSclExporterTests
 
 
     [Fact]
-    public void Exporter_IedScoutConnectionProfile_Excludes_Control_Service_And_Optional_Config_Attributes()
+    public void Exporter_SafeConnectionProfile_Excludes_Control_Service_And_Optional_Config_Attributes()
     {
         var discovery = new MmsDiscoveryResult
         {
@@ -517,7 +517,7 @@ public sealed class LiveIedSclExporterTests
 
         var xml = LiveIedSclExporter.BuildDocument(
             model,
-            new LiveIedSclExportOptions { Profile = "iedscout-connection", IpAddress = "192.0.2.10" }).ToString();
+            new LiveIedSclExportOptions { Profile = "safe-connection", IpAddress = "192.0.2.10" }).ToString();
 
         Assert.Contains("<DA name=\"stVal\"", xml, StringComparison.Ordinal);
         Assert.Contains("<BDA name=\"f\"", xml, StringComparison.Ordinal);

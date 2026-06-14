@@ -21,25 +21,25 @@ internal static class SclAttributeExportClassifier
         var leaf = LeafName(path);
 
         if (string.Equals(fc, "CO", StringComparison.OrdinalIgnoreCase))
-            return Exclude("ControlServiceParameter", "CO functional-constraint attributes are control service parameters; omit from IEDScout connection profile so the tool does not read Oper/SBOw/Cancel/ctlVal as ordinary values.");
+            return Exclude("ControlServiceParameter", "CO functional-constraint attributes are control service parameters; omit from safe-connection profile so the tool does not read Oper/SBOw/Cancel/ctlVal as ordinary values.");
 
         if (ContainsControlServicePath(path))
-            return Exclude("ControlServiceParameter", "Oper/SBOw/Cancel service parameter omitted from IEDScout connection profile.");
+            return Exclude("ControlServiceParameter", "Oper/SBOw/Cancel service parameter omitted from safe-connection profile.");
 
         if (ContainsOrEqualsSegment(path, "origin"))
-            return Exclude("ControlServiceParameter", "Originator structure omitted from IEDScout connection profile; many IEDs accept it only as a control-service parameter, not as an ordinary readable value.");
+            return Exclude("ControlServiceParameter", "Originator structure omitted from safe-connection profile; many IEDs accept it only as a control-service parameter, not as an ordinary readable value.");
 
         if (IsControlServiceLeaf(leaf) && IsLikelyControlObject(cdc, doName, path))
-            return Exclude("ControlServiceParameter", "Control-operation leaf omitted from IEDScout connection profile.");
+            return Exclude("ControlServiceParameter", "Control-operation leaf omitted from safe-connection profile.");
 
         if (IsOptionalMeasurementOrConfigAttribute(path, leaf))
-            return Exclude("OptionalConfigAttribute", "Optional measurement/configuration attribute omitted from IEDScout connection profile until read-proven by the IED.");
+            return Exclude("OptionalConfigAttribute", "Optional measurement/configuration attribute omitted from safe-connection profile until read-proven by the IED.");
 
         if (IsKnownNoisyStatus(dataObject, leaf))
             return Exclude("NoisyOptionalStatus", "Known optional/status attribute frequently rejected by live IEDs is omitted from the clean connection profile.");
 
         if (dataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.Low or LiveIedDiscoveryConfidenceLevel.Unknown)
-            return Exclude("LowConfidenceType", "Low-confidence CDC/type inference omitted from IEDScout connection profile; retained in full discovery evidence.");
+            return Exclude("LowConfidenceType", "Low-confidence CDC/type inference omitted from safe-connection profile; retained in full discovery evidence.");
 
         return new SclAttributeExportDecision(true);
     }

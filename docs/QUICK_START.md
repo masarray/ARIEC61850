@@ -129,3 +129,13 @@ Build output is centralized under `.artifacts/` and ignored by Git. To clean and
 .\scripts\clean-local-artifacts.cmd
 .\scripts\verify-source-clean.cmd
 ```
+
+## Generate an engineering profile from a live MMS endpoint
+
+Use this read-only command when validating engine maturity against a real IED or simulator. It connects, discovers the model, reads available DataSet directories, classifies report readiness, and writes capability/diagnostic evidence.
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-engine-profile 192.0.2.10 --port 102 --timeout-ms 30000 --output .\.artifacts\out\engineering-profile.md --json .\.artifacts\out\engineering-profile.json
+```
+
+The command performs no RCB writes. It is intended as the next baseline test before report runtime, GOOSE diagnostics, SV analyzer, and simulator-server phases.

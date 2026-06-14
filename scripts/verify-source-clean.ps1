@@ -32,6 +32,7 @@ $ForbiddenTextPatterns = @(
     "ARIEC60870", "IEC60870", "IEC 60870", "IEC101", "IEC 101",
     "IEC103", "IEC 103", "IEC104", "IEC 104", "libiec61850",
     "MZ Automation", "GPL", "General Public License", "OCR7SR12", "OMICRON_CMC",
+    "IEDScout", "IED Scout", "StationScout", "Station Scout", "SVScout", "SV Scout", "iedscout",
     "C:\Users\", "C:\Program Files\dotnet\sdk", "blocked in the current sandbox", "_wpftmp"
 )
 

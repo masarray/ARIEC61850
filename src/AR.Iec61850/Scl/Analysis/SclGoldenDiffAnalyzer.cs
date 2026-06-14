@@ -147,7 +147,7 @@ public static class SclGoldenDiffAnalyzer
         sb.AppendLine();
         sb.AppendLine("- Missing/extra control blocks or datasets are structural gaps that should be prioritized before cosmetic SCL cleanup.");
         sb.AppendLine("- CDC differences show where ARIEC61850 reconstruction diverges from the golden engineering model.");
-        sb.AppendLine("- High duplicate-shape counts indicate missing type-template deduplication; this is one reason generated SCL can be much larger than IEDScout export.");
+        sb.AppendLine("- High duplicate-shape counts indicate missing type-template deduplication; this is one reason generated SCL can be much larger than safe-connection export.");
         sb.AppendLine("- This report intentionally compares engineering SCL structure; it does not prove that every object is readable via MMS.");
         return sb.ToString();
     }

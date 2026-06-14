@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     private IReadOnlyList<MmsDataSetDirectoryResult> _lastDataSetDirectories = Array.Empty<MmsDataSetDirectoryResult>();
     private readonly DispatcherTimer _monitorTimer;
     private bool _monitorPollInProgress;
+    private bool _reportReceiveInProgress;
+    private MmsPersistentReportMonitorSession? _activeReportMonitor;
 
     public MainWindow()
     {
@@ -316,18 +318,20 @@ public partial class MainWindow : Window
     {
         if (_viewModel.IsReportMonitorActive)
         {
-            _viewModel.AddStatus("Info", "RCB_MONITOR_STOP", "Report monitor stop requested. The guarded monitor will clean up RptEna/Resv on completion.");
-            _cancellation?.Cancel();
+            await StopActiveReportMonitorAsync("RCB_MONITOR_STOP_REQUEST").ConfigureAwait(true);
             return;
         }
 
-        var selectedReference = _viewModel.SelectedNode?.Reference ?? string.Empty;
+        var selectedReference = ResolveSelectedReportReference();
         if (string.IsNullOrWhiteSpace(selectedReference))
+        {
+            _viewModel.AddStatus("Warning", "RCB_ENABLE_NO_SELECTION", "Select or double-click an RCB before enabling reports.");
             return;
+        }
 
         if (_activeSession == null || _lastDiscovery == null || !_viewModel.IsConnected || !_viewModel.IsOnline)
         {
-            _viewModel.AddStatus("Warning", "RCB_ENABLE_NOT_CONNECTED", "No active online MMS session is available for guarded report enable.");
+            _viewModel.AddStatus("Warning", "RCB_ENABLE_NOT_CONNECTED", "No active online MMS session is available for report enable.");
             return;
         }
 
@@ -364,69 +368,96 @@ public partial class MainWindow : Window
         var actualDynamic = plan.Mode == MmsReportSubscriptionPlanMode.DynamicDataSet;
         var confirm = MessageBox.Show(this,
             actualDynamic
-                ? $"This will create a temporary dynamic DataSet ({plan.DataSetReference}), bind {actualRcb.Reference}, enable reports, optionally GI, listen briefly, then clean up. Continue?"
-                : $"This will start a guarded report monitor for {actualRcb.Reference}.\n\nThe workflow writes RptEna=true, optionally GI=true, listens briefly, then attempts cleanup with RptEna=false. Continue?",
-            actualDynamic ? "Guarded Dynamic RCB" : "Guarded Enable RCB",
+                ? $"This will create a temporary dynamic DataSet ({plan.DataSetReference}), bind {actualRcb.Reference}, enable reports, and keep the monitor running until Stop RCB or Close IED. Continue?"
+                : $"This will enable reports on {actualRcb.Reference} and keep RptEna=true until Stop RCB or Close IED. Continue?",
+            actualDynamic ? "Start Dynamic Report Monitor" : "Start Report Monitor",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes)
             return;
 
         _viewModel.IsBusy = true;
-        _viewModel.IsReportMonitorActive = true;
-        _cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(75));
         try
         {
-            _viewModel.AddStatus("Info", "RCB_ENABLE_START", $"Starting guarded {plan.Mode} report enable for {actualRcb.Reference} using {plan.DataSetReference}. Selected by Smart RCB policy: {plan.RcbSelection.SelectedRcbReference}.");
+            _viewModel.AddStatus("Info", "RCB_MONITOR_START", $"Starting persistent {plan.Mode} report monitor for {actualRcb.Reference} using {plan.DataSetReference}. Selected by Smart RCB policy: {plan.RcbSelection.SelectedRcbReference}.");
             foreach (var warning in plan.Warnings.Take(5))
                 _viewModel.AddStatus("Warning", "RCB_PLAN_WARNING", warning);
 
-            var result = actualDynamic
-                ? await _activeSession.RunGuardedDynamicReportSessionAsync(
-                    plan,
-                    TimeSpan.FromSeconds(30),
-                    triggerGeneralInterrogation: dialogVm.PerformGeneralInterrogation,
-                    deleteDataSetOnCleanup: true,
-                    cancellationToken: _cancellation.Token,
-                    directory: _lastDiscovery.IedDirectory).ConfigureAwait(true)
-                : await _activeSession.RunGuardedStaticReportSessionAsync(
-                    plan,
-                    TimeSpan.FromSeconds(30),
-                    triggerGeneralInterrogation: dialogVm.PerformGeneralInterrogation,
-                    cancellationToken: _cancellation.Token,
-                    pollDirectory: _lastDiscovery.IedDirectory,
-                    pollReferences: _viewModel.MonitorSignals.Select(x => x.Reference).Take(16).ToArray(),
-                    pollInterval: TimeSpan.FromSeconds(1)).ConfigureAwait(true);
+            var start = await _activeSession.StartPersistentReportMonitorAsync(
+                plan,
+                triggerGeneralInterrogation: dialogVm.PerformGeneralInterrogation,
+                deleteDynamicDataSetOnStop: true,
+                directory: _lastDiscovery.IedDirectory,
+                cancellationToken: CancellationToken.None).ConfigureAwait(true);
 
-            foreach (var report in result.Reports.Take(32))
-                ApplyReportFrameToMonitor(report);
-            foreach (var poll in result.PollReads.Take(32))
-                ApplyPollReadToMonitor(poll);
+            foreach (var write in start.WriteSteps.Take(16))
+                _viewModel.AddStatus(write.IsSuccess ? "Info" : "Warning", "RCB_WRITE", $"{write.Attribute}: {write.Message}");
+            foreach (var warning in start.Warnings.Take(8))
+                _viewModel.AddStatus("Warning", "RCB_MONITOR_WARNING", warning);
 
-            foreach (var snapshot in result.Verification.RcbSnapshots.TakeLast(4))
-                _viewModel.AddStatus(snapshot.IsSuccess ? "Info" : "Warning", "RCB_SNAPSHOT", snapshot.Summary);
+            if (!start.IsSuccess || start.Session == null)
+            {
+                _viewModel.AddStatus("Error", "RCB_MONITOR_START_FAILED", start.Message);
+                MessageBox.Show(this, start.Message, "Report monitor failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-            var severity = result.IsSuccess ? "Info" : "Error";
-            _viewModel.AddStatus(severity, result.IsSuccess ? "RCB_ENABLE_COMPLETE" : "RCB_ENABLE_FAILED", result.Message + " " + result.Verification.Summary);
-            foreach (var warning in result.Warnings.Take(8))
-                _viewModel.AddStatus("Warning", "RCB_ENABLE_WARNING", warning);
-
+            _activeReportMonitor = start.Session;
+            _viewModel.IsReportMonitorActive = true;
+            _viewModel.AddStatus("Info", "RCB_MONITOR_RUNNING", start.Message);
             await RefreshReportControlRuntimeAsync(actualRcb.Reference, updateUi: true).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException)
-        {
-            _viewModel.AddStatus("Warning", "RCB_ENABLE_CANCELLED", "Guarded report enable was cancelled or timed out. Cleanup is attempted by the report session engine.");
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
-            _viewModel.AddStatus("Error", "RCB_ENABLE_FAILED", $"{ex.GetType().Name}: {ex.Message}");
+            _viewModel.AddStatus("Error", "RCB_MONITOR_START_FAILED", $"{ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
             _viewModel.IsBusy = false;
+        }
+    }
+
+    private string ResolveSelectedReportReference()
+    {
+        if (_viewModel.SelectedNode?.Kind == ExplorerNodeKind.ReportControl && !string.IsNullOrWhiteSpace(_viewModel.SelectedNode.Reference))
+            return _viewModel.SelectedNode.Reference;
+
+        if (_viewModel.SelectedDetailRow?.Source == "ReportList" && !string.IsNullOrWhiteSpace(_viewModel.SelectedDetailRow.Reference))
+            return _viewModel.SelectedDetailRow.Reference;
+
+        return string.Empty;
+    }
+
+    private async Task StopActiveReportMonitorAsync(string code)
+    {
+        if (_activeSession == null || _activeReportMonitor == null)
+        {
             _viewModel.IsReportMonitorActive = false;
-            _cancellation?.Dispose();
-            _cancellation = null;
+            _activeReportMonitor = null;
+            _viewModel.AddStatus("Info", code, "No active report monitor is running.");
+            return;
+        }
+
+        var rcbReference = _activeReportMonitor.ReportControl.Reference;
+        _viewModel.IsBusy = true;
+        try
+        {
+            _viewModel.AddStatus("Info", code, $"Stopping persistent report monitor for {rcbReference}.");
+            var stop = await _activeSession.StopPersistentReportMonitorAsync(_activeReportMonitor, CancellationToken.None).ConfigureAwait(true);
+            foreach (var write in stop.WriteSteps.Take(16))
+                _viewModel.AddStatus(write.IsSuccess ? "Info" : "Warning", "RCB_STOP_WRITE", $"{write.Attribute}: {write.Message}");
+            _viewModel.AddStatus(stop.IsSuccess ? "Info" : "Warning", stop.IsSuccess ? "RCB_MONITOR_STOPPED" : "RCB_MONITOR_STOPPED_WITH_WARNINGS", stop.Message);
+            await RefreshReportControlRuntimeAsync(rcbReference, updateUi: true).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
+        {
+            _viewModel.AddStatus("Error", "RCB_MONITOR_STOP_FAILED", $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _activeReportMonitor = null;
+            _viewModel.IsReportMonitorActive = false;
+            _viewModel.IsBusy = false;
         }
     }
 
@@ -448,7 +479,7 @@ public partial class MainWindow : Window
                 points,
                 preferredLogicalDevice: selectedRcb.Domain,
                 preferredRcbReference: selectedRcb.Reference,
-                dataSetName: "AR_DYN_DS01",
+                dataSetName: null,
                 strictRcb: true,
                 allowUrCbFallback: true,
                 allowPollingFallback: false);
@@ -461,7 +492,7 @@ public partial class MainWindow : Window
                 points,
                 preferredLogicalDevice: selectedRcb.Domain,
                 preferredRcbReference: null,
-                dataSetName: "AR_DYN_DS01",
+                dataSetName: null,
                 strictRcb: false,
                 allowUrCbFallback: true,
                 allowPollingFallback: false);
@@ -474,7 +505,7 @@ public partial class MainWindow : Window
                 points,
                 preferredLogicalDevice: null,
                 preferredRcbReference: null,
-                dataSetName: "AR_DYN_DS01",
+                dataSetName: null,
                 strictRcb: false,
                 allowUrCbFallback: true,
                 allowPollingFallback: false);
@@ -656,26 +687,40 @@ public partial class MainWindow : Window
 
     private void ApplyReportFrameToMonitor(MmsReportFrame frame)
     {
-        foreach (var value in frame.Values)
+        var projection = MmsReportValueProjector.Project(frame);
+        foreach (var warning in projection.Warnings.Take(4))
+            _viewModel.AddStatus("Warning", "REPORT_PROJECTOR", warning);
+
+        foreach (var update in projection.Updates)
         {
-            var reference = value.MemberReference;
-            var fc = value.Member?.FunctionalConstraint ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(reference))
+            if (string.IsNullOrWhiteSpace(update.Reference))
                 continue;
 
-            var signal = _viewModel.MonitorSignals.FirstOrDefault(x => string.Equals(x.Reference, reference, StringComparison.OrdinalIgnoreCase));
+            var signal = _viewModel.MonitorSignals.FirstOrDefault(x => string.Equals(x.Reference, update.Reference, StringComparison.OrdinalIgnoreCase));
             if (signal == null)
             {
-                signal = new MonitorSignalRow(reference, fc, "report", ShortReference(reference));
+                signal = new MonitorSignalRow(update.Reference, update.FunctionalConstraint, "report", update.DisplayName);
                 _viewModel.MonitorSignals.Add(signal);
             }
 
             signal.Source = "report";
-            signal.Value = value.DisplayValue;
-            signal.Quality = value.FailureCode.HasValue ? "failed" : "-";
-            signal.Status = value.ReasonSummary;
-            signal.MarkUpdated(frame.ReceivedAt);
+            signal.Value = update.Value;
+            signal.Quality = update.Quality;
+            signal.Status = string.IsNullOrWhiteSpace(update.Reason) ? update.ProjectionStatus : update.Reason;
+            signal.MarkUpdated(update.UpdatedAt);
+            if (!string.IsNullOrWhiteSpace(update.Timestamp) && update.Timestamp != "-")
+                signal.Timestamp = update.Timestamp;
         }
+    }
+
+    private static IEnumerable<string> ReportCoverageReferences(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            yield break;
+
+        yield return reference;
+        foreach (var suffix in new[] { ".stVal", ".general", ".dirGeneral", ".phsA", ".dirPhsA", ".phsB", ".dirPhsB", ".phsC", ".dirPhsC", ".q", ".t" })
+            yield return reference + suffix;
     }
 
     private void Control_Click(object sender, RoutedEventArgs e)
@@ -777,7 +822,54 @@ public partial class MainWindow : Window
         foreach (var signal in _viewModel.MonitorSignals)
             signal.RefreshAge(now);
 
-        if (!_viewModel.IsConnected || !_viewModel.IsOnline || _activeSession == null || _viewModel.MonitorSignals.Count == 0 || _monitorPollInProgress)
+        if (!_viewModel.IsConnected || !_viewModel.IsOnline || _activeSession == null)
+            return;
+
+        if (_activeReportMonitor != null && !_reportReceiveInProgress)
+        {
+            var activeMonitor = _activeReportMonitor;
+            _reportReceiveInProgress = true;
+            try
+            {
+                var reportCoveredReferences = activeMonitor.Plan.Members
+                    .Select(x => x.UserReference)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .SelectMany(ReportCoverageReferences)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var fallbackPollReferences = _viewModel.MonitorSignals
+                    .Where(x => !string.IsNullOrWhiteSpace(x.Reference) && !reportCoveredReferences.Contains(x.Reference))
+                    .Select(x => x.Reference)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(8)
+                    .ToArray();
+
+                var monitor = await _activeSession.ReceivePersistentReportMonitorSliceAsync(
+                    activeMonitor,
+                    TimeSpan.FromMilliseconds(300),
+                    pollDirectory: _lastDiscovery?.IedDirectory,
+                    pollReferences: fallbackPollReferences,
+                    pollInterval: fallbackPollReferences.Length == 0 ? null : TimeSpan.FromSeconds(1),
+                    triggerGeneralInterrogation: false,
+                    cancellationToken: CancellationToken.None).ConfigureAwait(true);
+
+                foreach (var report in monitor.Reports)
+                    ApplyReportFrameToMonitor(report);
+                foreach (var poll in monitor.PollReads)
+                    ApplyPollReadToMonitor(poll);
+                if (monitor.Reports.Count > 0)
+                    _viewModel.AddStatus("Info", "REPORT_RECEIVED", $"Received {monitor.Reports.Count} report frame(s). Monitor total={activeMonitor.ReportCount}.");
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
+            {
+                _viewModel.AddStatus("Warning", "REPORT_RECEIVE_FAILED", $"{ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                _reportReceiveInProgress = false;
+            }
+        }
+
+        if (_viewModel.MonitorSignals.Count == 0 || _monitorPollInProgress || _activeReportMonitor != null)
             return;
 
         _monitorPollInProgress = true;
@@ -889,6 +981,30 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private async void DetailGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_viewModel.SelectedDetailRow?.Source != "ReportList")
+            return;
+
+        var reference = _viewModel.SelectedDetailRow.Reference;
+        var candidate = FindReportControlCandidate(reference);
+        if (candidate == null)
+            return;
+
+        var syntheticNode = new IedExplorerNode(candidate.Name, ExplorerNodeKind.ReportControl, candidate.Reference, candidate.Mode)
+        {
+            Model = candidate
+        };
+        _viewModel.SelectedNode = syntheticNode;
+        PopulateDetails(syntheticNode);
+        _viewModel.AddStatus("Info", "RCB_DETAIL_OPENED", $"Opened RCB detail from report list: {candidate.Reference}.");
+
+        if (_viewModel.IsConnected && _viewModel.IsOnline)
+            await RefreshReportControlRuntimeAsync(candidate.Reference, updateUi: true).ConfigureAwait(true);
+
+        e.Handled = true;
+    }
+
     private IReadOnlyList<DataAttributeDetailRow> BuildSmartReadableRowsForSelection()
     {
         if (_viewModel.SelectedDetailRow != null)
@@ -979,6 +1095,22 @@ public partial class MainWindow : Window
 
     private async Task CloseSessionAsync()
     {
+        if (_activeSession != null && _activeReportMonitor != null)
+        {
+            try
+            {
+                var stop = await _activeSession.StopPersistentReportMonitorAsync(_activeReportMonitor, CancellationToken.None).ConfigureAwait(true);
+                _viewModel.AddStatus(stop.IsSuccess ? "Info" : "Warning", "RCB_MONITOR_CLOSE", stop.Message);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
+            {
+                _viewModel.AddStatus("Warning", "RCB_MONITOR_CLOSE_FAILED", $"{ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        _activeReportMonitor = null;
+        _viewModel.IsReportMonitorActive = false;
+
         if (_activeSession != null)
         {
             await _activeSession.DisposeAsync().ConfigureAwait(true);
@@ -1256,7 +1388,7 @@ public partial class MainWindow : Window
         var presentation = MmsReportPresentationBuilder.Build(rcb, knownDataSets);
         var row = new DataAttributeDetailRow(rcb.Name, rcb.FunctionalConstraint, rcb.Mode, rcb.Reference, "ReportList")
         {
-            Value = presentation.DetailStatus,
+            Value = $"{presentation.DetailStatus}   {presentation.StatusIcon}",
             Status = presentation.StatusIcon
         };
         row.ReplaceChildren(new[]

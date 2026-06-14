@@ -169,7 +169,7 @@ public static class MmsReportSubscriptionPlanner
         if (selected == null)
             blockers.Add("No free dynamic RCB slot matched the requested filter.");
 
-        var dsName = string.IsNullOrWhiteSpace(dataSetName) ? "AR_DYN_DS01" : SanitizeDataSetName(dataSetName);
+        var dsName = string.IsNullOrWhiteSpace(dataSetName) ? CreateDefaultDynamicDataSetName() : SanitizeDataSetName(dataSetName);
         var dsLogicalNode = selected == null || string.IsNullOrWhiteSpace(selected.LogicalNode)
             ? "LLN0"
             : selected.LogicalNode;
@@ -310,6 +310,9 @@ public static class MmsReportSubscriptionPlanner
 
         return ulong.TryParse(text, out var number) ? number > 0 : null;
     }
+
+    private static string CreateDefaultDynamicDataSetName()
+        => "AR_DYN_" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
 
     private static string SanitizeDataSetName(string name)
     {

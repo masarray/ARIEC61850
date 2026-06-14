@@ -344,3 +344,13 @@ The IED Discovery Workbench now uses an engine-owned value presentation layer fo
 - Static/dynamic report planning now uses refreshed RCB state.
 - Explicit Pin and Unpin activity monitor workflow.
 - Report group summaries expose locked/static/dynamic state.
+
+
+## N5.42 Persistent Report Monitor
+
+The IED Discovery Workbench now starts an interactive report monitor that keeps `RptEna=true` until Stop RCB or Close IED. Report-list rows can be opened by double-click, RCB state is refreshed after enable/stop, and received report values update the Activity Monitor.
+
+
+## N5.42.1 Report Value Projector
+
+The IED Discovery Workbench now projects report payload values through a report DataSet binding layer before updating the Activity Monitor. Static and dynamic reports can update readable engineering signals with value, quality, timestamp, reason, and source instead of showing raw `Struct(...)` values.

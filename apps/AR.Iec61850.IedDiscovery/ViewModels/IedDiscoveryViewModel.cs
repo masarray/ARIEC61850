@@ -65,7 +65,7 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     public bool CanExport => LastDocument != null;
     public bool CanPin => !IsBusy && SelectedNode != null && SelectedNode.Kind is (ExplorerNodeKind.DataObject or ExplorerNodeKind.DataSet or ExplorerNodeKind.ReportControl or ExplorerNodeKind.LogicalNode);
     public bool CanUnpin => !IsBusy && (SelectedMonitorSignal != null || MonitorSignals.Count > 0);
-    public bool CanEnableReport => !IsBusy && IsConnected && IsOnline && (IsReportMonitorActive || SelectedNode?.Kind == ExplorerNodeKind.ReportControl);
+    public bool CanEnableReport => !IsBusy && IsConnected && IsOnline && (IsReportMonitorActive || SelectedNode?.Kind == ExplorerNodeKind.ReportControl || string.Equals(SelectedDetailRow?.Source, "ReportList", StringComparison.OrdinalIgnoreCase));
     public bool CanControl => !IsBusy && IsConnected && IsOnline && SelectedNode?.Kind == ExplorerNodeKind.DataObject && IsControlCandidate(SelectedNode);
 
     public ObservableCollection<MetricRow> Metrics { get; } = new();

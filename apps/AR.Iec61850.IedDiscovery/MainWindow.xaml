@@ -192,7 +192,7 @@
                 <Border Grid.Row="1" BorderBrush="#C5D0DD" BorderThickness="0,0,0,1" Padding="10,7" Background="White">
                     <TextBlock Text="{Binding SelectedSubHeader}" Foreground="#405166" FontSize="12" TextWrapping="Wrap" />
                 </Border>
-                <DataGrid Grid.Row="2" ItemsSource="{Binding DetailRows}" SelectionMode="Single" x:Name="DetailGrid" SelectedItem="{Binding SelectedDetailRow, Mode=TwoWay}">
+                <DataGrid Grid.Row="2" ItemsSource="{Binding DetailRows}" SelectionMode="Single" x:Name="DetailGrid" SelectedItem="{Binding SelectedDetailRow, Mode=TwoWay}" MouseDoubleClick="DetailGrid_MouseDoubleClick">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="Name" Width="1.15*">
                             <DataGridTemplateColumn.CellTemplate>
@@ -227,8 +227,9 @@
                         <DataGridTextColumn Header="Signal" Binding="{Binding DisplayName}" Width="1.5*" />
                         <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="70" />
                         <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="120" />
-                        <DataGridTextColumn Header="Q" Binding="{Binding Quality}" Width="60" />
-                        <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="70" />
+                        <DataGridTextColumn Header="Q" Binding="{Binding Quality}" Width="56" />
+                        <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp}" Width="96" />
+                        <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="60" />
                     </DataGrid.Columns>
                 </DataGrid>
                 <DockPanel Grid.Row="2" Background="#EDF2F7" LastChildFill="False">
@@ -238,7 +239,7 @@
                         <ComboBoxItem Content="1 s" />
                         <ComboBoxItem Content="5 s" />
                     </ComboBox>
-                    <TextBlock DockPanel.Dock="Right" Text="Polling monitor active when Online. Reports update this panel after RCB enable.  " VerticalAlignment="Center" Foreground="#667085" FontSize="11" />
+                    <TextBlock DockPanel.Dock="Right" Text="Report-driven monitor after RCB enable. Polling is fallback only.  " VerticalAlignment="Center" Foreground="#667085" FontSize="11" />
                 </DockPanel>
             </Grid>
         </Grid>

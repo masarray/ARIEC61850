@@ -9,7 +9,7 @@ This matrix is the public engineering checklist for growing ARIEC61850 from prot
 | MMS model discovery | Online GetNameList-based discovery | High-level ACSI model-browser facade | Live model snapshot export with typed findings |
 | Data read/write | Basic read/write and smart read | Service-result facade and more typed values | Safe data reader with explicit write guard |
 | DataSet service | Directory read + dynamic define/delete basics | DataSet readiness diagnostics | Static/dynamic DataSet workflows with evidence |
-| Reporting | RCB discovery, planner, guarded live session | Typed RCB state machine and profile export | URCB/BRCB runtime with GI/recovery/evidence |
+| Reporting | RCB discovery, planner, guarded live session, static readiness profile | Typed RCB state machine, BRCB recovery, and profile import | URCB/BRCB runtime with GI/recovery/evidence |
 | GOOSE | Encode/decode/publish/subscribe basics | Expected-vs-observed diagnostics | SCL-bound forensic engine |
 | Sampled Values | Encode/decode/publish/injector basics | Subscriber/analyzer engine | RMS/phasor/timing/continuity diagnostics |
 | SCL | Parser/exporter/diff basics | Deep type-template and communication resolver | Station dataflow graph and mapping validator |
@@ -30,3 +30,18 @@ Live hardware tests are useful, but they must not be the only validation method.
 ## Naming rule
 
 Public source, docs, CLI output, tests, and release packages must use neutral ARIEC61850 terminology. Do not use benchmark-product names as feature names, profiles, commands, or comments.
+
+## N5.24 report-readiness test contract
+
+The report readiness profile is the first engine contract that bridges discovery into safe runtime preparation without enabling an RCB. It must remain read-only and deterministic.
+
+```text
+live/synthetic discovery + DataSet directories
+→ static report readiness profile
+→ acceptance gates
+→ RCB candidate matrix
+→ selected guarded session profile
+→ Markdown/JSON evidence
+```
+
+The profile is considered ready only when model discovery, DataSet directory member mapping, RCB selection, and member-map gates are satisfied. `RptEna` and `GI` are still live-write actions and must remain behind explicit caller confirmation.

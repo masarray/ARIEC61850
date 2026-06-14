@@ -138,4 +138,12 @@ Use this read-only command when validating engine maturity against a real IED or
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-engine-profile 192.0.2.10 --port 102 --timeout-ms 30000 --output .\.artifacts\out\engineering-profile.md --json .\.artifacts\out\engineering-profile.json
 ```
 
-The command performs no RCB writes. It is intended as the next baseline test before report runtime, GOOSE diagnostics, SV analyzer, and simulator-server phases.
+The command performs no RCB writes. It is intended as the baseline model/capability test before report runtime, GOOSE diagnostics, SV analyzer, and simulator-server phases.
+
+Generate a static report readiness profile before enabling any report:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --port 102 --timeout-ms 120000 --output .\.artifacts\out\report-readiness.md --json .\.artifacts\out\report-readiness.json --session-json .\.artifacts\out\report-session-profile.json
+```
+
+This command is also read-only. It produces acceptance gates, RCB candidate ranking, a selected static report plan, and a guarded report-session profile that future product apps can consume.

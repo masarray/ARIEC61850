@@ -15,7 +15,7 @@ This repository is intentionally source-first and public-release safe: generated
 
 | Area | Project / folder | Purpose |
 |---|---|---|
-| Core library | `src/AR.Iec61850` | BER, MMS, SCL, GOOSE, SV, PCAP, reporting, diagnostics, engineering-profile facade |
+| Core library | `src/AR.Iec61850` | BER, MMS, SCL, GOOSE, SV, PCAP, reporting, diagnostics, engineering/report-readiness facades |
 | Live Ethernet transport | `src/AR.Iec61850.Transports.Npcap` | Npcap-backed raw process-bus transport for Windows lab use |
 | CLI toolkit | `apps/AR.Iec61850.Cli` | SCL inspection, PCAP generation/inspection, MMS discovery/read/reporting commands |
 | WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher / injector workspace |
@@ -45,6 +45,7 @@ Implemented areas include:
 - WPF IED Discovery workspace for live MMS model/DataSet/RCB snapshot export.
 - Offline IED Simulator foundation with deterministic point values, DataSets, RCB profiles, and JSON export.
 - Engineering-profile facade that converts live discovery into capability assessment, report-lab readiness, diagnostics, and Markdown evidence.
+- Report-readiness profile engine that produces acceptance gates, RCB candidate ranking, selected static report plan, and guarded session-profile JSON before any RCB write.
 
 Experimental or future areas:
 
@@ -106,6 +107,12 @@ Plan report usage before writing to any RCB:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-plan 192.0.2.10 --port 102 --timeout-ms 60000 --max-report-probes 64 --only-safe
+```
+
+Generate read-only report readiness evidence and a guarded session profile:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --port 102 --timeout-ms 120000 --output .\.artifacts\out\report-readiness.md --json .\.artifacts\out\report-readiness.json --session-json .\.artifacts\out\report-session-profile.json
 ```
 
 Run a guarded report monitor:

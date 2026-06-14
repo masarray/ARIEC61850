@@ -4,6 +4,20 @@ ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The pr
 
 ## Current source milestone
 
+### N5.24 - Report readiness profile foundation
+
+- Added a static report readiness profile builder that turns live discovery + DataSet directory evidence into acceptance gates, RCB candidate ranking, selected static report plan, diagnostics, and guarded session profile JSON.
+- Added `Iec61850ReportReadinessProfile` as a deterministic engine contract for future report-workspace apps.
+- Added `Iec61850Client.DiscoverStaticReportReadinessProfileAsync(...)` so product apps can request a report profile without touching low-level MMS session classes.
+- Added `mms-report-readiness-profile`, a read-only CLI command that can export Markdown, JSON readiness evidence, and a guarded report-session profile.
+- Added deterministic unit tests for ready, blocked, occupied, reserved, and Markdown evidence cases.
+
+Validation command for the new milestone:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --output .artifacts/out/report-readiness.md --json .artifacts/out/report-readiness.json --session-json .artifacts/out/report-session-profile.json
+```
+
 ### N5.23 - Engine hygiene and engineering-profile foundation
 
 - Removed benchmark-product naming from source, CLI output, tests, and public docs.
@@ -39,45 +53,45 @@ A public release is allowed only when these gates are true:
 
 ## Near-term engine roadmap
 
-### N5.24 - ACSI service facade hardening
+### N5.25 - ACSI service facade hardening
 
 - Expand `Iec61850Client` into explicit service groups: model browser, data reader, DataSet client, report client, and file/log/setting placeholders.
 - Add service-result contracts for all public engine calls.
 - Add a deterministic fake session interface so high-level service workflows can be tested without a live IED.
-- Add profile JSON export/import for `Iec61850EngineeringProfile`.
+- Add profile JSON export/import for engineering and report readiness profiles.
 
-### N5.25 - SCL deep model phase 1
+### N5.26 - SCL deep model phase 1
 
 - Resolve `DataTypeTemplates`: `LNodeType`, `DOType`, `DAType`, `EnumType`.
 - Parse and normalize `Services`, `Communication`, `ConnectedAP`, `Address/P`, `GSE`, `SMV`, `Inputs/ExtRef`, and `ClientLN`.
 - Generate expected-vs-observed models for reports, GOOSE, SV, and DataSets.
 
-### N5.26 - Report industrial hardening
+### N5.27 - Report industrial hardening
 
 - Implement explicit URCB/BRCB state machine.
 - Handle `Resv`, `ResvTms`, `Owner`, `EntryID`, `PurgeBuf`, `BufOvfl`, `TrgOps`, `OptFlds`, `BufTm`, and `IntgPd` as first-class typed fields.
 - Add report member-order validation using DataSet directory evidence.
 - Add report loss, duplicate, stale timestamp, and GI-result diagnostics.
 
-### N5.27 - GOOSE diagnostics engine
+### N5.28 - GOOSE diagnostics engine
 
 - Add SCL-bound expected stream profiles.
 - Add `stNum/sqNum` state machine, TTL expiry, retransmission timing, VLAN/AppID/MAC/confRev checks, and expected-vs-observed matching.
 - Add PCAP replay findings for missing publisher, duplicate publisher, unexpected publisher, replay suspicion, and flood/storm patterns.
 
-### N5.28 - Sampled Values analyzer engine
+### N5.29 - Sampled Values analyzer engine
 
 - Add SV subscriber over the existing process-bus frame-source abstraction.
 - Add stream registry, sample counter continuity, sample-rate detection, ASDU/layout checks, RMS, phasor, jitter/dropout, and PTP-correlation hooks.
 - Keep the current SV publisher/injector as a test harness for the analyzer.
 
-### N5.29 - Read-only MMS server alpha
+### N5.30 - Read-only MMS server alpha
 
 - Add TCP/TPKT/COTP/ACSE/MMS accept path.
 - Serve domains, variables, access attributes, and named variable lists from a simulator model.
 - Keep write/control disabled until read-only discovery and report readback are stable.
 
-### N5.30 - Simulator bridge
+### N5.31 - Simulator bridge
 
 - Map simulator profiles into MMS server model, GOOSE publisher profiles, and SV publisher profiles.
 - Add scenario scheduler for value changes, quality changes, timestamp faults, report triggers, GOOSE transitions, and SV disturbances.

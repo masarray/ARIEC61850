@@ -13,7 +13,7 @@
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI Variable, Segoe UI"
         FontSize="13"
-        Background="#F3F5F7">
+        Background="#F3F7FD">
     <Window.InputBindings>
         <KeyBinding Key="F6" Command="{Binding StopCommand}" />
     </Window.InputBindings>
@@ -21,8 +21,14 @@
     <Window.Resources>
         <SolidColorBrush x:Key="TextStrong" Color="#111827" />
         <SolidColorBrush x:Key="TextMuted" Color="#64748B" />
-        <SolidColorBrush x:Key="Line" Color="#D7DEE8" />
+        <SolidColorBrush x:Key="Line" Color="#D8E2EF" />
         <SolidColorBrush x:Key="Panel" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="PanelSoft" Color="#FBFDFF" />
+        <SolidColorBrush x:Key="SelectedCellBg" Color="#EAF2FF" />
+        <SolidColorBrush x:Key="SelectedCellBorder" Color="#3B82F6" />
+        <SolidColorBrush x:Key="SelectedCellText" Color="#0F172A" />
+        <SolidColorBrush x:Key="HeaderBlueA" Color="#5B8FDC" />
+        <SolidColorBrush x:Key="HeaderBlueB" Color="#2E5FA8" />
         <SolidColorBrush x:Key="Subtle" Color="#F8FAFC" />
         <SolidColorBrush x:Key="Accent" Color="#2563EB" />
         <SolidColorBrush x:Key="Danger" Color="#B91C1C" />
@@ -35,19 +41,35 @@
             <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
         </Style>
 
-        <Style x:Key="PanelShell" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource Panel}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Line}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="SnapsToDevicePixels" Value="True" />
-        </Style>
+        
+<Style x:Key="PanelShell" TargetType="Border">
+    <Setter Property="Background" Value="{StaticResource Panel}" />
+    <Setter Property="BorderBrush" Value="#DCE6F3" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="Effect">
+        <Setter.Value>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="3" Direction="270" Opacity="0.15" Color="#183B70" />
+        </Setter.Value>
+    </Setter>
+</Style>
 
-        <Style x:Key="PanelHeader" TargetType="Border">
-            <Setter Property="Background" Value="#3E7CC9" />
-            <Setter Property="CornerRadius" Value="6,6,0,0" />
-            <Setter Property="Padding" Value="8,4" />
-        </Style>
+        
+
+<Style x:Key="PanelHeader" TargetType="Border">
+    <Setter Property="Background">
+        <Setter.Value>
+            <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                <GradientStop Color="#06B6D4" Offset="0" />
+                <GradientStop Color="#2F8CFF" Offset="0.42" />
+                <GradientStop Color="#2563EB" Offset="1" />
+            </LinearGradientBrush>
+        </Setter.Value>
+    </Setter>
+    <Setter Property="CornerRadius" Value="10,10,0,0" />
+    <Setter Property="Padding" Value="11,6" />
+</Style>
 
         <Style x:Key="LabelText" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11" />
@@ -55,91 +77,168 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
-        <Style TargetType="Button">
-            <Setter Property="Height" Value="32" />
-            <Setter Property="MinWidth" Value="76" />
-            <Setter Property="Padding" Value="12,0" />
-            <Setter Property="Margin" Value="0,0,7,0" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="BorderBrush" Value="#D7DEE8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Foreground" Value="#1F2937" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="SnapsToDevicePixels" Value="True" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type Button}">
-                        <Border x:Name="Chrome"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10"
-                                Padding="{TemplateBinding Padding}"
-                                SnapsToDevicePixels="True"
-                                RenderTransformOrigin="0.5,0.5">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="12" ShadowDepth="1" Opacity="0.10" Color="#0F172A" />
-                            </Border.Effect>
+        
+
+<Style TargetType="Button">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="MinWidth" Value="76" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="Background" Value="#FFFFFF" />
+    <Setter Property="BorderBrush" Value="#D7E2F0" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="#1F2937" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="{x:Type Button}">
+                <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
+                    <Grid.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="1" ScaleY="1" />
+                            <TranslateTransform Y="0" />
+                        </TransformGroup>
+                    </Grid.RenderTransform>
+                    <Border x:Name="Surface"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="15"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="16" ShadowDepth="2" Direction="270" Opacity="0.13" Color="#172554" />
+                        </Border.Effect>
+                        <Grid>
+                            <Border x:Name="HoverGlass" CornerRadius="14" Opacity="0">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#55FFFFFF" Offset="0" />
+                                        <GradientStop Color="#10FFFFFF" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                               RecognizesAccessKey="True" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#93C5FD" />
-                                <Setter TargetName="Chrome" Property="Effect">
-                                    <Setter.Value>
-                                        <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.16" Color="#1E3A8A" />
-                                    </Setter.Value>
-                                </Setter>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#2563EB" />
-                                <Setter TargetName="Chrome" Property="Effect">
-                                    <Setter.Value>
-                                        <DropShadowEffect BlurRadius="7" ShadowDepth="0" Opacity="0.10" Color="#0F172A" />
-                                    </Setter.Value>
-                                </Setter>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Chrome" Property="Opacity" Value="0.48" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+                        </Grid>
+                    </Border>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Surface" Property="BorderBrush" Value="#7DD3FC" />
+                        <Setter TargetName="HoverGlass" Property="Opacity" Value="1" />
+                        <Setter TargetName="Surface" Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect BlurRadius="28" ShadowDepth="7" Direction="270" Opacity="0.23" Color="#2563EB" />
+                            </Setter.Value>
+                        </Setter>
+                        <Setter TargetName="Root" Property="RenderTransform">
+                            <Setter.Value>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="1.035" ScaleY="1.035" />
+                                    <TranslateTransform Y="-2" />
+                                </TransformGroup>
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="Surface" Property="BorderBrush" Value="#2563EB" />
+                        <Setter TargetName="HoverGlass" Property="Opacity" Value="0.3" />
+                        <Setter TargetName="Surface" Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect BlurRadius="7" ShadowDepth="1" Direction="270" Opacity="0.09" Color="#0F172A" />
+                            </Setter.Value>
+                        </Setter>
+                        <Setter TargetName="Root" Property="RenderTransform">
+                            <Setter.Value>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="0.965" ScaleY="0.965" />
+                                    <TranslateTransform Y="2" />
+                                </TransformGroup>
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+</Style>
 
-        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+<Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="{StaticResource Accent}" />
             <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
             <Setter Property="Foreground" Value="#FFFFFF" />
         </Style>
 
-        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#DC2626" />
-            <Setter Property="BorderBrush" Value="#B91C1C" />
-            <Setter Property="Foreground" Value="#FFFFFF" />
-        </Style>
+        
+<Style x:Key="StartButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Width" Value="76" />
+    <Setter Property="Height" Value="66" />
+    <Setter Property="MinWidth" Value="76" />
+    <Setter Property="MaxWidth" Value="76" />
+    <Setter Property="Padding" Value="6,6" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="Background">
+        <Setter.Value>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#2F8CFF" Offset="0" />
+                <GradientStop Color="#2563EB" Offset="1" />
+            </LinearGradientBrush>
+        </Setter.Value>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#1D4ED8" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+</Style>
 
-        <Style x:Key="RibbonButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Height" Value="66" />
-            <Setter Property="MinWidth" Value="94" />
-            <Setter Property="Padding" Value="12,7" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="Background">
-                <Setter.Value>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#FFFFFF" Offset="0" />
-                        <GradientStop Color="#F5F8FC" Offset="1" />
-                    </LinearGradientBrush>
-                </Setter.Value>
-            </Setter>
-        </Style>
+<Style x:Key="StopButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Width" Value="76" />
+    <Setter Property="Height" Value="66" />
+    <Setter Property="MinWidth" Value="76" />
+    <Setter Property="MaxWidth" Value="76" />
+    <Setter Property="Padding" Value="6,6" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="Background">
+        <Setter.Value>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#FB7185" Offset="0" />
+                <GradientStop Color="#E11D48" Offset="1" />
+            </LinearGradientBrush>
+        </Setter.Value>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#BE123C" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+</Style>
 
-        <Style x:Key="RibbonCaption" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="10" />
+<Style x:Key="RibbonButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Width" Value="76" />
+    <Setter Property="Height" Value="66" />
+    <Setter Property="MinWidth" Value="76" />
+    <Setter Property="MaxWidth" Value="76" />
+    <Setter Property="Padding" Value="6,6" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Background">
+        <Setter.Value>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#FFFFFF" Offset="0" />
+                <GradientStop Color="#F4F8FF" Offset="1" />
+            </LinearGradientBrush>
+        </Setter.Value>
+    </Setter>
+</Style>
+
+<Style x:Key="RibbonCaption" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="9.5" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="#334155" />
             <Setter Property="HorizontalAlignment" Value="Center" />
@@ -182,6 +281,7 @@
         </Style>
 
         <Style x:Key="ModernGridCellStyle" TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="{StaticResource TextStrong}" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="BorderBrush" Value="#E6ECF3" />
@@ -202,8 +302,9 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="CellBorder" Property="Background" Value="#DBEAFE" />
-                                <Setter TargetName="CellBorder" Property="BorderBrush" Value="#93C5FD" />
+                                <Setter Property="Foreground" Value="{StaticResource SelectedCellText}" />
+                                <Setter TargetName="CellBorder" Property="Background" Value="{StaticResource SelectedCellBg}" />
+                                <Setter TargetName="CellBorder" Property="BorderBrush" Value="{StaticResource SelectedCellBorder}" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                 <Setter TargetName="CellBorder" Property="BorderBrush" Value="#2563EB" />
@@ -215,46 +316,90 @@
         </Style>
 
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="#718096" />
+            <Setter Property="Background" Value="#667891" />
             <Setter Property="Foreground" Value="#FFFFFF" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="FontSize" Value="11.5" />
             <Setter Property="Padding" Value="8,0" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="BorderBrush" Value="#95A3B6" />
+            <Setter Property="BorderBrush" Value="#8EA0B8" />
             <Setter Property="BorderThickness" Value="0,0,1,1" />
         </Style>
 
-        <Style x:Key="ModernScrollThumb" TargetType="Thumb">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type Thumb}">
-                        <Border x:Name="ThumbChrome" Background="#B8C2D1" CornerRadius="5" Margin="2" />
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ThumbChrome" Property="Background" Value="#94A3B8" />
-                            </Trigger>
-                            <Trigger Property="IsDragging" Value="True">
-                                <Setter TargetName="ThumbChrome" Property="Background" Value="#64748B" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        
 
-        <Style TargetType="Thumb" BasedOn="{StaticResource ModernScrollThumb}" />
+<Style x:Key="ModernScrollThumb" TargetType="Thumb">
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="{x:Type Thumb}">
+                <Border x:Name="ThumbChrome" Background="#B7C7DC" CornerRadius="4" Margin="2" />
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="ThumbChrome" Property="Background" Value="#7FB3EA" />
+                    </Trigger>
+                    <Trigger Property="IsDragging" Value="True">
+                        <Setter TargetName="ThumbChrome" Property="Background" Value="#2F8CFF" />
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+</Style>
 
-        <Style TargetType="ScrollBar">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#94A3B8" />
+<Style TargetType="Thumb" BasedOn="{StaticResource ModernScrollThumb}" />
+
+<Style x:Key="InvisibleRepeatButton" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="RepeatButton">
+                <Rectangle Fill="Transparent" />
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+</Style>
+
+<Style TargetType="ScrollBar">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#94A3B8" />
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+                <Grid Background="Transparent">
+                    <Track x:Name="PART_Track" IsDirectionReversed="True">
+                        <Track.DecreaseRepeatButton>
+                            <RepeatButton Style="{StaticResource InvisibleRepeatButton}" Command="ScrollBar.PageUpCommand" />
+                        </Track.DecreaseRepeatButton>
+                        <Track.Thumb>
+                            <Thumb Style="{StaticResource ModernScrollThumb}" />
+                        </Track.Thumb>
+                        <Track.IncreaseRepeatButton>
+                            <RepeatButton Style="{StaticResource InvisibleRepeatButton}" Command="ScrollBar.PageDownCommand" />
+                        </Track.IncreaseRepeatButton>
+                    </Track>
+                </Grid>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+        <Trigger Property="Orientation" Value="Vertical">
+            <Setter Property="Width" Value="9" />
+        </Trigger>
+        <Trigger Property="Orientation" Value="Horizontal">
+            <Setter Property="Height" Value="9" />
+        </Trigger>
+    </Style.Triggers>
+</Style>
+
+<Style TargetType="DataGridRow">
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
             <Style.Triggers>
-                <Trigger Property="Orientation" Value="Vertical">
-                    <Setter Property="Width" Value="11" />
-                </Trigger>
-                <Trigger Property="Orientation" Value="Horizontal">
-                    <Setter Property="Height" Value="11" />
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource SelectedCellText}" />
+                    <Setter Property="Background" Value="#F0F6FF" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -266,7 +411,7 @@
             <Setter Property="HorizontalGridLinesBrush" Value="#E5EAF1" />
             <Setter Property="VerticalGridLinesBrush" Value="#E5EAF1" />
             <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="RowHeight" Value="29" />
+            <Setter Property="RowHeight" Value="30" />
             <Setter Property="ColumnHeaderHeight" Value="28" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="CanUserAddRows" Value="False" />
@@ -284,199 +429,184 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="86" />
+            <RowDefinition Height="116" />
             <RowDefinition Height="*" />
             <RowDefinition Height="36" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#FBFCFE" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
-            <Grid Margin="12,9">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="1" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="1" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="1" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        
+<Border Grid.Row="0" Background="#F7FAFF" BorderBrush="#DCE6F3" BorderThickness="0,0,0,1" ClipToBounds="False">
+    <Border Margin="12,10,12,14"
+            Padding="10,10,10,12"
+            Background="#FCFEFF"
+            BorderBrush="#E1EAF5"
+            BorderThickness="1"
+            CornerRadius="20">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="18" ShadowDepth="2" Direction="270" Opacity="0.10" Color="#183B70" />
+        </Border.Effect>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Click="OpenConfig_Click" Style="{StaticResource RibbonButton}" MinWidth="98">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Rectangle Canvas.Left="5" Canvas.Top="3" Width="14" Height="18" RadiusX="1.5" RadiusY="1.5" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
-                                    <Polyline Points="14,3 14,8 19,8" Stroke="#334155" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
-                                    <Line X1="8" Y1="13" X2="16" Y2="13" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Line X1="8" Y1="17" X2="14" Y2="17" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="SCL / Config" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Click="ManualMode_Click" Style="{StaticResource RibbonButton}" MinWidth="82">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Line X1="4" Y1="3" X2="4" Y2="21" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Line X1="12" Y1="3" X2="12" Y2="21" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Line X1="20" Y1="3" X2="20" Y2="21" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Line X1="2" Y1="14" X2="6" Y2="14" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Line X1="10" Y1="8" X2="14" Y2="8" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Line X1="18" Y1="12" X2="22" Y2="12" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Manual" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Click="RampMode_Click" Style="{StaticResource RibbonButton}" MinWidth="82">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Polyline Points="3,17 7,17 11,9 15,14 21,4" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
-                                    <Line X1="3" Y1="21" X2="21" Y2="21" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Ramp" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Click="StateSequencerMode_Click" Style="{StaticResource RibbonButton}" MinWidth="116">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Rectangle Canvas.Left="3" Canvas.Top="5" Width="5" Height="14" RadiusX="1" RadiusY="1" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
-                                    <Rectangle Canvas.Left="10" Canvas.Top="5" Width="5" Height="14" RadiusX="1" RadiusY="1" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
-                                    <Rectangle Canvas.Left="17" Canvas.Top="5" Width="4" Height="14" RadiusX="1" RadiusY="1" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="State Seq" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
+            <Button Grid.Column="0" Click="OpenConfig_Click" Style="{StaticResource RibbonButton}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="24" Height="24">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                                  Stroke="#334155" StrokeThickness="1.7" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            <Ellipse Canvas.Left="9" Canvas.Top="9" Width="6" Height="6" Stroke="#334155" StrokeThickness="1.7" Fill="Transparent" />
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Config" Style="{StaticResource RibbonCaption}" />
                 </StackPanel>
+            </Button>
 
-                <Border Grid.Column="1" Background="#CBD5E1" Margin="7,0" />
-
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsRampWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Button Command="{Binding AddRampStateCommand}" Style="{StaticResource RibbonButton}" MinWidth="98">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Line X1="12" Y1="5" X2="12" Y2="19" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Line X1="5" Y1="12" X2="19" Y2="12" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Append Ramp" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{Binding RemoveRampStateCommand}" Style="{StaticResource RibbonButton}" MinWidth="96">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Line X1="3" Y1="6" X2="21" Y2="6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Polyline Points="8,6 8,4 16,4 16,6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
-                                    <Polyline Points="6,6 7,22 17,22 18,6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Delete Ramp" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
+            <Button Grid.Column="1" Click="ManualMode_Click" Style="{StaticResource RibbonButton}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="24" Height="24">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M11.146 15.854a1.207 1.207 0 0 1 1.708 0l1.56 1.56A2 2 0 0 1 15 18.828V21a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-2.172a2 2 0 0 1 .586-1.414z"
+                                  Stroke="#334155" StrokeThickness="1.8" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            <Path Data="M18.828 15a2 2 0 0 1-1.414-.586l-1.56-1.56a1.207 1.207 0 0 1 0-1.708l1.56-1.56A2 2 0 0 1 18.828 9H21a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1z"
+                                  Stroke="#334155" StrokeThickness="1.8" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            <Path Data="M6.586 14.414A2 2 0 0 1 5.172 15H3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2.172a2 2 0 0 1 1.414.586l1.56 1.56a1.207 1.207 0 0 1 0 1.708z"
+                                  Stroke="#334155" StrokeThickness="1.8" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            <Path Data="M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2.172a2 2 0 0 1-.586 1.414l-1.56 1.56a1.207 1.207 0 0 1-1.708 0l-1.56-1.56A2 2 0 0 1 9 5.172z"
+                                  Stroke="#334155" StrokeThickness="1.8" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Manual" Style="{StaticResource RibbonCaption}" />
                 </StackPanel>
+            </Button>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsSequencerWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Button Command="{Binding AddSequenceStateCommand}" Style="{StaticResource RibbonButton}" MinWidth="98">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Line X1="12" Y1="5" X2="12" Y2="19" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Line X1="5" Y1="12" X2="19" Y2="12" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Append State" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{Binding RemoveSequenceStateCommand}" Style="{StaticResource RibbonButton}" MinWidth="96">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Line X1="3" Y1="6" X2="21" Y2="6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Polyline Points="8,6 8,4 16,4 16,6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
-                                    <Polyline Points="6,6 7,22 17,22 18,6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Delete State" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
+            <Button Grid.Column="2" Click="RampMode_Click" Style="{StaticResource RibbonButton}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="24" Height="24">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M3 3v16a2 2 0 0 0 2 2h16" Stroke="#334155" StrokeThickness="1.9" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            <Path Data="M7 11.207a.5.5 0 0 1 .146-.353l2-2a.5.5 0 0 1 .708 0l3.292 3.292a.5.5 0 0 0 .708 0l4.292-4.292a.5.5 0 0 1 .854.353V16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1z" Stroke="#334155" StrokeThickness="1.9" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Ramp" Style="{StaticResource RibbonCaption}" />
                 </StackPanel>
+            </Button>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsManualWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Button Command="{Binding ApplyNominalCommand}" Style="{StaticResource RibbonButton}" MinWidth="90">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Polyline Points="12,2 20,5 20,12 18,16 12,22 6,16 4,12 4,5 12,2" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Prefault" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{Binding ZeroOutputCommand}" Style="{StaticResource RibbonButton}" MinWidth="96">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Ellipse Canvas.Left="3" Canvas.Top="3" Width="18" Height="18" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
-                                    <Line X1="8" Y1="16" X2="16" Y2="8" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Zero Output" Style="{StaticResource RibbonCaption}" />
-                        </StackPanel>
-                    </Button>
+            <Button Grid.Column="3" Click="StateSequencerMode_Click" Style="{StaticResource RibbonButton}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="24" Height="24">
+                        <Canvas Width="24" Height="24">
+                            <Line X1="9" Y1="5" X2="9" Y2="9" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Rectangle Canvas.Left="7" Canvas.Top="9" Width="4" Height="6" RadiusX="1" RadiusY="1" Stroke="#334155" StrokeThickness="1.9" Fill="Transparent"/>
+                            <Line X1="9" Y1="15" X2="9" Y2="17" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Line X1="17" Y1="3" X2="17" Y2="5" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Rectangle Canvas.Left="15" Canvas.Top="5" Width="4" Height="8" RadiusX="1" RadiusY="1" Stroke="#334155" StrokeThickness="1.9" Fill="Transparent"/>
+                            <Line X1="17" Y1="13" X2="17" Y2="16" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Path Data="M3 3v16a2 2 0 0 0 2 2h16" Stroke="#334155" StrokeThickness="1.9" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Sequence" Style="{StaticResource RibbonCaption}" />
                 </StackPanel>
+            </Button>
 
-                <Border Grid.Column="3" Background="#CBD5E1" Margin="7,0" />
-
-                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Command="{Binding RunLiveCommand}" Style="{StaticResource DangerButton}" MinWidth="118" Height="58">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Polygon Points="6,4 20,12 6,20" Stroke="#FFFFFF" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Start Injection" Style="{StaticResource RibbonCaption}" Foreground="#FFFFFF" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{Binding StopCommand}" Style="{StaticResource DangerButton}" MinWidth="94" Height="58">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Viewbox Width="24" Height="24">
-                                <Canvas Width="24" Height="24">
-                                    <Rectangle Canvas.Left="6" Canvas.Top="6" Width="12" Height="12" RadiusX="1" RadiusY="1" Stroke="#FFFFFF" StrokeThickness="2" Fill="Transparent"/>
-                                </Canvas>
-                            </Viewbox>
-                            <TextBlock Text="Stop F6" Style="{StaticResource RibbonCaption}" Foreground="#FFFFFF" />
-                        </StackPanel>
-                    </Button>
+            <Button Grid.Column="4" Command="{Binding ApplyNominalCommand}" Style="{StaticResource RibbonButton}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="24" Height="24">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M21 5H3" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Path Data="M7 12H3" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Path Data="M7 19H3" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Path Data="M12 18a5 5 0 0 0 9-3 4.5 4.5 0 0 0-4.5-4.5c-1.33 0-2.54.54-3.41 1.41L11 14" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                            <Path Data="M11 10v4h4" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Prefault" Style="{StaticResource RibbonCaption}" />
                 </StackPanel>
+            </Button>
 
-                <Border Grid.Column="5" Background="#E2E8F0" Margin="8,8" />
-
-                <StackPanel Grid.Column="6" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="999" Padding="10,4" Margin="0,0,8,0">
-                        <TextBlock Text="{Binding WorkspaceTitle}" FontSize="11.5" FontWeight="SemiBold" Foreground="#1D4ED8" />
-                    </Border>
-                    <TextBlock Text="F6 Stop" Foreground="#64748B" FontSize="11.5" VerticalAlignment="Center" />
+            <Button Grid.Column="5" Command="{Binding ZeroOutputCommand}" Style="{StaticResource RibbonButton}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="24" Height="24">
+                        <Canvas Width="24" Height="24">
+                            <Ellipse Canvas.Left="2.8" Canvas.Top="2.8" Width="18.4" Height="18.4" Stroke="#334155" StrokeThickness="1.9" Fill="Transparent"/>
+                            <Line X1="9" Y1="15" X2="15" Y2="9" Stroke="#334155" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Zero" Style="{StaticResource RibbonCaption}" />
                 </StackPanel>
-            </Grid>
-        </Border>
+            </Button>
 
-        <Grid Grid.Row="1" Margin="8">
+            <Rectangle Grid.Column="6" Width="1" Fill="#D8E2EF" Margin="8,10" />
+
+            <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsRampWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Button Command="{Binding AddRampStateCommand}" Style="{StaticResource RibbonButton}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Viewbox Width="24" Height="24"><Canvas Width="24" Height="24"><Line X1="12" Y1="5" X2="12" Y2="19" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/><Line X1="5" Y1="12" X2="19" Y2="12" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Canvas></Viewbox>
+                        <TextBlock Text="+ Ramp" Style="{StaticResource RibbonCaption}" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding RemoveRampStateCommand}" Style="{StaticResource RibbonButton}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Viewbox Width="24" Height="24"><Canvas Width="24" Height="24"><Line X1="3" Y1="6" X2="21" Y2="6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/><Polyline Points="8,6 8,4 16,4 16,6" Stroke="#334155" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/><Polyline Points="6,6 7,21 17,21 18,6" Stroke="#334155" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/></Canvas></Viewbox>
+                        <TextBlock Text="Del Ramp" Style="{StaticResource RibbonCaption}" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsSequencerWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Button Command="{Binding AddSequenceStateCommand}" Style="{StaticResource RibbonButton}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Viewbox Width="24" Height="24"><Canvas Width="24" Height="24"><Line X1="12" Y1="5" X2="12" Y2="19" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/><Line X1="5" Y1="12" X2="19" Y2="12" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Canvas></Viewbox>
+                        <TextBlock Text="+ State" Style="{StaticResource RibbonCaption}" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding RemoveSequenceStateCommand}" Style="{StaticResource RibbonButton}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Viewbox Width="24" Height="24"><Canvas Width="24" Height="24"><Line X1="3" Y1="6" X2="21" Y2="6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/><Polyline Points="8,6 8,4 16,4 16,6" Stroke="#334155" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/><Polyline Points="6,6 7,21 17,21 18,6" Stroke="#334155" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/></Canvas></Viewbox>
+                        <TextBlock Text="Del State" Style="{StaticResource RibbonCaption}" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <Rectangle Grid.Column="8" Width="1" Fill="#D8E2EF" Margin="8,10" />
+
+            <Button Grid.Column="10" Command="{Binding RunLiveCommand}" Style="{StaticResource StartButtonStyle}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="24" Height="24"><Canvas Width="24" Height="24"><Path Data="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" Stroke="#FFFFFF" StrokeThickness="1.9" Fill="Transparent" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Canvas></Viewbox>
+                    <TextBlock Text="Start" Style="{StaticResource RibbonCaption}" Foreground="#FFFFFF" />
+                </StackPanel>
+            </Button>
+
+            <Button Grid.Column="11" Command="{Binding StopCommand}" Style="{StaticResource StopButtonStyle}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Viewbox Width="24" Height="24"><Canvas Width="24" Height="24"><Rectangle Canvas.Left="3.5" Canvas.Top="3.5" Width="17" Height="17" RadiusX="2" RadiusY="2" Stroke="#FFFFFF" StrokeThickness="1.9" Fill="Transparent"/></Canvas></Viewbox>
+                    <TextBlock Text="Stop" Style="{StaticResource RibbonCaption}" Foreground="#FFFFFF" />
+                </StackPanel>
+            </Button>
+        </Grid>
+    </Border>
+</Border>
+
+        <Grid Grid.Row="1" Margin="10,8,10,8">
             <!-- MANUAL WORKSPACE -->
             <Grid Visibility="{Binding IsManualWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="430" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="34*" MinWidth="390" />
+                    <ColumnDefinition Width="33*" MinWidth="320" />
+                    <ColumnDefinition Width="33*" MinWidth="340" />
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0" Style="{StaticResource PanelShell}" Margin="0,0,8,0">
@@ -534,13 +664,13 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="84" />
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="140" />
-                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="86" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Sample rate" Style="{StaticResource LabelText}" />
                                 <TextBox Grid.Column="1" Text="{Binding SampleRateHz, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Grid.Column="2" Text="Run behavior" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
-                                <TextBlock Grid.Column="3" Text="continuous, live auto-apply" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="Nom. Hz" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
+                                <TextBox Grid.Column="3" Text="{Binding NominalFrequencyHz, UpdateSourceTrigger=PropertyChanged}" />
                             </Grid>
                         </StackPanel>
 
@@ -898,9 +1028,9 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="350" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="430" />
+                    <ColumnDefinition Width="28*" MinWidth="320" />
+                    <ColumnDefinition Width="44*" MinWidth="420" />
+                    <ColumnDefinition Width="28*" MinWidth="340" />
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource PanelShell}" Margin="0,0,0,8">
@@ -917,18 +1047,24 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderBrush="#1F2937"
-                                                BorderThickness="0,0,2,0"
-                                                Width="308"
-                                                Margin="0"
+                                        <Border BorderBrush="#D7E3F2"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Width="304"
+                                                Margin="3"
                                                 Cursor="Hand"
                                                 MouseLeftButtonDown="SequenceStateCard_MouseLeftButtonDown">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Background" Value="#FFFFFF" />
+                                                    <Setter Property="Effect">
+                                                        <Setter.Value>
+                                                            <DropShadowEffect BlurRadius="12" ShadowDepth="1" Direction="270" Opacity="0.10" Color="#23324A" />
+                                                        </Setter.Value>
+                                                    </Setter>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                            <Setter Property="Background" Value="#EAF2FF" />
+                                                            <Setter Property="Background" Value="#EEF6FF" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -954,10 +1090,24 @@
                                                 <Border Grid.ColumnSpan="4">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="#7B8A9B" />
+                                                            <Setter Property="Background">
+                                                                <Setter.Value>
+                                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                        <GradientStop Color="#7B8CA2" Offset="0" />
+                                                                        <GradientStop Color="#667891" Offset="1" />
+                                                                    </LinearGradientBrush>
+                                                                </Setter.Value>
+                                                            </Setter>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                                    <Setter Property="Background" Value="#3E7CC9" />
+                                                                    <Setter Property="Background">
+                                                                        <Setter.Value>
+                                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                                <GradientStop Color="#5B8FDC" Offset="0" />
+                                                                                <GradientStop Color="#2F65B5" Offset="1" />
+                                                                            </LinearGradientBrush>
+                                                                        </Setter.Value>
+                                                                    </Setter>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
@@ -1103,18 +1253,22 @@
 
                     </Grid>
 
-        <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+        <Border Grid.Row="2" BorderBrush="#DCE6F3" BorderThickness="0,1,0,0">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#FFFFFF" Offset="0" />
+                    <GradientStop Color="#F7FAFE" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
             <Grid Margin="12,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="210" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="#334155" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                 <TextBlock Grid.Column="1" Text="{Binding AdapterStatusText}" VerticalAlignment="Center" Foreground="#475569" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
                 <TextBlock Grid.Column="2" Text="{Binding StreamControlBlock}" VerticalAlignment="Center" Foreground="#64748B" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
-                <TextBlock Grid.Column="3" Text="F6 Stop Injection" VerticalAlignment="Center" Foreground="#64748B" Margin="16,0,0,0" />
             </Grid>
         </Border>
     </Grid>

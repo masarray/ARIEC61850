@@ -5,9 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:AR.Iec61850.SvPublisher.Controls"
         mc:Ignorable="d"
-        Title="AR IEC 61850 SV Injector - Manual Test Console"
-        Width="1440"
-        Height="820"
+        Title="AR IEC 61850 SV Injector - Test Workspace"
+        Width="1460"
+        Height="860"
         MinWidth="1220"
         MinHeight="720"
         WindowStartupLocation="CenterScreen"
@@ -39,14 +39,14 @@
             <Setter Property="Background" Value="{StaticResource Panel}" />
             <Setter Property="BorderBrush" Value="{StaticResource Line}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="CornerRadius" Value="6" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
         </Style>
 
         <Style x:Key="PanelHeader" TargetType="Border">
             <Setter Property="Background" Value="#3E7CC9" />
-            <Setter Property="CornerRadius" Value="7,7,0,0" />
-            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="CornerRadius" Value="6,6,0,0" />
+            <Setter Property="Padding" Value="8,4" />
         </Style>
 
         <Style x:Key="LabelText" TargetType="TextBlock">
@@ -81,16 +81,36 @@
         </Style>
 
         <Style x:Key="RibbonButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Height" Value="52" />
-            <Setter Property="MinWidth" Value="88" />
-            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Height" Value="58" />
+            <Setter Property="MinWidth" Value="90" />
+            <Setter Property="Padding" Value="10,5" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Background" Value="#F8FAFC" />
         </Style>
 
+        <Style x:Key="RibbonCaption" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2937" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+        </Style>
+
+        <Style x:Key="StateCardButton" TargetType="Button">
+            <Setter Property="Width" Value="280" />
+            <Setter Property="Height" Value="196" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+
         <Style TargetType="TextBox">
-            <Setter Property="Height" Value="29" />
-            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Height" Value="27" />
+            <Setter Property="Padding" Value="6,2" />
             <Setter Property="BorderBrush" Value="#CBD5E1" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Background" Value="#FFFFFF" />
@@ -98,8 +118,8 @@
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Height" Value="29" />
-            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="Height" Value="27" />
+            <Setter Property="Padding" Value="6,2" />
             <Setter Property="BorderBrush" Value="#CBD5E1" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Background" Value="#FFFFFF" />
@@ -112,8 +132,8 @@
             <Setter Property="HorizontalGridLinesBrush" Value="#E5EAF1" />
             <Setter Property="VerticalGridLinesBrush" Value="#E5EAF1" />
             <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="RowHeight" Value="27" />
-            <Setter Property="ColumnHeaderHeight" Value="27" />
+            <Setter Property="RowHeight" Value="25" />
+            <Setter Property="ColumnHeaderHeight" Value="25" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="CanUserDeleteRows" Value="False" />
@@ -126,7 +146,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="28" />
-            <RowDefinition Height="88" />
+            <RowDefinition Height="98" />
             <RowDefinition Height="*" />
             <RowDefinition Height="34" />
         </Grid.RowDefinitions>
@@ -139,7 +159,8 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="AR IEC 61850 SV Injector" Foreground="White" FontSize="13" FontWeight="SemiBold" />
-                    <TextBlock Text="  -  Quick manual sampled-value console" Foreground="#D7E7FF" FontSize="12" />
+                    <TextBlock Text="  -  " Foreground="#D7E7FF" FontSize="12" />
+                    <TextBlock Text="{Binding WorkspaceTitle}" Foreground="#D7E7FF" FontSize="12" FontWeight="SemiBold" />
                 </StackPanel>
                 <TextBlock Grid.Column="1" Text="F6 Stop Injection" Foreground="#D7E7FF" VerticalAlignment="Center" FontSize="12" />
             </Grid>
@@ -152,276 +173,776 @@
                     <ColumnDefinition Width="1" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="1" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="1" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="SCL / Config" Click="OpenConfig_Click" Style="{StaticResource RibbonButton}" MinWidth="98" />
-                    <Button Content="Manual" Click="ManualMode_Click" Style="{StaticResource RibbonButton}" MinWidth="82" />
-                    <Button Content="Ramp..." Click="RampSetup_Click" Style="{StaticResource RibbonButton}" MinWidth="82" />
-                    <Button Content="Sequencer..." Click="StateSequencer_Click" Style="{StaticResource RibbonButton}" MinWidth="98" />
+                    <Button Click="OpenConfig_Click" Style="{StaticResource RibbonButton}" MinWidth="98">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Rectangle Canvas.Left="5" Canvas.Top="3" Width="14" Height="18" RadiusX="1.5" RadiusY="1.5" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
+                                    <Polyline Points="14,3 14,8 19,8" Stroke="#334155" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
+                                    <Line X1="8" Y1="13" X2="16" Y2="13" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line X1="8" Y1="17" X2="14" Y2="17" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="SCL / Config" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="ManualMode_Click" Style="{StaticResource RibbonButton}" MinWidth="82">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Line X1="4" Y1="3" X2="4" Y2="21" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line X1="12" Y1="3" X2="12" Y2="21" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line X1="20" Y1="3" X2="20" Y2="21" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line X1="2" Y1="14" X2="6" Y2="14" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line X1="10" Y1="8" X2="14" Y2="8" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line X1="18" Y1="12" X2="22" Y2="12" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Manual" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="RampMode_Click" Style="{StaticResource RibbonButton}" MinWidth="82">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Polyline Points="3,17 7,17 11,9 15,14 21,4" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                                    <Line X1="3" Y1="21" X2="21" Y2="21" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Ramp" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="StateSequencerMode_Click" Style="{StaticResource RibbonButton}" MinWidth="116">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Rectangle Canvas.Left="3" Canvas.Top="5" Width="5" Height="14" RadiusX="1" RadiusY="1" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
+                                    <Rectangle Canvas.Left="10" Canvas.Top="5" Width="5" Height="14" RadiusX="1" RadiusY="1" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
+                                    <Rectangle Canvas.Left="17" Canvas.Top="5" Width="4" Height="14" RadiusX="1" RadiusY="1" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="State Seq" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <Border Grid.Column="1" Background="#CBD5E1" Margin="7,0" />
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="Prefault" Command="{Binding ApplyNominalCommand}" Style="{StaticResource RibbonButton}" />
-                    <Button Content="Zero Output" Command="{Binding ZeroOutputCommand}" Style="{StaticResource RibbonButton}" MinWidth="96" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsRampWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Command="{Binding AddRampStateCommand}" Style="{StaticResource RibbonButton}" MinWidth="98">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Line X1="12" Y1="5" X2="12" Y2="19" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line X1="5" Y1="12" X2="19" Y2="12" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Append Ramp" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding RemoveRampStateCommand}" Style="{StaticResource RibbonButton}" MinWidth="96">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Line X1="3" Y1="6" X2="21" Y2="6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Polyline Points="8,6 8,4 16,4 16,6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                                    <Polyline Points="6,6 7,22 17,22 18,6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Delete Ramp" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsSequencerWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Command="{Binding AddSequenceStateCommand}" Style="{StaticResource RibbonButton}" MinWidth="98">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Line X1="12" Y1="5" X2="12" Y2="19" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line X1="5" Y1="12" X2="19" Y2="12" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Append State" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding RemoveSequenceStateCommand}" Style="{StaticResource RibbonButton}" MinWidth="96">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Line X1="3" Y1="6" X2="21" Y2="6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Polyline Points="8,6 8,4 16,4 16,6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                                    <Polyline Points="6,6 7,22 17,22 18,6" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Delete State" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsManualWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Command="{Binding ApplyNominalCommand}" Style="{StaticResource RibbonButton}" MinWidth="90">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Polyline Points="12,2 20,5 20,12 18,16 12,22 6,16 4,12 4,5 12,2" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Prefault" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ZeroOutputCommand}" Style="{StaticResource RibbonButton}" MinWidth="96">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Ellipse Canvas.Left="3" Canvas.Top="3" Width="18" Height="18" Stroke="#334155" StrokeThickness="2" Fill="Transparent"/>
+                                    <Line X1="8" Y1="16" X2="16" Y2="8" Stroke="#334155" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Zero Output" Style="{StaticResource RibbonCaption}" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <Border Grid.Column="3" Background="#CBD5E1" Margin="7,0" />
 
                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="Start Injection" Command="{Binding RunLiveCommand}" Style="{StaticResource DangerButton}" MinWidth="118" Height="52" />
-                    <Button Content="Stop (F6)" Command="{Binding StopCommand}" Style="{StaticResource DangerButton}" MinWidth="94" Height="52" />
-                    <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="10,5" Margin="4,0,0,0" MinWidth="220">
-                        <StackPanel>
-                            <TextBlock Text="Active execution mode" Style="{StaticResource LabelText}" />
-                            <TextBlock Text="{Binding Mode}" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <Button Command="{Binding RunLiveCommand}" Style="{StaticResource DangerButton}" MinWidth="118" Height="58">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Polygon Points="6,4 20,12 6,20" Stroke="#FFFFFF" StrokeThickness="2" StrokeLineJoin="Round" Fill="Transparent"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Start Injection" Style="{StaticResource RibbonCaption}" Foreground="#FFFFFF" />
                         </StackPanel>
-                    </Border>
+                    </Button>
+                    <Button Command="{Binding StopCommand}" Style="{StaticResource DangerButton}" MinWidth="94" Height="58">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="24" Height="24">
+                                <Canvas Width="24" Height="24">
+                                    <Rectangle Canvas.Left="6" Canvas.Top="6" Width="12" Height="12" RadiusX="1" RadiusY="1" Stroke="#FFFFFF" StrokeThickness="2" Fill="Transparent"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Stop F6" Style="{StaticResource RibbonCaption}" Foreground="#FFFFFF" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
-                <StackPanel Grid.Column="5" VerticalAlignment="Center" MinWidth="250">
+                <Border Grid.Column="5" Background="#CBD5E1" Margin="7,0" />
+
+                <Border Grid.Column="6" Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="10,5" Margin="0,0,8,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Active workspace" Style="{StaticResource LabelText}" />
+                            <TextBlock Text="{Binding Mode}" FontWeight="SemiBold" Foreground="#0F172A" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="{Binding WorkspaceSubtitle}" FontSize="12" Foreground="#334155" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding LiveApplyText}" FontSize="11" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="7" VerticalAlignment="Center" MinWidth="240">
                     <TextBlock Text="{Binding StreamControlBlock}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding LiveApplyText}" FontSize="11" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding PublishText}" FontSize="11" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2" Margin="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="430" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <Grid Grid.Row="2" Margin="8">
+            <!-- MANUAL WORKSPACE -->
+            <Grid Visibility="{Binding IsManualWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="430" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource PanelShell}" Margin="0,0,10,0">
-                <DockPanel>
-                    <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
-                        <TextBlock Text="Test View: SV Manual Injector" Foreground="White" FontWeight="SemiBold" />
-                    </Border>
+                <Border Grid.Column="0" Style="{StaticResource PanelShell}" Margin="0,0,8,0">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Test View: Quick Manual" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
 
-                    <Border DockPanel.Dock="Bottom"
-                            Background="{StaticResource Subtle}"
-                            BorderBrush="{StaticResource Line}"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Padding="10"
-                            Margin="12,8,12,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="DataSet" Style="{StaticResource LabelText}" />
-                                <TextBlock>
-                                    <Run Text="{Binding DataSetEntryCount, Mode=OneWay}" />
-                                    <Run Text=" entries, " />
-                                    <Run Text="{Binding MappedSignalCount, Mode=OneWay}" />
-                                    <Run Text=" mapped" />
-                                </TextBlock>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Payload" Style="{StaticResource LabelText}" />
-                                <TextBlock>
-                                    <Run Text="{Binding PayloadBytes, Mode=OneWay}" />
-                                    <Run Text=" bytes" />
-                                </TextBlock>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <StackPanel DockPanel.Dock="Top" Margin="12,12,12,8">
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="84" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="70" />
-                                <ColumnDefinition Width="86" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Set Mode" Style="{StaticResource LabelText}" />
-                            <ComboBox Grid.Column="1" ItemsSource="{Binding ManualSetModes}" SelectedItem="{Binding ManualSetMode}" />
-                            <TextBlock Grid.Column="2" Text="Duration" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
-                            <TextBox Grid.Column="3" Text="{Binding DurationSeconds, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="84" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="88" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Sample rate" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Column="1" Text="{Binding SampleRateHz, UpdateSourceTrigger=PropertyChanged}" />
-                            <CheckBox Grid.Column="2" Content="Continuous" IsChecked="{Binding Continuous}" VerticalAlignment="Center" Margin="10,0,0,0" />
-                            <CheckBox Grid.Column="3" Content="Auto apply RUN" IsChecked="{Binding AutoApplyWhileRunning}" VerticalAlignment="Center" />
-                        </Grid>
-                    </StackPanel>
-
-                    <DataGrid x:Name="ManualOutputsGrid"
-                              ItemsSource="{Binding ManualRows}"
-                              Margin="12,0,12,0"
-                              PreviewMouseLeftButtonDown="ManualOutputsGrid_PreviewMouseLeftButtonDown"
-                              PreviewMouseRightButtonDown="ManualOutputsGrid_PreviewMouseRightButtonDown"
-                              PreviewTextInput="ManualOutputsGrid_PreviewTextInput">
-                        <DataGrid.ContextMenu>
-                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                <MenuItem Header="Signal naming"
-                                          Visibility="{Binding IsContextSignalColumn, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <MenuItem Header="ABC" Command="{Binding SetSignalNamingCommand}" CommandParameter="ABC" />
-                                    <MenuItem Header="RSTN" Command="{Binding SetSignalNamingCommand}" CommandParameter="RSTN" />
-                                    <MenuItem Header="L1 / L2 / L3 / E" Command="{Binding SetSignalNamingCommand}" CommandParameter="L1L2L3E" />
-                                    <MenuItem Header="Raw keys" Command="{Binding SetSignalNamingCommand}" CommandParameter="RAW" />
-                                </MenuItem>
-
-                                <MenuItem Header="Nominal Value"
-                                          Command="{Binding NominalValueFromContextCommand}"
-                                          Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="Zero"
-                                          Command="{Binding ZeroFromContextCommand}"
-                                          Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="Equal Magnitudes"
-                                          Command="{Binding EqualMagnitudesFromContextCommand}"
-                                          Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="100 % Load"
-                                          Command="{Binding HundredPercentLoadCommand}"
-                                          Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="50 % Load"
-                                          Command="{Binding FiftyPercentLoadCommand}"
-                                          Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="Unload (0%)"
-                                          Command="{Binding UnloadCommand}"
-                                          Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                <MenuItem Header="Zero"
-                                          Command="{Binding ZeroFromContextCommand}"
-                                          Visibility="{Binding IsContextAngleColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="Line Angle"
-                                          Command="{Binding LineAngleFromContextCommand}"
-                                          Visibility="{Binding IsContextAngleColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="Balance Angles"
-                                          Command="{Binding BalanceAnglesFromContextCommand}"
-                                          Visibility="{Binding IsContextAngleColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="Reverse Rotation"
-                                          Command="{Binding ReverseRotationFromContextCommand}"
-                                          Visibility="{Binding IsContextAngleColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                <MenuItem Header="Nominal Value"
-                                          Command="{Binding NominalFrequencyFromContextCommand}"
-                                          Visibility="{Binding IsContextFrequencyColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="DC"
-                                          Command="{Binding DcFrequencyFromContextCommand}"
-                                          Visibility="{Binding IsContextFrequencyColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                <MenuItem Header="Equal Frequencies"
-                                          Command="{Binding EqualFrequenciesFromContextCommand}"
-                                          Visibility="{Binding IsContextFrequencyColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
-                            </ContextMenu>
-                        </DataGrid.ContextMenu>
-                        <DataGrid.Columns>
-                            <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="38" />
-                            <DataGridTextColumn Header="Signal" Binding="{Binding Name}" IsReadOnly="True" Width="88" />
-
-                            <DataGridTemplateColumn Header="Value" Width="98" SortMemberPath="Magnitude">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding MagnitudeText}" TextAlignment="Right" Padding="0,4,6,0" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding MagnitudeText, UpdateSourceTrigger=PropertyChanged}"
-                                                 Tag="Magnitude"
-                                                 TextAlignment="Right"
-                                                 LostFocus="ManualNumericTextBox_LostFocus"
-                                                 PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
-
-                            <DataGridTemplateColumn Header="Angle" Width="86" SortMemberPath="AngleDegrees">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding AngleDegreesText}" TextAlignment="Right" Padding="0,4,6,0" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding AngleDegreesText, UpdateSourceTrigger=PropertyChanged}"
-                                                 Tag="AngleDegrees"
-                                                 TextAlignment="Right"
-                                                 LostFocus="ManualNumericTextBox_LostFocus"
-                                                 PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
-
-                            <DataGridTemplateColumn Header="Freq" Width="92" SortMemberPath="FrequencyHz">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding FrequencyHzText}" TextAlignment="Right" Padding="0,4,6,0" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding FrequencyHzText, UpdateSourceTrigger=PropertyChanged}"
-                                                 Tag="FrequencyHz"
-                                                 TextAlignment="Right"
-                                                 LostFocus="ManualNumericTextBox_LostFocus"
-                                                 PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
-
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
-            </Border>
-
-            <Border Grid.Column="1" Style="{StaticResource PanelShell}" Margin="0,0,10,0">
-                <DockPanel>
-                    <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
-                        <TextBlock Text="Phasor View: Effective SV Outputs" Foreground="White" FontWeight="SemiBold" />
-                    </Border>
-                    <controls:PhasorPlot Channels="{Binding Channels}" Margin="12" />
-                </DockPanel>
-            </Border>
-
-            <Border Grid.Column="2" Style="{StaticResource PanelShell}">
-                <DockPanel>
-                    <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
-                        <TextBlock Text="Waveform / Injection Monitor" Foreground="White" FontWeight="SemiBold" />
-                    </Border>
-                    <Grid Margin="12">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="112" />
-                        </Grid.RowDefinitions>
-                        <controls:WaveformPlot Channels="{Binding Channels}" />
-                        <Border Grid.Row="1" Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,8,0,0">
+                        <Border DockPanel.Dock="Bottom"
+                                Background="{StaticResource Subtle}"
+                                BorderBrush="{StaticResource Line}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10"
+                                Margin="12,8,12,12">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="Nominal frequency" Style="{StaticResource LabelText}" />
-                                    <TextBox Text="{Binding NominalFrequencyHz, UpdateSourceTrigger=PropertyChanged}" Width="110" HorizontalAlignment="Left" />
-                                    <CheckBox Content="Link Frequencies" IsChecked="{Binding LinkFrequencies}" Margin="0,8,0,0" />
+                                    <TextBlock Text="DataSet" Style="{StaticResource LabelText}" />
+                                    <TextBlock>
+                                        <Run Text="{Binding DataSetEntryCount, Mode=OneWay}" />
+                                        <Run Text=" entries, " />
+                                        <Run Text="{Binding MappedSignalCount, Mode=OneWay}" />
+                                        <Run Text=" mapped" />
+                                    </TextBlock>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
-                                    <TextBlock Text="Publisher status" Style="{StaticResource LabelText}" />
-                                    <TextBlock Text="{Binding PublishText}" TextWrapping="Wrap" Foreground="#334155" />
+                                    <TextBlock Text="Payload" Style="{StaticResource LabelText}" />
+                                    <TextBlock>
+                                        <Run Text="{Binding PayloadBytes, Mode=OneWay}" />
+                                        <Run Text=" bytes" />
+                                    </TextBlock>
                                 </StackPanel>
                             </Grid>
                         </Border>
+
+                        <StackPanel DockPanel.Dock="Top" Margin="12,12,12,8">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="84" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="86" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Set Mode" Style="{StaticResource LabelText}" />
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding ManualSetModes}" SelectedItem="{Binding ManualSetMode}" />
+                                <TextBlock Grid.Column="2" Text="Duration" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
+                                <TextBox Grid.Column="3" Text="{Binding DurationSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="84" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Sample rate" Style="{StaticResource LabelText}" />
+                                <TextBox Grid.Column="1" Text="{Binding SampleRateHz, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Grid.Column="2" Text="Run behavior" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
+                                <TextBlock Grid.Column="3" Text="continuous, live auto-apply" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" />
+                            </Grid>
+                        </StackPanel>
+
+                        <DataGrid x:Name="ManualOutputsGrid"
+                                  ItemsSource="{Binding ManualRows}"
+                                  Margin="12,0,12,0"
+                                  PreviewMouseLeftButtonDown="ManualOutputsGrid_PreviewMouseLeftButtonDown"
+                                  PreviewMouseRightButtonDown="ManualOutputsGrid_PreviewMouseRightButtonDown"
+                                  PreviewTextInput="ManualOutputsGrid_PreviewTextInput">
+                            <DataGrid.ContextMenu>
+                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                    <MenuItem Header="Signal naming" Visibility="{Binding IsContextSignalColumn, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <MenuItem Header="ABC" Command="{Binding SetSignalNamingCommand}" CommandParameter="ABC" />
+                                        <MenuItem Header="RSTN" Command="{Binding SetSignalNamingCommand}" CommandParameter="RSTN" />
+                                        <MenuItem Header="L1 / L2 / L3 / E" Command="{Binding SetSignalNamingCommand}" CommandParameter="L1L2L3E" />
+                                        <MenuItem Header="Raw keys" Command="{Binding SetSignalNamingCommand}" CommandParameter="RAW" />
+                                    </MenuItem>
+
+                                    <MenuItem Header="Nominal Value" Command="{Binding NominalValueFromContextCommand}" Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="Zero" Command="{Binding ZeroFromContextCommand}" Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="Equal Magnitudes" Command="{Binding EqualMagnitudesFromContextCommand}" Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="100 % Load" Command="{Binding HundredPercentLoadCommand}" Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="50 % Load" Command="{Binding FiftyPercentLoadCommand}" Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="Unload (0%)" Command="{Binding UnloadCommand}" Visibility="{Binding IsContextValueColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                    <MenuItem Header="Zero" Command="{Binding ZeroFromContextCommand}" Visibility="{Binding IsContextAngleColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="Line Angle" Command="{Binding LineAngleFromContextCommand}" Visibility="{Binding IsContextAngleColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="Balance Angles" Command="{Binding BalanceAnglesFromContextCommand}" Visibility="{Binding IsContextAngleColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="Reverse Rotation" Command="{Binding ReverseRotationFromContextCommand}" Visibility="{Binding IsContextAngleColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                    <MenuItem Header="Nominal Value" Command="{Binding NominalFrequencyFromContextCommand}" Visibility="{Binding IsContextFrequencyColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="DC" Command="{Binding DcFrequencyFromContextCommand}" Visibility="{Binding IsContextFrequencyColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuItem Header="Equal Frequencies" Command="{Binding EqualFrequenciesFromContextCommand}" Visibility="{Binding IsContextFrequencyColumn, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="38" />
+                                <DataGridTextColumn Header="Signal" Binding="{Binding Name}" IsReadOnly="True" Width="88" />
+
+                                <DataGridTemplateColumn Header="Value" Width="98" SortMemberPath="Magnitude">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding MagnitudeText}" TextAlignment="Right" Padding="0,4,6,0" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding MagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="Magnitude" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Header="Angle" Width="86" SortMemberPath="AngleDegrees">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding AngleDegreesText}" TextAlignment="Right" Padding="0,4,6,0" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding AngleDegreesText, UpdateSourceTrigger=PropertyChanged}" Tag="AngleDegrees" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Header="Freq" Width="92" SortMemberPath="FrequencyHz">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding FrequencyHzText}" TextAlignment="Right" Padding="0,4,6,0" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding FrequencyHzText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource PanelShell}" Margin="0,0,8,0">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Phasor View: Effective SV Outputs" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+                        <controls:PhasorPlot Channels="{Binding Channels}" Margin="12" />
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource PanelShell}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Waveform / Injection Monitor" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="112" />
+                            </Grid.RowDefinitions>
+                            <controls:WaveformPlot Channels="{Binding Channels}" />
+                            <Border Grid.Row="1" Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,8,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Nominal frequency" Style="{StaticResource LabelText}" />
+                                        <TextBox Text="{Binding NominalFrequencyHz, UpdateSourceTrigger=PropertyChanged}" Width="110" HorizontalAlignment="Left" />
+                                        <CheckBox Content="Link Frequencies" IsChecked="{Binding LinkFrequencies}" Margin="0,8,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Publisher status" Style="{StaticResource LabelText}" />
+                                        <TextBlock Text="{Binding PublishText}" TextWrapping="Wrap" Foreground="#334155" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <!-- RAMP WORKSPACE -->
+            <Grid Visibility="{Binding IsRampWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="42*" />
+                    <ColumnDefinition Width="58*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="210" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Column="0" Grid.Row="0" Style="{StaticResource PanelShell}" Margin="0,0,8,8">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Test View: Ramping" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+
+                        <Grid DockPanel.Dock="Top" Margin="10,10,10,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="78" />
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="78" />
+                                <ColumnDefinition Width="92" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="126" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Set mode:" Style="{StaticResource LabelText}" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding ManualSetModes}" SelectedItem="{Binding ManualSetMode}" />
+                            <TextBlock Grid.Column="2" Text="Fault type:" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
+                            <ComboBox Grid.Column="3" IsEnabled="False" SelectedIndex="0">
+                                <ComboBoxItem Content="n/a" />
+                            </ComboBox>
+                            <TextBlock Grid.Column="4" Text="Estimated test time:" Style="{StaticResource LabelText}" HorizontalAlignment="Right" Margin="10,0,8,0" />
+                            <TextBox Grid.Column="5" Text="{Binding RampTotalTimeText, Mode=OneWay}" IsReadOnly="True" />
+                        </Grid>
+
+                        <Grid DockPanel.Dock="Top" Margin="10,0,10,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="76" />
+                                <ColumnDefinition Width="152" />
+                                <ColumnDefinition Width="82" />
+                                <ColumnDefinition Width="118" />
+                                <ColumnDefinition Width="76" />
+                                <ColumnDefinition Width="152" />
+                                <ColumnDefinition Width="82" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Signal 1:" Style="{StaticResource LabelText}" />
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding RampSignalChoices}"
+                                      SelectedItem="{Binding SelectedRampSignalChoice, Mode=TwoWay}"
+                                      DisplayMemberPath="Name" />
+                            <TextBlock Grid.Column="2" Text="Quantity 1:" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
+                            <ComboBox Grid.Column="3" ItemsSource="{Binding RampQuantities}" SelectedIndex="0" />
+                            <TextBlock Grid.Column="4" Text="Signal 2:" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
+                            <ComboBox Grid.Column="5" IsEnabled="False" SelectedIndex="0">
+                                <ComboBoxItem Content="(none)" />
+                            </ComboBox>
+                            <TextBlock Grid.Column="6" Text="Quantity 2:" Style="{StaticResource LabelText}" Margin="10,0,0,0" />
+                            <ComboBox Grid.Column="7" IsEnabled="False" SelectedIndex="0">
+                                <ComboBoxItem Content="Frequency" />
+                            </ComboBox>
+                        </Grid>
+
+                        <DataGrid x:Name="RampStatesGrid"
+                                  ItemsSource="{Binding RampStates}"
+                                  SelectedItem="{Binding SelectedRampState, Mode=TwoWay}"
+                                  SelectionUnit="CellOrRowHeader"
+                                  Margin="10,0,10,10"
+                                  PreviewMouseLeftButtonDown="RampStatesGrid_PreviewMouseLeftButtonDown"
+                                  PreviewMouseRightButtonDown="RampStatesGrid_PreviewMouseRightButtonDown"
+                                  PreviewTextInput="RampStatesGrid_PreviewTextInput">
+                            <DataGrid.ContextMenu>
+                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                    <MenuItem Header="Append Ramp" Command="{Binding AddRampStateCommand}" />
+                                    <MenuItem Header="Delete Ramp" Command="{Binding RemoveRampStateCommand}" />
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="Ramp" Width="70" SortMemberPath="Name">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" Padding="6,4,0,0" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" IsReadOnly="True" Width="76" />
+                                <DataGridTemplateColumn Header="From" Width="92" SortMemberPath="From">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding FromText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding FromText, UpdateSourceTrigger=PropertyChanged}" Tag="From" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="To" Width="92" SortMemberPath="To">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding ToText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding ToText, UpdateSourceTrigger=PropertyChanged}" Tag="To" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Delta" Binding="{Binding DeltaText, Mode=OneWay}" IsReadOnly="True" Width="82" />
+                                <DataGridTemplateColumn Header="Step" Width="82" SortMemberPath="Step">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding StepText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding StepText, UpdateSourceTrigger=PropertyChanged}" Tag="Step" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="dt" Width="74" SortMemberPath="StepTimeSeconds">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding StepTimeText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding StepTimeText, UpdateSourceTrigger=PropertyChanged}" Tag="StepTimeSeconds" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="d/dt" Binding="{Binding SlopeText, Mode=OneWay}" IsReadOnly="True" Width="88" />
+                                <DataGridTemplateColumn Header="Steps" Width="58" SortMemberPath="Steps">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding StepsText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding StepsText, UpdateSourceTrigger=PropertyChanged}" Tag="Steps" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Time" Width="80" SortMemberPath="TimeSeconds">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding TimeText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding TimeText, UpdateSourceTrigger=PropertyChanged}" Tag="TimeSeconds" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="1" Grid.Row="0" Style="{StaticResource PanelShell}" Margin="0,0,0,8">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Signal View: Ramping" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+                        <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="74" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <DataGrid ItemsSource="{Binding RampStates}"
+                                      SelectedItem="{Binding SelectedRampState, Mode=TwoWay}"
+                                      HeadersVisibility="Column"
+                                      SelectionUnit="FullRow">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Time" Binding="{Binding TimeText, Mode=OneWay}" Width="100" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="120" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Value" Binding="{Binding ToText, Mode=OneWay}" Width="120" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Ramp time" Binding="{Binding TimeText, Mode=OneWay}" Width="*" IsReadOnly="True" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <controls:RampTimelinePlot Grid.Row="1" RampStates="{Binding RampStates}" Margin="0,8,0,0" />
+                        </Grid>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="0" Grid.Row="1" Style="{StaticResource PanelShell}" Margin="0,0,8,0">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Detail View: Analog Out" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+                        <DataGrid x:Name="RampAnalogOutGrid"
+                                  Margin="8"
+                                  ItemsSource="{Binding ManualRows}"
+                                  SelectionUnit="CellOrRowHeader"
+                                  PreviewMouseLeftButtonDown="ManualOutputsGrid_PreviewMouseLeftButtonDown"
+                                  PreviewMouseRightButtonDown="ManualOutputsGrid_PreviewMouseRightButtonDown"
+                                  PreviewTextInput="ManualOutputsGrid_PreviewTextInput">
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="38" />
+                                <DataGridTextColumn Header="Signal" Binding="{Binding Name}" IsReadOnly="True" Width="90" />
+                                <DataGridTemplateColumn Header="Value" Width="110" SortMemberPath="Magnitude">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding MagnitudeText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding MagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="Magnitude" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Angle" Width="100" SortMemberPath="AngleDegrees">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding AngleDegreesText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding AngleDegreesText, UpdateSourceTrigger=PropertyChanged}" Tag="AngleDegrees" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Freq" Width="100" SortMemberPath="FrequencyHz">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding FrequencyHzText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate><TextBox Text="{Binding FrequencyHzText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" /></DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="1" Grid.Row="1" Style="{StaticResource PanelShell}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Phasor View: Selected Ramp Output" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+                        <controls:PhasorPlot Channels="{Binding RampPreviewChannels}" Margin="8" />
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <!-- STATE SEQUENCER WORKSPACE -->
+            <Grid Visibility="{Binding IsSequencerWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="238" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="350" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="430" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource PanelShell}" Margin="0,0,0,8">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Table View: State Sequencer" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="6">
+                            <ItemsControl ItemsSource="{Binding SequenceStates}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="#1F2937"
+                                                BorderThickness="0,0,2,0"
+                                                Width="280"
+                                                Margin="0"
+                                                Cursor="Hand"
+                                                MouseLeftButtonDown="SequenceStateCard_MouseLeftButtonDown">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="#FFFFFF" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                <Setter Property="Background" Value="#EAF2FF" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="24" />
+                                                        <RowDefinition Height="27" />
+                                                        <RowDefinition Height="27" />
+                                                        <RowDefinition Height="27" />
+                                                        <RowDefinition Height="27" />
+                                                        <RowDefinition Height="27" />
+                                                        <RowDefinition Height="27" />
+                                                        <RowDefinition Height="30" />
+                                                    </Grid.RowDefinitions>
+                                                    <Border>
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="#7B8A9B" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                        <Setter Property="Background" Value="#3E7CC9" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="{Binding Name}" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                                    </Border>
+                                                    <TextBlock Grid.Row="1" Margin="8,5,0,0">
+                                                        <Run Text="V L1-E     "/><Run Text="{Binding VoltageMagnitudeText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding PhaseAAngleText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding FrequencyText, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Row="2" Margin="8,5,0,0">
+                                                        <Run Text="V L2-E     "/><Run Text="{Binding VoltageMagnitudeText, Mode=OneWay}"/><Run Text="    "/><Run Text="{Binding PhaseBAngleText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding FrequencyText, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Row="3" Margin="8,5,0,0">
+                                                        <Run Text="V L3-E     "/><Run Text="{Binding VoltageMagnitudeText, Mode=OneWay}"/><Run Text="     "/><Run Text="{Binding PhaseCAngleText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding FrequencyText, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Row="4" Margin="8,5,0,0">
+                                                        <Run Text="I L1       "/><Run Text="{Binding CurrentText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding PhaseAAngleText, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Row="5" Margin="8,5,0,0">
+                                                        <Run Text="I L2       "/><Run Text="{Binding CurrentText, Mode=OneWay}"/><Run Text="    "/><Run Text="{Binding PhaseBAngleText, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Row="6" Margin="8,5,0,0">
+                                                        <Run Text="I L3       "/><Run Text="{Binding CurrentText, Mode=OneWay}"/><Run Text="     "/><Run Text="{Binding PhaseCAngleText, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBox Grid.Row="7" Text="{Binding DurationSeconds, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" HorizontalContentAlignment="Center" Margin="50,2" />
+                                                </Grid>
+                                            </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource PanelShell}" Margin="0,0,8,0">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Detail View: Analog Out" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+
+                        <Grid DockPanel.Dock="Top" Margin="8,8,8,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="31" />
+                                <RowDefinition Height="31" />
+                                <RowDefinition Height="31" />
+                                <RowDefinition Height="31" />
+                                <RowDefinition Height="31" />
+                                <RowDefinition Height="31" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Selected" Style="{StaticResource LabelText}" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding SequenceStates}" SelectedItem="{Binding SelectedSequenceState, Mode=TwoWay}" DisplayMemberPath="Name" />
+                            <TextBlock Grid.Row="1" Text="Name" Style="{StaticResource LabelText}" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SelectedSequenceState.Name, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Grid.Row="2" Text="Duration" Style="{StaticResource LabelText}" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SelectedSequenceState.DurationSeconds, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" />
+                            <TextBlock Grid.Row="3" Text="I value" Style="{StaticResource LabelText}" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SelectedSequenceState.CurrentScale, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" />
+                            <TextBlock Grid.Row="4" Text="V scale" Style="{StaticResource LabelText}" />
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding SelectedSequenceState.VoltageScale, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" />
+                            <TextBlock Grid.Row="5" Text="Angle shift" Style="{StaticResource LabelText}" />
+                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding SelectedSequenceState.AngleShiftDegrees, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" />
+                        </Grid>
+
+                        <DataGrid ItemsSource="{Binding SequencePreviewChannels}" IsReadOnly="True" Margin="8,0,8,8">
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled}" Width="38" />
+                                <DataGridTextColumn Header="Signal" Binding="{Binding Name}" Width="82" />
+                                <DataGridTextColumn Header="Value" Binding="{Binding MagnitudeText, Mode=OneWay}" Width="96" />
+                                <DataGridTextColumn Header="Angle" Binding="{Binding AngleDegreesText, Mode=OneWay}" Width="92" />
+                                <DataGridTextColumn Header="Freq" Binding="{Binding FrequencyHzText, Mode=OneWay}" Width="92" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource PanelShell}" Margin="0,0,8,0">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Time Signal View: State Sequencer" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+                        <controls:StateTimelinePlot SequenceStates="{Binding SequenceStates}" Margin="8" />
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource PanelShell}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource PanelHeader}">
+                            <TextBlock Text="Phasor View: Selected State" Foreground="White" FontWeight="SemiBold" />
+                        </Border>
+                        <controls:PhasorPlot Channels="{Binding SequencePreviewChannels}" Margin="8" />
+                    </DockPanel>
+                </Border>
+            </Grid>
+
                     </Grid>
-                </DockPanel>
-            </Border>
-        </Grid>
 
         <Border Grid.Row="3" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
             <Grid Margin="12,0">

@@ -21,6 +21,21 @@ public sealed class SvStreamChoice
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }
 
+
+public sealed class RampSignalChoice
+{
+    public required string KeyCsv { get; init; }
+    public required string Name { get; init; }
+    public string Quantity { get; init; } = "Magnitude";
+    public string Unit { get; init; } = string.Empty;
+
+    public IReadOnlyList<string> Keys =>
+        KeyCsv.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    public bool AppliesTo(string channelKey) =>
+        Keys.Any(key => string.Equals(key, channelKey, StringComparison.OrdinalIgnoreCase));
+}
+
 public sealed class AdapterChoice
 {
     public required string Selector { get; init; }

@@ -10,14 +10,14 @@ The SV Publisher desktop app now includes a QuickCMC-style manual injection cons
    - `Line-Line` for V L1-L2, V L2-L3, and V L3-L1 voltage entry with phase current values.
    - `Symmetrical components` for V1/V2/V0 and I1/I2/I0 entry.
 3. Use presets from the toolbar or the table context menu.
-4. Run `Dry Start` for verification, or arm the NIC and press `Start Injection` for live Ethernet SV publishing.
+4. Press `Start Injection` for live Ethernet SV publishing.
 5. Press `Stop (F6)` for immediate stop.
 
 ## Manual table behavior
 
 Operator-entered magnitudes are treated as RMS phasor values. The publisher converts RMS setpoints to instantaneous peak samples when building the SV payload.
 
-The table supports live editing while the publisher is running. With `Auto apply RUN` enabled, magnitude, angle, frequency, and on/off changes are applied to the next generated SV frames. Stream identity, MAC, APPID, VLAN, and selected NIC remain configured through the SCL/config dialog and should be selected before starting the publisher.
+The table supports live editing while the publisher is running. Magnitude, angle, frequency, and on/off changes are always applied to the next generated SV frames. Stream identity, MAC, APPID, VLAN, and selected NIC remain configured through the SCL/config dialog and should be selected before starting the publisher.
 
 ## Presets
 

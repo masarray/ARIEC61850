@@ -26,11 +26,23 @@ public sealed class SignalChannelViewModel : ObservableObject
     public string Name
     {
         get => _name;
-        set => SetProperty(ref _name, value);
+        set
+        {
+            if (SetProperty(ref _name, value))
+                OnPropertyChanged(nameof(DisplayName));
+        }
     }
 
     public string Kind { get; }
     public string Unit { get; }
+
+    public string DisplayName => Name;
+
+    public string MagnitudeText => $"{Magnitude:0.000} {Unit}";
+
+    public string AngleDegreesText => $"{AngleDegrees:0.000} °";
+
+    public string FrequencyHzText => $"{FrequencyHz:0.000} Hz";
 
     public bool IsEnabled
     {
@@ -45,19 +57,31 @@ public sealed class SignalChannelViewModel : ObservableObject
     public double Magnitude
     {
         get => _magnitude;
-        set => SetProperty(ref _magnitude, value);
+        set
+        {
+            if (SetProperty(ref _magnitude, value))
+                OnPropertyChanged(nameof(MagnitudeText));
+        }
     }
 
     public double AngleDegrees
     {
         get => _angleDegrees;
-        set => SetProperty(ref _angleDegrees, value);
+        set
+        {
+            if (SetProperty(ref _angleDegrees, value))
+                OnPropertyChanged(nameof(AngleDegreesText));
+        }
     }
 
     public double FrequencyHz
     {
         get => _frequencyHz;
-        set => SetProperty(ref _frequencyHz, value);
+        set
+        {
+            if (SetProperty(ref _frequencyHz, value))
+                OnPropertyChanged(nameof(FrequencyHzText));
+        }
     }
 
     public SignalChannelSnapshot ToSnapshot()

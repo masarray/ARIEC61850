@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -31,6 +32,10 @@ public sealed class SvPublisherViewModel : ObservableObject
     private SvStreamChoice? _selectedStream;
     private AdapterChoice? _selectedAdapter;
     private SignalChannelViewModel? _selectedRampChannel;
+    private RampSignalChoice? _selectedRampSignalChoice;
+    private bool _isSyncingRampSignalChoice;
+    private RampStateViewModel? _selectedRampState;
+    private SequenceStateViewModel? _selectedSequenceState;
     private CancellationTokenSource? _publisherStop;
     private string _sclPath = string.Empty;
     private string _sclSummary = "Open an SCL file to resolve SV streams.";
@@ -85,6 +90,13 @@ public sealed class SvPublisherViewModel : ObservableObject
         ];
 
         ManualRows = new ObservableCollection<ManualOutputRowViewModel>();
+        RampPreviewChannels = CreatePreviewChannels();
+        SequencePreviewChannels = CreatePreviewChannels();
+        RampStates =
+        [
+            new RampStateViewModel("Ramp 1", "Ia", "I L1", "Magnitude", 1.000, 5.000, 0.200, 0.100, 21, 2.100),
+            new RampStateViewModel("Ramp 2", "Ia", "I L1", "Magnitude", 5.000, 4.000, -0.050, 0.100, 21, 2.100)
+        ];
 
         SequenceStates =
         [
@@ -93,7 +105,15 @@ public sealed class SvPublisherViewModel : ObservableObject
             new SequenceStateViewModel("Recovery", 1.000, 1.0, 1.0, 0, 50)
         ];
 
+        foreach (var rampState in RampStates)
+            AttachRampState(rampState);
+        foreach (var sequenceState in SequenceStates)
+            AttachSequenceState(sequenceState);
+
+        SelectedRampSignalChoice = RampSignalChoices.FirstOrDefault(choice => string.Equals(choice.KeyCsv, "Ia", StringComparison.OrdinalIgnoreCase));
         SelectedRampChannel = Channels.FirstOrDefault(c => c.Key == "Ia");
+        SelectedRampState = RampStates.FirstOrDefault();
+        SelectedSequenceState = SequenceStates.FirstOrDefault();
 
         OpenSclCommand = new AsyncRelayCommand(OpenSclAsync, () => !IsPublishing);
         RefreshAdaptersCommand = new RelayCommand(RefreshAdapters, () => !IsPublishing);
@@ -104,6 +124,9 @@ public sealed class SvPublisherViewModel : ObservableObject
         ApplyBalancedDefaultsCommand = new RelayCommand(ApplyBalancedDefaults);
         AddSequenceStateCommand = new RelayCommand(AddSequenceState, () => !IsPublishing);
         RemoveSequenceStateCommand = new RelayCommand(RemoveLastSequenceState, () => !IsPublishing && SequenceStates.Count > 0);
+        SelectSequenceStateCommand = new ParameterRelayCommand(parameter => SelectSequenceState(parameter as SequenceStateViewModel));
+        AddRampStateCommand = new RelayCommand(AddRampState, () => !IsPublishing);
+        RemoveRampStateCommand = new RelayCommand(RemoveSelectedRampState, () => !IsPublishing && RampStates.Count > 0);
         ApplyNominalCommand = new RelayCommand(ApplyNominalValues);
         ZeroOutputCommand = new RelayCommand(ZeroOutputs);
         EqualMagnitudesCommand = new RelayCommand(EqualMagnitudes);
@@ -127,12 +150,38 @@ public sealed class SvPublisherViewModel : ObservableObject
 
         ApplyChannelNaming();
         RebuildManualRowsFromChannels();
+        UpdateRampPreview();
+        UpdateSequencePreview();
         RefreshAdapters();
     }
 
     public ObservableCollection<SignalChannelViewModel> Channels { get; }
     public ObservableCollection<ManualOutputRowViewModel> ManualRows { get; }
+    public ObservableCollection<SignalChannelViewModel> RampPreviewChannels { get; }
+    public ObservableCollection<SignalChannelViewModel> SequencePreviewChannels { get; }
+    public ObservableCollection<RampStateViewModel> RampStates { get; }
     public ObservableCollection<SequenceStateViewModel> SequenceStates { get; }
+
+    public IReadOnlyList<RampSignalChoice> RampSignalChoices { get; } =
+    [
+        new RampSignalChoice { KeyCsv = "Va", Name = "V L1-E", Unit = "V" },
+        new RampSignalChoice { KeyCsv = "Vb", Name = "V L2-E", Unit = "V" },
+        new RampSignalChoice { KeyCsv = "Vc", Name = "V L3-E", Unit = "V" },
+        new RampSignalChoice { KeyCsv = "Ia", Name = "I L1", Unit = "A" },
+        new RampSignalChoice { KeyCsv = "Ib", Name = "I L2", Unit = "A" },
+        new RampSignalChoice { KeyCsv = "Ic", Name = "I L3", Unit = "A" },
+        new RampSignalChoice { KeyCsv = "Va,Vb,Vc", Name = "V L1-E, L2-E, L3-E", Unit = "V" },
+        new RampSignalChoice { KeyCsv = "Ia,Ib,Ic", Name = "I L1, L2, L3", Unit = "A" }
+    ];
+
+    public IReadOnlyList<string> RampQuantities { get; } =
+    [
+        "Magnitude"
+    ];
+
+    public double RampTotalTimeSeconds => RampStates.Sum(state => Math.Max(0.001, state.TimeSeconds));
+
+    public string RampTotalTimeText => $"{RampTotalTimeSeconds:0.000} s";
     public ObservableCollection<SvStreamChoice> Streams { get; } = new();
     public ObservableCollection<AdapterChoice> Adapters { get; } = new();
 
@@ -159,6 +208,9 @@ public sealed class SvPublisherViewModel : ObservableObject
     public ICommand ApplyBalancedDefaultsCommand { get; }
     public ICommand AddSequenceStateCommand { get; }
     public ICommand RemoveSequenceStateCommand { get; }
+    public ICommand SelectSequenceStateCommand { get; }
+    public ICommand AddRampStateCommand { get; }
+    public ICommand RemoveRampStateCommand { get; }
     public ICommand ApplyNominalCommand { get; }
     public ICommand ZeroOutputCommand { get; }
     public ICommand EqualMagnitudesCommand { get; }
@@ -243,7 +295,64 @@ public sealed class SvPublisherViewModel : ObservableObject
     public SignalChannelViewModel? SelectedRampChannel
     {
         get => _selectedRampChannel;
-        set => SetProperty(ref _selectedRampChannel, value);
+        set
+        {
+            if (!SetProperty(ref _selectedRampChannel, value) || value is null || SelectedRampState is null)
+                return;
+
+            if (_isSyncingRampSignalChoice)
+                return;
+
+            var choice = RampSignalChoices.FirstOrDefault(candidate => string.Equals(candidate.KeyCsv, value.Key, StringComparison.OrdinalIgnoreCase));
+            if (choice is not null)
+                SelectedRampSignalChoice = choice;
+        }
+    }
+
+    public RampSignalChoice? SelectedRampSignalChoice
+    {
+        get => _selectedRampSignalChoice;
+        set
+        {
+            if (!SetProperty(ref _selectedRampSignalChoice, value) || value is null)
+                return;
+
+            ApplyRampSignalChoiceToSelectedState(value, resetFromBase: true);
+        }
+    }
+
+    public RampStateViewModel? SelectedRampState
+    {
+        get => _selectedRampState;
+        set
+        {
+            if (!SetProperty(ref _selectedRampState, value))
+                return;
+
+            if (value is not null)
+            {
+                SyncRampSignalChoiceFromState(value);
+                RampTargetMagnitude = value.To;
+                RampDurationSeconds = value.TimeSeconds;
+            }
+
+            UpdateRampPreview();
+        }
+    }
+
+    public SequenceStateViewModel? SelectedSequenceState
+    {
+        get => _selectedSequenceState;
+        set
+        {
+            if (!SetProperty(ref _selectedSequenceState, value))
+                return;
+
+            foreach (var state in SequenceStates)
+                state.IsSelected = ReferenceEquals(state, value);
+
+            UpdateSequencePreview();
+        }
     }
 
     public string StreamId
@@ -409,8 +518,39 @@ public sealed class SvPublisherViewModel : ObservableObject
     public InjectionMode Mode
     {
         get => _mode;
-        set => SetProperty(ref _mode, value);
+        set
+        {
+            if (!SetProperty(ref _mode, value))
+                return;
+
+            OnPropertyChanged(nameof(IsManualWorkspaceVisible));
+            OnPropertyChanged(nameof(IsRampWorkspaceVisible));
+            OnPropertyChanged(nameof(IsSequencerWorkspaceVisible));
+            OnPropertyChanged(nameof(WorkspaceTitle));
+            OnPropertyChanged(nameof(WorkspaceSubtitle));
+            AppendEvent($"Workspace changed to {value}.");
+        }
     }
+
+    public bool IsManualWorkspaceVisible => Mode == InjectionMode.Manual;
+
+    public bool IsRampWorkspaceVisible => Mode == InjectionMode.Ramp;
+
+    public bool IsSequencerWorkspaceVisible => Mode == InjectionMode.Sequencer;
+
+    public string WorkspaceTitle => Mode switch
+    {
+        InjectionMode.Ramp => "Ramping",
+        InjectionMode.Sequencer => "State Sequencer",
+        _ => "Quick Manual"
+    };
+
+    public string WorkspaceSubtitle => Mode switch
+    {
+        InjectionMode.Ramp => "Step ramp profile, analog-output detail, and time-signal preview.",
+        InjectionMode.Sequencer => "Horizontal state table with selected-state analog detail, phasor, and time-signal preview.",
+        _ => "Fast manual SV injection with live numeric commit and unit formatting."
+    };
 
     public string ManualSetMode
     {
@@ -431,13 +571,28 @@ public sealed class SvPublisherViewModel : ObservableObject
     public double RampTargetMagnitude
     {
         get => _rampTargetMagnitude;
-        set => SetProperty(ref _rampTargetMagnitude, value);
+        set
+        {
+            if (SetProperty(ref _rampTargetMagnitude, value) && SelectedRampState is not null)
+            {
+                SelectedRampState.To = value;
+                UpdateRampPreview();
+            }
+        }
     }
 
     public double RampDurationSeconds
     {
         get => _rampDurationSeconds;
-        set => SetProperty(ref _rampDurationSeconds, value);
+        set
+        {
+            var coerced = Math.Max(0.001, value);
+            if (SetProperty(ref _rampDurationSeconds, coerced) && SelectedRampState is not null)
+            {
+                SelectedRampState.TimeSeconds = coerced;
+                UpdateRampPreview();
+            }
+        }
     }
 
     public int DataSetEntryCount
@@ -456,6 +611,195 @@ public sealed class SvPublisherViewModel : ObservableObject
     {
         get => _payloadBytes;
         private set => SetProperty(ref _payloadBytes, value);
+    }
+
+
+    private static ObservableCollection<SignalChannelViewModel> CreatePreviewChannels()
+        =>
+        [
+            new SignalChannelViewModel("Va", "V L1-E", "V", "V", NominalVoltageLn, 0, 50),
+            new SignalChannelViewModel("Vb", "V L2-E", "V", "V", NominalVoltageLn, -120, 50),
+            new SignalChannelViewModel("Vc", "V L3-E", "V", "V", NominalVoltageLn, 120, 50),
+            new SignalChannelViewModel("Ia", "I L1", "I", "A", NominalCurrent, 0, 50),
+            new SignalChannelViewModel("Ib", "I L2", "I", "A", NominalCurrent, -120, 50),
+            new SignalChannelViewModel("Ic", "I L3", "I", "A", NominalCurrent, 120, 50)
+        ];
+
+    private void AttachRampState(RampStateViewModel state)
+        => state.PropertyChanged += RampState_PropertyChanged;
+
+    private void AttachSequenceState(SequenceStateViewModel state)
+        => state.PropertyChanged += SequenceState_PropertyChanged;
+
+    private void DetachRampState(RampStateViewModel state)
+        => state.PropertyChanged -= RampState_PropertyChanged;
+
+    private void DetachSequenceState(SequenceStateViewModel state)
+        => state.PropertyChanged -= SequenceState_PropertyChanged;
+
+    private void RampState_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(RampTotalTimeSeconds));
+        OnPropertyChanged(nameof(RampTotalTimeText));
+
+        if (ReferenceEquals(sender, SelectedRampState))
+        {
+            if (SelectedRampState is not null)
+            {
+                if (string.Equals(e.PropertyName, nameof(RampStateViewModel.SignalKey), StringComparison.Ordinal))
+                    SyncRampSignalChoiceFromState(SelectedRampState);
+
+                _rampTargetMagnitude = SelectedRampState.To;
+                _rampDurationSeconds = SelectedRampState.TimeSeconds;
+                OnPropertyChanged(nameof(RampTargetMagnitude));
+                OnPropertyChanged(nameof(RampDurationSeconds));
+            }
+
+            UpdateRampPreview();
+        }
+    }
+
+    private void SequenceState_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (ReferenceEquals(sender, SelectedSequenceState))
+            UpdateSequencePreview();
+    }
+
+    private void SelectSequenceState(SequenceStateViewModel? state)
+    {
+        if (state is not null)
+            SelectedSequenceState = state;
+    }
+
+    private void SyncRampSignalChoiceFromState(RampStateViewModel state)
+    {
+        var choice = RampSignalChoices.FirstOrDefault(candidate => string.Equals(candidate.KeyCsv, state.SignalKey, StringComparison.OrdinalIgnoreCase));
+        if (choice is null)
+            return;
+
+        _isSyncingRampSignalChoice = true;
+        try
+        {
+            _selectedRampSignalChoice = choice;
+            OnPropertyChanged(nameof(SelectedRampSignalChoice));
+            _selectedRampChannel = Channels.FirstOrDefault(channel => string.Equals(channel.Key, choice.Keys.FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
+            OnPropertyChanged(nameof(SelectedRampChannel));
+        }
+        finally
+        {
+            _isSyncingRampSignalChoice = false;
+        }
+    }
+
+    private void ApplyRampSignalChoiceToSelectedState(RampSignalChoice choice, bool resetFromBase)
+    {
+        if (SelectedRampState is not { } state)
+            return;
+
+        state.SignalKey = choice.KeyCsv;
+        state.SignalName = choice.Name;
+        state.Quantity = choice.Quantity;
+
+        _isSyncingRampSignalChoice = true;
+        try
+        {
+            SelectedRampChannel = Channels.FirstOrDefault(channel => string.Equals(channel.Key, choice.Keys.FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            _isSyncingRampSignalChoice = false;
+        }
+
+        if (resetFromBase && ResolveFirstRampBaseChannel(choice) is { } baseChannel)
+        {
+            state.From = baseChannel.Magnitude;
+            if (Math.Abs(state.To - state.From) < 0.000001)
+            {
+                var bump = baseChannel.Kind == "I" ? 1.0 : 10.0;
+                state.To = state.From + bump;
+            }
+        }
+
+        RampTargetMagnitude = state.To;
+        RampDurationSeconds = state.TimeSeconds;
+        UpdateRampPreview();
+    }
+
+    private SignalChannelViewModel? ResolveFirstRampBaseChannel(RampSignalChoice choice)
+        => choice.Keys
+            .Select(key => Channels.FirstOrDefault(channel => string.Equals(channel.Key, key, StringComparison.OrdinalIgnoreCase)))
+            .FirstOrDefault(channel => channel is not null);
+
+    private void UpdateRampPreview()
+    {
+        if (RampPreviewChannels.Count == 0)
+            return;
+
+        CopyManualPreview(Channels, RampPreviewChannels);
+
+        if (SelectedRampState is { } state)
+        {
+            foreach (var channel in RampPreviewChannels.Where(c => state.AppliesToChannel(c.Key)))
+            {
+                channel.Magnitude = Math.Max(0, state.To);
+                channel.IsEnabled = state.To > 0;
+            }
+        }
+    }
+
+    private void UpdateSequencePreview()
+    {
+        if (SequencePreviewChannels.Count == 0)
+            return;
+
+        var state = SelectedSequenceState;
+        var voltage = state is null ? NominalVoltageLn : NominalVoltageLn * Math.Max(0, state.VoltageScale);
+        var current = state is null ? NominalCurrent : Math.Max(0, state.CurrentScale);
+        var shift = state?.AngleShiftDegrees ?? 0;
+        var frequency = state?.FrequencyHz ?? NominalFrequencyHz;
+
+        SetPreviewChannel(SequencePreviewChannels, "Va", DisplaySignalName("Va", "V L1-E"), voltage, shift, voltage > 0, frequency);
+        SetPreviewChannel(SequencePreviewChannels, "Vb", DisplaySignalName("Vb", "V L2-E"), voltage, shift - 120, voltage > 0, frequency);
+        SetPreviewChannel(SequencePreviewChannels, "Vc", DisplaySignalName("Vc", "V L3-E"), voltage, shift + 120, voltage > 0, frequency);
+        SetPreviewChannel(SequencePreviewChannels, "Ia", DisplaySignalName("Ia", "I L1"), current, shift, current > 0, frequency);
+        SetPreviewChannel(SequencePreviewChannels, "Ib", DisplaySignalName("Ib", "I L2"), current, shift - 120, current > 0, frequency);
+        SetPreviewChannel(SequencePreviewChannels, "Ic", DisplaySignalName("Ic", "I L3"), current, shift + 120, current > 0, frequency);
+    }
+
+    private static void CopyManualPreview(IEnumerable<SignalChannelViewModel> source, ObservableCollection<SignalChannelViewModel> target)
+    {
+        foreach (var destination in target)
+        {
+            var sourceChannel = source.FirstOrDefault(c => string.Equals(c.Key, destination.Key, StringComparison.OrdinalIgnoreCase));
+            if (sourceChannel is null)
+                continue;
+
+            destination.Name = sourceChannel.Name;
+            destination.Magnitude = sourceChannel.Magnitude;
+            destination.AngleDegrees = sourceChannel.AngleDegrees;
+            destination.FrequencyHz = sourceChannel.FrequencyHz;
+            destination.IsEnabled = sourceChannel.IsEnabled;
+        }
+    }
+
+    private static void SetPreviewChannel(
+        ObservableCollection<SignalChannelViewModel> channels,
+        string key,
+        string name,
+        double magnitude,
+        double angle,
+        bool enabled,
+        double frequency)
+    {
+        var channel = channels.FirstOrDefault(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (channel is null)
+            return;
+
+        channel.Name = name;
+        channel.Magnitude = magnitude;
+        channel.AngleDegrees = NormalizeDegrees(angle);
+        channel.FrequencyHz = frequency;
+        channel.IsEnabled = enabled;
     }
 
     private async Task OpenSclAsync()
@@ -560,9 +904,9 @@ public sealed class SvPublisherViewModel : ObservableObject
             _publisherStop = stop;
             IsPublishing = true;
             StatusText = live ? "START INJECTION - live NIC." : "START INJECTION - dry run.";
-            LiveApplyText = AutoApplyWhileRunning
-                ? "RUN: table edits are applied to the next SV frames."
-                : "RUN: auto apply is paused.";
+            AutoApplyWhileRunning = true;
+            Continuous = true;
+            LiveApplyText = "RUN: table edits are applied to the next SV frames.";
             AppendEvent(live ? "Start Injection: live NIC publisher started." : "Start Injection: dry-run publisher started.");
 
             await Task.Run(async () => await PublishLoopAsync(live, stop.Token).ConfigureAwait(false)).ConfigureAwait(true);
@@ -597,14 +941,13 @@ public sealed class SvPublisherViewModel : ObservableObject
         var appId = ParseAppId(AppIdText);
         var vlan = ResolveVlanTag();
         var sampleRateHz = SampleRateHz;
-        var frameLimit = Continuous ? (long?)null : Math.Max(1, (long)Math.Round(sampleRateHz * DurationSeconds));
+        var runDurationSeconds = Mode == InjectionMode.Ramp ? RampTotalTimeSeconds : DurationSeconds;
+        var frameLimit = Continuous ? (long?)null : Math.Max(1, (long)Math.Round(sampleRateHz * runDurationSeconds));
         var startedTicks = Stopwatch.GetTimestamp();
         var startedAt = DateTimeOffset.UtcNow;
         var nextUiTicks = startedTicks;
-        var rampStartMagnitude = SelectedRampChannel?.Magnitude ?? 0;
-        var rampSignalKey = SelectedRampChannel?.Key ?? string.Empty;
         var sampleCounterWrap = ResolveSampleCounterWrap(selectedStream, sampleRateHz, NominalFrequencyHz);
-        var frozenChannels = CaptureEffectiveChannels(0, rampSignalKey, rampStartMagnitude);
+        var frozenChannels = CaptureEffectiveChannels(0);
         var oscillatorStates = frozenChannels.ToDictionary(
             x => x.Key,
             x => new OscillatorState
@@ -634,7 +977,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                 var timestamp = startedAt.AddTicks((long)Math.Round(sent * TimeSpan.TicksPerSecond / sampleRateHz));
                 var sampleTime = new Iec61850UtcTime(timestamp, Quality: 0);
                 var channels = AutoApplyWhileRunning
-                    ? CaptureEffectiveChannels(elapsedSeconds, rampSignalKey, rampStartMagnitude)
+                    ? CaptureEffectiveChannels(elapsedSeconds)
                     : frozenChannels;
                 var phasedChannels = ApplyOscillatorPhases(channels, oscillatorStates, sampleRateHz);
                 var payload = BuildSamplePayload(selectedStream, sampleTime, phasedChannels);
@@ -675,7 +1018,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                     var elapsed = Stopwatch.GetElapsedTime(startedTicks);
                     var rate = sent / Math.Max(elapsed.TotalSeconds, 0.001);
                     var progress = frameLimit.HasValue ? $"{sent}/{frameLimit.Value}" : sent.ToString(CultureInfo.InvariantCulture);
-                    var message = $"{(live ? "LIVE" : "DRY")} frames={progress} rate={rate:0.0} fps smpCnt={sampleCount} payload={payload.Length}B frame={lastFrameBytes}B autoApply={(AutoApplyWhileRunning ? "ON" : "OFF")}";
+                    var message = $"{(live ? "LIVE" : "DRY")} frames={progress} rate={rate:0.0} fps smpCnt={sampleCount} payload={payload.Length}B frame={lastFrameBytes}B autoApply=ON";
                     Dispatch(() =>
                     {
                         PayloadBytes = payload.Length;
@@ -781,33 +1124,29 @@ public sealed class SvPublisherViewModel : ObservableObject
             _ => MmsDataValue.Integer(0)
         };
 
-    private IReadOnlyDictionary<string, EffectiveChannel> CaptureEffectiveChannels(
-        double elapsedSeconds,
-        string rampSignalKey,
-        double rampStartMagnitude)
+    private IReadOnlyDictionary<string, EffectiveChannel> CaptureEffectiveChannels(double elapsedSeconds)
     {
         var channels = new Dictionary<string, EffectiveChannel>(StringComparer.OrdinalIgnoreCase);
         foreach (var channel in Channels)
-            channels[channel.Key] = ResolveEffectiveChannel(channel, elapsedSeconds, rampSignalKey, rampStartMagnitude);
+            channels[channel.Key] = ResolveEffectiveChannel(channel, elapsedSeconds);
 
         return channels;
     }
 
     private EffectiveChannel ResolveEffectiveChannel(
         SignalChannelViewModel channel,
-        double elapsedSeconds,
-        string rampSignalKey,
-        double rampStartMagnitude)
+        double elapsedSeconds)
     {
         var magnitude = channel.Magnitude;
         var angle = channel.AngleDegrees;
         var frequency = channel.FrequencyHz >= 0 ? channel.FrequencyHz : NominalFrequencyHz;
 
-        if (Mode == InjectionMode.Ramp && string.Equals(channel.Key, rampSignalKey, StringComparison.OrdinalIgnoreCase))
+        if (Mode == InjectionMode.Ramp && ResolveRampState(elapsedSeconds) is { State: var ramp, LocalElapsedSeconds: var localElapsed } &&
+            ramp.AppliesToChannel(channel.Key))
         {
-            var duration = Math.Max(0.001, RampDurationSeconds);
-            var position = Math.Clamp(elapsedSeconds / duration, 0.0, 1.0);
-            magnitude = rampStartMagnitude + ((RampTargetMagnitude - rampStartMagnitude) * position);
+            var duration = Math.Max(0.001, ramp.TimeSeconds);
+            var position = Math.Clamp(localElapsed / duration, 0.0, 1.0);
+            magnitude = ramp.From + ((ramp.To - ramp.From) * position);
         }
         else if (Mode == InjectionMode.Sequencer && ResolveSequenceState(elapsedSeconds) is { } state)
         {
@@ -817,6 +1156,27 @@ public sealed class SvPublisherViewModel : ObservableObject
         }
 
         return new EffectiveChannel(channel.Kind, channel.IsEnabled, magnitude, angle, frequency, angle * Math.PI / 180.0);
+    }
+
+    private (RampStateViewModel State, double LocalElapsedSeconds)? ResolveRampState(double elapsedSeconds)
+    {
+        var states = RampStates.Where(s => s.TimeSeconds > 0).ToArray();
+        if (states.Length == 0)
+            return null;
+
+        var total = states.Sum(s => Math.Max(0.001, s.TimeSeconds));
+        var cursor = Math.Min(Math.Max(0, elapsedSeconds), Math.Max(0, total - 0.000001));
+
+        foreach (var state in states)
+        {
+            var duration = Math.Max(0.001, state.TimeSeconds);
+            if (cursor <= duration)
+                return (state, cursor);
+
+            cursor -= duration;
+        }
+
+        return (states[^1], Math.Max(0.001, states[^1].TimeSeconds));
     }
 
     private SequenceStateViewModel? ResolveSequenceState(double elapsedSeconds)
@@ -1169,6 +1529,8 @@ public sealed class SvPublisherViewModel : ObservableObject
         else
             ProjectDirectRowsToChannels();
 
+        UpdateRampPreview();
+
         LiveApplyText = IsPublishing
             ? $"RUN auto-applied: {reason}"
             : $"Ready: {reason}";
@@ -1251,6 +1613,9 @@ public sealed class SvPublisherViewModel : ObservableObject
     {
         foreach (var channel in Channels)
             channel.Name = DisplaySignalName(channel.Key, channel.Name);
+
+        UpdateRampPreview();
+        UpdateSequencePreview();
     }
 
     private string DisplaySignalName(string key, string fallback)
@@ -1903,9 +2268,56 @@ public sealed class SvPublisherViewModel : ObservableObject
         return Math.Round(degrees, 6);
     }
 
+    private void AddRampState()
+    {
+        var choice = SelectedRampSignalChoice ?? RampSignalChoices.FirstOrDefault(choice => string.Equals(choice.KeyCsv, "Ia", StringComparison.OrdinalIgnoreCase)) ?? RampSignalChoices.First();
+        var channel = ResolveFirstRampBaseChannel(choice) ?? Channels.FirstOrDefault(c => c.Key == "Ia") ?? Channels.First();
+        var from = channel.Magnitude;
+        var to = Math.Max(0, from + (channel.Kind == "I" ? 1.0 : 10.0));
+        var state = new RampStateViewModel(
+            $"Ramp {RampStates.Count + 1}",
+            choice.KeyCsv,
+            choice.Name,
+            choice.Quantity,
+            from,
+            to,
+            (to - from) / 20.0,
+            0.100,
+            21,
+            Math.Max(0.001, RampDurationSeconds));
+
+        AttachRampState(state);
+        RampStates.Add(state);
+        SelectedRampState = state;
+        OnPropertyChanged(nameof(RampTotalTimeSeconds));
+        OnPropertyChanged(nameof(RampTotalTimeText));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void RemoveSelectedRampState()
+    {
+        if (RampStates.Count == 0)
+            return;
+
+        var index = SelectedRampState is null ? RampStates.Count - 1 : RampStates.IndexOf(SelectedRampState);
+        if (index < 0)
+            index = RampStates.Count - 1;
+
+        var removed = RampStates[index];
+        DetachRampState(removed);
+        RampStates.RemoveAt(index);
+        SelectedRampState = RampStates.Count == 0 ? null : RampStates[Math.Clamp(index, 0, RampStates.Count - 1)];
+        OnPropertyChanged(nameof(RampTotalTimeSeconds));
+        OnPropertyChanged(nameof(RampTotalTimeText));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
     private void AddSequenceState()
     {
-        SequenceStates.Add(new SequenceStateViewModel($"State {SequenceStates.Count + 1}", 0.500, 1.0, 1.0, 0, NominalFrequencyHz));
+        var state = new SequenceStateViewModel($"State {SequenceStates.Count + 1}", 0.500, 1.0, 1.0, 0, NominalFrequencyHz);
+        AttachSequenceState(state);
+        SequenceStates.Add(state);
+        SelectedSequenceState = state;
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -1914,7 +2326,13 @@ public sealed class SvPublisherViewModel : ObservableObject
         if (SequenceStates.Count == 0)
             return;
 
-        SequenceStates.RemoveAt(SequenceStates.Count - 1);
+        var index = SelectedSequenceState is null ? SequenceStates.Count - 1 : SequenceStates.IndexOf(SelectedSequenceState);
+        if (index < 0)
+            index = SequenceStates.Count - 1;
+        var removed = SequenceStates[index];
+        DetachSequenceState(removed);
+        SequenceStates.RemoveAt(index);
+        SelectedSequenceState = SequenceStates.Count == 0 ? null : SequenceStates[Math.Clamp(index, 0, SequenceStates.Count - 1)];
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -1941,7 +2359,7 @@ public sealed class SvPublisherViewModel : ObservableObject
             ManualSetMode = ManualSetMode,
             AutoApplyWhileRunning = AutoApplyWhileRunning,
             LinkFrequencies = LinkFrequencies,
-            RampSignalKey = SelectedRampChannel?.Key ?? string.Empty,
+            RampSignalKey = SelectedRampSignalChoice?.KeyCsv ?? SelectedRampState?.SignalKey ?? string.Empty,
             RampTargetMagnitude = RampTargetMagnitude,
             RampDurationSeconds = RampDurationSeconds,
             Channels = Channels.Select(c => c.ToSnapshot()).ToArray(),

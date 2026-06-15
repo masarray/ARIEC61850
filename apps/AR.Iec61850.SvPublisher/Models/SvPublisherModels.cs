@@ -34,6 +34,7 @@ public sealed class SignalChannelSnapshot
     public bool IsEnabled { get; init; }
     public double Magnitude { get; init; }
     public double AngleDegrees { get; init; }
+    public double FrequencyHz { get; init; }
 }
 
 public sealed class SequenceStateSnapshot
@@ -65,6 +66,9 @@ public sealed class SvPublisherConfigSnapshot
     public double DurationSeconds { get; init; }
     public bool Continuous { get; init; }
     public InjectionMode Mode { get; init; }
+    public string ManualSetMode { get; init; } = "Direct";
+    public bool AutoApplyWhileRunning { get; init; } = true;
+    public bool LinkFrequencies { get; init; } = true;
     public string RampSignalKey { get; init; } = string.Empty;
     public double RampTargetMagnitude { get; init; }
     public double RampDurationSeconds { get; init; }

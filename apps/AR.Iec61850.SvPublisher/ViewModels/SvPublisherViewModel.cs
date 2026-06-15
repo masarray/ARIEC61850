@@ -1,8 +1,9 @@
-using System.Buffers.Binary;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Numerics;
+using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
@@ -19,6 +20,13 @@ namespace AR.Iec61850.SvPublisher.ViewModels;
 
 public sealed class SvPublisherViewModel : ObservableObject
 {
+    private const string DirectSetMode = "Direct";
+    private const string LineLineSetMode = "Line-Line";
+    private const string SymmetricalSetMode = "Symmetrical components";
+    private const double NominalVoltageLn = 57.735;
+    private const double NominalVoltageLl = 100.0;
+    private const double NominalCurrent = 1.0;
+
     private readonly List<string> _eventLines = new();
     private SvStreamChoice? _selectedStream;
     private AdapterChoice? _selectedAdapter;
@@ -29,6 +37,7 @@ public sealed class SvPublisherViewModel : ObservableObject
     private string _statusText = "Idle";
     private string _publishText = "No active publisher.";
     private string _evidenceText = string.Empty;
+    private string _liveApplyText = "Auto apply ready.";
     private string _streamId = string.Empty;
     private string _streamControlBlock = string.Empty;
     private string _dataSetReference = string.Empty;
@@ -43,10 +52,17 @@ public sealed class SvPublisherViewModel : ObservableObject
     private double _currentDlsb = 0.001;
     private double _voltageDlsb = 0.01;
     private double _durationSeconds = 1;
-    private bool _continuous;
+    private bool _continuous = true;
     private bool _loopSequence = true;
     private bool _isLiveArmed;
     private bool _isPublishing;
+    private bool _autoApplyWhileRunning = true;
+    private bool _linkFrequencies = true;
+    private bool _isUpdatingManualRows;
+    private ManualOutputRowViewModel? _contextManualRow;
+    private string _contextColumnHeader = string.Empty;
+    private string _signalNamingScheme = "L1L2L3E";
+    private string _manualSetMode = DirectSetMode;
     private InjectionMode _mode;
     private double _rampTargetMagnitude = 5;
     private double _rampDurationSeconds = 1;
@@ -58,15 +74,17 @@ public sealed class SvPublisherViewModel : ObservableObject
     {
         Channels =
         [
-            new SignalChannelViewModel("Ia", "Ia", "I", "A", 1.000, 0),
-            new SignalChannelViewModel("Ib", "Ib", "I", "A", 1.000, -120),
-            new SignalChannelViewModel("Ic", "Ic", "I", "A", 1.000, 120),
-            new SignalChannelViewModel("In", "In", "I", "A", 0.000, 0) { IsEnabled = false },
-            new SignalChannelViewModel("Va", "Va", "V", "V", 57.735, 0),
-            new SignalChannelViewModel("Vb", "Vb", "V", "V", 57.735, -120),
-            new SignalChannelViewModel("Vc", "Vc", "V", "V", 57.735, 120),
-            new SignalChannelViewModel("Vn", "Vn", "V", "V", 0.000, 0) { IsEnabled = false }
+            new SignalChannelViewModel("Ia", "I L1", "I", "A", NominalCurrent, 0, _nominalFrequencyHz),
+            new SignalChannelViewModel("Ib", "I L2", "I", "A", NominalCurrent, -120, _nominalFrequencyHz),
+            new SignalChannelViewModel("Ic", "I L3", "I", "A", NominalCurrent, 120, _nominalFrequencyHz),
+            new SignalChannelViewModel("In", "I N", "I", "A", 0.000, 0, _nominalFrequencyHz) { IsEnabled = false },
+            new SignalChannelViewModel("Va", "V L1-E", "V", "V", NominalVoltageLn, 0, _nominalFrequencyHz),
+            new SignalChannelViewModel("Vb", "V L2-E", "V", "V", NominalVoltageLn, -120, _nominalFrequencyHz),
+            new SignalChannelViewModel("Vc", "V L3-E", "V", "V", NominalVoltageLn, 120, _nominalFrequencyHz),
+            new SignalChannelViewModel("Vn", "V N", "V", "V", 0.000, 0, _nominalFrequencyHz) { IsEnabled = false }
         ];
+
+        ManualRows = new ObservableCollection<ManualOutputRowViewModel>();
 
         SequenceStates =
         [
@@ -83,17 +101,47 @@ public sealed class SvPublisherViewModel : ObservableObject
         RunDryCommand = new AsyncRelayCommand(() => RunPublishAsync(live: false), () => !IsPublishing);
         RunLiveCommand = new AsyncRelayCommand(() => RunPublishAsync(live: true), () => !IsPublishing);
         StopCommand = new RelayCommand(StopPublisher, () => IsPublishing);
-        ApplyBalancedDefaultsCommand = new RelayCommand(ApplyBalancedDefaults, () => !IsPublishing);
+        ApplyBalancedDefaultsCommand = new RelayCommand(ApplyBalancedDefaults);
         AddSequenceStateCommand = new RelayCommand(AddSequenceState, () => !IsPublishing);
         RemoveSequenceStateCommand = new RelayCommand(RemoveLastSequenceState, () => !IsPublishing && SequenceStates.Count > 0);
+        ApplyNominalCommand = new RelayCommand(ApplyNominalValues);
+        ZeroOutputCommand = new RelayCommand(ZeroOutputs);
+        EqualMagnitudesCommand = new RelayCommand(EqualMagnitudes);
+        HundredPercentLoadCommand = new RelayCommand(ApplyHundredPercentLoad);
+        FiftyPercentLoadCommand = new RelayCommand(ApplyFiftyPercentLoad);
+        UnloadCommand = new RelayCommand(ApplyUnload);
+        BalanceAnglesCommand = new RelayCommand(BalanceAngles);
+        NominalValueFromContextCommand = new RelayCommand(NominalValueFromContext);
+        ZeroFromContextCommand = new RelayCommand(ZeroFromContext);
+        EqualMagnitudesFromContextCommand = new RelayCommand(EqualMagnitudesFromContext);
+        LineAngleFromContextCommand = new RelayCommand(LineAngleFromContext);
+        BalanceAnglesFromContextCommand = new RelayCommand(BalanceAnglesFromContext);
+        ReverseRotationFromContextCommand = new RelayCommand(ReverseRotationFromContext);
+        NominalFrequencyFromContextCommand = new RelayCommand(NominalFrequencyFromContext);
+        DcFrequencyFromContextCommand = new RelayCommand(DcFrequencyFromContext);
+        EqualFrequenciesFromContextCommand = new RelayCommand(EqualFrequenciesFromContext);
+        ReverseRotationCommand = new RelayCommand(ReverseRotation);
+        SetSignalNamingCommand = new ParameterRelayCommand(parameter => ApplySignalNaming(parameter?.ToString() ?? "L1L2L3E"));
+        CopyTableCommand = new RelayCommand(CopyManualTable);
+        PasteTableCommand = new RelayCommand(PasteManualTable);
 
+        ApplyChannelNaming();
+        RebuildManualRowsFromChannels();
         RefreshAdapters();
     }
 
     public ObservableCollection<SignalChannelViewModel> Channels { get; }
+    public ObservableCollection<ManualOutputRowViewModel> ManualRows { get; }
     public ObservableCollection<SequenceStateViewModel> SequenceStates { get; }
     public ObservableCollection<SvStreamChoice> Streams { get; } = new();
     public ObservableCollection<AdapterChoice> Adapters { get; } = new();
+
+    public IReadOnlyList<string> ManualSetModes { get; } =
+    [
+        DirectSetMode,
+        LineLineSetMode,
+        SymmetricalSetMode
+    ];
 
     public IReadOnlyList<InjectionMode> Modes { get; } =
     [
@@ -111,6 +159,26 @@ public sealed class SvPublisherViewModel : ObservableObject
     public ICommand ApplyBalancedDefaultsCommand { get; }
     public ICommand AddSequenceStateCommand { get; }
     public ICommand RemoveSequenceStateCommand { get; }
+    public ICommand ApplyNominalCommand { get; }
+    public ICommand ZeroOutputCommand { get; }
+    public ICommand EqualMagnitudesCommand { get; }
+    public ICommand HundredPercentLoadCommand { get; }
+    public ICommand FiftyPercentLoadCommand { get; }
+    public ICommand UnloadCommand { get; }
+    public ICommand BalanceAnglesCommand { get; }
+    public ICommand NominalValueFromContextCommand { get; }
+    public ICommand ZeroFromContextCommand { get; }
+    public ICommand EqualMagnitudesFromContextCommand { get; }
+    public ICommand LineAngleFromContextCommand { get; }
+    public ICommand BalanceAnglesFromContextCommand { get; }
+    public ICommand ReverseRotationFromContextCommand { get; }
+    public ICommand NominalFrequencyFromContextCommand { get; }
+    public ICommand DcFrequencyFromContextCommand { get; }
+    public ICommand EqualFrequenciesFromContextCommand { get; }
+    public ICommand ReverseRotationCommand { get; }
+    public ICommand SetSignalNamingCommand { get; }
+    public ICommand CopyTableCommand { get; }
+    public ICommand PasteTableCommand { get; }
 
     public string SclPath
     {
@@ -140,6 +208,12 @@ public sealed class SvPublisherViewModel : ObservableObject
     {
         get => _evidenceText;
         private set => SetProperty(ref _evidenceText, value);
+    }
+
+    public string LiveApplyText
+    {
+        get => _liveApplyText;
+        private set => SetProperty(ref _liveApplyText, value);
     }
 
     public SvStreamChoice? SelectedStream
@@ -235,7 +309,14 @@ public sealed class SvPublisherViewModel : ObservableObject
     public double NominalFrequencyHz
     {
         get => _nominalFrequencyHz;
-        set => SetProperty(ref _nominalFrequencyHz, value);
+        set
+        {
+            if (!SetProperty(ref _nominalFrequencyHz, value))
+                return;
+
+            if (LinkFrequencies)
+                SetAllManualFrequencies(value);
+        }
     }
 
     public double CurrentDlsb
@@ -274,6 +355,29 @@ public sealed class SvPublisherViewModel : ObservableObject
         set => SetProperty(ref _isLiveArmed, value);
     }
 
+    public bool AutoApplyWhileRunning
+    {
+        get => _autoApplyWhileRunning;
+        set
+        {
+            if (SetProperty(ref _autoApplyWhileRunning, value))
+                LiveApplyText = value ? "Auto apply ready." : "Auto apply paused. Edits remain visible but publisher keeps previous setpoints.";
+        }
+    }
+
+    public bool LinkFrequencies
+    {
+        get => _linkFrequencies;
+        set
+        {
+            if (SetProperty(ref _linkFrequencies, value) && value)
+            {
+                SetAllManualFrequencies(NominalFrequencyHz);
+                AppendEvent("Frequencies linked to nominal frequency.");
+            }
+        }
+    }
+
     public bool IsPublishing
     {
         get => _isPublishing;
@@ -284,10 +388,44 @@ public sealed class SvPublisherViewModel : ObservableObject
         }
     }
 
+    public bool IsContextValueColumn
+        => string.Equals(_contextColumnHeader, "Value", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsContextAngleColumn
+        => string.Equals(_contextColumnHeader, "Angle", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsContextFrequencyColumn
+        => string.Equals(_contextColumnHeader, "Freq", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsContextSignalColumn
+        => string.Equals(_contextColumnHeader, "Signal", StringComparison.OrdinalIgnoreCase);
+
+    public string SignalNamingScheme
+    {
+        get => _signalNamingScheme;
+        private set => SetProperty(ref _signalNamingScheme, value);
+    }
+
     public InjectionMode Mode
     {
         get => _mode;
         set => SetProperty(ref _mode, value);
+    }
+
+    public string ManualSetMode
+    {
+        get => _manualSetMode;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+
+            if (SetProperty(ref _manualSetMode, value))
+            {
+                RebuildManualRowsFromChannels();
+                AppendEvent($"Manual set mode changed to {value}.");
+            }
+        }
     }
 
     public double RampTargetMagnitude
@@ -421,15 +559,18 @@ public sealed class SvPublisherViewModel : ObservableObject
             using var stop = new CancellationTokenSource();
             _publisherStop = stop;
             IsPublishing = true;
-            StatusText = live ? "Publishing to NIC." : "Dry-run publishing.";
-            AppendEvent(live ? "Live NIC publisher started." : "Dry-run publisher started.");
+            StatusText = live ? "START INJECTION - live NIC." : "START INJECTION - dry run.";
+            LiveApplyText = AutoApplyWhileRunning
+                ? "RUN: table edits are applied to the next SV frames."
+                : "RUN: auto apply is paused.";
+            AppendEvent(live ? "Start Injection: live NIC publisher started." : "Start Injection: dry-run publisher started.");
 
             await Task.Run(async () => await PublishLoopAsync(live, stop.Token).ConfigureAwait(false)).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
-            StatusText = "Publisher stopped.";
-            AppendEvent("Publisher stopped by user.");
+            StatusText = "STOP INJECTION.";
+            AppendEvent("Stop Injection requested by operator.");
         }
         catch (Exception ex)
         {
@@ -442,6 +583,8 @@ public sealed class SvPublisherViewModel : ObservableObject
             _publisherStop = null;
             IsPublishing = false;
             IsLiveArmed = false;
+            if (!PublishText.StartsWith("Complete", StringComparison.OrdinalIgnoreCase))
+                PublishText = "Publisher stopped.";
             CommandManager.InvalidateRequerySuggested();
         }
     }
@@ -461,6 +604,15 @@ public sealed class SvPublisherViewModel : ObservableObject
         var rampStartMagnitude = SelectedRampChannel?.Magnitude ?? 0;
         var rampSignalKey = SelectedRampChannel?.Key ?? string.Empty;
         var sampleCounterWrap = ResolveSampleCounterWrap(selectedStream, sampleRateHz, NominalFrequencyHz);
+        var frozenChannels = CaptureEffectiveChannels(0, rampSignalKey, rampStartMagnitude);
+        var oscillatorStates = frozenChannels.ToDictionary(
+            x => x.Key,
+            x => new OscillatorState
+            {
+                PhaseRadians = x.Value.AngleDegrees * Math.PI / 180.0,
+                LastAngleDegrees = x.Value.AngleDegrees
+            },
+            StringComparer.OrdinalIgnoreCase);
 
         IProcessBusTransport transport = live
             ? new NpcapProcessBusTransport(SelectedAdapter?.Selector ?? string.Empty)
@@ -481,7 +633,11 @@ public sealed class SvPublisherViewModel : ObservableObject
                 var elapsedSeconds = sent / sampleRateHz;
                 var timestamp = startedAt.AddTicks((long)Math.Round(sent * TimeSpan.TicksPerSecond / sampleRateHz));
                 var sampleTime = new Iec61850UtcTime(timestamp, Quality: 0);
-                var payload = BuildSamplePayload(selectedStream, elapsedSeconds, rampSignalKey, rampStartMagnitude, sampleTime);
+                var channels = AutoApplyWhileRunning
+                    ? CaptureEffectiveChannels(elapsedSeconds, rampSignalKey, rampStartMagnitude)
+                    : frozenChannels;
+                var phasedChannels = ApplyOscillatorPhases(channels, oscillatorStates, sampleRateHz);
+                var payload = BuildSamplePayload(selectedStream, sampleTime, phasedChannels);
                 var frame = SampledValuesFrameBuilder.BuildEthernetFrame(new SampledValuesFrame
                 {
                     Destination = destination,
@@ -519,7 +675,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                     var elapsed = Stopwatch.GetElapsedTime(startedTicks);
                     var rate = sent / Math.Max(elapsed.TotalSeconds, 0.001);
                     var progress = frameLimit.HasValue ? $"{sent}/{frameLimit.Value}" : sent.ToString(CultureInfo.InvariantCulture);
-                    var message = $"{(live ? "LIVE" : "DRY")} frames={progress} rate={rate:0.0} fps smpCnt={sampleCount} payload={payload.Length}B frame={lastFrameBytes}B";
+                    var message = $"{(live ? "LIVE" : "DRY")} frames={progress} rate={rate:0.0} fps smpCnt={sampleCount} payload={payload.Length}B frame={lastFrameBytes}B autoApply={(AutoApplyWhileRunning ? "ON" : "OFF")}";
                     Dispatch(() =>
                     {
                         PayloadBytes = payload.Length;
@@ -546,10 +702,8 @@ public sealed class SvPublisherViewModel : ObservableObject
 
     private byte[] BuildSamplePayload(
         SclSampledValuesStream stream,
-        double elapsedSeconds,
-        string rampSignalKey,
-        double rampStartMagnitude,
-        Iec61850UtcTime timestamp)
+        Iec61850UtcTime timestamp,
+        IReadOnlyDictionary<string, EffectiveChannel> channels)
     {
         var layout = SampledValuesPayloadLayout.FromDataSet(stream.Entries);
         if (!layout.IsFullySupported)
@@ -576,7 +730,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                 continue;
             }
 
-            values.Add(BuildChannelValue(entry, element, elapsedSeconds, rampSignalKey, rampStartMagnitude));
+            values.Add(BuildChannelValue(entry, element, channels));
         }
 
         return SampledValuesPayloadBuilder.BuildPayload(layout, values);
@@ -585,22 +739,20 @@ public sealed class SvPublisherViewModel : ObservableObject
     private MmsDataValue BuildChannelValue(
         SclDataSetEntry entry,
         SampledValuePayloadElement element,
-        double elapsedSeconds,
-        string rampSignalKey,
-        double rampStartMagnitude)
+        IReadOnlyDictionary<string, EffectiveChannel> channels)
     {
-        var channel = ResolveChannel(entry);
-        if (channel is null || !channel.IsEnabled)
+        var key = ResolveSignalKey(entry);
+        if (key is null || !channels.TryGetValue(key, out var effective) || !effective.IsEnabled)
             return ZeroValue(element);
 
-        var effective = ResolveEffectiveChannel(channel, elapsedSeconds, rampSignalKey, rampStartMagnitude);
-        var dlsb = channel.Kind == "I" ? CurrentDlsb : VoltageDlsb;
+        var dlsb = effective.Kind == "I" ? CurrentDlsb : VoltageDlsb;
         if (dlsb <= 0)
             throw new InvalidOperationException("dLSB must be greater than 0.");
 
-        var angle = (2.0 * Math.PI * effective.FrequencyHz * elapsedSeconds) + (effective.AngleDegrees * Math.PI / 180.0);
-        var counts = effective.Magnitude / dlsb;
-        var sample = counts * Math.Sin(angle);
+        // Operator values are RMS phasors. IEC 61850-9-2 Sampled Values carry instantaneous samples,
+        // therefore the RMS setpoint is converted to peak before dLSB scaling.
+        var counts = effective.MagnitudeRms * Math.Sqrt(2.0) / dlsb;
+        var sample = counts * Math.Sin(effective.PhaseRadians);
         return element.Kind switch
         {
             SampledValuePayloadElementKind.Boolean => MmsDataValue.Boolean(Math.Abs(sample) >= 0.5),
@@ -629,6 +781,18 @@ public sealed class SvPublisherViewModel : ObservableObject
             _ => MmsDataValue.Integer(0)
         };
 
+    private IReadOnlyDictionary<string, EffectiveChannel> CaptureEffectiveChannels(
+        double elapsedSeconds,
+        string rampSignalKey,
+        double rampStartMagnitude)
+    {
+        var channels = new Dictionary<string, EffectiveChannel>(StringComparer.OrdinalIgnoreCase);
+        foreach (var channel in Channels)
+            channels[channel.Key] = ResolveEffectiveChannel(channel, elapsedSeconds, rampSignalKey, rampStartMagnitude);
+
+        return channels;
+    }
+
     private EffectiveChannel ResolveEffectiveChannel(
         SignalChannelViewModel channel,
         double elapsedSeconds,
@@ -637,7 +801,7 @@ public sealed class SvPublisherViewModel : ObservableObject
     {
         var magnitude = channel.Magnitude;
         var angle = channel.AngleDegrees;
-        var frequency = NominalFrequencyHz;
+        var frequency = channel.FrequencyHz >= 0 ? channel.FrequencyHz : NominalFrequencyHz;
 
         if (Mode == InjectionMode.Ramp && string.Equals(channel.Key, rampSignalKey, StringComparison.OrdinalIgnoreCase))
         {
@@ -652,7 +816,7 @@ public sealed class SvPublisherViewModel : ObservableObject
             frequency = state.FrequencyHz > 0 ? state.FrequencyHz : frequency;
         }
 
-        return new EffectiveChannel(magnitude, angle, frequency);
+        return new EffectiveChannel(channel.Kind, channel.IsEnabled, magnitude, angle, frequency, angle * Math.PI / 180.0);
     }
 
     private SequenceStateViewModel? ResolveSequenceState(double elapsedSeconds)
@@ -708,14 +872,8 @@ public sealed class SvPublisherViewModel : ObservableObject
         _ = ParseAppId(AppIdText);
         _ = ResolveVlanTag();
 
-        if (live)
-        {
-            if (!IsLiveArmed)
-                throw new InvalidOperationException("Arm live NIC before transmitting raw Ethernet frames.");
-
-            if (SelectedAdapter is null)
-                throw new InvalidOperationException("Select a NIC adapter before live publishing.");
-        }
+        if (live && SelectedAdapter is null)
+            throw new InvalidOperationException("Select a NIC adapter before live publishing.");
     }
 
     private void ApplySelectedStream(SvStreamChoice? choice)
@@ -877,32 +1035,872 @@ public sealed class SvPublisherViewModel : ObservableObject
         }
     }
 
+    public void SetManualContext(ManualOutputRowViewModel? row, string columnHeader)
+    {
+        _contextManualRow = row;
+        _contextColumnHeader = columnHeader ?? string.Empty;
+        OnPropertyChanged(nameof(IsContextValueColumn));
+        OnPropertyChanged(nameof(IsContextAngleColumn));
+        OnPropertyChanged(nameof(IsContextFrequencyColumn));
+        OnPropertyChanged(nameof(IsContextSignalColumn));
+    }
+
+    public bool CommitManualRowText(ManualOutputRowViewModel row, string propertyName, out string warning)
+    {
+        if (row is null)
+            throw new ArgumentNullException(nameof(row));
+
+        var committed = row.CommitText(propertyName, out warning);
+        if (!committed)
+        {
+            LiveApplyText = warning;
+            return false;
+        }
+
+        return true;
+    }
+
     private void StopPublisher()
         => _publisherStop?.Cancel();
 
+    private void RebuildManualRowsFromChannels()
+    {
+        _isUpdatingManualRows = true;
+        try
+        {
+            ManualRows.Clear();
+            if (ManualSetMode == SymmetricalSetMode)
+                AddSymmetricalRowsFromChannels();
+            else if (ManualSetMode == LineLineSetMode)
+                AddLineLineRowsFromChannels();
+            else
+                AddDirectRowsFromChannels();
+        }
+        finally
+        {
+            _isUpdatingManualRows = false;
+        }
+
+        ProjectManualRowsToChannels($"Mode={ManualSetMode}");
+    }
+
+    private void AddDirectRowsFromChannels()
+    {
+        AddManualRow("Va", "V L1-E", "V", "V", Channel("Va"));
+        AddManualRow("Vb", "V L2-E", "V", "V", Channel("Vb"));
+        AddManualRow("Vc", "V L3-E", "V", "V", Channel("Vc"));
+        AddManualRow("Vn", "V N", "V", "V", Channel("Vn"));
+        AddManualRow("Ia", "I L1", "I", "A", Channel("Ia"));
+        AddManualRow("Ib", "I L2", "I", "A", Channel("Ib"));
+        AddManualRow("Ic", "I L3", "I", "A", Channel("Ic"));
+        AddManualRow("In", "I N", "I", "A", Channel("In"));
+    }
+
+    private void AddSymmetricalRowsFromChannels()
+    {
+        var v = ToSymmetricalComponents(ChannelPhasor("Va"), ChannelPhasor("Vb"), ChannelPhasor("Vc"));
+        var i = ToSymmetricalComponents(ChannelPhasor("Ia"), ChannelPhasor("Ib"), ChannelPhasor("Ic"));
+        var voltageFrequency = Channel("Va")?.FrequencyHz ?? NominalFrequencyHz;
+        var currentFrequency = Channel("Ia")?.FrequencyHz ?? NominalFrequencyHz;
+
+        AddManualRow("V1", "V 1", "V", "V", v.Positive, voltageFrequency, v.Positive.Magnitude > 0.000001);
+        AddManualRow("V2", "V 2", "V", "V", v.Negative, voltageFrequency, v.Negative.Magnitude > 0.000001);
+        AddManualRow("V0", "V 0", "V", "V", v.Zero, voltageFrequency, v.Zero.Magnitude > 0.000001);
+        AddManualRow("I1", "I 1", "I", "A", i.Positive, currentFrequency, i.Positive.Magnitude > 0.000001);
+        AddManualRow("I2", "I 2", "I", "A", i.Negative, currentFrequency, i.Negative.Magnitude > 0.000001);
+        AddManualRow("I0", "I 0", "I", "A", i.Zero, currentFrequency, i.Zero.Magnitude > 0.000001);
+    }
+
+    private void AddLineLineRowsFromChannels()
+    {
+        AddManualRow("Vab", "V L1-L2", "V", "V", ChannelPhasor("Va") - ChannelPhasor("Vb"), Channel("Va")?.FrequencyHz ?? NominalFrequencyHz, true);
+        AddManualRow("Vbc", "V L2-L3", "V", "V", ChannelPhasor("Vb") - ChannelPhasor("Vc"), Channel("Vb")?.FrequencyHz ?? NominalFrequencyHz, true);
+        AddManualRow("Vca", "V L3-L1", "V", "V", ChannelPhasor("Vc") - ChannelPhasor("Va"), Channel("Vc")?.FrequencyHz ?? NominalFrequencyHz, true);
+        AddManualRow("Ia", "I L1", "I", "A", Channel("Ia"));
+        AddManualRow("Ib", "I L2", "I", "A", Channel("Ib"));
+        AddManualRow("Ic", "I L3", "I", "A", Channel("Ic"));
+        AddManualRow("In", "I N", "I", "A", Channel("In"));
+    }
+
+    private void AddManualRow(string key, string name, string kind, string unit, SignalChannelViewModel? channel)
+        => ManualRows.Add(new ManualOutputRowViewModel(
+            key,
+            DisplaySignalName(key, name),
+            kind,
+            unit,
+            channel?.Magnitude ?? 0,
+            channel?.AngleDegrees ?? 0,
+            channel?.FrequencyHz ?? NominalFrequencyHz,
+            channel?.IsEnabled ?? false,
+            ManualRowChanged));
+
+    private void AddManualRow(string key, string name, string kind, string unit, Complex phasor, double frequencyHz, bool isEnabled)
+        => ManualRows.Add(new ManualOutputRowViewModel(
+            key,
+            DisplaySignalName(key, name),
+            kind,
+            unit,
+            phasor.Magnitude,
+            NormalizeDegrees(phasor.Phase * 180.0 / Math.PI),
+            frequencyHz,
+            isEnabled,
+            ManualRowChanged));
+
+    private void ManualRowChanged(ManualOutputRowViewModel row, string propertyName)
+    {
+        if (_isUpdatingManualRows)
+            return;
+
+        if (LinkFrequencies && propertyName == nameof(ManualOutputRowViewModel.FrequencyHz) && row.FrequencyHz > 0)
+            NominalFrequencyHz = row.FrequencyHz;
+        else
+            ProjectManualRowsToChannels($"Edited {row.Name}");
+    }
+
+    private void ProjectManualRowsToChannels(string reason)
+    {
+        if (_isUpdatingManualRows)
+            return;
+
+        if (ManualSetMode == SymmetricalSetMode)
+            ProjectSymmetricalRowsToChannels();
+        else if (ManualSetMode == LineLineSetMode)
+            ProjectLineLineRowsToChannels();
+        else
+            ProjectDirectRowsToChannels();
+
+        LiveApplyText = IsPublishing
+            ? $"RUN auto-applied: {reason}"
+            : $"Ready: {reason}";
+    }
+
+    private void ProjectDirectRowsToChannels()
+    {
+        foreach (var row in ManualRows)
+        {
+            if (Channel(row.Key) is { } channel)
+                SetChannel(channel.Key, row.Magnitude, row.AngleDegrees, row.IsEnabled, row.FrequencyHz);
+        }
+    }
+
+    private void ProjectSymmetricalRowsToChannels()
+    {
+        var a = Complex.FromPolarCoordinates(1, 120.0 * Math.PI / 180.0);
+        var a2 = a * a;
+        var v0 = RowPhasor("V0");
+        var v1 = RowPhasor("V1");
+        var v2 = RowPhasor("V2");
+        var i0 = RowPhasor("I0");
+        var i1 = RowPhasor("I1");
+        var i2 = RowPhasor("I2");
+        var voltageFrequency = RowFrequency("V1", "V2", "V0");
+        var currentFrequency = RowFrequency("I1", "I2", "I0");
+        var voltageEnabled = IsAnyRowEnabled("V1", "V2", "V0");
+        var currentEnabled = IsAnyRowEnabled("I1", "I2", "I0");
+
+        SetChannelFromPhasor("Va", v0 + v1 + v2, voltageEnabled, voltageFrequency);
+        SetChannelFromPhasor("Vb", v0 + (a2 * v1) + (a * v2), voltageEnabled, voltageFrequency);
+        SetChannelFromPhasor("Vc", v0 + (a * v1) + (a2 * v2), voltageEnabled, voltageFrequency);
+        SetChannel("Vn", 0, 0, false, voltageFrequency);
+        SetChannelFromPhasor("Ia", i0 + i1 + i2, currentEnabled, currentFrequency);
+        SetChannelFromPhasor("Ib", i0 + (a2 * i1) + (a * i2), currentEnabled, currentFrequency);
+        SetChannelFromPhasor("Ic", i0 + (a * i1) + (a2 * i2), currentEnabled, currentFrequency);
+        SetChannel("In", 0, 0, false, currentFrequency);
+    }
+
+    private void ProjectLineLineRowsToChannels()
+    {
+        var vab = RowPhasor("Vab");
+        var vbc = RowPhasor("Vbc");
+        var vca = RowPhasor("Vca");
+        var voltageEnabled = IsAnyRowEnabled("Vab", "Vbc", "Vca");
+        var voltageFrequency = RowFrequency("Vab", "Vbc", "Vca");
+
+        SetChannelFromPhasor("Va", (vab - vca) / 3.0, voltageEnabled, voltageFrequency);
+        SetChannelFromPhasor("Vb", (vbc - vab) / 3.0, voltageEnabled, voltageFrequency);
+        SetChannelFromPhasor("Vc", (vca - vbc) / 3.0, voltageEnabled, voltageFrequency);
+        SetChannel("Vn", 0, 0, false, voltageFrequency);
+
+        foreach (var key in new[] { "Ia", "Ib", "Ic", "In" })
+        {
+            if (Row(key) is { } row)
+                SetChannel(key, row.Magnitude, row.AngleDegrees, row.IsEnabled, row.FrequencyHz);
+        }
+    }
+
+    private void ApplySignalNaming(string scheme)
+    {
+        var normalized = scheme.Trim().ToUpperInvariant() switch
+        {
+            "ABC" => "ABC",
+            "RSTN" => "RSTN",
+            "RAW" => "RAW",
+            _ => "L1L2L3E"
+        };
+
+        SignalNamingScheme = normalized;
+        ApplyChannelNaming();
+        foreach (var row in ManualRows)
+            row.Name = DisplaySignalName(row.Key, row.Name);
+
+        LiveApplyText = $"Signal naming changed to {normalized}.";
+        AppendEvent(LiveApplyText);
+    }
+
+    private void ApplyChannelNaming()
+    {
+        foreach (var channel in Channels)
+            channel.Name = DisplaySignalName(channel.Key, channel.Name);
+    }
+
+    private string DisplaySignalName(string key, string fallback)
+        => SignalNamingScheme switch
+        {
+            "ABC" => key switch
+            {
+                "Va" => "V A-E",
+                "Vb" => "V B-E",
+                "Vc" => "V C-E",
+                "Vn" => "V N",
+                "Ia" => "I A",
+                "Ib" => "I B",
+                "Ic" => "I C",
+                "In" => "I N",
+                "Vab" => "V A-B",
+                "Vbc" => "V B-C",
+                "Vca" => "V C-A",
+                _ => key
+            },
+            "RSTN" => key switch
+            {
+                "Va" => "V R-N",
+                "Vb" => "V S-N",
+                "Vc" => "V T-N",
+                "Vn" => "V N",
+                "Ia" => "I R",
+                "Ib" => "I S",
+                "Ic" => "I T",
+                "In" => "I N",
+                "Vab" => "V R-S",
+                "Vbc" => "V S-T",
+                "Vca" => "V T-R",
+                _ => key
+            },
+            "RAW" => key,
+            _ => key switch
+            {
+                "Va" => "V L1-E",
+                "Vb" => "V L2-E",
+                "Vc" => "V L3-E",
+                "Vn" => "V N",
+                "Ia" => "I L1",
+                "Ib" => "I L2",
+                "Ic" => "I L3",
+                "In" => "I N",
+                "Vab" => "V L1-L2",
+                "Vbc" => "V L2-L3",
+                "Vca" => "V L3-L1",
+                _ => fallback
+            }
+        };
+
+    private void NominalValueFromContext()
+    {
+        if (_contextManualRow is not { } row)
+            return;
+
+        SetRowsInBatch(() => row.Magnitude = ResolveNominalMagnitude(row), $"Nominal value applied to {row.Name}");
+        AppendEvent($"Nominal value applied to {row.Name}.");
+    }
+
+    private void ZeroFromContext()
+    {
+        if (_contextManualRow is not { } row)
+            return;
+
+        SetRowsInBatch(() =>
+        {
+            if (IsContextAngleColumn)
+                row.AngleDegrees = 0;
+            else if (IsContextFrequencyColumn)
+                row.FrequencyHz = 0;
+            else
+                row.Magnitude = 0;
+        }, $"Zero applied to {row.Name}");
+        AppendEvent($"Zero applied to {row.Name} {_contextColumnHeader}.");
+    }
+
+    private void EqualMagnitudesFromContext()
+    {
+        if (_contextManualRow is not { } anchor)
+            return;
+
+        if (!TryResolveMagnitudeGroup(anchor.Key, anchor.Kind, out var keys))
+        {
+            LiveApplyText = "Equal Magnitudes is available only for compatible voltage/current rows.";
+            return;
+        }
+
+        var value = anchor.Magnitude;
+        SetRowsInBatch(() =>
+        {
+            foreach (var key in keys)
+            {
+                if (Row(key) is { } row)
+                    row.Magnitude = value;
+            }
+        }, $"Equal magnitudes from {anchor.Name}");
+        AppendEvent($"Equal magnitudes applied using {anchor.Name}={value:0.###} {anchor.Unit} as reference.");
+    }
+
+    private void LineAngleFromContext()
+    {
+        if (_contextManualRow is not { } row)
+            return;
+
+        SetRowsInBatch(() => row.AngleDegrees = ResolveLineAngle(row.Key), $"Line angle applied to {row.Name}");
+        AppendEvent($"Line angle applied to {row.Name}.");
+    }
+
+    private void BalanceAnglesFromContext()
+    {
+        if (_contextManualRow is not { } anchor)
+        {
+            LiveApplyText = "Right-click an angle cell first.";
+            return;
+        }
+
+        if (!TryResolveBalanceGroup(anchor.Key, reverse: false, out var keys, out var offsets))
+        {
+            LiveApplyText = "Balance Angles is available only for three-phase voltage/current angle rows.";
+            return;
+        }
+
+        var anchorIndex = Array.FindIndex(keys, key => string.Equals(key, anchor.Key, StringComparison.OrdinalIgnoreCase));
+        if (anchorIndex < 0)
+            return;
+
+        var anchorAngle = anchor.AngleDegrees;
+        var baseAngle = anchorAngle - offsets[anchorIndex];
+        SetRowsInBatch(() =>
+        {
+            for (var i = 0; i < keys.Length; i++)
+            {
+                if (Row(keys[i]) is { } row)
+                    row.AngleDegrees = baseAngle + offsets[i];
+            }
+        }, $"Balance angles from {anchor.Name}");
+
+        AppendEvent($"Balance angles applied using {anchor.Name} as anchor. Anchor angle stayed {anchorAngle:0.###} deg.");
+    }
+
+    private static bool TryResolveBalanceGroup(string key, bool reverse, out string[] keys, out double[] offsets)
+    {
+        var isLineLine = IsAnyKey(key, "Vab", "Vbc", "Vca");
+        if (isLineLine)
+        {
+            keys = ["Vab", "Vbc", "Vca"];
+            offsets = reverse ? [-30, 90, -150] : [30, -90, 150];
+            return true;
+        }
+
+        if (IsAnyKey(key, "Va", "Vb", "Vc"))
+        {
+            keys = ["Va", "Vb", "Vc"];
+            offsets = reverse ? [0, 120, -120] : [0, -120, 120];
+            return true;
+        }
+
+        if (IsAnyKey(key, "Ia", "Ib", "Ic"))
+        {
+            keys = ["Ia", "Ib", "Ic"];
+            offsets = reverse ? [0, 120, -120] : [0, -120, 120];
+            return true;
+        }
+
+        keys = [];
+        offsets = [];
+        return false;
+    }
+
+    private static bool TryResolveMagnitudeGroup(string key, string kind, out string[] keys)
+    {
+        if (IsAnyKey(key, "Va", "Vb", "Vc"))
+        {
+            keys = ["Va", "Vb", "Vc"];
+            return true;
+        }
+
+        if (IsAnyKey(key, "Vab", "Vbc", "Vca"))
+        {
+            keys = ["Vab", "Vbc", "Vca"];
+            return true;
+        }
+
+        if (IsAnyKey(key, "Ia", "Ib", "Ic"))
+        {
+            keys = ["Ia", "Ib", "Ic"];
+            return true;
+        }
+
+        if (IsAnyKey(key, "V1", "V2", "V0"))
+        {
+            keys = ["V1", "V2", "V0"];
+            return true;
+        }
+
+        if (IsAnyKey(key, "I1", "I2", "I0"))
+        {
+            keys = ["I1", "I2", "I0"];
+            return true;
+        }
+
+        keys = string.Equals(kind, "V", StringComparison.OrdinalIgnoreCase)
+            ? ["Va", "Vb", "Vc"]
+            : ["Ia", "Ib", "Ic"];
+        return false;
+    }
+
+    private static bool IsAnyKey(string key, params string[] candidates)
+        => candidates.Any(candidate => string.Equals(candidate, key, StringComparison.OrdinalIgnoreCase));
+
+    private static double ResolveNominalMagnitude(ManualOutputRowViewModel row)
+        => row.Key switch
+        {
+            "Vab" or "Vbc" or "Vca" => NominalVoltageLl,
+            "Va" or "Vb" or "Vc" or "V1" => NominalVoltageLn,
+            "Ia" or "Ib" or "Ic" or "I1" => NominalCurrent,
+            _ => 0
+        };
+
+    private static double ResolveLineAngle(string key)
+        => key switch
+        {
+            "Vab" => 30,
+            "Vbc" => -90,
+            "Vca" => 150,
+            "Vb" or "Ib" => -120,
+            "Vc" or "Ic" => 120,
+            _ => 0
+        };
+
     private void ApplyBalancedDefaults()
     {
-        SetChannel("Ia", 1.000, 0, true);
-        SetChannel("Ib", 1.000, -120, true);
-        SetChannel("Ic", 1.000, 120, true);
-        SetChannel("In", 0.000, 0, false);
-        SetChannel("Va", 57.735, 0, true);
-        SetChannel("Vb", 57.735, -120, true);
-        SetChannel("Vc", 57.735, 120, true);
-        SetChannel("Vn", 0.000, 0, false);
-        NominalFrequencyHz = 50;
+        ApplyNominalValues();
         AppendEvent("Balanced 3-phase defaults applied.");
     }
 
-    private void SetChannel(string key, double magnitude, double angle, bool enabled)
+    private void ApplyNominalValues()
     {
-        var channel = Channels.FirstOrDefault(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (ManualSetMode == SymmetricalSetMode)
+            ApplySymmetricalNominalValues(reverse: false);
+        else if (ManualSetMode == LineLineSetMode)
+            ApplyLineLineNominalValues(reverse: false, loadCurrent: NominalCurrent);
+        else
+            ApplyDirectNominalValues(reverse: false, loadCurrent: NominalCurrent);
+
+        AppendEvent("Nominal value preset applied.");
+    }
+
+    private void ZeroOutputs()
+    {
+        SetRowsInBatch(() =>
+        {
+            foreach (var row in ManualRows)
+            {
+                row.Magnitude = 0;
+                row.IsEnabled = true;
+            }
+        }, "Zero output applied");
+        AppendEvent("Zero output: all manual setpoint magnitudes set to zero.");
+    }
+
+    private void EqualMagnitudes()
+    {
+        SetRowsInBatch(() =>
+        {
+            var voltage = ManualRows.Where(r => r.Kind == "V" && r.Magnitude > 0).Select(r => r.Magnitude).DefaultIfEmpty(NominalVoltageLn).First();
+            var current = ManualRows.Where(r => r.Kind == "I" && r.Magnitude > 0).Select(r => r.Magnitude).DefaultIfEmpty(NominalCurrent).First();
+            foreach (var row in ManualRows)
+                row.Magnitude = row.Kind == "V" ? voltage : current;
+        }, "Equal magnitudes applied");
+        AppendEvent("Equal magnitudes applied per signal group.");
+    }
+
+    private void ApplyHundredPercentLoad()
+    {
+        if (ManualSetMode == SymmetricalSetMode)
+            ApplySymmetricalNominalValues(reverse: false);
+        else if (ManualSetMode == LineLineSetMode)
+            ApplyLineLineNominalValues(reverse: false, loadCurrent: NominalCurrent);
+        else
+            ApplyDirectNominalValues(reverse: false, loadCurrent: NominalCurrent);
+
+        AppendEvent("100% load preset applied.");
+    }
+
+    private void ApplyFiftyPercentLoad()
+    {
+        if (ManualSetMode == SymmetricalSetMode)
+            ApplySymmetricalNominalValues(reverse: false, currentMagnitude: NominalCurrent * 0.5);
+        else if (ManualSetMode == LineLineSetMode)
+            ApplyLineLineNominalValues(reverse: false, loadCurrent: NominalCurrent * 0.5);
+        else
+            ApplyDirectNominalValues(reverse: false, loadCurrent: NominalCurrent * 0.5);
+
+        AppendEvent("50% load preset applied.");
+    }
+
+    private void ApplyUnload()
+    {
+        if (ManualSetMode == SymmetricalSetMode)
+            ApplySymmetricalNominalValues(reverse: false, currentMagnitude: 0);
+        else if (ManualSetMode == LineLineSetMode)
+            ApplyLineLineNominalValues(reverse: false, loadCurrent: 0);
+        else
+            ApplyDirectNominalValues(reverse: false, loadCurrent: 0);
+
+        AppendEvent("Unload preset applied: voltage nominal, current zero.");
+    }
+
+    private void BalanceAngles()
+    {
+        SetRowsInBatch(() =>
+        {
+            if (ManualSetMode == SymmetricalSetMode)
+            {
+                SetRowAngle("V1", 0);
+                SetRowAngle("V2", 0);
+                SetRowAngle("V0", 0);
+                SetRowAngle("I1", 0);
+                SetRowAngle("I2", 0);
+                SetRowAngle("I0", 0);
+            }
+            else if (ManualSetMode == LineLineSetMode)
+            {
+                SetRowAngle("Vab", 30);
+                SetRowAngle("Vbc", -90);
+                SetRowAngle("Vca", 150);
+                SetRowAngle("Ia", 0);
+                SetRowAngle("Ib", -120);
+                SetRowAngle("Ic", 120);
+            }
+            else
+            {
+                SetRowAngle("Va", 0);
+                SetRowAngle("Vb", -120);
+                SetRowAngle("Vc", 120);
+                SetRowAngle("Ia", 0);
+                SetRowAngle("Ib", -120);
+                SetRowAngle("Ic", 120);
+            }
+        }, "Balance angles applied");
+
+        AppendEvent("Balance angles applied.");
+    }
+
+    private void ReverseRotationFromContext()
+    {
+        if (_contextManualRow is not { } anchor)
+        {
+            LiveApplyText = "Right-click an angle cell first.";
+            return;
+        }
+
+        if (!TryResolveBalanceGroup(anchor.Key, reverse: true, out var keys, out var offsets))
+        {
+            LiveApplyText = "Reverse Rotation is available only for three-phase voltage/current angle rows.";
+            return;
+        }
+
+        var anchorIndex = Array.FindIndex(keys, key => string.Equals(key, anchor.Key, StringComparison.OrdinalIgnoreCase));
+        if (anchorIndex < 0)
+            return;
+
+        var anchorAngle = anchor.AngleDegrees;
+        var baseAngle = anchorAngle - offsets[anchorIndex];
+        SetRowsInBatch(() =>
+        {
+            for (var i = 0; i < keys.Length; i++)
+            {
+                if (Row(keys[i]) is { } row)
+                    row.AngleDegrees = baseAngle + offsets[i];
+            }
+        }, $"Reverse rotation from {anchor.Name}");
+        AppendEvent($"Reverse rotation applied using {anchor.Name} as anchor. Anchor angle stayed {anchorAngle:0.###} deg.");
+    }
+
+    private void NominalFrequencyFromContext()
+    {
+        if (_contextManualRow is not { } row)
+            return;
+
+        SetRowsInBatch(() => row.FrequencyHz = NominalFrequencyHz, $"Nominal frequency applied to {row.Name}", preserveFrequencies: true);
+        AppendEvent($"Nominal frequency {NominalFrequencyHz:0.###} Hz applied to {row.Name}.");
+    }
+
+    private void DcFrequencyFromContext()
+    {
+        if (_contextManualRow is not { } row)
+            return;
+
+        SetRowsInBatch(() => row.FrequencyHz = 0, $"DC frequency applied to {row.Name}", preserveFrequencies: true);
+        AppendEvent($"DC frequency applied to {row.Name}.");
+    }
+
+    private void EqualFrequenciesFromContext()
+    {
+        if (_contextManualRow is not { } anchor)
+            return;
+
+        if (!TryResolveMagnitudeGroup(anchor.Key, anchor.Kind, out var keys))
+        {
+            LiveApplyText = "Equal Frequencies is available only for compatible voltage/current rows.";
+            return;
+        }
+
+        var value = anchor.FrequencyHz;
+        SetRowsInBatch(() =>
+        {
+            foreach (var key in keys)
+            {
+                if (Row(key) is { } row)
+                    row.FrequencyHz = value;
+            }
+        }, $"Equal frequencies from {anchor.Name}", preserveFrequencies: true);
+        AppendEvent($"Equal frequencies applied using {anchor.Name}={value:0.###} Hz as reference.");
+    }
+
+    private void ReverseRotation()
+    {
+        if (ManualSetMode == SymmetricalSetMode)
+            ApplySymmetricalNominalValues(reverse: true);
+        else if (ManualSetMode == LineLineSetMode)
+            ApplyLineLineNominalValues(reverse: true, loadCurrent: NominalCurrent);
+        else
+            ApplyDirectNominalValues(reverse: true, loadCurrent: NominalCurrent);
+
+        AppendEvent("Reverse rotation applied.");
+    }
+
+    private void ApplyDirectNominalValues(bool reverse, double loadCurrent)
+    {
+        SetRowsInBatch(() =>
+        {
+            SetRow("Va", NominalVoltageLn, 0, true);
+            SetRow("Vb", NominalVoltageLn, reverse ? 120 : -120, true);
+            SetRow("Vc", NominalVoltageLn, reverse ? -120 : 120, true);
+            SetRow("Vn", 0, 0, false);
+            SetRow("Ia", loadCurrent, 0, loadCurrent > 0);
+            SetRow("Ib", loadCurrent, reverse ? 120 : -120, loadCurrent > 0);
+            SetRow("Ic", loadCurrent, reverse ? -120 : 120, loadCurrent > 0);
+            SetRow("In", 0, 0, false);
+        }, "Direct nominal preset applied");
+    }
+
+    private void ApplyLineLineNominalValues(bool reverse, double loadCurrent)
+    {
+        SetRowsInBatch(() =>
+        {
+            SetRow("Vab", NominalVoltageLl, reverse ? -30 : 30, true);
+            SetRow("Vbc", NominalVoltageLl, reverse ? 90 : -90, true);
+            SetRow("Vca", NominalVoltageLl, reverse ? -150 : 150, true);
+            SetRow("Ia", loadCurrent, 0, loadCurrent > 0);
+            SetRow("Ib", loadCurrent, reverse ? 120 : -120, loadCurrent > 0);
+            SetRow("Ic", loadCurrent, reverse ? -120 : 120, loadCurrent > 0);
+            SetRow("In", 0, 0, false);
+        }, "Line-line nominal preset applied");
+    }
+
+    private void ApplySymmetricalNominalValues(bool reverse, double currentMagnitude = NominalCurrent)
+    {
+        SetRowsInBatch(() =>
+        {
+            SetRow("V1", reverse ? 0 : NominalVoltageLn, 0, !reverse);
+            SetRow("V2", reverse ? NominalVoltageLn : 0, 0, reverse);
+            SetRow("V0", 0, 0, false);
+            SetRow("I1", reverse ? 0 : currentMagnitude, 0, !reverse && currentMagnitude > 0);
+            SetRow("I2", reverse ? currentMagnitude : 0, 0, reverse && currentMagnitude > 0);
+            SetRow("I0", 0, 0, false);
+        }, "Symmetrical component preset applied");
+    }
+
+    private void CopyManualTable()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Signal\tMagnitude\tAngleDeg\tFrequencyHz\tOn");
+        foreach (var row in ManualRows)
+        {
+            builder.AppendLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}\t{1}\t{2}\t{3}\t{4}",
+                row.Name,
+                row.Magnitude,
+                row.AngleDegrees,
+                row.FrequencyHz,
+                row.IsEnabled));
+        }
+
+        Clipboard.SetText(builder.ToString());
+        AppendEvent("Manual output table copied to clipboard.");
+    }
+
+    private void PasteManualTable()
+    {
+        if (!Clipboard.ContainsText())
+            return;
+
+        var lines = Clipboard.GetText().Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length == 0)
+            return;
+
+        var dataLines = lines.Skip(lines[0].StartsWith("Signal", StringComparison.OrdinalIgnoreCase) ? 1 : 0).ToArray();
+        SetRowsInBatch(() =>
+        {
+            for (var i = 0; i < dataLines.Length && i < ManualRows.Count; i++)
+            {
+                var cells = dataLines[i].Split('\t');
+                if (cells.Length < 4)
+                    continue;
+
+                var row = ManualRows[i];
+                if (double.TryParse(cells[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var magnitude))
+                    row.Magnitude = magnitude;
+                if (double.TryParse(cells[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var angle))
+                    row.AngleDegrees = angle;
+                if (double.TryParse(cells[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var frequency))
+                    row.FrequencyHz = frequency;
+                if (cells.Length >= 5 && bool.TryParse(cells[4], out var enabled))
+                    row.IsEnabled = enabled;
+            }
+        }, "Manual output table pasted");
+        AppendEvent("Manual output table pasted from clipboard.");
+    }
+
+    private void SetRowsInBatch(Action action, string reason, bool preserveFrequencies = false)
+    {
+        _isUpdatingManualRows = true;
+        try
+        {
+            action();
+            if (LinkFrequencies && !preserveFrequencies)
+            {
+                foreach (var row in ManualRows)
+                    row.FrequencyHz = NominalFrequencyHz;
+            }
+        }
+        finally
+        {
+            _isUpdatingManualRows = false;
+        }
+
+        ProjectManualRowsToChannels(reason);
+    }
+
+    private void SetAllManualFrequencies(double frequencyHz)
+    {
+        _isUpdatingManualRows = true;
+        try
+        {
+            foreach (var row in ManualRows)
+                row.FrequencyHz = frequencyHz;
+        }
+        finally
+        {
+            _isUpdatingManualRows = false;
+        }
+
+        ProjectManualRowsToChannels("Linked frequencies updated");
+    }
+
+    private void SetRow(string key, double magnitude, double angle, bool enabled)
+    {
+        if (Row(key) is not { } row)
+            return;
+
+        row.Magnitude = magnitude;
+        row.AngleDegrees = angle;
+        row.FrequencyHz = NominalFrequencyHz;
+        row.IsEnabled = enabled;
+    }
+
+    private void SetRowAngle(string key, double angle)
+    {
+        if (Row(key) is { } row)
+            row.AngleDegrees = angle;
+    }
+
+    private void SetChannel(string key, double magnitude, double angle, bool enabled, double frequencyHz)
+    {
+        var channel = Channel(key);
         if (channel is null)
             return;
 
-        channel.Magnitude = magnitude;
-        channel.AngleDegrees = angle;
+        channel.Magnitude = Math.Max(0, magnitude);
+        channel.AngleDegrees = NormalizeDegrees(angle);
+        channel.FrequencyHz = frequencyHz >= 0 ? frequencyHz : NominalFrequencyHz;
         channel.IsEnabled = enabled;
+    }
+
+    private void SetChannelFromPhasor(string key, Complex phasor, bool enabled, double frequencyHz)
+        => SetChannel(key, phasor.Magnitude, NormalizeDegrees(phasor.Phase * 180.0 / Math.PI), enabled, frequencyHz);
+
+    private SignalChannelViewModel? Channel(string key)
+        => Channels.FirstOrDefault(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    private ManualOutputRowViewModel? Row(string key)
+        => ManualRows.FirstOrDefault(r => string.Equals(r.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    private Complex RowPhasor(string key)
+    {
+        var row = Row(key);
+        if (row is null || !row.IsEnabled)
+            return Complex.Zero;
+
+        return Complex.FromPolarCoordinates(row.Magnitude, row.AngleDegrees * Math.PI / 180.0);
+    }
+
+    private Complex ChannelPhasor(string key)
+    {
+        var channel = Channel(key);
+        if (channel is null || !channel.IsEnabled)
+            return Complex.Zero;
+
+        return Complex.FromPolarCoordinates(channel.Magnitude, channel.AngleDegrees * Math.PI / 180.0);
+    }
+
+    private double RowFrequency(params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var row = Row(key);
+            if (row is not null && row.FrequencyHz >= 0)
+                return row.FrequencyHz;
+        }
+
+        return NominalFrequencyHz;
+    }
+
+    private bool IsAnyRowEnabled(params string[] keys)
+        => keys.Any(key => Row(key) is { IsEnabled: true });
+
+    private static (Complex Zero, Complex Positive, Complex Negative) ToSymmetricalComponents(Complex phaseA, Complex phaseB, Complex phaseC)
+    {
+        var a = Complex.FromPolarCoordinates(1, 120.0 * Math.PI / 180.0);
+        var a2 = a * a;
+        var zero = (phaseA + phaseB + phaseC) / 3.0;
+        var positive = (phaseA + (a * phaseB) + (a2 * phaseC)) / 3.0;
+        var negative = (phaseA + (a2 * phaseB) + (a * phaseC)) / 3.0;
+        return (zero, positive, negative);
+    }
+
+    private static double NormalizeDegrees(double degrees)
+    {
+        while (degrees > 180)
+            degrees -= 360;
+        while (degrees <= -180)
+            degrees += 360;
+        return Math.Round(degrees, 6);
     }
 
     private void AddSequenceState()
@@ -940,6 +1938,9 @@ public sealed class SvPublisherViewModel : ObservableObject
             DurationSeconds = DurationSeconds,
             Continuous = Continuous,
             Mode = Mode,
+            ManualSetMode = ManualSetMode,
+            AutoApplyWhileRunning = AutoApplyWhileRunning,
+            LinkFrequencies = LinkFrequencies,
             RampSignalKey = SelectedRampChannel?.Key ?? string.Empty,
             RampTargetMagnitude = RampTargetMagnitude,
             RampDurationSeconds = RampDurationSeconds,
@@ -971,5 +1972,46 @@ public sealed class SvPublisherViewModel : ObservableObject
             dispatcher.Invoke(action);
     }
 
-    private readonly record struct EffectiveChannel(double Magnitude, double AngleDegrees, double FrequencyHz);
+    private static IReadOnlyDictionary<string, EffectiveChannel> ApplyOscillatorPhases(
+        IReadOnlyDictionary<string, EffectiveChannel> channels,
+        Dictionary<string, OscillatorState> states,
+        double sampleRateHz)
+    {
+        var result = new Dictionary<string, EffectiveChannel>(channels.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in channels)
+        {
+            if (!states.TryGetValue(pair.Key, out var state))
+            {
+                state = new OscillatorState
+                {
+                    PhaseRadians = pair.Value.AngleDegrees * Math.PI / 180.0,
+                    LastAngleDegrees = pair.Value.AngleDegrees
+                };
+                states[pair.Key] = state;
+            }
+
+            var angleDelta = NormalizeDegrees(pair.Value.AngleDegrees - state.LastAngleDegrees) * Math.PI / 180.0;
+            state.PhaseRadians = WrapRadians(state.PhaseRadians + angleDelta);
+            state.LastAngleDegrees = pair.Value.AngleDegrees;
+            result[pair.Key] = pair.Value with { PhaseRadians = state.PhaseRadians };
+            state.PhaseRadians = WrapRadians(state.PhaseRadians + (2.0 * Math.PI * pair.Value.FrequencyHz / sampleRateHz));
+        }
+
+        return result;
+    }
+
+    private static double WrapRadians(double radians)
+    {
+        const double twoPi = 2.0 * Math.PI;
+        radians %= twoPi;
+        return radians < -Math.PI ? radians + twoPi : radians > Math.PI ? radians - twoPi : radians;
+    }
+
+    private sealed class OscillatorState
+    {
+        public double PhaseRadians { get; set; }
+        public double LastAngleDegrees { get; set; }
+    }
+
+    private readonly record struct EffectiveChannel(string Kind, bool IsEnabled, double MagnitudeRms, double AngleDegrees, double FrequencyHz, double PhaseRadians);
 }

@@ -40,21 +40,17 @@ public sealed class PhasorPlot : FrameworkElement
         if (width <= 1 || height <= 1)
             return;
 
-        var background = new SolidColorBrush(Color.FromRgb(248, 250, 252));
+        var background = new SolidColorBrush(Color.FromRgb(250, 250, 250));
         drawingContext.DrawRoundedRectangle(background, null, new Rect(0, 0, width, height), 8, 8);
 
         var center = new Point(width / 2.0, height / 2.0);
         var radius = Math.Max(24, Math.Min(width, height) * 0.38);
-        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(215, 221, 230)), 1);
-        var axisPen = new Pen(new SolidColorBrush(Color.FromRgb(148, 163, 184)), 1);
+        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(205, 212, 222)), 0.85);
+        var minorGridPen = new Pen(new SolidColorBrush(Color.FromRgb(220, 226, 234)), 0.8) { DashStyle = DashStyles.Dash };
+        var axisPen = new Pen(new SolidColorBrush(Color.FromRgb(17, 24, 39)), 1.0);
 
-        drawingContext.DrawEllipse(null, gridPen, center, radius, radius);
-        drawingContext.DrawEllipse(null, gridPen, center, radius * 0.5, radius * 0.5);
-        drawingContext.DrawLine(axisPen, new Point(center.X - radius - 10, center.Y), new Point(center.X + radius + 10, center.Y));
-        drawingContext.DrawLine(axisPen, new Point(center.X, center.Y - radius - 10), new Point(center.X, center.Y + radius + 10));
-
-        DrawLabel(drawingContext, "0 deg", new Point(center.X + radius + 12, center.Y - 10), 11, Color.FromRgb(71, 85, 105));
-        DrawLabel(drawingContext, "90", new Point(center.X + 8, center.Y - radius - 20), 11, Color.FromRgb(71, 85, 105));
+        DrawPolarGrid(drawingContext, center, radius, gridPen, minorGridPen, axisPen);
+        DrawAngleLabels(drawingContext, center, radius);
 
         var channels = GetChannels().Where(c => c.IsEnabled && c.Magnitude > 0).ToArray();
         var currentMax = Math.Max(0.001, channels.Where(c => c.Kind == "I").Select(c => c.Magnitude).DefaultIfEmpty(0).Max());
@@ -66,22 +62,46 @@ public sealed class PhasorPlot : FrameworkElement
             var length = radius * Math.Clamp(channel.Magnitude / scale, 0.0, 1.0);
             var angle = -channel.AngleDegrees * Math.PI / 180.0;
             var end = new Point(center.X + Math.Cos(angle) * length, center.Y + Math.Sin(angle) * length);
-            var color = ResolveColor(channel.Key);
-            var pen = new Pen(new SolidColorBrush(color), channel.Kind == "V" ? 2.4 : 2.1)
+            var color = ResolveColor(channel.Key, channel.Kind);
+            var pen = new Pen(new SolidColorBrush(color), channel.Kind == "V" ? 2.1 : 2.3)
             {
                 StartLineCap = PenLineCap.Round,
                 EndLineCap = PenLineCap.Round
             };
 
-            if (channel.Kind == "I")
-                pen.DashStyle = DashStyles.Solid;
-
             drawingContext.DrawLine(pen, center, end);
             DrawArrowHead(drawingContext, center, end, color);
-            DrawLabel(drawingContext, channel.Name, new Point(end.X + 6, end.Y - 8), 12, color);
+            DrawLabel(drawingContext, channel.Name, new Point(end.X + 6, end.Y - 9), 12, color);
         }
 
-        DrawLabel(drawingContext, "Current and voltage are normalized separately", new Point(14, height - 26), 11, Color.FromRgb(71, 85, 105));
+        DrawLabel(drawingContext, voltageMax.ToString("0.###", CultureInfo.InvariantCulture) + " V", new Point(12, height - 26), 11, Color.FromRgb(37, 99, 235));
+        DrawLabel(drawingContext, currentMax.ToString("0.###", CultureInfo.InvariantCulture) + " A", new Point(width - 58, height - 26), 11, Color.FromRgb(220, 38, 38));
+    }
+
+    private static void DrawPolarGrid(DrawingContext drawingContext, Point center, double radius, Pen gridPen, Pen minorGridPen, Pen axisPen)
+    {
+        for (var ring = 1; ring <= 4; ring++)
+        {
+            var ringRadius = radius * ring / 4.0;
+            drawingContext.DrawEllipse(null, gridPen, center, ringRadius, ringRadius);
+        }
+
+        for (var degree = 0; degree < 360; degree += 30)
+        {
+            var radians = -degree * Math.PI / 180.0;
+            var end = new Point(center.X + Math.Cos(radians) * (radius + 10), center.Y + Math.Sin(radians) * (radius + 10));
+            var pen = degree % 90 == 0 ? axisPen : minorGridPen;
+            drawingContext.DrawLine(pen, center, end);
+        }
+    }
+
+    private void DrawAngleLabels(DrawingContext drawingContext, Point center, double radius)
+    {
+        var textColor = Color.FromRgb(15, 23, 42);
+        DrawCenteredLabel(drawingContext, "0°", new Point(center.X + radius + 18, center.Y - 6), 11, textColor);
+        DrawCenteredLabel(drawingContext, "+90°", new Point(center.X, center.Y - radius - 18), 11, textColor);
+        DrawCenteredLabel(drawingContext, "-90°", new Point(center.X, center.Y + radius + 8), 11, textColor);
+        DrawCenteredLabel(drawingContext, "180°", new Point(center.X - radius - 22, center.Y - 6), 11, textColor);
     }
 
     private IEnumerable<SignalChannelViewModel> GetChannels()
@@ -170,8 +190,20 @@ public sealed class PhasorPlot : FrameworkElement
 
     private void DrawLabel(DrawingContext drawingContext, string text, Point origin, double size, Color color)
     {
+        var formatted = CreateFormattedText(text, size, color);
+        drawingContext.DrawText(formatted, origin);
+    }
+
+    private void DrawCenteredLabel(DrawingContext drawingContext, string text, Point center, double size, Color color)
+    {
+        var formatted = CreateFormattedText(text, size, color);
+        drawingContext.DrawText(formatted, new Point(center.X - (formatted.Width / 2.0), center.Y - (formatted.Height / 2.0)));
+    }
+
+    private FormattedText CreateFormattedText(string text, double size, Color color)
+    {
         var dpi = VisualTreeHelper.GetDpi(this);
-        var formatted = new FormattedText(
+        return new FormattedText(
             text,
             CultureInfo.CurrentUICulture,
             FlowDirection.LeftToRight,
@@ -179,21 +211,27 @@ public sealed class PhasorPlot : FrameworkElement
             size,
             new SolidColorBrush(color),
             dpi.PixelsPerDip);
-
-        drawingContext.DrawText(formatted, origin);
     }
 
-    private static Color ResolveColor(string key)
-        => key switch
+    private static Color ResolveColor(string key, string kind)
+    {
+        if (kind == "V")
         {
-            "Ia" => Color.FromRgb(37, 99, 235),
-            "Ib" => Color.FromRgb(14, 165, 233),
-            "Ic" => Color.FromRgb(79, 70, 229),
-            "In" => Color.FromRgb(100, 116, 139),
-            "Va" => Color.FromRgb(217, 119, 6),
-            "Vb" => Color.FromRgb(22, 163, 74),
-            "Vc" => Color.FromRgb(220, 38, 38),
-            "Vn" => Color.FromRgb(120, 113, 108),
-            _ => Color.FromRgb(51, 65, 85)
+            return key switch
+            {
+                "Va" or "Vab" or "V1" => Color.FromRgb(0, 0, 255),
+                "Vb" or "Vbc" or "V2" => Color.FromRgb(37, 99, 235),
+                "Vc" or "Vca" or "V0" => Color.FromRgb(29, 78, 216),
+                _ => Color.FromRgb(30, 64, 175)
+            };
+        }
+
+        return key switch
+        {
+            "Ia" or "I1" => Color.FromRgb(220, 38, 38),
+            "Ib" or "I2" => Color.FromRgb(239, 68, 68),
+            "Ic" or "I0" => Color.FromRgb(185, 28, 28),
+            _ => Color.FromRgb(127, 29, 29)
         };
+    }
 }

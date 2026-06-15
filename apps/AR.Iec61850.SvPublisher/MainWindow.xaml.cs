@@ -469,6 +469,58 @@ public partial class MainWindow : Window
     private static bool IsRampTypingText(string text)
         => text.All(ch => char.IsDigit(ch) || ch is '-' or '+' or '.' or ',');
 
+    private void SequenceStateTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox { DataContext: SequenceStateViewModel state })
+            _viewModel.SelectedSequenceState = state;
+    }
+
+    private void SequenceStateTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+            _ = CommitSequenceTextBox(textBox);
+    }
+
+    private void SequenceStateTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox textBox)
+            return;
+
+        if (e.Key is not (Key.Enter or Key.Up or Key.Down or Key.Left or Key.Right))
+            return;
+
+        e.Handled = true;
+        if (!CommitSequenceTextBox(textBox))
+            return;
+
+        var direction = e.Key switch
+        {
+            Key.Up or Key.Left => FocusNavigationDirection.Previous,
+            _ => FocusNavigationDirection.Next
+        };
+        textBox.MoveFocus(new TraversalRequest(direction));
+    }
+
+    private bool CommitSequenceTextBox(TextBox textBox)
+    {
+        textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+
+        if (textBox.DataContext is not SequenceStateViewModel state || textBox.Tag is not string propertyName)
+            return true;
+
+        _viewModel.SelectedSequenceState = state;
+        if (state.CommitText(propertyName, out var warning))
+            return true;
+
+        MessageBox.Show(this, warning, "Invalid state value", MessageBoxButton.OK, MessageBoxImage.Warning);
+        textBox.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            textBox.Focus();
+            textBox.SelectAll();
+        }));
+        return false;
+    }
+
     private static T? FindVisualParent<T>(DependencyObject? child)
         where T : DependencyObject
     {

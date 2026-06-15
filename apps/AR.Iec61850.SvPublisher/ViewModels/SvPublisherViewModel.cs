@@ -256,6 +256,10 @@ public sealed class SvPublisherViewModel : ObservableObject
         private set => SetProperty(ref _publishText, value);
     }
 
+    public string AdapterStatusText => SelectedAdapter is null
+        ? "Adapter: not selected"
+        : $"Adapter: {SelectedAdapter.DisplayName}";
+
     public string EvidenceText
     {
         get => _evidenceText;
@@ -283,12 +287,13 @@ public sealed class SvPublisherViewModel : ObservableObject
         get => _selectedAdapter;
         set
         {
-            if (SetProperty(ref _selectedAdapter, value) &&
-                value is not null &&
-                !string.IsNullOrWhiteSpace(value.MacAddress))
-            {
+            if (!SetProperty(ref _selectedAdapter, value))
+                return;
+
+            OnPropertyChanged(nameof(AdapterStatusText));
+
+            if (value is not null && !string.IsNullOrWhiteSpace(value.MacAddress))
                 SourceMac = value.MacAddress;
-            }
         }
     }
 
@@ -1150,8 +1155,10 @@ public sealed class SvPublisherViewModel : ObservableObject
         }
         else if (Mode == InjectionMode.Sequencer && ResolveSequenceState(elapsedSeconds) is { } state)
         {
-            magnitude *= channel.Kind == "I" ? state.CurrentScale : state.VoltageScale;
-            angle += state.AngleShiftDegrees;
+            magnitude = string.Equals(channel.Kind, "I", StringComparison.OrdinalIgnoreCase)
+                ? state.CurrentScale
+                : NominalVoltageLn * Math.Max(0, state.VoltageScale);
+            angle = state.AngleShiftDegrees + PhaseOffsetForChannel(channel.Key);
             frequency = state.FrequencyHz > 0 ? state.FrequencyHz : frequency;
         }
 
@@ -1177,6 +1184,19 @@ public sealed class SvPublisherViewModel : ObservableObject
         }
 
         return (states[^1], Math.Max(0.001, states[^1].TimeSeconds));
+    }
+
+    private static double PhaseOffsetForChannel(string channelKey)
+    {
+        if (string.Equals(channelKey, "Vb", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(channelKey, "Ib", StringComparison.OrdinalIgnoreCase))
+            return -120;
+
+        if (string.Equals(channelKey, "Vc", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(channelKey, "Ic", StringComparison.OrdinalIgnoreCase))
+            return 120;
+
+        return 0;
     }
 
     private SequenceStateViewModel? ResolveSequenceState(double elapsedSeconds)

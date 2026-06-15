@@ -56,16 +56,59 @@
         </Style>
 
         <Style TargetType="Button">
-            <Setter Property="Height" Value="31" />
+            <Setter Property="Height" Value="32" />
             <Setter Property="MinWidth" Value="76" />
-            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Padding" Value="12,0" />
             <Setter Property="Margin" Value="0,0,7,0" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
-            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#D7DEE8" />
+            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Foreground" Value="#1F2937" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12" ShadowDepth="1" Opacity="0.10" Color="#0F172A" />
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#93C5FD" />
+                                <Setter TargetName="Chrome" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.16" Color="#1E3A8A" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#2563EB" />
+                                <Setter TargetName="Chrome" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="7" ShadowDepth="0" Opacity="0.10" Color="#0F172A" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.48" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -75,23 +118,30 @@
         </Style>
 
         <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource Danger}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Danger}" />
+            <Setter Property="Background" Value="#DC2626" />
+            <Setter Property="BorderBrush" Value="#B91C1C" />
             <Setter Property="Foreground" Value="#FFFFFF" />
         </Style>
 
         <Style x:Key="RibbonButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Height" Value="58" />
-            <Setter Property="MinWidth" Value="90" />
-            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Height" Value="66" />
+            <Setter Property="MinWidth" Value="94" />
+            <Setter Property="Padding" Value="12,7" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="Background" Value="#F8FAFC" />
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#FFFFFF" Offset="0" />
+                        <GradientStop Color="#F5F8FC" Offset="1" />
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="RibbonCaption" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontSize" Value="10" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#1F2937" />
+            <Setter Property="Foreground" Value="#334155" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="Margin" Value="0,3,0,0" />
         </Style>
@@ -109,65 +159,138 @@
         </Style>
 
         <Style TargetType="TextBox">
-            <Setter Property="Height" Value="27" />
-            <Setter Property="Padding" Value="6,2" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="BorderBrush" Value="#D7DEE8" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Background" Value="#FFFFFF" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Height" Value="27" />
-            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="8,2" />
             <Setter Property="BorderBrush" Value="#CBD5E1" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Background" Value="#FFFFFF" />
         </Style>
 
+        <Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+
+        <Style x:Key="ModernGridCellStyle" TargetType="DataGridCell">
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="BorderBrush" Value="#E6ECF3" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type DataGridCell}">
+                        <Border x:Name="CellBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="8,0,8,0"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="CellBorder" Property="Background" Value="#DBEAFE" />
+                                <Setter TargetName="CellBorder" Property="BorderBrush" Value="#93C5FD" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="CellBorder" Property="BorderBrush" Value="#2563EB" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#718096" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="BorderBrush" Value="#95A3B6" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+        </Style>
+
+        <Style x:Key="ModernScrollThumb" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border x:Name="ThumbChrome" Background="#B8C2D1" CornerRadius="5" Margin="2" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ThumbChrome" Property="Background" Value="#94A3B8" />
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="ThumbChrome" Property="Background" Value="#64748B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="Thumb" BasedOn="{StaticResource ModernScrollThumb}" />
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#94A3B8" />
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Vertical">
+                    <Setter Property="Width" Value="11" />
+                </Trigger>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Height" Value="11" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style TargetType="DataGrid">
-            <Setter Property="BorderBrush" Value="#C7D0DD" />
+            <Setter Property="BorderBrush" Value="#D6DEE9" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="GridLinesVisibility" Value="All" />
             <Setter Property="HorizontalGridLinesBrush" Value="#E5EAF1" />
             <Setter Property="VerticalGridLinesBrush" Value="#E5EAF1" />
             <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="RowHeight" Value="25" />
-            <Setter Property="ColumnHeaderHeight" Value="25" />
+            <Setter Property="RowHeight" Value="29" />
+            <Setter Property="ColumnHeaderHeight" Value="28" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="CanUserDeleteRows" Value="False" />
             <Setter Property="AutoGenerateColumns" Value="False" />
             <Setter Property="SelectionMode" Value="Single" />
             <Setter Property="SelectionUnit" Value="CellOrRowHeader" />
+            <Setter Property="CellStyle" Value="{StaticResource ModernGridCellStyle}" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="RowBackground" Value="#FFFFFF" />
+            <Setter Property="AlternatingRowBackground" Value="#F8FAFC" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
         </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="28" />
-            <RowDefinition Height="98" />
+            <RowDefinition Height="86" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="34" />
+            <RowDefinition Height="36" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="{StaticResource RibbonBlue}">
-            <Grid Margin="10,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="AR IEC 61850 SV Injector" Foreground="White" FontSize="13" FontWeight="SemiBold" />
-                    <TextBlock Text="  -  " Foreground="#D7E7FF" FontSize="12" />
-                    <TextBlock Text="{Binding WorkspaceTitle}" Foreground="#D7E7FF" FontSize="12" FontWeight="SemiBold" />
-                </StackPanel>
-                <TextBlock Grid.Column="1" Text="F6 Stop Injection" Foreground="#D7E7FF" VerticalAlignment="Center" FontSize="12" />
-            </Grid>
-        </Border>
-
-        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
-            <Grid Margin="12,8">
+        <Border Grid.Row="0" Background="#FBFCFE" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="12,9">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="1" />
@@ -336,33 +459,18 @@
                     </Button>
                 </StackPanel>
 
-                <Border Grid.Column="5" Background="#CBD5E1" Margin="7,0" />
+                <Border Grid.Column="5" Background="#E2E8F0" Margin="8,8" />
 
-                <Border Grid.Column="6" Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="10,5" Margin="0,0,8,0">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="220" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="Active workspace" Style="{StaticResource LabelText}" />
-                            <TextBlock Text="{Binding Mode}" FontWeight="SemiBold" Foreground="#0F172A" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="{Binding WorkspaceSubtitle}" FontSize="12" Foreground="#334155" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding LiveApplyText}" FontSize="11" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <StackPanel Grid.Column="7" VerticalAlignment="Center" MinWidth="240">
-                    <TextBlock Text="{Binding StreamControlBlock}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding PublishText}" FontSize="11" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                <StackPanel Grid.Column="6" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="999" Padding="10,4" Margin="0,0,8,0">
+                        <TextBlock Text="{Binding WorkspaceTitle}" FontSize="11.5" FontWeight="SemiBold" Foreground="#1D4ED8" />
+                    </Border>
+                    <TextBlock Text="F6 Stop" Foreground="#64748B" FontSize="11.5" VerticalAlignment="Center" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2" Margin="8">
+        <Grid Grid.Row="1" Margin="8">
             <!-- MANUAL WORKSPACE -->
             <Grid Visibility="{Binding IsManualWorkspaceVisible, Converter={StaticResource BoolToVisibilityConverter}}">
                 <Grid.ColumnDefinitions>
@@ -469,13 +577,13 @@
                                 </ContextMenu>
                             </DataGrid.ContextMenu>
                             <DataGrid.Columns>
-                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="38" />
+                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" ElementStyle="{StaticResource ModernCheckBoxStyle}" EditingElementStyle="{StaticResource ModernCheckBoxStyle}" Width="42" />
                                 <DataGridTextColumn Header="Signal" Binding="{Binding Name}" IsReadOnly="True" Width="88" />
 
                                 <DataGridTemplateColumn Header="Value" Width="98" SortMemberPath="Magnitude">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding MagnitudeText}" TextAlignment="Right" Padding="0,4,6,0" />
+                                            <TextBlock Text="{Binding MagnitudeText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
@@ -488,7 +596,7 @@
                                 <DataGridTemplateColumn Header="Angle" Width="86" SortMemberPath="AngleDegrees">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding AngleDegreesText}" TextAlignment="Right" Padding="0,4,6,0" />
+                                            <TextBlock Text="{Binding AngleDegreesText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
@@ -501,7 +609,7 @@
                                 <DataGridTemplateColumn Header="Freq" Width="92" SortMemberPath="FrequencyHz">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding FrequencyHzText}" TextAlignment="Right" Padding="0,4,6,0" />
+                                            <TextBlock Text="{Binding FrequencyHzText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
@@ -547,8 +655,8 @@
                                         <CheckBox Content="Link Frequencies" IsChecked="{Binding LinkFrequencies}" Margin="0,8,0,0" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1">
-                                        <TextBlock Text="Publisher status" Style="{StaticResource LabelText}" />
-                                        <TextBlock Text="{Binding PublishText}" TextWrapping="Wrap" Foreground="#334155" />
+                                        <TextBlock Text="Selected adapter" Style="{StaticResource LabelText}" />
+                                        <TextBlock Text="{Binding AdapterStatusText}" TextWrapping="Wrap" Foreground="#334155" />
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -639,7 +747,7 @@
                                 <DataGridTemplateColumn Header="Ramp" Width="70" SortMemberPath="Name">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding Name}" Padding="6,4,0,0" />
+                                            <TextBlock Text="{Binding Name}" Padding="8,0,8,0" VerticalAlignment="Center" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
@@ -648,10 +756,9 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellEditingTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" IsReadOnly="True" Width="76" />
                                 <DataGridTemplateColumn Header="From" Width="92" SortMemberPath="From">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding FromText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding FromText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding FromText, UpdateSourceTrigger=PropertyChanged}" Tag="From" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
@@ -659,7 +766,7 @@
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="To" Width="92" SortMemberPath="To">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding ToText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding ToText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding ToText, UpdateSourceTrigger=PropertyChanged}" Tag="To" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
@@ -668,7 +775,7 @@
                                 <DataGridTextColumn Header="Delta" Binding="{Binding DeltaText, Mode=OneWay}" IsReadOnly="True" Width="82" />
                                 <DataGridTemplateColumn Header="Step" Width="82" SortMemberPath="Step">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding StepText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding StepText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding StepText, UpdateSourceTrigger=PropertyChanged}" Tag="Step" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
@@ -676,7 +783,7 @@
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="dt" Width="74" SortMemberPath="StepTimeSeconds">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding StepTimeText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding StepTimeText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding StepTimeText, UpdateSourceTrigger=PropertyChanged}" Tag="StepTimeSeconds" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
@@ -685,7 +792,7 @@
                                 <DataGridTextColumn Header="d/dt" Binding="{Binding SlopeText, Mode=OneWay}" IsReadOnly="True" Width="88" />
                                 <DataGridTemplateColumn Header="Steps" Width="58" SortMemberPath="Steps">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding StepsText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding StepsText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding StepsText, UpdateSourceTrigger=PropertyChanged}" Tag="Steps" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
@@ -693,7 +800,7 @@
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="Time" Width="80" SortMemberPath="TimeSeconds">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding TimeText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding TimeText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding TimeText, UpdateSourceTrigger=PropertyChanged}" Tag="TimeSeconds" TextAlignment="Right" LostFocus="RampStateTextBox_LostFocus" PreviewKeyDown="RampStateTextBox_PreviewKeyDown" /></DataTemplate>
@@ -743,11 +850,11 @@
                                   PreviewMouseRightButtonDown="ManualOutputsGrid_PreviewMouseRightButtonDown"
                                   PreviewTextInput="ManualOutputsGrid_PreviewTextInput">
                             <DataGrid.Columns>
-                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="38" />
+                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" ElementStyle="{StaticResource ModernCheckBoxStyle}" EditingElementStyle="{StaticResource ModernCheckBoxStyle}" Width="42" />
                                 <DataGridTextColumn Header="Signal" Binding="{Binding Name}" IsReadOnly="True" Width="90" />
                                 <DataGridTemplateColumn Header="Value" Width="110" SortMemberPath="Magnitude">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding MagnitudeText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding MagnitudeText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding MagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="Magnitude" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" /></DataTemplate>
@@ -755,7 +862,7 @@
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="Angle" Width="100" SortMemberPath="AngleDegrees">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding AngleDegreesText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding AngleDegreesText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding AngleDegreesText, UpdateSourceTrigger=PropertyChanged}" Tag="AngleDegrees" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" /></DataTemplate>
@@ -763,7 +870,7 @@
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="Freq" Width="100" SortMemberPath="FrequencyHz">
                                     <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding FrequencyHzText}" TextAlignment="Right" Padding="0,4,6,0" /></DataTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding FrequencyHzText}" TextAlignment="Right" Padding="6,0,8,0" VerticalAlignment="Center" /></DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate><TextBox Text="{Binding FrequencyHzText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="ManualNumericTextBox_LostFocus" PreviewKeyDown="ManualNumericTextBox_PreviewKeyDown" /></DataTemplate>
@@ -812,65 +919,94 @@
                                     <DataTemplate>
                                         <Border BorderBrush="#1F2937"
                                                 BorderThickness="0,0,2,0"
-                                                Width="280"
+                                                Width="308"
                                                 Margin="0"
                                                 Cursor="Hand"
                                                 MouseLeftButtonDown="SequenceStateCard_MouseLeftButtonDown">
-                                                <Border.Style>
-                                                    <Style TargetType="Border">
-                                                        <Setter Property="Background" Value="#FFFFFF" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                                <Setter Property="Background" Value="#EAF2FF" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Border.Style>
-                                                <Grid>
-                                                    <Grid.RowDefinitions>
-                                                        <RowDefinition Height="24" />
-                                                        <RowDefinition Height="27" />
-                                                        <RowDefinition Height="27" />
-                                                        <RowDefinition Height="27" />
-                                                        <RowDefinition Height="27" />
-                                                        <RowDefinition Height="27" />
-                                                        <RowDefinition Height="27" />
-                                                        <RowDefinition Height="30" />
-                                                    </Grid.RowDefinitions>
-                                                    <Border>
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Background" Value="#7B8A9B" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                                        <Setter Property="Background" Value="#3E7CC9" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <TextBlock Text="{Binding Name}" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
-                                                    </Border>
-                                                    <TextBlock Grid.Row="1" Margin="8,5,0,0">
-                                                        <Run Text="V L1-E     "/><Run Text="{Binding VoltageMagnitudeText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding PhaseAAngleText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding FrequencyText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock Grid.Row="2" Margin="8,5,0,0">
-                                                        <Run Text="V L2-E     "/><Run Text="{Binding VoltageMagnitudeText, Mode=OneWay}"/><Run Text="    "/><Run Text="{Binding PhaseBAngleText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding FrequencyText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock Grid.Row="3" Margin="8,5,0,0">
-                                                        <Run Text="V L3-E     "/><Run Text="{Binding VoltageMagnitudeText, Mode=OneWay}"/><Run Text="     "/><Run Text="{Binding PhaseCAngleText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding FrequencyText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock Grid.Row="4" Margin="8,5,0,0">
-                                                        <Run Text="I L1       "/><Run Text="{Binding CurrentText, Mode=OneWay}"/><Run Text="       "/><Run Text="{Binding PhaseAAngleText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock Grid.Row="5" Margin="8,5,0,0">
-                                                        <Run Text="I L2       "/><Run Text="{Binding CurrentText, Mode=OneWay}"/><Run Text="    "/><Run Text="{Binding PhaseBAngleText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock Grid.Row="6" Margin="8,5,0,0">
-                                                        <Run Text="I L3       "/><Run Text="{Binding CurrentText, Mode=OneWay}"/><Run Text="     "/><Run Text="{Binding PhaseCAngleText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBox Grid.Row="7" Text="{Binding DurationSeconds, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" HorizontalContentAlignment="Center" Margin="50,2" />
-                                                </Grid>
-                                            </Border>
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#FFFFFF" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Background" Value="#EAF2FF" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="25" />
+                                                    <RowDefinition Height="25" />
+                                                    <RowDefinition Height="25" />
+                                                    <RowDefinition Height="25" />
+                                                    <RowDefinition Height="25" />
+                                                    <RowDefinition Height="25" />
+                                                    <RowDefinition Height="25" />
+                                                    <RowDefinition Height="31" />
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="72" />
+                                                    <ColumnDefinition Width="82" />
+                                                    <ColumnDefinition Width="72" />
+                                                    <ColumnDefinition Width="82" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <Border Grid.ColumnSpan="4">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#7B8A9B" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <Setter Property="Background" Value="#3E7CC9" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                                             BorderThickness="0"
+                                                             Background="Transparent"
+                                                             Foreground="White"
+                                                             HorizontalContentAlignment="Center"
+                                                             VerticalContentAlignment="Center"
+                                                             FontWeight="SemiBold"
+                                                             Padding="0"
+                                                             GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                </Border>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="V L1-E" Margin="7,5,0,0" />
+                                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding VoltageMagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="VoltageMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding PhaseAAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseAAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="V L2-E" Margin="7,5,0,0" />
+                                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding VoltageMagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="VoltageMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding PhaseBAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseBAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="V L3-E" Margin="7,5,0,0" />
+                                                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding VoltageMagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="VoltageMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding PhaseCAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseCAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                                                <TextBlock Grid.Row="4" Grid.Column="0" Text="I L1" Margin="7,5,0,0" />
+                                                <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding CurrentText, UpdateSourceTrigger=PropertyChanged}" Tag="CurrentMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding PhaseAAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseAAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                                                <TextBlock Grid.Row="5" Grid.Column="0" Text="I L2" Margin="7,5,0,0" />
+                                                <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding CurrentText, UpdateSourceTrigger=PropertyChanged}" Tag="CurrentMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="5" Grid.Column="2" Text="{Binding PhaseBAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseBAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="5" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                                                <TextBlock Grid.Row="6" Grid.Column="0" Text="I L3" Margin="7,5,0,0" />
+                                                <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding CurrentText, UpdateSourceTrigger=PropertyChanged}" Tag="CurrentMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="6" Grid.Column="2" Text="{Binding PhaseCAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseCAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                                                <TextBox Grid.Row="6" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Duration" Margin="7,7,0,0" />
+                                                <TextBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding DurationText, UpdateSourceTrigger=PropertyChanged}" Tag="DurationSeconds" HorizontalContentAlignment="Center" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" Margin="10,2" />
+                                            </Grid>
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -884,42 +1020,65 @@
                             <TextBlock Text="Detail View: Analog Out" Foreground="White" FontWeight="SemiBold" />
                         </Border>
 
-                        <Grid DockPanel.Dock="Top" Margin="8,8,8,6">
+                        <Grid DockPanel.Dock="Top" Margin="8" DataContext="{Binding SelectedSequenceState}">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="78" />
                                 <ColumnDefinition Width="92" />
-                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="82" />
+                                <ColumnDefinition Width="92" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="31" />
-                                <RowDefinition Height="31" />
-                                <RowDefinition Height="31" />
-                                <RowDefinition Height="31" />
-                                <RowDefinition Height="31" />
-                                <RowDefinition Height="31" />
+                                <RowDefinition Height="30" />
+                                <RowDefinition Height="30" />
+                                <RowDefinition Height="30" />
+                                <RowDefinition Height="30" />
+                                <RowDefinition Height="30" />
+                                <RowDefinition Height="30" />
+                                <RowDefinition Height="30" />
+                                <RowDefinition Height="30" />
+                                <RowDefinition Height="30" />
                             </Grid.RowDefinitions>
-                            <TextBlock Text="Selected" Style="{StaticResource LabelText}" />
-                            <ComboBox Grid.Column="1" ItemsSource="{Binding SequenceStates}" SelectedItem="{Binding SelectedSequenceState, Mode=TwoWay}" DisplayMemberPath="Name" />
-                            <TextBlock Grid.Row="1" Text="Name" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SelectedSequenceState.Name, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Row="2" Text="Duration" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SelectedSequenceState.DurationSeconds, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" />
-                            <TextBlock Grid.Row="3" Text="I value" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SelectedSequenceState.CurrentScale, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" />
-                            <TextBlock Grid.Row="4" Text="V scale" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding SelectedSequenceState.VoltageScale, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" />
-                            <TextBlock Grid.Row="5" Text="Angle shift" Style="{StaticResource LabelText}" />
-                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding SelectedSequenceState.AngleShiftDegrees, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.000}}" />
-                        </Grid>
 
-                        <DataGrid ItemsSource="{Binding SequencePreviewChannels}" IsReadOnly="True" Margin="8,0,8,8">
-                            <DataGrid.Columns>
-                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled}" Width="38" />
-                                <DataGridTextColumn Header="Signal" Binding="{Binding Name}" Width="82" />
-                                <DataGridTextColumn Header="Value" Binding="{Binding MagnitudeText, Mode=OneWay}" Width="96" />
-                                <DataGridTextColumn Header="Angle" Binding="{Binding AngleDegreesText, Mode=OneWay}" Width="92" />
-                                <DataGridTextColumn Header="Freq" Binding="{Binding FrequencyHzText, Mode=OneWay}" Width="92" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                            <TextBlock Text="State" Style="{StaticResource LabelText}" />
+                            <TextBox Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Value" HorizontalAlignment="Center" Style="{StaticResource LabelText}" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Angle" HorizontalAlignment="Center" Style="{StaticResource LabelText}" />
+                            <TextBlock Grid.Row="1" Grid.Column="3" Text="Freq" HorizontalAlignment="Center" Style="{StaticResource LabelText}" />
+
+                            <TextBlock Grid.Row="2" Text="V L1-E" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding VoltageMagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="VoltageMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding PhaseAAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseAAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                            <TextBlock Grid.Row="3" Text="V L2-E" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding VoltageMagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="VoltageMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding PhaseBAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseBAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                            <TextBlock Grid.Row="4" Text="V L3-E" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding VoltageMagnitudeText, UpdateSourceTrigger=PropertyChanged}" Tag="VoltageMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding PhaseCAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseCAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                            <TextBlock Grid.Row="5" Text="I L1" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding CurrentText, UpdateSourceTrigger=PropertyChanged}" Tag="CurrentMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="5" Grid.Column="2" Text="{Binding PhaseAAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseAAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="5" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                            <TextBlock Grid.Row="6" Text="I L2" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding CurrentText, UpdateSourceTrigger=PropertyChanged}" Tag="CurrentMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="6" Grid.Column="2" Text="{Binding PhaseBAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseBAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="6" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                            <TextBlock Grid.Row="7" Text="I L3" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding CurrentText, UpdateSourceTrigger=PropertyChanged}" Tag="CurrentMagnitude" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="7" Grid.Column="2" Text="{Binding PhaseCAngleText, UpdateSourceTrigger=PropertyChanged}" Tag="PhaseCAngle" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                            <TextBox Grid.Row="7" Grid.Column="3" Text="{Binding FrequencyText, UpdateSourceTrigger=PropertyChanged}" Tag="FrequencyHz" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+
+                            <TextBlock Grid.Row="8" Text="Duration" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding DurationText, UpdateSourceTrigger=PropertyChanged}" Tag="DurationSeconds" TextAlignment="Right" LostFocus="SequenceStateTextBox_LostFocus" PreviewKeyDown="SequenceStateTextBox_PreviewKeyDown" GotKeyboardFocus="SequenceStateTextBox_GotKeyboardFocus" />
+                        </Grid>
                     </DockPanel>
                 </Border>
 
@@ -944,14 +1103,18 @@
 
                     </Grid>
 
-        <Border Grid.Row="3" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+        <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
             <Grid Margin="12,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="210" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="#334155" />
-                <TextBlock Grid.Column="1" Text="{Binding LiveApplyText}" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="#334155" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="1" Text="{Binding AdapterStatusText}" VerticalAlignment="Center" Foreground="#475569" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
+                <TextBlock Grid.Column="2" Text="{Binding StreamControlBlock}" VerticalAlignment="Center" Foreground="#64748B" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
+                <TextBlock Grid.Column="3" Text="F6 Stop Injection" VerticalAlignment="Center" Foreground="#64748B" Margin="16,0,0,0" />
             </Grid>
         </Border>
     </Grid>

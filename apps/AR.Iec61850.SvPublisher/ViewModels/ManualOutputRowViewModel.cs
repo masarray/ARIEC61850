@@ -8,7 +8,7 @@ public sealed class ManualOutputRowViewModel : ObservableObject
     public const string AngleDegreesPropertyName = nameof(AngleDegrees);
     public const string FrequencyHzPropertyName = nameof(FrequencyHz);
 
-    private const string NumericFormat = "0.###";
+    private const string NumericFormat = "0.000";
     private readonly Action<ManualOutputRowViewModel, string> _onChanged;
     private bool _isEnabled = true;
     private string _name;
@@ -71,12 +71,12 @@ public sealed class ManualOutputRowViewModel : ObservableObject
             var coerced = CoerceMagnitude(value);
             if (SetProperty(ref _magnitude, coerced))
             {
-                MagnitudeText = FormatNumber(coerced);
+                MagnitudeText = FormatMagnitude(coerced);
                 _onChanged(this, nameof(Magnitude));
             }
             else
             {
-                MagnitudeText = FormatNumber(coerced);
+                MagnitudeText = FormatMagnitude(coerced);
             }
         }
     }
@@ -89,12 +89,12 @@ public sealed class ManualOutputRowViewModel : ObservableObject
             var coerced = NormalizeDegrees(value);
             if (SetProperty(ref _angleDegrees, coerced))
             {
-                AngleDegreesText = FormatNumber(coerced);
+                AngleDegreesText = FormatAngle(coerced);
                 _onChanged(this, nameof(AngleDegrees));
             }
             else
             {
-                AngleDegreesText = FormatNumber(coerced);
+                AngleDegreesText = FormatAngle(coerced);
             }
         }
     }
@@ -107,16 +107,20 @@ public sealed class ManualOutputRowViewModel : ObservableObject
             var coerced = CoerceFrequency(value);
             if (SetProperty(ref _frequencyHz, coerced))
             {
-                FrequencyHzText = FormatNumber(coerced);
+                FrequencyHzText = FormatFrequency(coerced);
                 _onChanged(this, nameof(FrequencyHz));
             }
             else
             {
-                FrequencyHzText = FormatNumber(coerced);
+                FrequencyHzText = FormatFrequency(coerced);
             }
         }
     }
 
+    /// <summary>
+    /// Display text after commit. The editor accepts either plain numbers or values with units
+    /// such as "57.740 V", "1.000 A", "50.000 Hz", and "-120.000 °".
+    /// </summary>
     public string MagnitudeText
     {
         get => _magnitudeText;
@@ -152,30 +156,30 @@ public sealed class ManualOutputRowViewModel : ObservableObject
         switch (propertyName)
         {
             case MagnitudePropertyName:
-                MagnitudeText = FormatNumber(Magnitude);
+                MagnitudeText = FormatMagnitude(Magnitude);
                 break;
             case AngleDegreesPropertyName:
-                AngleDegreesText = FormatNumber(AngleDegrees);
+                AngleDegreesText = FormatAngle(AngleDegrees);
                 break;
             case FrequencyHzPropertyName:
-                FrequencyHzText = FormatNumber(FrequencyHz);
+                FrequencyHzText = FormatFrequency(FrequencyHz);
                 break;
         }
     }
 
     public void RefreshTexts()
     {
-        MagnitudeText = FormatNumber(Magnitude);
-        AngleDegreesText = FormatNumber(AngleDegrees);
-        FrequencyHzText = FormatNumber(FrequencyHz);
+        MagnitudeText = FormatMagnitude(Magnitude);
+        AngleDegreesText = FormatAngle(AngleDegrees);
+        FrequencyHzText = FormatFrequency(FrequencyHz);
     }
 
     private bool CommitMagnitude(out string warning)
     {
         warning = string.Empty;
-        if (!TryParseOperatorNumber(MagnitudeText, out var value) || !IsFinite(value) || value < 0 || value > 1_000_000_000)
+        if (!TryParseOperatorNumber(MagnitudeText, Unit, out var value) || !IsFinite(value) || value < 0 || value > 1_000_000_000)
         {
-            warning = $"Invalid value for {Name}. Magnitude must be a numeric value from 0 to 1,000,000,000.";
+            warning = $"Invalid value for {Name}. Magnitude must be a numeric value from 0 to 1,000,000,000 {Unit}.";
             RejectText(MagnitudePropertyName);
             return false;
         }
@@ -187,7 +191,7 @@ public sealed class ManualOutputRowViewModel : ObservableObject
     private bool CommitAngle(out string warning)
     {
         warning = string.Empty;
-        if (!TryParseOperatorNumber(AngleDegreesText, out var value) || !IsFinite(value) || Math.Abs(value) > 360_000)
+        if (!TryParseOperatorNumber(AngleDegreesText, "°", out var value) || !IsFinite(value) || Math.Abs(value) > 360_000)
         {
             warning = $"Invalid angle for {Name}. Angle must be a numeric value within ±360,000 degrees.";
             RejectText(AngleDegreesPropertyName);
@@ -201,7 +205,7 @@ public sealed class ManualOutputRowViewModel : ObservableObject
     private bool CommitFrequency(out string warning)
     {
         warning = string.Empty;
-        if (!TryParseOperatorNumber(FrequencyHzText, out var value) || !IsFinite(value) || value < 0 || value > 5_000)
+        if (!TryParseOperatorNumber(FrequencyHzText, "Hz", out var value) || !IsFinite(value) || value < 0 || value > 5_000)
         {
             warning = $"Invalid frequency for {Name}. Frequency must be a numeric value from 0 to 5000 Hz. Use 0 Hz for DC.";
             RejectText(FrequencyHzPropertyName);
@@ -212,13 +216,29 @@ public sealed class ManualOutputRowViewModel : ObservableObject
         return true;
     }
 
-    private static bool TryParseOperatorNumber(string text, out double value)
+    private static bool TryParseOperatorNumber(string text, string unit, out double value)
     {
-        var input = (text ?? string.Empty).Trim();
+        var input = NormalizeOperatorInput(text, unit);
         if (double.TryParse(input, NumberStyles.Float, CultureInfo.CurrentCulture, out value))
             return true;
 
         return double.TryParse(input, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static string NormalizeOperatorInput(string text, string unit)
+    {
+        var input = (text ?? string.Empty).Trim();
+        input = input.Replace(" ", string.Empty, StringComparison.Ordinal);
+        input = input.Replace("deg", string.Empty, StringComparison.OrdinalIgnoreCase);
+        input = input.Replace("degree", string.Empty, StringComparison.OrdinalIgnoreCase);
+        input = input.Replace("degrees", string.Empty, StringComparison.OrdinalIgnoreCase);
+        input = input.Replace("°", string.Empty, StringComparison.Ordinal);
+        input = input.Replace("Hz", string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(unit))
+            input = input.Replace(unit, string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        return input.Trim();
     }
 
     private static bool IsFinite(double value)
@@ -241,6 +261,15 @@ public sealed class ManualOutputRowViewModel : ObservableObject
             degrees += 360;
         return Math.Round(degrees, 6);
     }
+
+    private string FormatMagnitude(double value)
+        => $"{FormatNumber(value)} {Unit}";
+
+    private static string FormatAngle(double value)
+        => $"{FormatNumber(value)} °";
+
+    private static string FormatFrequency(double value)
+        => $"{FormatNumber(value)} Hz";
 
     private static string FormatNumber(double value)
         => value.ToString(NumericFormat, CultureInfo.InvariantCulture);

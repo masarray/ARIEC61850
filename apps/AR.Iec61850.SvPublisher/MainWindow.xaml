@@ -325,7 +325,7 @@
                             <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="38" />
                             <DataGridTextColumn Header="Signal" Binding="{Binding Name}" IsReadOnly="True" Width="88" />
 
-                            <DataGridTemplateColumn Header="Value" Width="*" SortMemberPath="Magnitude">
+                            <DataGridTemplateColumn Header="Value" Width="98" SortMemberPath="Magnitude">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding MagnitudeText}" TextAlignment="Right" Padding="0,4,6,0" />
@@ -342,7 +342,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Angle" Width="66" SortMemberPath="AngleDegrees">
+                            <DataGridTemplateColumn Header="Angle" Width="86" SortMemberPath="AngleDegrees">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding AngleDegreesText}" TextAlignment="Right" Padding="0,4,6,0" />
@@ -359,7 +359,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Freq" Width="66" SortMemberPath="FrequencyHz">
+                            <DataGridTemplateColumn Header="Freq" Width="92" SortMemberPath="FrequencyHz">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding FrequencyHzText}" TextAlignment="Right" Padding="0,4,6,0" />
@@ -376,7 +376,6 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" IsReadOnly="True" Width="42" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>

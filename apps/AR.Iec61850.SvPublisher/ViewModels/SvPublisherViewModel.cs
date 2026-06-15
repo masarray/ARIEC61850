@@ -694,7 +694,7 @@ public sealed class SvPublisherViewModel : ObservableObject
         var effectiveRate = sent / Math.Max(totalElapsed.TotalSeconds, 0.001);
         Dispatch(() =>
         {
-            PublishText = $"Complete frames={sent} elapsed={totalElapsed.TotalSeconds:0.###}s rate={effectiveRate:0.0} fps lastFrame={lastFrameBytes}B";
+            PublishText = $"Complete frames={sent} elapsed={totalElapsed.TotalSeconds:0.000}s rate={effectiveRate:0.0} fps lastFrame={lastFrameBytes}B";
             StatusText = "Publisher complete.";
             AppendEvent(PublishText);
         });
@@ -1350,7 +1350,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                     row.Magnitude = value;
             }
         }, $"Equal magnitudes from {anchor.Name}");
-        AppendEvent($"Equal magnitudes applied using {anchor.Name}={value:0.###} {anchor.Unit} as reference.");
+        AppendEvent($"Equal magnitudes applied using {anchor.Name}={value:0.000} {anchor.Unit} as reference.");
     }
 
     private void LineAngleFromContext()
@@ -1391,7 +1391,7 @@ public sealed class SvPublisherViewModel : ObservableObject
             }
         }, $"Balance angles from {anchor.Name}");
 
-        AppendEvent($"Balance angles applied using {anchor.Name} as anchor. Anchor angle stayed {anchorAngle:0.###} deg.");
+        AppendEvent($"Balance angles applied using {anchor.Name} as anchor. Anchor angle stayed {anchorAngle:0.000} deg.");
     }
 
     private static bool TryResolveBalanceGroup(string key, bool reverse, out string[] keys, out double[] offsets)
@@ -1627,7 +1627,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                     row.AngleDegrees = baseAngle + offsets[i];
             }
         }, $"Reverse rotation from {anchor.Name}");
-        AppendEvent($"Reverse rotation applied using {anchor.Name} as anchor. Anchor angle stayed {anchorAngle:0.###} deg.");
+        AppendEvent($"Reverse rotation applied using {anchor.Name} as anchor. Anchor angle stayed {anchorAngle:0.000} deg.");
     }
 
     private void NominalFrequencyFromContext()
@@ -1636,7 +1636,7 @@ public sealed class SvPublisherViewModel : ObservableObject
             return;
 
         SetRowsInBatch(() => row.FrequencyHz = NominalFrequencyHz, $"Nominal frequency applied to {row.Name}", preserveFrequencies: true);
-        AppendEvent($"Nominal frequency {NominalFrequencyHz:0.###} Hz applied to {row.Name}.");
+        AppendEvent($"Nominal frequency {NominalFrequencyHz:0.000} Hz applied to {row.Name}.");
     }
 
     private void DcFrequencyFromContext()
@@ -1668,7 +1668,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                     row.FrequencyHz = value;
             }
         }, $"Equal frequencies from {anchor.Name}", preserveFrequencies: true);
-        AppendEvent($"Equal frequencies applied using {anchor.Name}={value:0.###} Hz as reference.");
+        AppendEvent($"Equal frequencies applied using {anchor.Name}={value:0.000} Hz as reference.");
     }
 
     private void ReverseRotation()

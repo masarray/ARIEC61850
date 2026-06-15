@@ -109,7 +109,7 @@ public sealed class WaveformPlot : FrameworkElement
             var y = lane.Y + 8 + (i * 18);
             var color = ResolveColor(channel.Key);
             drawingContext.DrawLine(new Pen(new SolidColorBrush(color), 2), new Point(legendX, y + 7), new Point(legendX + 18, y + 7));
-            DrawText(drawingContext, $"{channel.Name} {channel.Magnitude:0.###}", new Point(legendX + 24, y), 11, color);
+            DrawText(drawingContext, $"{channel.Name} {channel.Magnitude:0.000} {channel.Unit}", new Point(legendX + 24, y), 11, color);
         }
     }
 
@@ -193,12 +193,10 @@ public sealed class WaveformPlot : FrameworkElement
     private static Color ResolveColor(string key)
         => key switch
         {
-            "Ia" => Color.FromRgb(37, 99, 235),
-            "Ib" => Color.FromRgb(14, 165, 233),
-            "Ic" => Color.FromRgb(79, 70, 229),
-            "Va" => Color.FromRgb(217, 119, 6),
-            "Vb" => Color.FromRgb(22, 163, 74),
-            "Vc" => Color.FromRgb(220, 38, 38),
-            _ => Color.FromRgb(71, 85, 105)
+            "Va" or "Vab" or "V1" or "Ia" or "I1" => Color.FromRgb(220, 38, 38),
+            "Vb" or "Vbc" or "V2" or "Ib" or "I2" => Color.FromRgb(217, 119, 6),
+            "Vc" or "Vca" or "Ic" => Color.FromRgb(37, 99, 235),
+            "V0" or "I0" or "Vn" or "In" => Color.FromRgb(71, 85, 105),
+            _ => Color.FromRgb(51, 65, 85)
         };
 }

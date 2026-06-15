@@ -74,8 +74,8 @@ public sealed class PhasorPlot : FrameworkElement
             DrawLabel(drawingContext, channel.Name, new Point(end.X + 6, end.Y - 9), 12, color);
         }
 
-        DrawLabel(drawingContext, voltageMax.ToString("0.###", CultureInfo.InvariantCulture) + " V", new Point(12, height - 26), 11, Color.FromRgb(37, 99, 235));
-        DrawLabel(drawingContext, currentMax.ToString("0.###", CultureInfo.InvariantCulture) + " A", new Point(width - 58, height - 26), 11, Color.FromRgb(220, 38, 38));
+        DrawLabel(drawingContext, voltageMax.ToString("0.000", CultureInfo.InvariantCulture) + " V", new Point(12, height - 26), 11, Color.FromRgb(37, 99, 235));
+        DrawLabel(drawingContext, currentMax.ToString("0.000", CultureInfo.InvariantCulture) + " A", new Point(width - 58, height - 26), 11, Color.FromRgb(220, 38, 38));
     }
 
     private static void DrawPolarGrid(DrawingContext drawingContext, Point center, double radius, Pen gridPen, Pen minorGridPen, Pen axisPen)
@@ -215,23 +215,20 @@ public sealed class PhasorPlot : FrameworkElement
 
     private static Color ResolveColor(string key, string kind)
     {
-        if (kind == "V")
-        {
-            return key switch
-            {
-                "Va" or "Vab" or "V1" => Color.FromRgb(0, 0, 255),
-                "Vb" or "Vbc" or "V2" => Color.FromRgb(37, 99, 235),
-                "Vc" or "Vca" or "V0" => Color.FromRgb(29, 78, 216),
-                _ => Color.FromRgb(30, 64, 175)
-            };
-        }
-
-        return key switch
-        {
-            "Ia" or "I1" => Color.FromRgb(220, 38, 38),
-            "Ib" or "I2" => Color.FromRgb(239, 68, 68),
-            "Ic" or "I0" => Color.FromRgb(185, 28, 28),
-            _ => Color.FromRgb(127, 29, 29)
-        };
+        // Phase color convention used by many IEC / substation drawings:
+        // R/A/L1 = red, S/B/L2 = yellow, T/C/L3 = blue, neutral/residual = gray.
+        // Voltage and current intentionally share the same phase color so the operator
+        // sees phase identity consistently across phasor and waveform views.
+        return ResolvePhaseColor(key);
     }
+
+    private static Color ResolvePhaseColor(string key)
+        => key switch
+        {
+            "Va" or "Vab" or "V1" or "Ia" or "I1" => Color.FromRgb(220, 38, 38),
+            "Vb" or "Vbc" or "V2" or "Ib" or "I2" => Color.FromRgb(217, 119, 6),
+            "Vc" or "Vca" or "Ic" => Color.FromRgb(37, 99, 235),
+            "V0" or "I0" or "Vn" or "In" => Color.FromRgb(71, 85, 105),
+            _ => Color.FromRgb(51, 65, 85)
+        };
 }

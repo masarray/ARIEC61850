@@ -1,6 +1,8 @@
 using AR.Iec61850.TimeSync.Health;
 using AR.Iec61850.TimeSync.Monitoring;
 using AR.Iec61850.TimeSync.Ptp;
+using AR.Iec61850.TimeSync.PtpRuntime;
+using AR.Iec61850.Transports;
 
 namespace AR.Iec61850.Tests;
 
@@ -83,4 +85,40 @@ public class PtpTimeSyncTests
         Assert.True(report.IsHealthy);
         Assert.Equal(SmpSynchValue.GlobalSynchronized, PtpSmpSynchPolicy.Resolve(report));
     }
+    [Fact]
+    public async Task LabPtpPublisherRuntimeBroadcastsAnnounceSyncAndFollowUp()
+    {
+        var transport = new InMemoryProcessBusTransport();
+        var runtime = new PtpPublisherRuntime(transport, new PtpPublisherOptions
+        {
+            DomainNumber = 0,
+            SourceMac = new byte[] { 0x02, 0x00, 0x00, 0xFF, 0xFE, 0x01 },
+            ClockIdentity = ClockIdentity.Parse("02:00:00:FF:FE:00:00:01"),
+            AnnounceInterval = TimeSpan.FromSeconds(1),
+            SyncInterval = TimeSpan.FromMilliseconds(100),
+            FollowUpDelay = TimeSpan.Zero,
+            TwoStepClock = true
+        });
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(180));
+        await runtime.RunAsync(cts.Token);
+
+        var parsedTypes = transport.Frames
+            .Where(frame => PtpPacketParser.TryParseEthernetFrame(frame, out _))
+            .Select(frame =>
+            {
+                PtpPacketParser.TryParseEthernetFrame(frame, out var parsed);
+                return parsed.Header.MessageType;
+            })
+            .ToArray();
+
+        Assert.Contains(PtpMessageType.Announce, parsedTypes);
+        Assert.Contains(PtpMessageType.Sync, parsedTypes);
+        Assert.Contains(PtpMessageType.FollowUp, parsedTypes);
+        var status = runtime.GetStatus();
+        Assert.True(status.AnnounceSent >= 1);
+        Assert.True(status.SyncSent >= 1);
+        Assert.True(status.FollowUpSent >= 1);
+    }
+
 }

@@ -9,6 +9,20 @@ public enum InjectionMode
     Sequencer
 }
 
+public enum SvSyncPolicyMode
+{
+    AutoPtp,
+    ForceUnsynchronized,
+    ForceLocal,
+    ForceGlobal
+}
+
+public enum PtpPublisherMode
+{
+    MonitorOnly,
+    LabPublisher
+}
+
 public sealed class SvStreamChoice
 {
     public required int Index { get; init; }
@@ -84,6 +98,14 @@ public sealed class SvPublisherConfigSnapshot
     public string ManualSetMode { get; init; } = "Direct";
     public bool AutoApplyWhileRunning { get; init; } = true;
     public bool LinkFrequencies { get; init; } = true;
+    public SvSyncPolicyMode SyncPolicyMode { get; init; } = SvSyncPolicyMode.AutoPtp;
+    public int ExpectedPtpDomain { get; init; }
+    public bool PtpAllowLocalFallback { get; init; } = true;
+    public PtpPublisherMode PtpPublisherMode { get; init; } = PtpPublisherMode.MonitorOnly;
+    public string PtpClockIdentity { get; init; } = "02:00:00:FF:FE:00:00:01";
+    public int PtpAnnounceIntervalMs { get; init; } = 1000;
+    public int PtpSyncIntervalMs { get; init; } = 250;
+    public bool PtpRespondToPeerDelay { get; init; } = true;
     public string RampSignalKey { get; init; } = string.Empty;
     public double RampTargetMagnitude { get; init; }
     public double RampDurationSeconds { get; init; }

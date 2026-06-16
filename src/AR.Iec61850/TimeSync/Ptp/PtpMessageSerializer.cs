@@ -48,12 +48,14 @@ public static class PtpMessageSerializer
         return BuildMessage(PtpMessageType.Announce, options, 0x05, body);
     }
 
-    public static byte[] BuildEthernetFrame(ReadOnlySpan<byte> destinationMac, ReadOnlySpan<byte> sourceMac, ReadOnlySpan<byte> ptpMessage, ushort? vlanId = null)
+    public static byte[] BuildEthernetFrame(ReadOnlySpan<byte> destinationMac, ReadOnlySpan<byte> sourceMac, ReadOnlySpan<byte> ptpMessage, ushort? vlanId = null, byte vlanPriority = 0)
     {
         if (destinationMac.Length != 6)
             throw new ArgumentException("Destination MAC must be 6 bytes.", nameof(destinationMac));
         if (sourceMac.Length != 6)
             throw new ArgumentException("Source MAC must be 6 bytes.", nameof(sourceMac));
+        if (vlanPriority > 7)
+            throw new ArgumentOutOfRangeException(nameof(vlanPriority), "VLAN priority must be 0..7.");
 
         var headerLength = vlanId.HasValue ? 18 : 14;
         var frame = new byte[headerLength + ptpMessage.Length];
@@ -63,7 +65,8 @@ public static class PtpMessageSerializer
         if (vlanId.HasValue)
         {
             BinaryPrimitives.WriteUInt16BigEndian(frame.AsSpan(offset, 2), PtpConstants.VlanEtherType);
-            BinaryPrimitives.WriteUInt16BigEndian(frame.AsSpan(offset + 2, 2), (ushort)(vlanId.Value & 0x0FFF));
+            var tagControlInformation = (ushort)(((vlanPriority & 0x07) << 13) | (vlanId.Value & 0x0FFF));
+            BinaryPrimitives.WriteUInt16BigEndian(frame.AsSpan(offset + 2, 2), tagControlInformation);
             offset += 4;
         }
 

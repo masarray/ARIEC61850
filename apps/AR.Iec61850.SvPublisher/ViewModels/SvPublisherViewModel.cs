@@ -15,6 +15,10 @@ using AR.Iec61850.Scl;
 using AR.Iec61850.SvPublisher.Models;
 using AR.Iec61850.Transports;
 using AR.Iec61850.Transports.Npcap;
+using AR.Iec61850.TimeSync.Health;
+using AR.Iec61850.TimeSync.Monitoring;
+using AR.Iec61850.TimeSync.Ptp;
+using AR.Iec61850.TimeSync.PtpRuntime;
 using Microsoft.Win32;
 
 namespace AR.Iec61850.SvPublisher.ViewModels;
@@ -24,6 +28,7 @@ public sealed class SvPublisherViewModel : ObservableObject
     private const string DirectSetMode = "Direct";
     private const string LineLineSetMode = "Line-Line";
     private const string SymmetricalSetMode = "Symmetrical components";
+    private const string PtpCaptureFilter = "ether proto 0x88f7";
     private const double NominalVoltageLn = 57.735;
     private const double NominalVoltageLl = 100.0;
     private const double NominalCurrent = 1.0;
@@ -63,6 +68,17 @@ public sealed class SvPublisherViewModel : ObservableObject
     private bool _isPublishing;
     private bool _autoApplyWhileRunning = true;
     private bool _linkFrequencies = true;
+    private SvSyncPolicyMode _syncPolicyMode = SvSyncPolicyMode.AutoPtp;
+    private int _expectedPtpDomain;
+    private bool _ptpAllowLocalFallback = true;
+    private PtpPublisherMode _ptpPublisherMode = AR.Iec61850.SvPublisher.Models.PtpPublisherMode.MonitorOnly;
+    private string _ptpClockIdentityText = "02:00:00:FF:FE:00:00:01";
+    private int _ptpAnnounceIntervalMs = 1000;
+    private int _ptpSyncIntervalMs = 250;
+    private bool _ptpRespondToPeerDelay = true;
+    private string _ptpPublisherStatusText = "PTP TX: off";
+    private string _ptpStatusText = "PTP: idle";
+    private string _smpSynchStatusText = "smpSynch: Auto PTP";
     private bool _isUpdatingManualRows;
     private ManualOutputRowViewModel? _contextManualRow;
     private string _contextColumnHeader = string.Empty;
@@ -192,6 +208,20 @@ public sealed class SvPublisherViewModel : ObservableObject
         SymmetricalSetMode
     ];
 
+    public IReadOnlyList<SvSyncPolicyMode> SyncPolicyModes { get; } =
+    [
+        SvSyncPolicyMode.AutoPtp,
+        SvSyncPolicyMode.ForceUnsynchronized,
+        SvSyncPolicyMode.ForceLocal,
+        SvSyncPolicyMode.ForceGlobal
+    ];
+
+    public IReadOnlyList<PtpPublisherMode> PtpPublisherModes { get; } =
+    [
+        AR.Iec61850.SvPublisher.Models.PtpPublisherMode.MonitorOnly,
+        AR.Iec61850.SvPublisher.Models.PtpPublisherMode.LabPublisher
+    ];
+
     public IReadOnlyList<InjectionMode> Modes { get; } =
     [
         InjectionMode.Manual,
@@ -259,6 +289,38 @@ public sealed class SvPublisherViewModel : ObservableObject
     public string AdapterStatusText => SelectedAdapter is null
         ? "Adapter: not selected"
         : $"Adapter: {SelectedAdapter.DisplayName}";
+
+    public string PtpStatusText
+    {
+        get => _ptpStatusText;
+        private set
+        {
+            if (SetProperty(ref _ptpStatusText, value))
+                OnPropertyChanged(nameof(SyncStatusBarText));
+        }
+    }
+
+    public string SmpSynchStatusText
+    {
+        get => _smpSynchStatusText;
+        private set
+        {
+            if (SetProperty(ref _smpSynchStatusText, value))
+                OnPropertyChanged(nameof(SyncStatusBarText));
+        }
+    }
+
+    public string PtpPublisherStatusText
+    {
+        get => _ptpPublisherStatusText;
+        private set
+        {
+            if (SetProperty(ref _ptpPublisherStatusText, value))
+                OnPropertyChanged(nameof(SyncStatusBarText));
+        }
+    }
+
+    public string SyncStatusBarText => $"{PtpStatusText}  |  {PtpPublisherStatusText}  |  {SmpSynchStatusText}";
 
     public string EvidenceText
     {
@@ -490,6 +552,74 @@ public sealed class SvPublisherViewModel : ObservableObject
                 AppendEvent("Frequencies linked to nominal frequency.");
             }
         }
+    }
+
+    public SvSyncPolicyMode SyncPolicyMode
+    {
+        get => _syncPolicyMode;
+        set
+        {
+            if (SetProperty(ref _syncPolicyMode, value))
+            {
+                SmpSynchStatusText = value switch
+                {
+                    SvSyncPolicyMode.ForceUnsynchronized => "smpSynch=0 forced",
+                    SvSyncPolicyMode.ForceLocal => "smpSynch=1 forced",
+                    SvSyncPolicyMode.ForceGlobal => "smpSynch=2 forced",
+                    _ => "smpSynch: Auto PTP"
+                };
+                AppendEvent($"Sync policy changed to {value}.");
+            }
+        }
+    }
+
+    public int ExpectedPtpDomain
+    {
+        get => _expectedPtpDomain;
+        set => SetProperty(ref _expectedPtpDomain, Math.Clamp(value, 0, 255));
+    }
+
+    public bool PtpAllowLocalFallback
+    {
+        get => _ptpAllowLocalFallback;
+        set => SetProperty(ref _ptpAllowLocalFallback, value);
+    }
+
+    public PtpPublisherMode PtpPublisherMode
+    {
+        get => _ptpPublisherMode;
+        set
+        {
+            if (SetProperty(ref _ptpPublisherMode, value))
+            {
+                PtpPublisherStatusText = value == AR.Iec61850.SvPublisher.Models.PtpPublisherMode.LabPublisher ? "PTP TX: lab publisher armed" : "PTP TX: off";
+                AppendEvent($"PTP mode changed to {value}.");
+            }
+        }
+    }
+
+    public string PtpClockIdentityText
+    {
+        get => _ptpClockIdentityText;
+        set => SetProperty(ref _ptpClockIdentityText, value);
+    }
+
+    public int PtpAnnounceIntervalMs
+    {
+        get => _ptpAnnounceIntervalMs;
+        set => SetProperty(ref _ptpAnnounceIntervalMs, Math.Clamp(value, 100, 10000));
+    }
+
+    public int PtpSyncIntervalMs
+    {
+        get => _ptpSyncIntervalMs;
+        set => SetProperty(ref _ptpSyncIntervalMs, Math.Clamp(value, 20, 5000));
+    }
+
+    public bool PtpRespondToPeerDelay
+    {
+        get => _ptpRespondToPeerDelay;
+        set => SetProperty(ref _ptpRespondToPeerDelay, value);
     }
 
     public bool IsPublishing
@@ -962,11 +1092,35 @@ public sealed class SvPublisherViewModel : ObservableObject
             },
             StringComparer.OrdinalIgnoreCase);
 
-        IProcessBusTransport transport = live
-            ? new NpcapProcessBusTransport(SelectedAdapter?.Selector ?? string.Empty)
-            : new InMemoryProcessBusTransport();
+        var ptpMonitor = new PtpPassiveMonitor();
+        var ptpValidator = new PtpTimingHealthValidator();
+        var ptpOptions = BuildPtpHealthOptions();
+        PtpTimingHealthReport? latestPtpReport = null;
+
+        IProcessBusTransport transport;
+        IProcessBusFrameSource? frameSource = null;
+        if (live)
+        {
+            var duplex = new NpcapProcessBusDuplexTransport(SelectedAdapter?.Selector ?? string.Empty);
+            transport = duplex;
+            frameSource = duplex;
+        }
+        else
+        {
+            transport = new InMemoryProcessBusTransport();
+        }
 
         IDisposable? disposableTransport = transport as IDisposable;
+        using var ptpCaptureStop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        PtpPublisherRuntime? labPtpPublisher = live && PtpPublisherMode == AR.Iec61850.SvPublisher.Models.PtpPublisherMode.LabPublisher
+            ? new PtpPublisherRuntime(transport, BuildLabPtpOptions(source, vlan))
+            : null;
+        var labPtpTask = labPtpPublisher is not null
+            ? Task.Run(async () => await labPtpPublisher.RunAsync(ptpCaptureStop.Token).ConfigureAwait(false), CancellationToken.None)
+            : Task.CompletedTask;
+        var ptpCaptureTask = live && frameSource is not null
+            ? Task.Run(async () => await CapturePtpAsync(frameSource, ptpMonitor, labPtpPublisher, ptpCaptureStop.Token).ConfigureAwait(false), CancellationToken.None)
+            : Task.CompletedTask;
 
         long sent = 0;
         ushort sampleCount = 0;
@@ -974,6 +1128,13 @@ public sealed class SvPublisherViewModel : ObservableObject
 
         try
         {
+            Dispatch(() =>
+            {
+                PtpStatusText = live ? $"PTP: listening domain {ExpectedPtpDomain}" : "PTP: dry-run monitor inactive";
+                PtpPublisherStatusText = labPtpPublisher is null ? "PTP TX: off" : "PTP TX: starting lab publisher";
+                SmpSynchStatusText = live ? "smpSynch: waiting for policy" : FormatSmpSynchStatus(ResolveSampleSynchronization(null));
+            });
+
             while (!frameLimit.HasValue || sent < frameLimit.Value)
             {
                 await DelayUntilSampleAsync(startedTicks, sent, sampleRateHz, cancellationToken).ConfigureAwait(false);
@@ -1003,7 +1164,7 @@ public sealed class SvPublisherViewModel : ObservableObject
                                 SampleCount = sampleCount,
                                 ConfigurationRevision = selectedStream.ConfigurationRevision,
                                 ReferenceTime = sampleTime,
-                                SampleSynchronization = 2,
+                                SampleSynchronization = (byte)ResolveSampleSynchronization(latestPtpReport),
                                 SampleRate = ToSampleRate(sampleRateHz),
                                 SampleMode = MapSampleMode(selectedStream.SampleMode),
                                 SamplePayload = payload
@@ -1020,14 +1181,18 @@ public sealed class SvPublisherViewModel : ObservableObject
                 var nowTicks = Stopwatch.GetTimestamp();
                 if (nowTicks >= nextUiTicks)
                 {
+                    latestPtpReport = ptpValidator.Evaluate(ptpMonitor.GetSnapshot(), ptpOptions);
+                    var smpSynch = ResolveSampleSynchronization(latestPtpReport);
                     var elapsed = Stopwatch.GetElapsedTime(startedTicks);
                     var rate = sent / Math.Max(elapsed.TotalSeconds, 0.001);
                     var progress = frameLimit.HasValue ? $"{sent}/{frameLimit.Value}" : sent.ToString(CultureInfo.InvariantCulture);
-                    var message = $"{(live ? "LIVE" : "DRY")} frames={progress} rate={rate:0.0} fps smpCnt={sampleCount} payload={payload.Length}B frame={lastFrameBytes}B autoApply=ON";
+                    var message = $"{(live ? "LIVE" : "DRY")} frames={progress} rate={rate:0.0} fps smpCnt={sampleCount} smpSynch={(byte)smpSynch} payload={payload.Length}B frame={lastFrameBytes}B autoApply=ON";
                     Dispatch(() =>
                     {
                         PayloadBytes = payload.Length;
                         PublishText = message;
+                        UpdatePtpStatus(latestPtpReport, smpSynch, live);
+                        UpdatePtpPublisherStatus(labPtpPublisher);
                     });
                     nextUiTicks = nowTicks + (long)Math.Round(0.25 * Stopwatch.Frequency);
                 }
@@ -1035,6 +1200,20 @@ public sealed class SvPublisherViewModel : ObservableObject
         }
         finally
         {
+            ptpCaptureStop.Cancel();
+            try
+            {
+                await Task.WhenAll(ptpCaptureTask, labPtpTask).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during publisher shutdown.
+            }
+            catch (Exception ex)
+            {
+                Dispatch(() => AppendEvent($"PTP runtime stopped: {ex.Message}"));
+            }
+
             disposableTransport?.Dispose();
         }
 
@@ -1047,6 +1226,153 @@ public sealed class SvPublisherViewModel : ObservableObject
             AppendEvent(PublishText);
         });
     }
+
+private static async Task CapturePtpAsync(
+    IProcessBusFrameSource frameSource,
+    PtpPassiveMonitor monitor,
+    PtpPublisherRuntime? labPtpPublisher,
+    CancellationToken cancellationToken)
+{
+    var options = new ProcessBusCaptureOptions
+    {
+        Filter = PtpCaptureFilter,
+        BufferCapacity = 2048,
+        ReadTimeoutMilliseconds = 500
+    };
+
+    await foreach (var captured in frameSource.CaptureAsync(options, cancellationToken).ConfigureAwait(false))
+    {
+        var frameBytes = captured.Frame.ToArray();
+        monitor.ObserveEthernetFrame(frameBytes, captured.Timestamp);
+
+        if (labPtpPublisher is not null &&
+            PtpPacketParser.TryParseEthernetFrame(frameBytes, out var ptpFrame) &&
+            ptpFrame.Header.MessageType == PtpMessageType.PdelayReq)
+        {
+            await labPtpPublisher.RespondToPeerDelayRequestAsync(ptpFrame, cancellationToken).ConfigureAwait(false);
+        }
+    }
+}
+
+private PtpPublisherOptions BuildLabPtpOptions(MacAddress sourceMac, VlanTag? vlan)
+    {
+        var clockIdentity = ClockIdentity.TryParse(PtpClockIdentityText, out var parsedIdentity)
+            ? parsedIdentity
+            : DeriveClockIdentity(sourceMac);
+
+        return new PtpPublisherOptions
+        {
+            DomainNumber = (byte)Math.Clamp(ExpectedPtpDomain, 0, 255),
+            SourceMac = sourceMac.ToArray(),
+            VlanId = vlan?.VlanId,
+            VlanPriority = vlan?.PriorityCodePoint ?? (byte)Math.Clamp(VlanPriority, 0, 7),
+            ClockIdentity = clockIdentity,
+            PortNumber = 1,
+            AnnounceInterval = TimeSpan.FromMilliseconds(PtpAnnounceIntervalMs),
+            SyncInterval = TimeSpan.FromMilliseconds(PtpSyncIntervalMs),
+            FollowUpDelay = TimeSpan.FromMilliseconds(2),
+            RespondToPeerDelay = PtpRespondToPeerDelay,
+            TwoStepClock = true
+        };
+    }
+
+    private static ClockIdentity DeriveClockIdentity(MacAddress sourceMac)
+    {
+        var mac = sourceMac.ToArray();
+        return new ClockIdentity(new byte[]
+        {
+            mac[0], mac[1], mac[2], 0xFF, 0xFE, mac[3], mac[4], mac[5]
+        });
+    }
+
+    private PtpTimingHealthOptions BuildPtpHealthOptions()
+    => new()
+    {
+        ExpectedDomainNumber = (byte)Math.Clamp(ExpectedPtpDomain, 0, 255),
+        SourceTimeout = TimeSpan.FromSeconds(3),
+        RequireAnnounce = true,
+        RequireSync = true,
+        RequireFollowUpForTwoStep = true,
+        RequirePeerDelayActivity = true,
+        MaximumSequenceAnomalies = 0
+    };
+
+private SmpSynchValue ResolveSampleSynchronization(PtpTimingHealthReport? report)
+    => SyncPolicyMode switch
+    {
+        SvSyncPolicyMode.ForceUnsynchronized => SmpSynchValue.NotSynchronized,
+        SvSyncPolicyMode.ForceLocal => SmpSynchValue.LocalSynchronized,
+        SvSyncPolicyMode.ForceGlobal => SmpSynchValue.GlobalSynchronized,
+        _ => PtpPublisherMode == AR.Iec61850.SvPublisher.Models.PtpPublisherMode.LabPublisher
+            ? SmpSynchValue.GlobalSynchronized
+            : report is null
+                ? SmpSynchValue.NotSynchronized
+                : PtpSmpSynchPolicy.Resolve(report, PtpAllowLocalFallback)
+    };
+
+private void UpdatePtpStatus(PtpTimingHealthReport? report, SmpSynchValue smpSynch, bool live)
+{
+    if (!live)
+    {
+        PtpStatusText = "PTP: dry-run";
+        SmpSynchStatusText = FormatSmpSynchStatus(smpSynch);
+        return;
+    }
+
+    if (report is null)
+    {
+        PtpStatusText = "PTP: waiting";
+        SmpSynchStatusText = FormatSmpSynchStatus(smpSynch);
+        return;
+    }
+
+    var snapshot = report.Snapshot;
+    var source = snapshot.Sources
+        .Where(s => s.DomainNumber == Math.Clamp(ExpectedPtpDomain, 0, 255))
+        .OrderByDescending(s => s.LastSeenAt)
+        .FirstOrDefault()
+        ?? snapshot.Sources.OrderByDescending(s => s.LastSeenAt).FirstOrDefault();
+
+    if (source is null)
+    {
+        PtpStatusText = report.Severity == PtpHealthSeverity.Fail
+            ? "PTP: not detected"
+            : $"PTP: {report.Severity}";
+    }
+    else
+    {
+        var age = Math.Max(0, (snapshot.CapturedAt - source.LastSeenAt).TotalSeconds);
+        PtpStatusText = $"PTP: {report.Severity} d={source.DomainNumber} src={source.SourcePortIdentity.ClockIdentity} age={age:0.0}s";
+    }
+
+    SmpSynchStatusText = FormatSmpSynchStatus(smpSynch);
+}
+
+private void UpdatePtpPublisherStatus(PtpPublisherRuntime? publisher)
+{
+    if (publisher is null)
+    {
+        PtpPublisherStatusText = "PTP TX: off";
+        return;
+    }
+
+    var status = publisher.GetStatus();
+    if (!string.IsNullOrWhiteSpace(status.LastError))
+    {
+        PtpPublisherStatusText = $"PTP TX: error {status.LastError}";
+        return;
+    }
+
+    PtpPublisherStatusText = $"PTP TX: {(status.IsRunning ? "lab" : "stopped")} A={status.AnnounceSent} S={status.SyncSent} FU={status.FollowUpSent} PD={status.PeerDelayResponsesSent}";
+}
+
+private static string FormatSmpSynchStatus(SmpSynchValue value)
+    => value switch
+    {
+        SmpSynchValue.GlobalSynchronized => "smpSynch=2 global",
+        SmpSynchValue.LocalSynchronized => "smpSynch=1 local",
+        _ => "smpSynch=0 unsync"
+    };
 
     private byte[] BuildSamplePayload(
         SclSampledValuesStream stream,
@@ -2379,6 +2705,14 @@ public sealed class SvPublisherViewModel : ObservableObject
             ManualSetMode = ManualSetMode,
             AutoApplyWhileRunning = AutoApplyWhileRunning,
             LinkFrequencies = LinkFrequencies,
+            SyncPolicyMode = SyncPolicyMode,
+            ExpectedPtpDomain = ExpectedPtpDomain,
+            PtpAllowLocalFallback = PtpAllowLocalFallback,
+            PtpPublisherMode = PtpPublisherMode,
+            PtpClockIdentity = PtpClockIdentityText,
+            PtpAnnounceIntervalMs = PtpAnnounceIntervalMs,
+            PtpSyncIntervalMs = PtpSyncIntervalMs,
+            PtpRespondToPeerDelay = PtpRespondToPeerDelay,
             RampSignalKey = SelectedRampSignalChoice?.KeyCsv ?? SelectedRampState?.SignalKey ?? string.Empty,
             RampTargetMagnitude = RampTargetMagnitude,
             RampDurationSeconds = RampDurationSeconds,

@@ -1460,13 +1460,15 @@
             </Border.Background>
             <Grid Margin="12,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="210" />
+                    <ColumnDefinition Width="170" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="1.15*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="#334155" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="1" Text="{Binding AdapterStatusText}" VerticalAlignment="Center" Foreground="#475569" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
-                <TextBlock Grid.Column="2" Text="{Binding StreamControlBlock}" VerticalAlignment="Center" Foreground="#64748B" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
+                <TextBlock Grid.Column="1" Text="{Binding SyncStatusBarText}" VerticalAlignment="Center" Foreground="#1D4ED8" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
+                <TextBlock Grid.Column="2" Text="{Binding AdapterStatusText}" VerticalAlignment="Center" Foreground="#475569" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
+                <TextBlock Grid.Column="3" Text="{Binding StreamControlBlock}" VerticalAlignment="Center" Foreground="#64748B" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
             </Grid>
         </Border>
     </Grid>

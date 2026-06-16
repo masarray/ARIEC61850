@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:AR.Iec61850.SvPublisher.Controls"
+        xmlns:conv="clr-namespace:AR.Iec61850.SvPublisher.Converters"
         mc:Ignorable="d"
         Title="AR IEC 61850 SV Injector - Test Workspace"
         Width="1460"
@@ -34,6 +35,9 @@
         <SolidColorBrush x:Key="Danger" Color="#B91C1C" />
         <SolidColorBrush x:Key="RibbonBlue" Color="#24558E" />
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <conv:SignalBrushConverter x:Key="SignalBrushConverter" />
+        <conv:KindToVisibilityConverter x:Key="VoltageKindVisibilityConverter" MatchKind="V" />
+        <conv:KindToVisibilityConverter x:Key="CurrentKindVisibilityConverter" MatchKind="I" />
 
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextStrong}" />
@@ -61,8 +65,8 @@
     <Setter Property="Background">
         <Setter.Value>
             <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
-                <GradientStop Color="#06B6D4" Offset="0" />
-                <GradientStop Color="#2F8CFF" Offset="0.42" />
+                <GradientStop Color="#22D3EE" Offset="0" />
+                <GradientStop Color="#38BDF8" Offset="0.22" />
                 <GradientStop Color="#2563EB" Offset="1" />
             </LinearGradientBrush>
         </Setter.Value>
@@ -108,14 +112,14 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="15"
+                            CornerRadius="12"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="16" ShadowDepth="2" Direction="270" Opacity="0.13" Color="#172554" />
                         </Border.Effect>
                         <Grid>
-                            <Border x:Name="HoverGlass" CornerRadius="14" Opacity="0">
+                            <Border x:Name="HoverGlass" CornerRadius="11" Opacity="0">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                         <GradientStop Color="#55FFFFFF" Offset="0" />
@@ -180,6 +184,7 @@
         </Style>
 
         
+
 <Style x:Key="StartButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Width" Value="76" />
     <Setter Property="Height" Value="66" />
@@ -190,14 +195,92 @@
     <Setter Property="Background">
         <Setter.Value>
             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                <GradientStop Color="#2F8CFF" Offset="0" />
+                <GradientStop Color="#4DA4FF" Offset="0" />
+                <GradientStop Color="#2F7CFF" Offset="0.55" />
                 <GradientStop Color="#2563EB" Offset="1" />
             </LinearGradientBrush>
         </Setter.Value>
     </Setter>
     <Setter Property="BorderBrush" Value="#1D4ED8" />
     <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="{x:Type Button}">
+                <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
+                    <Grid.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="1" ScaleY="1" />
+                            <TranslateTransform Y="0" />
+                        </TransformGroup>
+                    </Grid.RenderTransform>
+                    <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="14">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270" Opacity="0.24" Color="#2563EB" />
+                        </Border.Effect>
+                        <Grid>
+                            <Border x:Name="Gloss" Margin="1.5" CornerRadius="12.5" Opacity="0.75" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#72FFFFFF" Offset="0" />
+                                        <GradientStop Color="#24FFFFFF" Offset="0.38" />
+                                        <GradientStop Color="#00FFFFFF" Offset="0.85" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Surface" Property="Background">
+                            <Setter.Value>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#65B8FF" Offset="0" />
+                                    <GradientStop Color="#368BFF" Offset="0.55" />
+                                    <GradientStop Color="#2A6BF0" Offset="1" />
+                                </LinearGradientBrush>
+                            </Setter.Value>
+                        </Setter>
+                        <Setter TargetName="Surface" Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.30" Color="#2563EB" />
+                            </Setter.Value>
+                        </Setter>
+                        <Setter TargetName="Root" Property="RenderTransform">
+                            <Setter.Value>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="1.035" ScaleY="1.035" />
+                                    <TranslateTransform Y="-2" />
+                                </TransformGroup>
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="Gloss" Property="Opacity" Value="0.35" />
+                        <Setter TargetName="Root" Property="RenderTransform">
+                            <Setter.Value>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="0.97" ScaleY="0.97" />
+                                    <TranslateTransform Y="1.5" />
+                                </TransformGroup>
+                            </Setter.Value>
+                        </Setter>
+                        <Setter TargetName="Surface" Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="1" Direction="270" Opacity="0.14" Color="#1E3A8A" />
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
 </Style>
+
 
 <Style x:Key="StopButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Width" Value="76" />
@@ -209,13 +292,90 @@
     <Setter Property="Background">
         <Setter.Value>
             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                <GradientStop Color="#FB7185" Offset="0" />
+                <GradientStop Color="#FFA1AF" Offset="0" />
+                <GradientStop Color="#FB7185" Offset="0.55" />
                 <GradientStop Color="#E11D48" Offset="1" />
             </LinearGradientBrush>
         </Setter.Value>
     </Setter>
     <Setter Property="BorderBrush" Value="#BE123C" />
     <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="{x:Type Button}">
+                <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
+                    <Grid.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="1" ScaleY="1" />
+                            <TranslateTransform Y="0" />
+                        </TransformGroup>
+                    </Grid.RenderTransform>
+                    <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="14">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270" Opacity="0.18" Color="#BE123C" />
+                        </Border.Effect>
+                        <Grid>
+                            <Border x:Name="Gloss" Margin="1.5" CornerRadius="12.5" Opacity="0.72" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#66FFFFFF" Offset="0" />
+                                        <GradientStop Color="#22FFFFFF" Offset="0.38" />
+                                        <GradientStop Color="#00FFFFFF" Offset="0.85" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Surface" Property="Background">
+                            <Setter.Value>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#FFB7C2" Offset="0" />
+                                    <GradientStop Color="#FF7C95" Offset="0.55" />
+                                    <GradientStop Color="#E11D48" Offset="1" />
+                                </LinearGradientBrush>
+                            </Setter.Value>
+                        </Setter>
+                        <Setter TargetName="Surface" Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect BlurRadius="28" ShadowDepth="7" Direction="270" Opacity="0.24" Color="#E11D48" />
+                            </Setter.Value>
+                        </Setter>
+                        <Setter TargetName="Root" Property="RenderTransform">
+                            <Setter.Value>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="1.035" ScaleY="1.035" />
+                                    <TranslateTransform Y="-2" />
+                                </TransformGroup>
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="Gloss" Property="Opacity" Value="0.32" />
+                        <Setter TargetName="Root" Property="RenderTransform">
+                            <Setter.Value>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="0.97" ScaleY="0.97" />
+                                    <TranslateTransform Y="1.5" />
+                                </TransformGroup>
+                            </Setter.Value>
+                        </Setter>
+                        <Setter TargetName="Surface" Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="1" Direction="270" Opacity="0.12" Color="#881337" />
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
 </Style>
 
 <Style x:Key="RibbonButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -315,17 +475,26 @@
             </Setter>
         </Style>
 
-        <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="#667891" />
-            <Setter Property="Foreground" Value="#FFFFFF" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="11.5" />
-            <Setter Property="Padding" Value="8,0" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="BorderBrush" Value="#8EA0B8" />
-            <Setter Property="BorderThickness" Value="0,0,1,1" />
-        </Style>
+        
+<Style TargetType="DataGridColumnHeader">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="BorderBrush" Value="#214D89" />
+    <Setter Property="BorderThickness" Value="0,0,1,1" />
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="DataGridColumnHeader">
+                <Border Background="#4A6486" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" Margin="6,0" />
+                </Border>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+</Style>
 
         
 
@@ -773,20 +942,49 @@
                                 <RowDefinition Height="112" />
                             </Grid.RowDefinitions>
                             <controls:WaveformPlot Channels="{Binding Channels}" />
-                            <Border Grid.Row="1" Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,8,0,0">
+                            <Border Grid.Row="1" Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,8,0,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="Nominal frequency" Style="{StaticResource LabelText}" />
-                                        <TextBox Text="{Binding NominalFrequencyHz, UpdateSourceTrigger=PropertyChanged}" Width="110" HorizontalAlignment="Left" />
-                                        <CheckBox Content="Link Frequencies" IsChecked="{Binding LinkFrequencies}" Margin="0,8,0,0" />
+                                    <StackPanel Margin="0,0,8,0">
+                                        <TextBlock Text="Voltage Legend" Style="{StaticResource LabelText}" Margin="0,0,0,6" />
+                                        <ItemsControl ItemsSource="{Binding ManualRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,1" Visibility="{Binding Kind, Converter={StaticResource VoltageKindVisibilityConverter}}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Rectangle Width="12" Height="2" Fill="{Binding Key, Converter={StaticResource SignalBrushConverter}}" VerticalAlignment="Center" RadiusX="1" RadiusY="1" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="8,0,0,0" FontSize="11" Foreground="#334155" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding MagnitudeText}" FontSize="11" Foreground="#0F172A" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1">
-                                        <TextBlock Text="Selected adapter" Style="{StaticResource LabelText}" />
-                                        <TextBlock Text="{Binding AdapterStatusText}" TextWrapping="Wrap" Foreground="#334155" />
+                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                        <TextBlock Text="Current Legend" Style="{StaticResource LabelText}" Margin="0,0,0,6" />
+                                        <ItemsControl ItemsSource="{Binding ManualRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,1" Visibility="{Binding Kind, Converter={StaticResource CurrentKindVisibilityConverter}}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Rectangle Width="12" Height="2" Fill="{Binding Key, Converter={StaticResource SignalBrushConverter}}" VerticalAlignment="Center" RadiusX="1" RadiusY="1" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="8,0,0,0" FontSize="11" Foreground="#334155" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding MagnitudeText}" FontSize="11" Foreground="#0F172A" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </StackPanel>
                                 </Grid>
                             </Border>

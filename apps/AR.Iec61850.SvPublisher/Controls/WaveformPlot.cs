@@ -102,15 +102,6 @@ public sealed class WaveformPlot : FrameworkElement
             drawingContext.DrawGeometry(null, new Pen(new SolidColorBrush(ResolveColor(channel.Key)), 2), geometry);
         }
 
-        var legendX = lane.Right - 128;
-        for (var i = 0; i < channels.Length; i++)
-        {
-            var channel = channels[i];
-            var y = lane.Y + 8 + (i * 18);
-            var color = ResolveColor(channel.Key);
-            drawingContext.DrawLine(new Pen(new SolidColorBrush(color), 2), new Point(legendX, y + 7), new Point(legendX + 18, y + 7));
-            DrawText(drawingContext, $"{channel.Name} {channel.Magnitude:0.000} {channel.Unit}", new Point(legendX + 24, y), 11, color);
-        }
     }
 
     private IEnumerable<SignalChannelViewModel> GetChannels()

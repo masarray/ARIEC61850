@@ -9,8 +9,10 @@
         WindowStartupLocation="CenterOwner"
         FontFamily="Segoe UI Variable, Segoe UI"
         FontSize="13"
-        Background="#F3F5F7">
+        Background="#F3F7FD">
     <Window.Resources>
+        <SolidColorBrush x:Key="Panel" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="Subtle" Color="#FBFDFF" />
         <SolidColorBrush x:Key="Line" Color="#D7DEE8" />
         <SolidColorBrush x:Key="TextMuted" Color="#64748B" />
         <SolidColorBrush x:Key="Accent" Color="#2563EB" />
@@ -21,40 +23,112 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
-        <Style TargetType="Button">
-            <Setter Property="Height" Value="31" />
-            <Setter Property="MinWidth" Value="86" />
-            <Setter Property="Padding" Value="12,0" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="Cursor" Value="Hand" />
-        </Style>
+        
+<Style TargetType="Button">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="MinWidth" Value="92" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="BorderBrush" Value="#D7E2F0" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background">
+        <Setter.Value>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#FFFFFF" Offset="0" />
+                <GradientStop Color="#F5F9FF" Offset="1" />
+            </LinearGradientBrush>
+        </Setter.Value>
+    </Setter>
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="Button">
+                <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5">
+                    <Grid.RenderTransform>
+                        <TransformGroup><ScaleTransform/><TranslateTransform/></TransformGroup>
+                    </Grid.RenderTransform>
+                    <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="{TemplateBinding Padding}">
+                        <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="2" Direction="270" Opacity="0.12" Color="#183B70"/></Border.Effect>
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Root" Property="RenderTransform"><Setter.Value><TransformGroup><ScaleTransform ScaleX="1.02" ScaleY="1.02"/><TranslateTransform Y="-1"/></TransformGroup></Setter.Value></Setter>
+                        <Setter TargetName="Surface" Property="Effect"><Setter.Value><DropShadowEffect BlurRadius="24" ShadowDepth="5" Direction="270" Opacity="0.18" Color="#2563EB"/></Setter.Value></Setter>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="Root" Property="RenderTransform"><Setter.Value><TransformGroup><ScaleTransform ScaleX="0.98" ScaleY="0.98"/><TranslateTransform Y="1"/></TransformGroup></Setter.Value></Setter>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+</Style>
 
-        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource Accent}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
-            <Setter Property="Foreground" Value="#FFFFFF" />
-        </Style>
+<Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="BorderBrush" Value="#1D4ED8" />
+    <Setter Property="Background">
+        <Setter.Value>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#4DA4FF" Offset="0" />
+                <GradientStop Color="#2563EB" Offset="1" />
+            </LinearGradientBrush>
+        </Setter.Value>
+    </Setter>
+</Style>
 
-        <Style TargetType="TextBox">
-            <Setter Property="Height" Value="29" />
-            <Setter Property="Padding" Value="8,4" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
+<Style TargetType="TextBox">
+    <Setter Property="Height" Value="31" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="BorderBrush" Value="#D7DEE8" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="#FFFFFF" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+</Style>
 
-        <Style TargetType="ComboBox">
-            <Setter Property="Height" Value="29" />
-            <Setter Property="Padding" Value="6,3" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Background" Value="#FFFFFF" />
-        </Style>
+<Style TargetType="ComboBox">
+    <Setter Property="Height" Value="31" />
+    <Setter Property="Padding" Value="6,3" />
+    <Setter Property="BorderBrush" Value="#D7DEE8" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="#FFFFFF" />
+</Style>
+
+<Style x:Key="ModernScrollThumb" TargetType="Thumb">
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="Thumb">
+                <Border x:Name="ThumbChrome" Background="#B7C7DC" CornerRadius="4" Margin="2" />
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbChrome" Property="Background" Value="#7FB3EA" /></Trigger>
+                    <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbChrome" Property="Background" Value="#2F8CFF" /></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+</Style>
+<Style TargetType="Thumb" BasedOn="{StaticResource ModernScrollThumb}" />
+<Style x:Key="InvisibleRepeatButton" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Rectangle Fill="Transparent" /></ControlTemplate></Setter.Value></Setter>
+</Style>
+<Style TargetType="ScrollBar">
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+                <Grid Background="Transparent"><Track x:Name="PART_Track" IsDirectionReversed="True"><Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource InvisibleRepeatButton}" Command="ScrollBar.PageUpCommand" /></Track.DecreaseRepeatButton><Track.Thumb><Thumb Style="{StaticResource ModernScrollThumb}" /></Track.Thumb><Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource InvisibleRepeatButton}" Command="ScrollBar.PageDownCommand" /></Track.IncreaseRepeatButton></Track></Grid>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+        <Trigger Property="Orientation" Value="Vertical"><Setter Property="Width" Value="9" /></Trigger>
+        <Trigger Property="Orientation" Value="Horizontal"><Setter Property="Height" Value="9" /></Trigger>
+    </Style.Triggers>
+</Style>
     </Window.Resources>
 
     <Grid Margin="18">
@@ -64,20 +138,22 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel>
-            <TextBlock Text="SCL and stream setup" FontSize="20" FontWeight="SemiBold" Foreground="#0F172A" />
-            <TextBlock Text="Open the engineering file, select the SV control block, then check network settings before running."
-                       FontSize="12"
-                       Foreground="{StaticResource TextMuted}"
-                       Margin="0,3,0,14" />
-        </StackPanel>
+        <Border CornerRadius="14" Background="#FCFEFF" BorderBrush="#E1EAF5" BorderThickness="1" Padding="16,14" Margin="0,0,0,12">
+            <Border.Effect><DropShadowEffect BlurRadius="18" ShadowDepth="2" Direction="270" Opacity="0.10" Color="#183B70" /></Border.Effect>
+            <StackPanel>
+                <TextBlock Text="SCL and stream setup" FontSize="20" FontWeight="SemiBold" Foreground="#0F172A" />
+                <TextBlock Text="Open the engineering file, select the SV control block, then check network settings before running."
+                           FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,3,0,0" />
+            </StackPanel>
+        </Border>
 
         <Border Grid.Row="1"
                 Background="#FFFFFF"
                 BorderBrush="{StaticResource Line}"
                 BorderThickness="1"
-                CornerRadius="8"
+                CornerRadius="14"
                 Padding="16">
+            <Border.Effect><DropShadowEffect BlurRadius="24" ShadowDepth="3" Direction="270" Opacity="0.12" Color="#183B70" /></Border.Effect>
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">

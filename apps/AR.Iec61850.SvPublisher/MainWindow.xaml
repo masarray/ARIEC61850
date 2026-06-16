@@ -765,6 +765,26 @@
                     <TextBlock Text="Stop" Style="{StaticResource RibbonCaption}" Foreground="#FFFFFF" />
                 </StackPanel>
             </Button>
+
+            <Border Grid.Column="12" Background="#F8FBFF" BorderBrush="#D7E2F0" BorderThickness="1" CornerRadius="14" Padding="12,8" Margin="12,0,0,0" VerticalAlignment="Stretch">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="190" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="IED / MU Publisher" FontSize="11" Foreground="#64748B" FontWeight="SemiBold" />
+                        <ComboBox ItemsSource="{Binding PublisherSlots}"
+                                  SelectedItem="{Binding SelectedPublisherSlot}"
+                                  DisplayMemberPath="Header"
+                                  Height="30"
+                                  Margin="0,4,0,0" />
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" Content="Enabled" IsChecked="{Binding SelectedPublisherSlot.IsEnabled}" VerticalAlignment="Center" Margin="14,18,12,0" />
+                    <TextBlock Grid.Column="2" Text="{Binding SelectedPublisherSlot.SummaryText}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#334155" FontSize="12" />
+                </Grid>
+            </Border>
         </Grid>
     </Border>
 </Border>

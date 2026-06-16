@@ -76,6 +76,28 @@ public sealed class SequenceStateSnapshot
     public double FrequencyHz { get; init; } = 50;
 }
 
+public sealed class SvPublisherSlotConfigSnapshot
+{
+    public int Index { get; init; }
+    public bool IsEnabled { get; init; }
+    public string StreamControlBlock { get; init; } = string.Empty;
+    public string StreamId { get; init; } = string.Empty;
+    public string DataSetReference { get; init; } = string.Empty;
+    public string AppId { get; init; } = string.Empty;
+    public string DestinationMac { get; init; } = string.Empty;
+    public bool UseVlan { get; init; }
+    public int VlanId { get; init; }
+    public int VlanPriority { get; init; }
+    public string SourceMac { get; init; } = string.Empty;
+    public double SampleRateHz { get; init; }
+    public double NominalFrequencyHz { get; init; }
+    public string SampleRatePresetKey { get; init; } = string.Empty;
+    public double CurrentDlsb { get; init; }
+    public double VoltageDlsb { get; init; }
+    public string ManualSetMode { get; init; } = "Direct";
+    public IReadOnlyList<SignalChannelSnapshot> Channels { get; init; } = Array.Empty<SignalChannelSnapshot>();
+}
+
 public sealed class SvPublisherConfigSnapshot
 {
     public string SclPath { get; init; } = string.Empty;
@@ -96,6 +118,7 @@ public sealed class SvPublisherConfigSnapshot
     public bool Continuous { get; init; }
     public InjectionMode Mode { get; init; }
     public string ManualSetMode { get; init; } = "Direct";
+    public IReadOnlyList<SvPublisherSlotConfigSnapshot> Publishers { get; init; } = Array.Empty<SvPublisherSlotConfigSnapshot>();
     public bool AutoApplyWhileRunning { get; init; } = true;
     public bool LinkFrequencies { get; init; } = true;
     public SvSyncPolicyMode SyncPolicyMode { get; init; } = SvSyncPolicyMode.AutoPtp;

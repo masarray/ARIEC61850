@@ -164,7 +164,21 @@
                     <TextBlock Text="{Binding SclSummary, Mode=OneWay}" Foreground="#334155" />
                     <TextBlock Text="{Binding SclPath, Mode=OneWay}" FontSize="11" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" Margin="0,4,0,16" />
 
-                    <TextBlock Text="SV stream" Style="{StaticResource LabelText}" />
+                    <TextBlock Text="IED / MU publisher slot" Style="{StaticResource LabelText}" />
+                    <Grid Margin="0,4,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox ItemsSource="{Binding PublisherSlots}"
+                                  SelectedItem="{Binding SelectedPublisherSlot}"
+                                  DisplayMemberPath="Header" />
+                        <CheckBox Grid.Column="1" Content="Enabled" IsChecked="{Binding SelectedPublisherSlot.IsEnabled}" VerticalAlignment="Center" Margin="12,0" />
+                        <TextBlock Grid.Column="2" Text="{Binding SelectedPublisherSlot.SummaryText}" Foreground="#334155" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+
+                    <TextBlock Text="SV stream for selected publisher" Style="{StaticResource LabelText}" />
                     <ComboBox ItemsSource="{Binding Streams}"
                               SelectedItem="{Binding SelectedStream}"
                               DisplayMemberPath="Label"
@@ -225,7 +239,10 @@
                         </StackPanel>
 
                         <TextBlock Grid.Row="4" Text="Sample rate" Style="{StaticResource LabelText}" />
-                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding SampleRateHz, UpdateSourceTrigger=PropertyChanged}" />
+                        <ComboBox Grid.Row="4" Grid.Column="1"
+                                  ItemsSource="{Binding SampleRatePresets}"
+                                  SelectedItem="{Binding SelectedSampleRatePreset}"
+                                  DisplayMemberPath="Label" />
                         <TextBlock Grid.Row="4" Grid.Column="2" Text="dLSB I" Style="{StaticResource LabelText}" Margin="14,0,0,0" />
                         <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding CurrentDlsb, UpdateSourceTrigger=PropertyChanged}" />
 

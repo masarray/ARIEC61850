@@ -34,6 +34,8 @@ public sealed class SvPublisherViewModel : ObservableObject
     private const double NominalCurrent = 1.0;
 
     private readonly List<string> _eventLines = new();
+    private SvPublisherSlotViewModel? _selectedPublisherSlot;
+    private bool _isLoadingPublisherSlot;
     private SvStreamChoice? _selectedStream;
     private AdapterChoice? _selectedAdapter;
     private SignalChannelViewModel? _selectedRampChannel;
@@ -59,6 +61,7 @@ public sealed class SvPublisherViewModel : ObservableObject
     private int _vlanPriority = 4;
     private double _sampleRateHz = 4000;
     private double _nominalFrequencyHz = 50;
+    private SampleRatePreset? _selectedSampleRatePreset;
     private double _currentDlsb = 0.001;
     private double _voltageDlsb = 0.01;
     private double _durationSeconds = 1;
@@ -106,6 +109,15 @@ public sealed class SvPublisherViewModel : ObservableObject
         ];
 
         ManualRows = new ObservableCollection<ManualOutputRowViewModel>();
+        PublisherSlots = new ObservableCollection<SvPublisherSlotViewModel>
+        {
+            new(1),
+            new(2),
+            new(3)
+        };
+        foreach (var slot in PublisherSlots)
+            slot.Channels = Channels.Select(c => c.ToSnapshot()).ToArray();
+
         RampPreviewChannels = CreatePreviewChannels();
         SequencePreviewChannels = CreatePreviewChannels();
         RampStates =
@@ -130,6 +142,8 @@ public sealed class SvPublisherViewModel : ObservableObject
         SelectedRampChannel = Channels.FirstOrDefault(c => c.Key == "Ia");
         SelectedRampState = RampStates.FirstOrDefault();
         SelectedSequenceState = SequenceStates.FirstOrDefault();
+        SelectedSampleRatePreset = SampleRatePresets.FirstOrDefault(preset => preset.Key == "9-2LE-80-50");
+        SelectedPublisherSlot = PublisherSlots.FirstOrDefault();
 
         OpenSclCommand = new AsyncRelayCommand(OpenSclAsync, () => !IsPublishing);
         RefreshAdaptersCommand = new RelayCommand(RefreshAdapters, () => !IsPublishing);
@@ -177,6 +191,7 @@ public sealed class SvPublisherViewModel : ObservableObject
     public ObservableCollection<SignalChannelViewModel> SequencePreviewChannels { get; }
     public ObservableCollection<RampStateViewModel> RampStates { get; }
     public ObservableCollection<SequenceStateViewModel> SequenceStates { get; }
+    public ObservableCollection<SvPublisherSlotViewModel> PublisherSlots { get; }
 
     public IReadOnlyList<RampSignalChoice> RampSignalChoices { get; } =
     [
@@ -200,6 +215,18 @@ public sealed class SvPublisherViewModel : ObservableObject
     public string RampTotalTimeText => $"{RampTotalTimeSeconds:0.000} s";
     public ObservableCollection<SvStreamChoice> Streams { get; } = new();
     public ObservableCollection<AdapterChoice> Adapters { get; } = new();
+
+    public IReadOnlyList<SampleRatePreset> SampleRatePresets { get; } =
+    [
+        new SampleRatePreset { Key = "9-2LE-80-50", Label = "9-2LE protection — 80 spc / 50 Hz / 4000 fps", SampleRateHz = 4000, NominalFrequencyHz = 50, SamplesPerCycle = 80 },
+        new SampleRatePreset { Key = "9-2LE-80-60", Label = "9-2LE protection — 80 spc / 60 Hz / 4800 fps", SampleRateHz = 4800, NominalFrequencyHz = 60, SamplesPerCycle = 80 },
+        new SampleRatePreset { Key = "9-2LE-256-50", Label = "9-2LE power quality — 256 spc / 50 Hz / 12800 fps", SampleRateHz = 12800, NominalFrequencyHz = 50, SamplesPerCycle = 256 },
+        new SampleRatePreset { Key = "9-2LE-256-60", Label = "9-2LE power quality — 256 spc / 60 Hz / 15360 fps", SampleRateHz = 15360, NominalFrequencyHz = 60, SamplesPerCycle = 256 },
+        new SampleRatePreset { Key = "61869-9-96-50", Label = "IEC 61869-9 profile — 96 spc / 50 Hz / 4800 fps", SampleRateHz = 4800, NominalFrequencyHz = 50, SamplesPerCycle = 96 },
+        new SampleRatePreset { Key = "61869-9-96-60", Label = "IEC 61869-9 profile — 96 spc / 60 Hz / 5760 fps", SampleRateHz = 5760, NominalFrequencyHz = 60, SamplesPerCycle = 96 },
+        new SampleRatePreset { Key = "61869-9-288-50", Label = "IEC 61869-9 profile — 288 spc / 50 Hz / 14400 fps", SampleRateHz = 14400, NominalFrequencyHz = 50, SamplesPerCycle = 288 },
+        new SampleRatePreset { Key = "61869-9-288-60", Label = "IEC 61869-9 profile — 288 spc / 60 Hz / 17280 fps", SampleRateHz = 17280, NominalFrequencyHz = 60, SamplesPerCycle = 288 }
+    ];
 
     public IReadOnlyList<string> ManualSetModes { get; } =
     [
@@ -334,13 +361,46 @@ public sealed class SvPublisherViewModel : ObservableObject
         private set => SetProperty(ref _liveApplyText, value);
     }
 
+    public SvPublisherSlotViewModel? SelectedPublisherSlot
+    {
+        get => _selectedPublisherSlot;
+        set
+        {
+            if (ReferenceEquals(_selectedPublisherSlot, value))
+                return;
+
+            SaveCurrentPublisherSlot();
+            if (SetProperty(ref _selectedPublisherSlot, value) && value is not null)
+                LoadPublisherSlot(value);
+        }
+    }
+
+    public SampleRatePreset? SelectedSampleRatePreset
+    {
+        get => _selectedSampleRatePreset;
+        set
+        {
+            if (!SetProperty(ref _selectedSampleRatePreset, value) || value is null)
+                return;
+
+            SampleRateHz = value.SampleRateHz;
+            NominalFrequencyHz = value.NominalFrequencyHz;
+            if (!_isLoadingPublisherSlot && SelectedPublisherSlot is { } slot)
+                slot.SampleRatePresetKey = value.Key;
+        }
+    }
+
     public SvStreamChoice? SelectedStream
     {
         get => _selectedStream;
         set
         {
             if (SetProperty(ref _selectedStream, value))
+            {
                 ApplySelectedStream(value);
+                if (!_isLoadingPublisherSlot)
+                    SaveCurrentPublisherSlot();
+            }
         }
     }
 
@@ -957,6 +1017,13 @@ public sealed class SvPublisherViewModel : ObservableObject
             for (var i = 0; i < document.SampledValuesStreams.Count; i++)
                 Streams.Add(new SvStreamChoice { Index = i + 1, Stream = document.SampledValuesStreams[i] });
 
+            for (var i = 0; i < PublisherSlots.Count; i++)
+            {
+                var slot = PublisherSlots[i];
+                var choice = Streams.ElementAtOrDefault(i) ?? Streams.FirstOrDefault();
+                ApplyStreamMetadataToSlot(slot, choice);
+            }
+
             SelectedStream = Streams.FirstOrDefault();
             SclSummary = $"IED={document.Ieds.Count}  DataSets={document.DataSets.Count}  SV={document.SampledValuesStreams.Count}  Warnings={document.Warnings.Count}";
             StatusText = document.SampledValuesStreams.Count == 0 ? "SCL opened, no SV streams found." : "SCL opened.";
@@ -1070,27 +1137,21 @@ public sealed class SvPublisherViewModel : ObservableObject
 
     private async Task PublishLoopAsync(bool live, CancellationToken cancellationToken)
     {
-        var selectedStream = SelectedStream?.Stream ?? throw new InvalidOperationException("Select an SV stream first.");
-        var source = MacAddress.Parse(SourceMac);
-        var destination = MacAddress.Parse(DestinationMac);
-        var appId = ParseAppId(AppIdText);
-        var vlan = ResolveVlanTag();
-        var sampleRateHz = SampleRateHz;
+        SaveCurrentPublisherSlot();
+        var publisherStates = BuildPublisherRuntimeStates().ToArray();
+        if (publisherStates.Length == 0)
+            throw new InvalidOperationException("Enable at least one IED / MU publisher slot with a selected SV stream.");
+
+        var primary = publisherStates[0];
+        var source = primary.Source;
+        var vlan = primary.Vlan;
         var runDurationSeconds = Mode == InjectionMode.Ramp ? RampTotalTimeSeconds : DurationSeconds;
-        var frameLimit = Continuous ? (long?)null : Math.Max(1, (long)Math.Round(sampleRateHz * runDurationSeconds));
+        Dictionary<int, long>? frameLimitPerPublisher = Continuous
+            ? null
+            : publisherStates.ToDictionary(s => s.SlotIndex, s => Math.Max(1, (long)Math.Round(s.SampleRateHz * runDurationSeconds)));
         var startedTicks = Stopwatch.GetTimestamp();
         var startedAt = DateTimeOffset.UtcNow;
         var nextUiTicks = startedTicks;
-        var sampleCounterWrap = ResolveSampleCounterWrap(selectedStream, sampleRateHz, NominalFrequencyHz);
-        var frozenChannels = CaptureEffectiveChannels(0);
-        var oscillatorStates = frozenChannels.ToDictionary(
-            x => x.Key,
-            x => new OscillatorState
-            {
-                PhaseRadians = x.Value.AngleDegrees * Math.PI / 180.0,
-                LastAngleDegrees = x.Value.AngleDegrees
-            },
-            StringComparer.OrdinalIgnoreCase);
 
         var ptpMonitor = new PtpPassiveMonitor();
         var ptpValidator = new PtpTimingHealthValidator();
@@ -1122,74 +1183,93 @@ public sealed class SvPublisherViewModel : ObservableObject
             ? Task.Run(async () => await CapturePtpAsync(frameSource, ptpMonitor, labPtpPublisher, ptpCaptureStop.Token).ConfigureAwait(false), CancellationToken.None)
             : Task.CompletedTask;
 
-        long sent = 0;
-        ushort sampleCount = 0;
+        long totalSent = 0;
         var lastFrameBytes = 0;
+        var lastPayloadBytes = 0;
+        bool IsActive(PublisherRuntimeState state)
+            => frameLimitPerPublisher is null || state.Sent < frameLimitPerPublisher[state.SlotIndex];
 
         try
         {
             Dispatch(() =>
             {
                 PtpStatusText = live ? $"PTP: listening domain {ExpectedPtpDomain}" : "PTP: dry-run monitor inactive";
-                PtpPublisherStatusText = labPtpPublisher is null ? "PTP TX: off" : "PTP TX: starting lab publisher";
+                UpdatePtpPublisherStatus(labPtpPublisher);
                 SmpSynchStatusText = live ? "smpSynch: waiting for policy" : FormatSmpSynchStatus(ResolveSampleSynchronization(null));
+                PublishText = $"Prepared {publisherStates.Length} SV publisher(s): {string.Join(", ", publisherStates.Select(s => $"P{s.SlotIndex}@{s.SampleRateHz:0.#}fps"))}";
             });
 
-            while (!frameLimit.HasValue || sent < frameLimit.Value)
+            while (publisherStates.Any(IsActive))
             {
-                await DelayUntilSampleAsync(startedTicks, sent, sampleRateHz, cancellationToken).ConfigureAwait(false);
-
-                var elapsedSeconds = sent / sampleRateHz;
-                var timestamp = startedAt.AddTicks((long)Math.Round(sent * TimeSpan.TicksPerSecond / sampleRateHz));
-                var sampleTime = new Iec61850UtcTime(timestamp, Quality: 0);
-                var channels = AutoApplyWhileRunning
-                    ? CaptureEffectiveChannels(elapsedSeconds)
-                    : frozenChannels;
-                var phasedChannels = ApplyOscillatorPhases(channels, oscillatorStates, sampleRateHz);
-                var payload = BuildSamplePayload(selectedStream, sampleTime, phasedChannels);
-                var frame = SampledValuesFrameBuilder.BuildEthernetFrame(new SampledValuesFrame
-                {
-                    Destination = destination,
-                    Source = source,
-                    Vlan = vlan,
-                    AppId = appId,
-                    Pdu = new SampledValuesPdu
-                    {
-                        Asdus =
-                        [
-                            new SampledValueAsdu
-                            {
-                                SvId = StreamId.Trim(),
-                                DataSetReference = DataSetReference.Trim(),
-                                SampleCount = sampleCount,
-                                ConfigurationRevision = selectedStream.ConfigurationRevision,
-                                ReferenceTime = sampleTime,
-                                SampleSynchronization = (byte)ResolveSampleSynchronization(latestPtpReport),
-                                SampleRate = ToSampleRate(sampleRateHz),
-                                SampleMode = MapSampleMode(selectedStream.SampleMode),
-                                SamplePayload = payload
-                            }
-                        ]
-                    }
-                });
-
-                await transport.SendAsync(frame, cancellationToken).ConfigureAwait(false);
-                lastFrameBytes = frame.Length;
-                sampleCount = IncrementSampleCount(sampleCount, sampleCounterWrap);
-                sent++;
+                cancellationToken.ThrowIfCancellationRequested();
+                var nextDueTicks = publisherStates
+                    .Where(IsActive)
+                    .Min(s => s.DueTicks(startedTicks));
+                await DelayUntilTicksAsync(nextDueTicks, cancellationToken).ConfigureAwait(false);
 
                 var nowTicks = Stopwatch.GetTimestamp();
+                foreach (var state in publisherStates)
+                {
+                    if (!IsActive(state))
+                        continue;
+
+                    if (state.DueTicks(startedTicks) > nowTicks)
+                        continue;
+
+                    var elapsedSeconds = state.Sent / state.SampleRateHz;
+                    var timestamp = startedAt.AddTicks((long)Math.Round(state.Sent * TimeSpan.TicksPerSecond / state.SampleRateHz));
+                    var sampleTime = new Iec61850UtcTime(timestamp, Quality: 0);
+                    var baseChannels = state.IsSelectedSlot && AutoApplyWhileRunning
+                        ? CaptureEffectiveChannels(elapsedSeconds)
+                        : state.FrozenChannels;
+                    var phasedChannels = ApplyOscillatorPhases(baseChannels, state.OscillatorStates, state.SampleRateHz);
+                    var payload = BuildSamplePayload(state.Stream, sampleTime, phasedChannels, state.CurrentDlsb, state.VoltageDlsb);
+                    var smpSynch = ResolveSampleSynchronization(latestPtpReport);
+                    var frame = SampledValuesFrameBuilder.BuildEthernetFrame(new SampledValuesFrame
+                    {
+                        Destination = state.Destination,
+                        Source = state.Source,
+                        Vlan = state.Vlan,
+                        AppId = state.AppId,
+                        Pdu = new SampledValuesPdu
+                        {
+                            Asdus =
+                            [
+                                new SampledValueAsdu
+                                {
+                                    SvId = state.SvId,
+                                    DataSetReference = state.DataSetReference,
+                                    SampleCount = state.SampleCount,
+                                    ConfigurationRevision = state.Stream.ConfigurationRevision,
+                                    ReferenceTime = sampleTime,
+                                    SampleSynchronization = (byte)smpSynch,
+                                    SampleRate = ToSampleRate(state.SampleRateHz, state.NominalFrequencyHz, state.Stream.SampleMode),
+                                    SampleMode = MapSampleMode(state.Stream.SampleMode),
+                                    SamplePayload = payload
+                                }
+                            ]
+                        }
+                    });
+
+                    await transport.SendAsync(frame, cancellationToken).ConfigureAwait(false);
+                    state.SampleCount = IncrementSampleCount(state.SampleCount, state.SampleCounterWrap);
+                    state.Sent++;
+                    totalSent++;
+                    lastFrameBytes = frame.Length;
+                    lastPayloadBytes = payload.Length;
+                }
+
                 if (nowTicks >= nextUiTicks)
                 {
                     latestPtpReport = ptpValidator.Evaluate(ptpMonitor.GetSnapshot(), ptpOptions);
                     var smpSynch = ResolveSampleSynchronization(latestPtpReport);
                     var elapsed = Stopwatch.GetElapsedTime(startedTicks);
-                    var rate = sent / Math.Max(elapsed.TotalSeconds, 0.001);
-                    var progress = frameLimit.HasValue ? $"{sent}/{frameLimit.Value}" : sent.ToString(CultureInfo.InvariantCulture);
-                    var message = $"{(live ? "LIVE" : "DRY")} frames={progress} rate={rate:0.0} fps smpCnt={sampleCount} smpSynch={(byte)smpSynch} payload={payload.Length}B frame={lastFrameBytes}B autoApply=ON";
+                    var effectiveRate = totalSent / Math.Max(elapsed.TotalSeconds, 0.001);
+                    var perPublisher = string.Join("  ", publisherStates.Select(s => $"P{s.SlotIndex}:{s.Sent} smpCnt={s.SampleCount}"));
+                    var message = $"{(live ? "LIVE" : "DRY")} publishers={publisherStates.Length} frames={totalSent} rate={effectiveRate:0.0} fps smpSynch={(byte)smpSynch} payload={lastPayloadBytes}B frame={lastFrameBytes}B  {perPublisher}";
                     Dispatch(() =>
                     {
-                        PayloadBytes = payload.Length;
+                        PayloadBytes = lastPayloadBytes;
                         PublishText = message;
                         UpdatePtpStatus(latestPtpReport, smpSynch, live);
                         UpdatePtpPublisherStatus(labPtpPublisher);
@@ -1218,13 +1298,104 @@ public sealed class SvPublisherViewModel : ObservableObject
         }
 
         var totalElapsed = Stopwatch.GetElapsedTime(startedTicks);
-        var effectiveRate = sent / Math.Max(totalElapsed.TotalSeconds, 0.001);
+        var rate = totalSent / Math.Max(totalElapsed.TotalSeconds, 0.001);
         Dispatch(() =>
         {
-            PublishText = $"Complete frames={sent} elapsed={totalElapsed.TotalSeconds:0.000}s rate={effectiveRate:0.0} fps lastFrame={lastFrameBytes}B";
+            PublishText = $"Complete publishers={publisherStates.Length} frames={totalSent} elapsed={totalElapsed.TotalSeconds:0.000}s rate={rate:0.0} fps lastFrame={lastFrameBytes}B";
             StatusText = "Publisher complete.";
             AppendEvent(PublishText);
         });
+    }
+
+    private IReadOnlyList<PublisherRuntimeState> BuildPublisherRuntimeStates()
+    {
+        var selectedIndex = SelectedPublisherSlot?.Index ?? 1;
+        var states = new List<PublisherRuntimeState>();
+        foreach (var slot in PublisherSlots.Where(s => s.IsEnabled))
+        {
+            if (slot.SelectedStream?.Stream is not { } stream)
+                continue;
+
+            var channels = slot.Channels.Count > 0
+                ? slot.Channels.ToDictionary(
+                    c => c.Key,
+                    c => new EffectiveChannel(ResolveChannelKind(c.Key), c.IsEnabled, c.Magnitude, c.AngleDegrees, c.FrequencyHz, c.AngleDegrees * Math.PI / 180.0),
+                    StringComparer.OrdinalIgnoreCase)
+                : Channels.ToDictionary(
+                    c => c.Key,
+                    c => new EffectiveChannel(c.Kind, c.IsEnabled, c.Magnitude, c.AngleDegrees, c.FrequencyHz, c.AngleDegrees * Math.PI / 180.0),
+                    StringComparer.OrdinalIgnoreCase);
+
+            states.Add(new PublisherRuntimeState
+            {
+                SlotIndex = slot.Index,
+                IsSelectedSlot = slot.Index == selectedIndex,
+                Stream = stream,
+                Source = MacAddress.Parse(slot.SourceMac),
+                Destination = MacAddress.Parse(slot.DestinationMac),
+                AppId = ParseAppId(slot.AppIdText),
+                Vlan = ResolveVlanTag(slot.UseVlan, slot.VlanId, slot.VlanPriority),
+                SampleRateHz = slot.SampleRateHz,
+                NominalFrequencyHz = slot.NominalFrequencyHz,
+                CurrentDlsb = slot.CurrentDlsb,
+                VoltageDlsb = slot.VoltageDlsb,
+                SvId = slot.StreamId.Trim(),
+                DataSetReference = slot.DataSetReference.Trim(),
+                SampleCounterWrap = ResolveSampleCounterWrap(stream, slot.SampleRateHz, slot.NominalFrequencyHz),
+                FrozenChannels = channels,
+                OscillatorStates = channels.ToDictionary(
+                    x => x.Key,
+                    x => new OscillatorState { PhaseRadians = x.Value.AngleDegrees * Math.PI / 180.0, LastAngleDegrees = x.Value.AngleDegrees },
+                    StringComparer.OrdinalIgnoreCase)
+            });
+        }
+
+        return states;
+    }
+
+    private static string ResolveChannelKind(string key)
+        => key.StartsWith("I", StringComparison.OrdinalIgnoreCase) ? "I" : "V";
+
+    private static async Task DelayUntilTicksAsync(long targetTicks, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var remainingTicks = targetTicks - Stopwatch.GetTimestamp();
+            if (remainingTicks <= 0)
+                return;
+
+            var remainingMs = remainingTicks * 1000.0 / Stopwatch.Frequency;
+            if (remainingMs > 2)
+                await Task.Delay(TimeSpan.FromMilliseconds(Math.Min(remainingMs - 1, 10)), cancellationToken).ConfigureAwait(false);
+            else
+                Thread.SpinWait(64);
+        }
+    }
+
+    private sealed class PublisherRuntimeState
+    {
+        public int SlotIndex { get; init; }
+        public bool IsSelectedSlot { get; init; }
+        public required SclSampledValuesStream Stream { get; init; }
+        public required MacAddress Source { get; init; }
+        public required MacAddress Destination { get; init; }
+        public VlanTag? Vlan { get; init; }
+        public ushort AppId { get; init; }
+        public double SampleRateHz { get; init; }
+        public double NominalFrequencyHz { get; init; }
+        public double CurrentDlsb { get; init; }
+        public double VoltageDlsb { get; init; }
+        public string SvId { get; init; } = string.Empty;
+        public string DataSetReference { get; init; } = string.Empty;
+        public ushort? SampleCounterWrap { get; init; }
+        public ushort SampleCount { get; set; }
+        public long Sent { get; set; }
+        public required IReadOnlyDictionary<string, EffectiveChannel> FrozenChannels { get; init; }
+        public required Dictionary<string, OscillatorState> OscillatorStates { get; init; }
+
+        public long DueTicks(long startedTicks)
+            => startedTicks + (long)Math.Round(Sent * Stopwatch.Frequency / SampleRateHz);
     }
 
 private static async Task CapturePtpAsync(
@@ -1377,7 +1548,9 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
     private byte[] BuildSamplePayload(
         SclSampledValuesStream stream,
         Iec61850UtcTime timestamp,
-        IReadOnlyDictionary<string, EffectiveChannel> channels)
+        IReadOnlyDictionary<string, EffectiveChannel> channels,
+        double currentDlsb,
+        double voltageDlsb)
     {
         var layout = SampledValuesPayloadLayout.FromDataSet(stream.Entries);
         if (!layout.IsFullySupported)
@@ -1404,7 +1577,7 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
                 continue;
             }
 
-            values.Add(BuildChannelValue(entry, element, channels));
+            values.Add(BuildChannelValue(entry, element, channels, currentDlsb, voltageDlsb));
         }
 
         return SampledValuesPayloadBuilder.BuildPayload(layout, values);
@@ -1413,13 +1586,15 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
     private MmsDataValue BuildChannelValue(
         SclDataSetEntry entry,
         SampledValuePayloadElement element,
-        IReadOnlyDictionary<string, EffectiveChannel> channels)
+        IReadOnlyDictionary<string, EffectiveChannel> channels,
+        double currentDlsb,
+        double voltageDlsb)
     {
         var key = ResolveSignalKey(entry);
         if (key is null || !channels.TryGetValue(key, out var effective) || !effective.IsEnabled)
             return ZeroValue(element);
 
-        var dlsb = effective.Kind == "I" ? CurrentDlsb : VoltageDlsb;
+        var dlsb = effective.Kind == "I" ? currentDlsb : voltageDlsb;
         if (dlsb <= 0)
             throw new InvalidOperationException("dLSB must be greater than 0.");
 
@@ -1545,38 +1720,150 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
         return states[^1];
     }
 
+    private void ApplyStreamMetadataToSlot(SvPublisherSlotViewModel slot, SvStreamChoice? choice)
+    {
+        slot.SelectedStream = choice;
+        if (choice is null)
+        {
+            slot.StreamId = string.Empty;
+            slot.StreamControlBlock = string.Empty;
+            slot.DataSetReference = string.Empty;
+            slot.DataSetEntryCount = 0;
+            slot.MappedSignalCount = 0;
+            slot.PayloadBytes = 0;
+            return;
+        }
+
+        var stream = choice.Stream;
+        slot.StreamControlBlock = stream.ControlBlockReference;
+        slot.StreamId = stream.SvId;
+        slot.DataSetReference = stream.DataSetReference;
+        slot.AppIdText = stream.Address.AppId.HasValue ? $"0x{stream.Address.AppId.Value:X4}" : stream.Address.AppIdText;
+        slot.DestinationMac = stream.Address.DestinationMac?.ToString() ?? stream.Address.DestinationMacText;
+        slot.UseVlan = stream.Address.VlanId.HasValue;
+        slot.VlanId = stream.Address.VlanId ?? 0;
+        slot.VlanPriority = stream.Address.VlanPriority ?? 4;
+        var sampleRate = ResolveStreamSampleRateHz(stream, slot.NominalFrequencyHz);
+        if (sampleRate > 0)
+        {
+            slot.SampleRateHz = sampleRate;
+            slot.SampleRatePresetKey = SampleRatePresets.FirstOrDefault(preset => Math.Abs(preset.SampleRateHz - sampleRate) < 0.5)?.Key ?? slot.SampleRatePresetKey;
+        }
+        slot.DataSetEntryCount = stream.Entries.Count;
+        slot.MappedSignalCount = stream.Entries.Count(e => !e.IsQuality && !e.IsTimestamp && ResolveSignalKey(e) is not null);
+        slot.PayloadBytes = EstimatePayloadBytes(stream.Entries);
+    }
+
+    private void SaveCurrentPublisherSlot()
+    {
+        if (_isLoadingPublisherSlot || _selectedPublisherSlot is not { } slot)
+            return;
+
+        slot.SelectedStream = SelectedStream;
+        slot.StreamId = StreamId;
+        slot.StreamControlBlock = StreamControlBlock;
+        slot.DataSetReference = DataSetReference;
+        slot.AppIdText = AppIdText;
+        slot.DestinationMac = DestinationMac;
+        slot.SourceMac = SourceMac;
+        slot.UseVlan = UseVlan;
+        slot.VlanId = VlanId;
+        slot.VlanPriority = VlanPriority;
+        slot.SampleRateHz = SampleRateHz;
+        slot.NominalFrequencyHz = NominalFrequencyHz;
+        slot.CurrentDlsb = CurrentDlsb;
+        slot.VoltageDlsb = VoltageDlsb;
+        slot.ManualSetMode = ManualSetMode;
+        slot.SampleRatePresetKey = SelectedSampleRatePreset?.Key ?? slot.SampleRatePresetKey;
+        slot.DataSetEntryCount = DataSetEntryCount;
+        slot.MappedSignalCount = MappedSignalCount;
+        slot.PayloadBytes = PayloadBytes;
+        slot.Channels = Channels.Select(c => c.ToSnapshot()).ToArray();
+    }
+
+    private void LoadPublisherSlot(SvPublisherSlotViewModel slot)
+    {
+        _isLoadingPublisherSlot = true;
+        try
+        {
+            SelectedStream = slot.SelectedStream;
+            StreamId = slot.StreamId;
+            StreamControlBlock = slot.StreamControlBlock;
+            DataSetReference = slot.DataSetReference;
+            AppIdText = slot.AppIdText;
+            DestinationMac = slot.DestinationMac;
+            SourceMac = slot.SourceMac;
+            UseVlan = slot.UseVlan;
+            VlanId = slot.VlanId;
+            VlanPriority = slot.VlanPriority;
+            SampleRateHz = slot.SampleRateHz;
+            NominalFrequencyHz = slot.NominalFrequencyHz;
+            CurrentDlsb = slot.CurrentDlsb;
+            VoltageDlsb = slot.VoltageDlsb;
+            ManualSetMode = slot.ManualSetMode;
+            SelectedSampleRatePreset = SampleRatePresets.FirstOrDefault(p => p.Key == slot.SampleRatePresetKey)
+                ?? SampleRatePresets.FirstOrDefault(p => Math.Abs(p.SampleRateHz - slot.SampleRateHz) < 0.5)
+                ?? SampleRatePresets.FirstOrDefault();
+
+            if (slot.Channels.Count > 0)
+            {
+                foreach (var snapshot in slot.Channels)
+                    SetChannel(snapshot.Key, snapshot.Magnitude, snapshot.AngleDegrees, snapshot.IsEnabled, snapshot.FrequencyHz);
+            }
+
+            DataSetEntryCount = slot.DataSetEntryCount;
+            MappedSignalCount = slot.MappedSignalCount;
+            PayloadBytes = slot.PayloadBytes;
+            RebuildManualRowsFromChannels();
+            LiveApplyText = $"Editing {slot.Header}. {slot.SummaryText}";
+        }
+        finally
+        {
+            _isLoadingPublisherSlot = false;
+        }
+    }
+
     private void ValidateBeforeRun(bool live)
     {
-        if (SelectedStream is null)
-            throw new InvalidOperationException("Open an SCL file and select an SV stream first.");
+        SaveCurrentPublisherSlot();
+        var activeSlots = PublisherSlots.Where(s => s.IsEnabled).ToArray();
+        if (activeSlots.Length == 0)
+            throw new InvalidOperationException("Enable at least one IED / MU publisher slot.");
 
-        if (SampleRateHz <= 0)
-            throw new InvalidOperationException("Sample rate must be greater than 0.");
+        foreach (var slot in activeSlots)
+        {
+            var selectedSlotStream = slot.SelectedStream
+                ?? throw new InvalidOperationException($"{slot.Header}: select an SV stream first.");
+
+            if (slot.SampleRateHz <= 0)
+                throw new InvalidOperationException($"{slot.Header}: sample rate must be greater than 0.");
+
+            if (!MacAddress.TryParse(slot.SourceMac, out _))
+                throw new InvalidOperationException($"{slot.Header}: source MAC is invalid.");
+
+            if (!MacAddress.TryParse(slot.DestinationMac, out _))
+                throw new InvalidOperationException($"{slot.Header}: destination MAC is invalid.");
+
+            _ = ParseAppId(slot.AppIdText);
+            _ = ResolveVlanTag(slot.UseVlan, slot.VlanId, slot.VlanPriority);
+
+            if (slot.NominalFrequencyHz <= 0)
+                throw new InvalidOperationException($"{slot.Header}: nominal frequency must be greater than 0.");
+
+            if (slot.CurrentDlsb <= 0 || slot.VoltageDlsb <= 0)
+                throw new InvalidOperationException($"{slot.Header}: current and voltage dLSB must be greater than 0.");
+
+            var stream = selectedSlotStream.Stream;
+            if (stream.NoAsdu != 1)
+                throw new InvalidOperationException($"{slot.Header}: SV stream declares nofASDU={stream.NoAsdu}. This publisher currently supports exactly one ASDU per frame.");
+
+            var layout = SampledValuesPayloadLayout.FromDataSet(stream.Entries);
+            if (!layout.IsFullySupported)
+                throw new InvalidOperationException($"{slot.Header}: unsupported SV payload layout: " + string.Join("; ", layout.UnsupportedElements.Select(x => $"{x.SignalReference} bType={x.BType}")));
+        }
 
         if (!Continuous && DurationSeconds <= 0)
             throw new InvalidOperationException("Duration must be greater than 0 for finite publish.");
-
-        if (NominalFrequencyHz <= 0)
-            throw new InvalidOperationException("Frequency must be greater than 0.");
-
-        if (CurrentDlsb <= 0 || VoltageDlsb <= 0)
-            throw new InvalidOperationException("Current and voltage dLSB must be greater than 0.");
-
-        if (SelectedStream.Stream.NoAsdu != 1)
-            throw new InvalidOperationException($"SV stream declares nofASDU={SelectedStream.Stream.NoAsdu}. This publisher currently supports exactly one ASDU per frame.");
-
-        var layout = SampledValuesPayloadLayout.FromDataSet(SelectedStream.Stream.Entries);
-        if (!layout.IsFullySupported)
-            throw new InvalidOperationException("Unsupported SV payload layout: " + string.Join("; ", layout.UnsupportedElements.Select(x => $"{x.SignalReference} bType={x.BType}")));
-
-        if (!MacAddress.TryParse(SourceMac, out _))
-            throw new InvalidOperationException("Source MAC is invalid.");
-
-        if (!MacAddress.TryParse(DestinationMac, out _))
-            throw new InvalidOperationException("Destination MAC is invalid.");
-
-        _ = ParseAppId(AppIdText);
-        _ = ResolveVlanTag();
 
         if (live && SelectedAdapter is null)
             throw new InvalidOperationException("Select a NIC adapter before live publishing.");
@@ -1603,7 +1890,13 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
         UseVlan = stream.Address.VlanId.HasValue;
         VlanId = stream.Address.VlanId ?? 0;
         VlanPriority = stream.Address.VlanPriority ?? 4;
-        SampleRateHz = stream.SampleRate == 0 ? SampleRateHz : stream.SampleRate;
+        var streamSampleRateHz = ResolveStreamSampleRateHz(stream, NominalFrequencyHz);
+        if (streamSampleRateHz > 0)
+        {
+            SampleRateHz = streamSampleRateHz;
+            SelectedSampleRatePreset = SampleRatePresets.FirstOrDefault(preset => Math.Abs(preset.SampleRateHz - streamSampleRateHz) < 0.5)
+                ?? SelectedSampleRatePreset;
+        }
         DataSetEntryCount = stream.Entries.Count;
         MappedSignalCount = stream.Entries.Count(e => !e.IsQuality && !e.IsTimestamp && ResolveSignalKey(e) is not null);
         PayloadBytes = EstimatePayloadBytes(stream.Entries);
@@ -1612,17 +1905,20 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
     }
 
     private VlanTag? ResolveVlanTag()
+        => ResolveVlanTag(UseVlan, VlanId, VlanPriority);
+
+    private static VlanTag? ResolveVlanTag(bool useVlan, int vlanId, int vlanPriority)
     {
-        if (!UseVlan)
+        if (!useVlan)
             return null;
 
-        if (VlanId is < 0 or > 4094)
+        if (vlanId is < 0 or > 4094)
             throw new InvalidOperationException("VLAN ID must be 0..4094.");
 
-        if (VlanPriority is < 0 or > 7)
+        if (vlanPriority is < 0 or > 7)
             throw new InvalidOperationException("VLAN priority must be 0..7.");
 
-        return new VlanTag((byte)VlanPriority, (ushort)VlanId);
+        return new VlanTag((byte)vlanPriority, false, (ushort)vlanId);
     }
 
     private static ushort ParseAppId(string text)
@@ -1679,15 +1975,38 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
         };
     }
 
+    private static double ResolveStreamSampleRateHz(SclSampledValuesStream stream, double nominalFrequencyHz)
+    {
+        if (stream.SampleRate <= 0)
+            return 0;
+
+        return MapSampleMode(stream.SampleMode) switch
+        {
+            0 when nominalFrequencyHz > 0 => stream.SampleRate * nominalFrequencyHz,
+            1 => stream.SampleRate,
+            _ => stream.SampleRate
+        };
+    }
+
     private static int EstimatePayloadBytes(IEnumerable<SclDataSetEntry> entries)
         => SampledValuesPayloadLayout.FromDataSet(entries.ToArray()).PayloadByteLength;
 
-    private static ushort? ToSampleRate(double sampleRateHz)
+    private static ushort? ToSampleRate(double sampleRateHz, double nominalFrequencyHz, string sampleMode)
     {
-        if (sampleRateHz <= 0 || sampleRateHz > ushort.MaxValue)
+        if (sampleRateHz <= 0 || nominalFrequencyHz <= 0)
             return null;
 
-        return (ushort)Math.Round(sampleRateHz);
+        var mode = MapSampleMode(sampleMode);
+        var value = mode switch
+        {
+            0 => sampleRateHz / nominalFrequencyHz,
+            1 => sampleRateHz,
+            _ => sampleRateHz
+        };
+
+        return value <= 0 || value > ushort.MaxValue
+            ? null
+            : (ushort)Math.Round(value);
     }
 
     private static ushort? MapSampleMode(string sampleMode)
@@ -1704,7 +2023,7 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
         var mode = MapSampleMode(stream.SampleMode);
         var samplesPerSecond = mode switch
         {
-            0 when stream.SampleRate > 0 && nominalFrequencyHz > 0 => stream.SampleRate * nominalFrequencyHz,
+            0 when sampleRateHz > 0 => sampleRateHz,
             1 when sampleRateHz > 0 => sampleRateHz,
             _ => 0
         };
@@ -1880,6 +2199,9 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
         LiveApplyText = IsPublishing
             ? $"RUN auto-applied: {reason}"
             : $"Ready: {reason}";
+
+        if (!_isLoadingPublisherSlot)
+            SaveCurrentPublisherSlot();
     }
 
     private void ProjectDirectRowsToChannels()
@@ -2703,6 +3025,27 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
             Continuous = Continuous,
             Mode = Mode,
             ManualSetMode = ManualSetMode,
+            Publishers = PublisherSlots.Select(slot => new SvPublisherSlotConfigSnapshot
+            {
+                Index = slot.Index,
+                IsEnabled = slot.IsEnabled,
+                StreamControlBlock = slot.StreamControlBlock,
+                StreamId = slot.StreamId,
+                DataSetReference = slot.DataSetReference,
+                AppId = slot.AppIdText,
+                DestinationMac = slot.DestinationMac,
+                UseVlan = slot.UseVlan,
+                VlanId = slot.VlanId,
+                VlanPriority = slot.VlanPriority,
+                SourceMac = slot.SourceMac,
+                SampleRateHz = slot.SampleRateHz,
+                NominalFrequencyHz = slot.NominalFrequencyHz,
+                SampleRatePresetKey = slot.SampleRatePresetKey,
+                CurrentDlsb = slot.CurrentDlsb,
+                VoltageDlsb = slot.VoltageDlsb,
+                ManualSetMode = slot.ManualSetMode,
+                Channels = slot.Channels
+            }).ToArray(),
             AutoApplyWhileRunning = AutoApplyWhileRunning,
             LinkFrequencies = LinkFrequencies,
             SyncPolicyMode = SyncPolicyMode,

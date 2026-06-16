@@ -23,6 +23,12 @@ public enum PtpPublisherMode
     LabPublisher
 }
 
+public enum PublisherSignalSource
+{
+    Manual,
+    ComtradeReplay
+}
+
 public sealed class SvStreamChoice
 {
     public required int Index { get; init; }
@@ -95,6 +101,9 @@ public sealed class SvPublisherSlotConfigSnapshot
     public double CurrentDlsb { get; init; }
     public double VoltageDlsb { get; init; }
     public string ManualSetMode { get; init; } = "Direct";
+    public PublisherSignalSource SignalSource { get; init; } = PublisherSignalSource.Manual;
+    public string ComtradePath { get; init; } = string.Empty;
+    public bool ComtradeLoop { get; init; }
     public IReadOnlyList<SignalChannelSnapshot> Channels { get; init; } = Array.Empty<SignalChannelSnapshot>();
 }
 

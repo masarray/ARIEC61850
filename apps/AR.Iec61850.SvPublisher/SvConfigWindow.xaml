@@ -158,6 +158,8 @@
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                         <Button Content="Open SCL" Command="{Binding OpenSclCommand}" Style="{StaticResource PrimaryButton}" />
+                        <Button Content="Comtrade" Command="{Binding ImportComtradeCommand}" />
+                        <Button Content="Clear replay" Command="{Binding ClearComtradeCommand}" />
                         <Button Content="Save plan" Command="{Binding SaveProfileCommand}" />
                     </StackPanel>
 
@@ -168,14 +170,12 @@
                     <Grid Margin="0,4,0,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="220" />
-                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <ComboBox ItemsSource="{Binding PublisherSlots}"
                                   SelectedItem="{Binding SelectedPublisherSlot}"
                                   DisplayMemberPath="Header" />
-                        <CheckBox Grid.Column="1" Content="Enabled" IsChecked="{Binding SelectedPublisherSlot.IsEnabled}" VerticalAlignment="Center" Margin="12,0" />
-                        <TextBlock Grid.Column="2" Text="{Binding SelectedPublisherSlot.SummaryText}" Foreground="#334155" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="{Binding SelectedPublisherSlot.SummaryText}" Foreground="#334155" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
                     </Grid>
 
                     <TextBlock Text="SV stream for selected publisher" Style="{StaticResource LabelText}" />
@@ -213,6 +213,8 @@
                             <RowDefinition Height="38" />
                             <RowDefinition Height="38" />
                             <RowDefinition Height="38" />
+                            <RowDefinition Height="42" />
+                            <RowDefinition Height="42" />
                             <RowDefinition Height="42" />
                             <RowDefinition Height="42" />
                             <RowDefinition Height="42" />
@@ -266,16 +268,26 @@
                             <CheckBox Content="Local fallback" IsChecked="{Binding PtpAllowLocalFallback}" VerticalAlignment="Center" Margin="12,0,0,0" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="7" Text="PTP Publisher" Style="{StaticResource LabelText}" />
-                        <ComboBox Grid.Row="7" Grid.Column="1"
+                        <TextBlock Grid.Row="7" Text="SV output" Style="{StaticResource LabelText}" />
+                        <CheckBox Grid.Row="7" Grid.Column="1" Content="Enable selected publisher" IsChecked="{Binding SelectedPublisherSlot.IsEnabled}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="7" Grid.Column="2" Text="Source" Style="{StaticResource LabelText}" Margin="14,0,0,0" />
+                        <ComboBox Grid.Row="7" Grid.Column="3" ItemsSource="{Binding SignalSources}" SelectedItem="{Binding SelectedPublisherSlot.SignalSource}" />
+
+                        <TextBlock Grid.Row="8" Text="Replay" Style="{StaticResource LabelText}" />
+                        <CheckBox Grid.Row="8" Grid.Column="1" Content="Loop COMTRADE" IsChecked="{Binding SelectedPublisherSlot.ComtradeLoop}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="8" Grid.Column="2" Text="COMTRADE" Style="{StaticResource LabelText}" Margin="14,0,0,0" />
+                        <TextBlock Grid.Row="8" Grid.Column="3" Text="{Binding SelectedPublisherSlot.ComtradeSummary}" Foreground="#334155" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+
+                        <TextBlock Grid.Row="9" Text="PTP Publisher" Style="{StaticResource LabelText}" />
+                        <ComboBox Grid.Row="9" Grid.Column="1"
                                   ItemsSource="{Binding PtpPublisherModes}"
                                   SelectedItem="{Binding PtpPublisherMode}"
                                   Margin="0,4,0,0" />
-                        <TextBlock Grid.Row="7" Grid.Column="2" Text="Clock ID" Style="{StaticResource LabelText}" Margin="14,4,0,0" />
-                        <TextBox Grid.Row="7" Grid.Column="3" Text="{Binding PtpClockIdentityText, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="9" Grid.Column="2" Text="Clock ID" Style="{StaticResource LabelText}" Margin="14,4,0,0" />
+                        <TextBox Grid.Row="9" Grid.Column="3" Text="{Binding PtpClockIdentityText, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" />
 
-                        <TextBlock Grid.Row="8" Text="PTP timing" Style="{StaticResource LabelText}" />
-                        <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock Grid.Row="10" Text="PTP timing" Style="{StaticResource LabelText}" />
+                        <StackPanel Grid.Row="10" Grid.Column="1" Orientation="Horizontal" Margin="0,4,0,0">
                             <TextBlock Text="Ann" Style="{StaticResource LabelText}" Margin="0,0,5,0" />
                             <TextBox Width="64" Text="{Binding PtpAnnounceIntervalMs, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Text="ms" Style="{StaticResource LabelText}" Margin="5,0,10,0" />
@@ -283,8 +295,8 @@
                             <TextBox Width="64" Text="{Binding PtpSyncIntervalMs, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Text="ms" Style="{StaticResource LabelText}" Margin="5,0,0,0" />
                         </StackPanel>
-                        <TextBlock Grid.Row="8" Grid.Column="2" Text="Peer delay" Style="{StaticResource LabelText}" Margin="14,4,0,0" />
-                        <CheckBox Grid.Row="8" Grid.Column="3" Content="Respond to Pdelay_Req" IsChecked="{Binding PtpRespondToPeerDelay}" VerticalAlignment="Center" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="10" Grid.Column="2" Text="Peer delay" Style="{StaticResource LabelText}" Margin="14,4,0,0" />
+                        <CheckBox Grid.Row="10" Grid.Column="3" Content="Respond to Pdelay_Req" IsChecked="{Binding PtpRespondToPeerDelay}" VerticalAlignment="Center" Margin="0,4,0,0" />
                     </Grid>
 
                     <TextBlock Text="Evidence" FontSize="12" FontWeight="SemiBold" Foreground="#334155" Margin="0,16,0,8" />

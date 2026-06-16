@@ -1,3 +1,4 @@
+using AR.Iec61850.Comtrade;
 using AR.Iec61850.Scl;
 using AR.Iec61850.SvPublisher.Models;
 
@@ -22,6 +23,10 @@ public sealed class SvPublisherSlotViewModel : ObservableObject
     private double _voltageDlsb = 0.01;
     private string _manualSetMode = "Direct";
     private string _sampleRatePresetKey = "9-2LE-80-50";
+    private PublisherSignalSource _signalSource = PublisherSignalSource.Manual;
+    private string _comtradePath = string.Empty;
+    private string _comtradeSummary = "No COMTRADE loaded.";
+    private bool _comtradeLoop;
     private int _dataSetEntryCount;
     private int _mappedSignalCount;
     private int _payloadBytes;
@@ -202,6 +207,58 @@ public sealed class SvPublisherSlotViewModel : ObservableObject
         set => SetProperty(ref _payloadBytes, value);
     }
 
+    public PublisherSignalSource SignalSource
+    {
+        get => _signalSource;
+        set
+        {
+            if (SetProperty(ref _signalSource, value))
+            {
+                OnPropertyChanged(nameof(SummaryText));
+                OnPropertyChanged(nameof(SourceText));
+            }
+        }
+    }
+
+    public string ComtradePath
+    {
+        get => _comtradePath;
+        set
+        {
+            if (SetProperty(ref _comtradePath, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(HasComtrade));
+                OnPropertyChanged(nameof(SourceText));
+            }
+        }
+    }
+
+    public string ComtradeSummary
+    {
+        get => _comtradeSummary;
+        set
+        {
+            if (SetProperty(ref _comtradeSummary, string.IsNullOrWhiteSpace(value) ? "No COMTRADE loaded." : value))
+                OnPropertyChanged(nameof(SourceText));
+        }
+    }
+
+    public bool ComtradeLoop
+    {
+        get => _comtradeLoop;
+        set => SetProperty(ref _comtradeLoop, value);
+    }
+
+    public ComtradeDataset? ComtradeDataset { get; set; }
+
+    public IReadOnlyDictionary<string, int> ComtradeChannelMap { get; set; } = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+    public bool HasComtrade => ComtradeDataset is not null || !string.IsNullOrWhiteSpace(ComtradePath);
+
+    public string SourceText => SignalSource == PublisherSignalSource.ComtradeReplay
+        ? $"COMTRADE: {ComtradeSummary}"
+        : "Manual phasor values";
+
     public IReadOnlyList<SignalChannelSnapshot> Channels
     {
         get => _channels;
@@ -222,7 +279,8 @@ public sealed class SvPublisherSlotViewModel : ObservableObject
             var stream = string.IsNullOrWhiteSpace(StreamControlBlock) ? "No stream" : StreamControlBlock;
             var vlan = UseVlan ? $" VLAN {VlanId}" : " untagged";
             var appId = string.IsNullOrWhiteSpace(AppIdText) ? "APPID -" : AppIdText;
-            return $"{stream}  {appId}{vlan}  {SampleRateHz:0.#} fps";
+            var source = SignalSource == PublisherSignalSource.ComtradeReplay ? "  COMTRADE" : string.Empty;
+            return $"{stream}  {appId}{vlan}  {SampleRateHz:0.#} fps{source}";
         }
     }
 }

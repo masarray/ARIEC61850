@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using AR.Iec61850.Comtrade;
 using AR.Iec61850.Ethernet;
 using AR.Iec61850.Mms;
 using AR.Iec61850.SampledValues;
@@ -146,6 +147,8 @@ public sealed class SvPublisherViewModel : ObservableObject
         SelectedPublisherSlot = PublisherSlots.FirstOrDefault();
 
         OpenSclCommand = new AsyncRelayCommand(OpenSclAsync, () => !IsPublishing);
+        ImportComtradeCommand = new AsyncRelayCommand(ImportComtradeAsync, () => !IsPublishing && SelectedPublisherSlot is not null);
+        ClearComtradeCommand = new RelayCommand(ClearComtrade, () => !IsPublishing && SelectedPublisherSlot is not null);
         RefreshAdaptersCommand = new RelayCommand(RefreshAdapters, () => !IsPublishing);
         SaveProfileCommand = new AsyncRelayCommand(SaveProfileAsync, () => !IsPublishing);
         RunDryCommand = new AsyncRelayCommand(() => RunPublishAsync(live: false), () => !IsPublishing);
@@ -243,6 +246,12 @@ public sealed class SvPublisherViewModel : ObservableObject
         SvSyncPolicyMode.ForceGlobal
     ];
 
+    public IReadOnlyList<PublisherSignalSource> SignalSources { get; } =
+    [
+        PublisherSignalSource.Manual,
+        PublisherSignalSource.ComtradeReplay
+    ];
+
     public IReadOnlyList<PtpPublisherMode> PtpPublisherModes { get; } =
     [
         AR.Iec61850.SvPublisher.Models.PtpPublisherMode.MonitorOnly,
@@ -257,6 +266,8 @@ public sealed class SvPublisherViewModel : ObservableObject
     ];
 
     public ICommand OpenSclCommand { get; }
+    public ICommand ImportComtradeCommand { get; }
+    public ICommand ClearComtradeCommand { get; }
     public ICommand RefreshAdaptersCommand { get; }
     public ICommand SaveProfileCommand { get; }
     public ICommand RunDryCommand { get; }
@@ -1042,6 +1053,74 @@ public sealed class SvPublisherViewModel : ObservableObject
         }
     }
 
+
+    private async Task ImportComtradeAsync()
+    {
+        if (SelectedPublisherSlot is not { } slot)
+            return;
+
+        var dialog = new OpenFileDialog
+        {
+            Title = $"Import COMTRADE for {slot.Header}",
+            Filter = "COMTRADE configuration (*.cfg)|*.cfg|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            var dataset = await Task.Run(() => new ComtradeReader().Load(dialog.FileName)).ConfigureAwait(true);
+            slot.ComtradeDataset = dataset;
+            slot.ComtradeChannelMap = dataset.DefaultChannelMap;
+            slot.ComtradePath = dialog.FileName;
+            slot.ComtradeSummary = dataset.Summary;
+            slot.SignalSource = PublisherSignalSource.ComtradeReplay;
+            slot.IsEnabled = true;
+            slot.ComtradeLoop = false;
+
+            var rate = dataset.NominalSampleRateHz;
+            if (rate > 0)
+            {
+                slot.SampleRateHz = rate;
+                SampleRateHz = rate;
+                SelectedSampleRatePreset = SampleRatePresets.FirstOrDefault(preset => Math.Abs(preset.SampleRateHz - rate) < 0.5)
+                    ?? SelectedSampleRatePreset;
+            }
+
+            if (dataset.Configuration.LineFrequencyHz > 0)
+            {
+                slot.NominalFrequencyHz = dataset.Configuration.LineFrequencyHz;
+                NominalFrequencyHz = dataset.Configuration.LineFrequencyHz;
+            }
+
+            SaveCurrentPublisherSlot();
+            LoadPublisherSlot(slot);
+            StatusText = "COMTRADE imported.";
+            AppendEvent($"{slot.Header}: COMTRADE loaded {Path.GetFileName(dialog.FileName)}; {dataset.Summary}; mapped {dataset.DefaultChannelMap.Count} analog channel(s).");
+        }
+        catch (Exception ex)
+        {
+            StatusText = "COMTRADE import failed.";
+            AppendEvent(ex.Message);
+        }
+    }
+
+    private void ClearComtrade()
+    {
+        if (SelectedPublisherSlot is not { } slot)
+            return;
+
+        slot.SignalSource = PublisherSignalSource.Manual;
+        slot.ComtradeDataset = null;
+        slot.ComtradeChannelMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        slot.ComtradePath = string.Empty;
+        slot.ComtradeSummary = "No COMTRADE loaded.";
+        SaveCurrentPublisherSlot();
+        LoadPublisherSlot(slot);
+        AppendEvent($"{slot.Header}: COMTRADE replay cleared.");
+    }
+
     private void RefreshAdapters()
     {
         try
@@ -1187,7 +1266,12 @@ public sealed class SvPublisherViewModel : ObservableObject
         var lastFrameBytes = 0;
         var lastPayloadBytes = 0;
         bool IsActive(PublisherRuntimeState state)
-            => frameLimitPerPublisher is null || state.Sent < frameLimitPerPublisher[state.SlotIndex];
+        {
+            if (state.SignalSource == PublisherSignalSource.ComtradeReplay && state.ComtradeDataset is { } dataset && !state.ComtradeLoop)
+                return state.Sent < dataset.SampleCount;
+
+            return frameLimitPerPublisher is null || state.Sent < frameLimitPerPublisher[state.SlotIndex];
+        }
 
         try
         {
@@ -1219,11 +1303,21 @@ public sealed class SvPublisherViewModel : ObservableObject
                     var elapsedSeconds = state.Sent / state.SampleRateHz;
                     var timestamp = startedAt.AddTicks((long)Math.Round(state.Sent * TimeSpan.TicksPerSecond / state.SampleRateHz));
                     var sampleTime = new Iec61850UtcTime(timestamp, Quality: 0);
-                    var baseChannels = state.IsSelectedSlot && AutoApplyWhileRunning
-                        ? CaptureEffectiveChannels(elapsedSeconds)
-                        : state.FrozenChannels;
-                    var phasedChannels = ApplyOscillatorPhases(baseChannels, state.OscillatorStates, state.SampleRateHz);
-                    var payload = BuildSamplePayload(state.Stream, sampleTime, phasedChannels, state.CurrentDlsb, state.VoltageDlsb);
+                    byte[] payload;
+                    if (state.SignalSource == PublisherSignalSource.ComtradeReplay && state.ComtradeDataset is { } dataset)
+                    {
+                        var sample = dataset.GetSampleByIndex(state.Sent, state.ComtradeLoop);
+                        var instantaneousValues = ResolveComtradeInstantaneousValues(sample, state.ComtradeChannelMap);
+                        payload = BuildInstantaneousSamplePayload(state.Stream, sampleTime, instantaneousValues, state.CurrentDlsb, state.VoltageDlsb);
+                    }
+                    else
+                    {
+                        var baseChannels = state.IsSelectedSlot && AutoApplyWhileRunning
+                            ? CaptureEffectiveChannels(elapsedSeconds)
+                            : state.FrozenChannels;
+                        var phasedChannels = ApplyOscillatorPhases(baseChannels, state.OscillatorStates, state.SampleRateHz);
+                        payload = BuildSamplePayload(state.Stream, sampleTime, phasedChannels, state.CurrentDlsb, state.VoltageDlsb);
+                    }
                     var smpSynch = ResolveSampleSynchronization(latestPtpReport);
                     var frame = SampledValuesFrameBuilder.BuildEthernetFrame(new SampledValuesFrame
                     {
@@ -1346,7 +1440,11 @@ public sealed class SvPublisherViewModel : ObservableObject
                 OscillatorStates = channels.ToDictionary(
                     x => x.Key,
                     x => new OscillatorState { PhaseRadians = x.Value.AngleDegrees * Math.PI / 180.0, LastAngleDegrees = x.Value.AngleDegrees },
-                    StringComparer.OrdinalIgnoreCase)
+                    StringComparer.OrdinalIgnoreCase),
+                SignalSource = slot.SignalSource,
+                ComtradeDataset = slot.ComtradeDataset,
+                ComtradeLoop = slot.ComtradeLoop,
+                ComtradeChannelMap = slot.ComtradeChannelMap
             });
         }
 
@@ -1393,6 +1491,10 @@ public sealed class SvPublisherViewModel : ObservableObject
         public long Sent { get; set; }
         public required IReadOnlyDictionary<string, EffectiveChannel> FrozenChannels { get; init; }
         public required Dictionary<string, OscillatorState> OscillatorStates { get; init; }
+        public PublisherSignalSource SignalSource { get; init; }
+        public ComtradeDataset? ComtradeDataset { get; init; }
+        public bool ComtradeLoop { get; init; }
+        public IReadOnlyDictionary<string, int> ComtradeChannelMap { get; init; } = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         public long DueTicks(long startedTicks)
             => startedTicks + (long)Math.Round(Sent * Stopwatch.Frequency / SampleRateHz);
@@ -1544,6 +1646,89 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
         SmpSynchValue.LocalSynchronized => "smpSynch=1 local",
         _ => "smpSynch=0 unsync"
     };
+
+
+    private static IReadOnlyDictionary<string, double> ResolveComtradeInstantaneousValues(
+        ComtradeSample sample,
+        IReadOnlyDictionary<string, int> channelMap)
+    {
+        var values = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in channelMap)
+        {
+            if (pair.Value >= 0 && pair.Value < sample.AnalogValues.Count)
+                values[pair.Key] = sample.AnalogValues[pair.Value];
+        }
+
+        return values;
+    }
+
+    private byte[] BuildInstantaneousSamplePayload(
+        SclSampledValuesStream stream,
+        Iec61850UtcTime timestamp,
+        IReadOnlyDictionary<string, double> instantaneousValues,
+        double currentDlsb,
+        double voltageDlsb)
+    {
+        var layout = SampledValuesPayloadLayout.FromDataSet(stream.Entries);
+        if (!layout.IsFullySupported)
+            throw new InvalidOperationException("Unsupported SV payload layout: " + string.Join("; ", layout.UnsupportedElements.Select(x => $"{x.SignalReference} bType={x.BType}")));
+
+        var entriesByIndex = stream.Entries.ToDictionary(x => x.Index);
+        var values = new List<MmsDataValue>(layout.Elements.Count);
+        foreach (var element in layout.Elements)
+        {
+            if (!entriesByIndex.TryGetValue(element.Index, out var entry))
+                throw new InvalidOperationException($"SV payload layout entry {element.Index} has no matching DataSet entry.");
+
+            if (element.Kind == SampledValuePayloadElementKind.Quality ||
+                element.Kind == SampledValuePayloadElementKind.BitString ||
+                element.Kind == SampledValuePayloadElementKind.EntryTime)
+            {
+                values.Add(MmsDataValue.BitString(0, new byte[element.Width]));
+                continue;
+            }
+
+            if (element.Kind == SampledValuePayloadElementKind.Timestamp)
+            {
+                values.Add(MmsDataValue.UtcTime(timestamp));
+                continue;
+            }
+
+            values.Add(BuildInstantaneousChannelValue(entry, element, instantaneousValues, currentDlsb, voltageDlsb));
+        }
+
+        return SampledValuesPayloadBuilder.BuildPayload(layout, values);
+    }
+
+    private MmsDataValue BuildInstantaneousChannelValue(
+        SclDataSetEntry entry,
+        SampledValuePayloadElement element,
+        IReadOnlyDictionary<string, double> instantaneousValues,
+        double currentDlsb,
+        double voltageDlsb)
+    {
+        var key = ResolveSignalKey(entry);
+        if (key is null || !instantaneousValues.TryGetValue(key, out var value))
+            return ZeroValue(element);
+
+        var dlsb = ResolveChannelKind(key) == "I" ? currentDlsb : voltageDlsb;
+        if (dlsb <= 0)
+            throw new InvalidOperationException("dLSB must be greater than 0.");
+
+        var counts = value / dlsb;
+        return element.Kind switch
+        {
+            SampledValuePayloadElementKind.Boolean => MmsDataValue.Boolean(Math.Abs(counts) >= 0.5),
+            SampledValuePayloadElementKind.UInt8 or
+            SampledValuePayloadElementKind.UInt16 or
+            SampledValuePayloadElementKind.UInt24 or
+            SampledValuePayloadElementKind.UInt32 or
+            SampledValuePayloadElementKind.UInt64 => MmsDataValue.Unsigned((ulong)Math.Max(0, Math.Round(counts))),
+            SampledValuePayloadElementKind.Float32 or
+            SampledValuePayloadElementKind.Float64 => MmsDataValue.FloatingPoint((float)counts),
+            _ => MmsDataValue.Integer((long)Math.Clamp(Math.Round(counts), long.MinValue, long.MaxValue))
+        };
+    }
 
     private byte[] BuildSamplePayload(
         SclSampledValuesStream stream,
@@ -1815,7 +2000,7 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
             MappedSignalCount = slot.MappedSignalCount;
             PayloadBytes = slot.PayloadBytes;
             RebuildManualRowsFromChannels();
-            LiveApplyText = $"Editing {slot.Header}. {slot.SummaryText}";
+            LiveApplyText = $"Editing {slot.Header}. {slot.SummaryText}. {slot.SourceText}";
         }
         finally
         {
@@ -1852,6 +2037,9 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
 
             if (slot.CurrentDlsb <= 0 || slot.VoltageDlsb <= 0)
                 throw new InvalidOperationException($"{slot.Header}: current and voltage dLSB must be greater than 0.");
+
+            if (slot.SignalSource == PublisherSignalSource.ComtradeReplay && slot.ComtradeDataset is null)
+                throw new InvalidOperationException($"{slot.Header}: COMTRADE replay is selected but no COMTRADE file is loaded.");
 
             var stream = selectedSlotStream.Stream;
             if (stream.NoAsdu != 1)
@@ -3044,6 +3232,9 @@ private static string FormatSmpSynchStatus(SmpSynchValue value)
                 CurrentDlsb = slot.CurrentDlsb,
                 VoltageDlsb = slot.VoltageDlsb,
                 ManualSetMode = slot.ManualSetMode,
+                SignalSource = slot.SignalSource,
+                ComtradePath = slot.ComtradePath,
+                ComtradeLoop = slot.ComtradeLoop,
                 Channels = slot.Channels
             }).ToArray(),
             AutoApplyWhileRunning = AutoApplyWhileRunning,

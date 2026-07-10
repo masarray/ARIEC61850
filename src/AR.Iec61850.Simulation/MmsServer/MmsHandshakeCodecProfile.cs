@@ -80,7 +80,7 @@ public sealed class MmsHandshakeCodecProfileBuilder
         if (!decodedCr.IsValid || decodedCr.Kind != CotpTpduKind.ConnectionRequest)
             findings.Add($"Client COTP connect request cannot be decoded safely: {decodedCr.Message}");
 
-        var connectionConfirm = CotpFrameCodec.EncodeConnectionConfirm(decodedCr.SourceReference, 0x1001);
+        var connectionConfirm = CotpFrameCodec.EncodeConnectionConfirm(decodedCr, 0x1001);
         var ccTpkt = TpktFrameCodec.Encode(connectionConfirm);
         var decodedCcTpkt = TpktFrameCodec.Decode(ccTpkt);
         var decodedCc = CotpFrameCodec.Decode(decodedCcTpkt.Payload);

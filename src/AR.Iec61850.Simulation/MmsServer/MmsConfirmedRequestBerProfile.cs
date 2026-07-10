@@ -18,6 +18,7 @@ public enum MmsConfirmedBerProbeKind
     GetNamedVariableDirectory,
     GetNamedVariableListDirectory,
     Read,
+    GetVariableAccessAttributes,
     GetNamedVariableListAttributes,
     Write
 }
@@ -322,7 +323,7 @@ public sealed class MmsConfirmedRequestBerProfileBuilder
                 return;
             }
 
-            var ccPayload = CotpFrameCodec.EncodeConnectionConfirm(cr.SourceReference, options.ServerReference);
+            var ccPayload = CotpFrameCodec.EncodeConnectionConfirm(cr, options.ServerReference);
             var ccFrame = TpktFrameCodec.Encode(ccPayload);
             await stream.WriteAsync(ccFrame, timeoutSource.Token).ConfigureAwait(false);
             AddStep("server", "COTP-SEND-CC", true, $"Sent COTP Connection Confirm dstRef=0x{cr.SourceReference:X4} srcRef=0x{options.ServerReference:X4}.", ccFrame);
@@ -582,10 +583,17 @@ public sealed class MmsConfirmedRequestBerProfileBuilder
             },
             new MmsConfirmedBerProbe
             {
-                Kind = MmsConfirmedBerProbeKind.Write,
+                Kind = MmsConfirmedBerProbeKind.GetVariableAccessAttributes,
                 InvokeId = 6,
                 Target = firstPoint,
-                PresentationPayload = MmsWriteRequest.BuildSingleVariableWrite(6, MmsObjectReference.Parse(firstPoint), MmsDataValue.VisibleString("open"))
+                PresentationPayload = MmsVariableAccessAttributesRequest.Build(6, MmsObjectReference.Parse(firstPoint))
+            },
+            new MmsConfirmedBerProbe
+            {
+                Kind = MmsConfirmedBerProbeKind.Write,
+                InvokeId = 7,
+                Target = firstPoint,
+                PresentationPayload = MmsWriteRequest.BuildSingleVariableWrite(7, MmsObjectReference.Parse(firstPoint), MmsDataValue.VisibleString("open"))
             }
         ];
     }
@@ -619,6 +627,13 @@ public sealed class MmsConfirmedRequestBerProfileBuilder
                 serverSuccess = dataSet.IsSuccess;
                 clientSuccess = dataSet.IsSuccess && dataSet.Members.Count > 0;
                 message = dataSet.Message;
+                break;
+
+            case MmsConfirmedBerProbeKind.GetVariableAccessAttributes:
+                var attributes = MmsVariableAccessAttributesResponseDecoder.Decode(presentationPayload, probe.InvokeId, MmsObjectReference.Parse(probe.Target));
+                serverSuccess = attributes.IsSuccess;
+                clientSuccess = attributes.IsSuccess;
+                message = attributes.Message;
                 break;
 
             case MmsConfirmedBerProbeKind.Write:
@@ -780,6 +795,9 @@ public static class MmsConfirmedRequestBerDispatcher
                 case 0xA4:
                     serviceKind = MmsConfirmedBerProbeKind.Read;
                     return TryDecodeRead(service, out request, out message);
+                case 0xA6:
+                    serviceKind = MmsConfirmedBerProbeKind.GetVariableAccessAttributes;
+                    return TryDecodeGetVariableAccessAttributes(service, out request, out message);
                 case 0xAC:
                     serviceKind = MmsConfirmedBerProbeKind.GetNamedVariableListAttributes;
                     return TryDecodeGetNamedVariableListAttributes(service, out request, out message);
@@ -829,7 +847,7 @@ public static class MmsConfirmedRequestBerDispatcher
         else
         {
             serviceKind = MmsConfirmedBerProbeKind.GetNamedVariableDirectory;
-            request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetLogicalNodeDirectory, Target = domain };
+            request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetNamedVariableDirectory, Target = domain };
         }
 
         message = $"Decoded GetNameList objectClass={objectClass} domain={domain}.";
@@ -848,6 +866,21 @@ public static class MmsConfirmedRequestBerDispatcher
         var target = ToIecReference(domain, item);
         request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Read, Target = target };
         message = $"Decoded Read request target={target}.";
+        return true;
+    }
+
+    private static bool TryDecodeGetVariableAccessAttributes(BerTlv service, out MmsReadOnlyServerRequest request, out string message)
+    {
+        if (!TryDecodeDomainSpecificObjectName(service.Value, out var domain, out var item))
+        {
+            request = new MmsReadOnlyServerRequest();
+            message = "GetVariableAccessAttributes request has no domain-specific object name.";
+            return false;
+        }
+
+        var target = ToIecReference(domain, item);
+        request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetVariableAccessAttributes, Target = target };
+        message = $"Decoded GetVariableAccessAttributes request target={target}.";
         return true;
     }
 
@@ -889,6 +922,7 @@ public static class MmsConfirmedRequestBerDispatcher
             MmsConfirmedBerProbeKind.GetNamedVariableDirectory or
             MmsConfirmedBerProbeKind.GetNamedVariableListDirectory => EncodeGetNameListResponse(response),
             MmsConfirmedBerProbeKind.Read => EncodeReadResponse(response),
+            MmsConfirmedBerProbeKind.GetVariableAccessAttributes => EncodeVariableAccessAttributesResponse(response),
             MmsConfirmedBerProbeKind.GetNamedVariableListAttributes => EncodeDataSetDirectoryResponse(response),
             MmsConfirmedBerProbeKind.Write => EncodeWriteResponse(response),
             _ => EncodeReadResponse(response)
@@ -926,6 +960,16 @@ public static class MmsConfirmedRequestBerDispatcher
         return BerWriter.EncodeTlv(0xAC, Concat(deletable, listOfVariable));
     }
 
+    private static byte[] EncodeVariableAccessAttributesResponse(MmsReadOnlyServerResponse response)
+    {
+        var deletable = BerWriter.EncodeTlv(0x80, new byte[] { 0x00 });
+        var typeSpecification = response.IsSuccess && response.Values.Count > 0
+            ? EncodeTypeSpecification(response.Values[0])
+            : BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger(255));
+
+        return BerWriter.EncodeTlv(0xA6, Concat(deletable, typeSpecification));
+    }
+
     private static byte[] EncodeWriteResponse(MmsReadOnlyServerResponse response)
     {
         if (response.IsSuccess)
@@ -945,6 +989,25 @@ public static class MmsConfirmedRequestBerDispatcher
             return MmsDataCodec.Encode(MmsDataValue.Boolean(boolean));
 
         return MmsDataCodec.Encode(MmsDataValue.VisibleString(point.Value));
+    }
+
+    private static byte[] EncodeTypeSpecification(MmsReadOnlyPoint point)
+    {
+        if (point.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ||
+            point.Kind.Equals("quality", StringComparison.OrdinalIgnoreCase))
+            return BerWriter.EncodeTlv(0x84, new byte[] { 13 });
+
+        if (point.Reference.EndsWith(".t", StringComparison.OrdinalIgnoreCase) ||
+            point.Kind.Equals("timestamp", StringComparison.OrdinalIgnoreCase))
+            return BerWriter.EncodeTlv(0x91, ReadOnlySpan<byte>.Empty);
+
+        if (point.Kind.Equals("measurement", StringComparison.OrdinalIgnoreCase))
+            return BerWriter.EncodeTlv(0x87, BerWriter.EncodeUnsignedInteger(32));
+
+        if (bool.TryParse(point.Value, out _))
+            return BerWriter.EncodeTlv(0x83, ReadOnlySpan<byte>.Empty);
+
+        return BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger(255));
     }
 
     private static string DecodeObjectScopeDomain(BerTlv objectScopeField)

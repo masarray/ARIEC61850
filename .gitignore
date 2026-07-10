@@ -38,6 +38,7 @@ artifacts/
 out/
 publish/
 release/
+$(MSBuildProjectDirectory)/
 
 # Runtime evidence and lab captures
 evidence/

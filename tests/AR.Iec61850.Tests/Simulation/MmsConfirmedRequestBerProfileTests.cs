@@ -41,6 +41,43 @@ public sealed class MmsConfirmedRequestBerProfileTests
     }
 
     [Fact]
+    public void Dispatcher_Decodes_GetNameList_NamedVariable_Directory_With_FunctionalConstraints()
+    {
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var request = MmsGetNameListRequest.Build(11, MmsGetNameListObjectClass.NamedVariable, "IED1LD0");
+
+        var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(request, session);
+        var names = MmsGetNameListResponseDecoder.Decode(dispatch.ResponsePresentationPayload, 11);
+
+        Assert.True(dispatch.IsRequestDecoded, dispatch.Message);
+        Assert.Equal(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), dispatch.Response.Operation);
+        Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
+        Assert.True(names.IsSuccess, names.Message);
+        Assert.Contains(names.Names, x => x.Contains("$MX$", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(names.Names, x => x.Contains("$ST$", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Dispatcher_Decodes_GetVariableAccessAttributes_Request()
+    {
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var point = serverProfile.Points.First(x => x.Reference.EndsWith("MMXU1.PhV.phsA.cVal.mag.f", StringComparison.OrdinalIgnoreCase));
+        var reference = new MmsObjectReference(point.LogicalDevice, "MMXU1$MX$PhV$phsA$cVal$mag$f", "MX");
+        var request = MmsVariableAccessAttributesRequest.Build(12, reference);
+
+        var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(request, session);
+        var attributes = MmsVariableAccessAttributesResponseDecoder.Decode(dispatch.ResponsePresentationPayload, 12, reference);
+
+        Assert.True(dispatch.IsRequestDecoded, dispatch.Message);
+        Assert.Equal(nameof(MmsReadOnlyOperation.GetVariableAccessAttributes), dispatch.Response.Operation);
+        Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
+        Assert.True(attributes.IsSuccess, attributes.Message);
+        Assert.Equal("floating-point", attributes.MmsType);
+    }
+
+    [Fact]
     public void Dispatcher_Decodes_DataSet_Directory_Request()
     {
         var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());

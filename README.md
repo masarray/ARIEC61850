@@ -20,7 +20,7 @@ This repository is intentionally source-first and public-release safe: generated
 | CLI toolkit | `apps/AR.Iec61850.Cli` | SCL inspection, PCAP generation/inspection, MMS discovery/read/reporting commands |
 | WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher / injector workspace |
 | WPF app | `apps/AR.Iec61850.IedDiscovery` | Live IED discovery workspace for MMS model, DataSet, and RCB inventory |
-| WPF app | `apps/AR.Iec61850.IedSimulator` | Offline IED simulator workspace for deterministic profile, values, DataSets, and RCB planning |
+| WPF app | `apps/AR.Iec61850.IedSimulator` | SCL-backed IED simulator with deterministic values, DataSets, RCBs, and a read-only loopback MMS server |
 | WPF app | `apps/AR.Iec61850.EngineeringWorkbench` | Read-only engineering workbench for SCL, PCAP diagnostics, MMS loopback, and evidence-pack export |
 | Simulation library | `src/AR.Iec61850.Simulation` | In-memory IED profile and deterministic point/event simulation foundation |
 | Tests | `tests/AR.Iec61850.Tests` | Automated unit and protocol-shape tests |
@@ -45,7 +45,7 @@ Implemented areas include:
 - Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
 - WPF IED Discovery workspace for live MMS model/DataSet/RCB snapshot export.
 - IED Discovery data browser with expandable MMS structure rows and guarded Enable RCB dialog.
-- Offline IED Simulator foundation with deterministic point values, DataSets, RCB profiles, and JSON export.
+- IED Simulator with deterministic/SCL-derived profiles, read-only loopback MMS server, directory/read service probes, and write rejection.
 - WPF Engineering Workbench Alpha that orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and evidence-pack export.
 - Engineering-profile facade that converts live discovery into capability assessment, report-lab readiness, diagnostics, and Markdown evidence.
 - Report-readiness profile engine that produces acceptance gates, RCB candidate ranking, selected static report plan, and guarded session-profile JSON before any RCB write.
@@ -55,7 +55,7 @@ Experimental or future areas:
 - multi-vendor long-duration MMS reporting soak evidence;
 - full buffered report recovery and replay workflows;
 - MMS file/log/setting-group/control model services;
-- network MMS server for the IED simulator;
+- multi-client and third-party MMS interoperability evidence for the IED simulator server;
 - live raw SV subscriber CLI loop on top of the Npcap receive path;
 - IEC 62351 security profile;
 - formal third-party conformance testing.
@@ -115,11 +115,19 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-plan 192.0.2.10 --port
 
 Generate read-only report readiness evidence and a guarded session profile:
 
+  ```powershell
+  dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --port 102 --timeout-ms 120000 --output .\.artifacts\out\report-readiness.md --json .\.artifacts\out\report-readiness.json --session-json .\.artifacts\out\report-session-profile.json
+  ```
+
+Run a local, read-only virtual IED from the demo profile or an SCL file:
+
 ```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --port 102 --timeout-ms 120000 --output .\.artifacts\out\report-readiness.md --json .\.artifacts\out\report-readiness.json --session-json .\.artifacts\out\report-session-profile.json
+dotnet run --project .\apps\AR.Iec61850.Cli -- simulate-ied --scl .\samples\scl\minimal-station.scd --port 102 --duration-sec 60
 ```
 
-Run a guarded report monitor:
+The virtual IED is a lab-only server: it serves the implemented directory/read paths and rejects writes. It is not a formal conformance claim.
+
+  Run a guarded report monitor:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.0.2.10 --port 102 --timeout-ms 120000 --rcb IED1LD0/LLN0.RP.rpt01 --duration-sec 60 --evidence .\.artifacts\out\report-session01 --yes

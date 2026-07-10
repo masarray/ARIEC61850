@@ -21,3 +21,4 @@ public sealed record SimulatorDataSetRow(string Reference, int MemberCount);
 public sealed record SimulatorReportRow(string Reference, string Mode, string DataSet, int ConfRev, string TriggerOptions);
 public sealed record SimulatorEventRow(string Time, string Reference, string Change, string Reason);
 public sealed record SimulatorMetricRow(string Label, string Value);
+public sealed record SimulatorActivityRow(string Time, string Kind, string Remote, string Operation, string Target, string Status, string Detail);

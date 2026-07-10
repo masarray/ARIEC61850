@@ -284,7 +284,7 @@ public sealed class MmsConfirmedRequestSkeletonProfileBuilder
                 return;
             }
 
-            var ccPayload = CotpFrameCodec.EncodeConnectionConfirm(cr.SourceReference, options.ServerReference);
+            var ccPayload = CotpFrameCodec.EncodeConnectionConfirm(cr, options.ServerReference);
             var ccFrame = TpktFrameCodec.Encode(ccPayload);
             await stream.WriteAsync(ccFrame, timeoutSource.Token).ConfigureAwait(false);
             AddStep("server", "COTP-SEND-CC", true, $"Sent COTP Connection Confirm dstRef=0x{cr.SourceReference:X4} srcRef=0x{options.ServerReference:X4}.", ccFrame);

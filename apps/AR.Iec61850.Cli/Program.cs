@@ -18,6 +18,7 @@ using AR.Iec61850.Transports;
 using AR.Iec61850.Transports.Npcap;
 using System.Diagnostics;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Text.Json;
 
 return await Cli.RunAsync(args);
@@ -51,6 +52,9 @@ internal static class Cli
                 "mms-engine-profile" => await MmsEngineProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-report-readiness-profile" => await MmsReportReadinessProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-server-readonly-profile" => MmsServerReadOnlyProfile(args[1..]),
+                "simulator-profile-from-scl" => SimulatorProfileFromScl(args[1..]),
+                "simulate-ied" => await SimulateIedAsync(args[1..]).ConfigureAwait(false),
+                "simulator-run" => await SimulatorRunAsync(args[1..]).ConfigureAwait(false),
                 "mms-listener-skeleton-profile" => await MmsListenerSkeletonProfileAsync(args[1..]).ConfigureAwait(false),
                 "mms-handshake-codec-profile" => MmsHandshakeCodecProfile(args[1..]),
                 "mms-handshake-listener-profile" => await MmsHandshakeListenerProfileAsync(args[1..]).ConfigureAwait(false),
@@ -995,6 +999,345 @@ internal static class Cli
         return profile.IsComplete ? 0 : 3;
     }
 
+    private static IedSimulatorProfile ResolveSimulatorProfile(CliOptions options)
+    {
+        if (options.TryGet("scl", out var sclPath) && !string.IsNullOrWhiteSpace(sclPath))
+        {
+            var iedName = options.Get("ied", string.Empty);
+            var result = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions
+            {
+                IedName = iedName
+            });
+            return result.Profile;
+        }
+
+        return IedSimulatorProfile.CreateDefaultFeederProfile();
+    }
+
+    private static int SimulatorProfileFromScl(string[] args)
+    {
+        if (args.Length < 1)
+            throw new ArgumentException("simulator-profile-from-scl requires <scl-file>.");
+
+        var sclPath = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var iedName = options.Get("ied", string.Empty);
+        var steps = options.GetInt("steps", 0);
+        var rawLimit = options.GetInt("raw-limit", 30);
+
+        var result = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions
+        {
+            IedName = iedName,
+            NominalFrequencyHz = options.GetDouble("nominal-hz", 50)
+        });
+        var profile = result.Profile;
+
+        var engine = new IedSimulatorEngine(profile);
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 0; i < steps; i++)
+            engine.Step(now.AddMilliseconds(i * 20));
+        var snapshot = engine.CreateSnapshot(DateTimeOffset.UtcNow);
+
+        Console.WriteLine("IED simulator profile derived from SCL.");
+        Console.WriteLine($"  SCL: {Path.GetFullPath(sclPath)}");
+        Console.WriteLine($"  Selected IED: {TextOrDash(result.SelectedIedName)}");
+        Console.WriteLine($"  Profile name: {profile.Name}");
+        Console.WriteLine($"  Vendor: {profile.Vendor}");
+        Console.WriteLine($"  Logical devices: {profile.LogicalDevices.Count}");
+        Console.WriteLine($"  Logical nodes: {profile.LogicalNodeCount}");
+        Console.WriteLine($"  Points: {profile.PointCount}");
+        Console.WriteLine($"  DataSets: {profile.DataSets.Count} (members: {profile.DataSetMemberCount})");
+        Console.WriteLine($"  Report control blocks: {profile.ReportControlBlocks.Count}");
+        Console.WriteLine($"  DataSet members read: {result.DataSetMemberCount} (skipped: {result.SkippedMemberCount})");
+
+        foreach (var device in profile.LogicalDevices)
+        {
+            Console.WriteLine($"  LD {device.Name}: {device.LogicalNodes.Count} LN, {device.LogicalNodes.Sum(n => n.Points.Count)} point(s)");
+            foreach (var node in device.LogicalNodes.Take(rawLimit))
+                Console.WriteLine($"    LN {node.Name} [{node.LnClass}] points={node.Points.Count}");
+        }
+
+        if (steps > 0)
+        {
+            Console.WriteLine($"  Snapshot after {steps} step(s):");
+            foreach (var point in snapshot.Points.Where(p => string.Equals(p.Kind, "measurement", StringComparison.OrdinalIgnoreCase)).Take(rawLimit))
+                Console.WriteLine($"    {point.Reference} = {point.Value} {point.Unit} q={point.Quality}");
+        }
+
+        foreach (var rcb in profile.ReportControlBlocks.Take(rawLimit))
+            Console.WriteLine($"  RCB {rcb.Reference} [{rcb.Mode}] dataSet={TextOrDash(rcb.DataSetReference)} confRev={rcb.ConfRev}");
+
+        foreach (var finding in result.Findings.Take(rawLimit))
+            Console.WriteLine($"  NOTE: {finding}");
+
+        if (options.TryGet("output", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureOutputDirectory(markdownPath);
+            File.WriteAllText(markdownPath, BuildSimulatorProfileMarkdown(result, sclPath));
+            Console.WriteLine($"Markdown simulator profile: {Path.GetFullPath(markdownPath)}");
+        }
+
+        if (options.TryGet("json", out var jsonPath) && !string.IsNullOrWhiteSpace(jsonPath))
+        {
+            EnsureOutputDirectory(jsonPath);
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"JSON simulator profile: {Path.GetFullPath(jsonPath)}");
+        }
+
+        return profile.PointCount > 0 ? 0 : 3;
+    }
+
+    private static string BuildSimulatorProfileMarkdown(IedSimulatorProfileFromSclResult result, string sclPath)
+    {
+        var profile = result.Profile;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("# IED Simulator Profile (from SCL)");
+        sb.AppendLine();
+        sb.AppendLine($"- Source: `{Path.GetFileName(sclPath)}`");
+        sb.AppendLine($"- Selected IED: `{(string.IsNullOrWhiteSpace(result.SelectedIedName) ? "-" : result.SelectedIedName)}`");
+        sb.AppendLine($"- Vendor: {profile.Vendor}");
+        sb.AppendLine($"- Logical devices: {profile.LogicalDevices.Count}");
+        sb.AppendLine($"- Logical nodes: {profile.LogicalNodeCount}");
+        sb.AppendLine($"- Points: {profile.PointCount}");
+        sb.AppendLine($"- DataSets: {profile.DataSets.Count}");
+        sb.AppendLine($"- Report control blocks: {profile.ReportControlBlocks.Count}");
+        sb.AppendLine();
+
+        sb.AppendLine("## Logical Devices");
+        sb.AppendLine();
+        sb.AppendLine("| Logical device | Logical node | LN class | Points |");
+        sb.AppendLine("|---|---|---|---:|");
+        foreach (var device in profile.LogicalDevices)
+            foreach (var node in device.LogicalNodes)
+                sb.AppendLine($"| `{device.Name}` | `{node.Name}` | {node.LnClass} | {node.Points.Count} |");
+        sb.AppendLine();
+
+        sb.AppendLine("## Report Control Blocks");
+        sb.AppendLine();
+        sb.AppendLine("| Reference | Mode | DataSet | ConfRev | BufTm (ms) | IntgPd (ms) |");
+        sb.AppendLine("|---|---|---|---:|---:|---:|");
+        foreach (var rcb in profile.ReportControlBlocks)
+            sb.AppendLine($"| `{rcb.Reference}` | {rcb.Mode} | `{rcb.DataSetReference}` | {rcb.ConfRev} | {rcb.BufferTimeMs} | {rcb.IntegrityPeriodMs} |");
+        if (profile.ReportControlBlocks.Count == 0)
+            sb.AppendLine("| - | - | - | - | - | - |");
+        sb.AppendLine();
+
+        sb.AppendLine("## Notes");
+        sb.AppendLine();
+        if (result.Findings.Count == 0)
+            sb.AppendLine("- No findings; the SCL model mapped cleanly into a simulator profile.");
+        foreach (var finding in result.Findings)
+            sb.AppendLine($"- {finding}");
+
+        return sb.ToString();
+    }
+
+    private static async Task<int> SimulatorRunAsync(string[] args)
+    {
+        var options = CliOptions.Parse(args);
+        var sclPath = args.Length > 0 && !args[0].StartsWith("--", StringComparison.Ordinal) ? args[0] : options.Get("scl", string.Empty);
+        var host = options.Get("host", "127.0.0.1");
+        var port = options.GetInt("port", 102);
+        if (port is < 1 or > 65535)
+            throw new ArgumentException("--port must be 1..65535.");
+
+        var iedName = options.Get("ied", string.Empty);
+        var durationSec = options.GetInt("duration-sec", 0);
+        var stepMs = options.GetInt("step-ms", 1000);
+        var serverName = options.Get("name", "ARIEC61850 Virtual IED");
+
+        IedSimulatorProfile profile;
+        if (!string.IsNullOrWhiteSpace(sclPath))
+        {
+            var built = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions { IedName = iedName });
+            profile = built.Profile;
+            Console.WriteLine($"Loaded SCL model: {Path.GetFullPath(sclPath)} (IED {TextOrDash(built.SelectedIedName)})");
+            foreach (var finding in built.Findings)
+                Console.WriteLine($"  NOTE: {finding}");
+        }
+        else
+        {
+            profile = IedSimulatorProfile.CreateDefaultFeederProfile();
+            Console.WriteLine("No --scl provided; serving the built-in demo feeder profile.");
+        }
+
+        var engine = new IedSimulatorEngine(profile);
+        engine.Start();
+
+        await using var server = IedSimulatorMmsServer.Create(engine, new IedSimulatorMmsServerOptions
+        {
+            Host = host,
+            Port = port,
+            ServerName = serverName
+        });
+
+        server.Activity += (_, activity) =>
+        {
+            if (activity.Kind is IedSimulatorServerActivityKind.RequestServed
+                or IedSimulatorServerActivityKind.ClientConnected
+                or IedSimulatorServerActivityKind.ClientDisconnected
+                or IedSimulatorServerActivityKind.HandshakeReceived
+                or IedSimulatorServerActivityKind.HandshakeSent
+                or IedSimulatorServerActivityKind.ClientClosed
+                or IedSimulatorServerActivityKind.AssociationRejected
+                or IedSimulatorServerActivityKind.Error)
+            {
+                Console.WriteLine($"  {activity.Summary}");
+            }
+        };
+
+        try
+        {
+            server.Start();
+        }
+        catch (SocketException ex)
+        {
+            Console.Error.WriteLine($"ERROR: could not bind {host}:{port}: {ex.Message}");
+            if (port == 102)
+                Console.Error.WriteLine("Port 102 needs administrator/root privileges. Run the shell elevated or free the port.");
+            return 2;
+        }
+
+        Console.WriteLine($"Virtual IED MMS server running on {host}:{server.BoundPort} as '{serverName}'.");
+        Console.WriteLine($"  Logical devices: {profile.LogicalDevices.Count}, points: {profile.PointCount}, DataSets: {profile.DataSets.Count}, RCBs: {profile.ReportControlBlocks.Count}");
+        Console.WriteLine("  Connect a read-only MMS client (for example IED Discovery) to browse the model. Writes are rejected.");
+        Console.WriteLine(durationSec > 0 ? $"  Serving for {durationSec}s..." : "  Press Ctrl+C to stop.");
+
+        using var stopSignal = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            stopSignal.Cancel();
+        };
+        if (durationSec > 0)
+            stopSignal.CancelAfter(TimeSpan.FromSeconds(durationSec));
+
+        try
+        {
+            while (!stopSignal.IsCancellationRequested)
+            {
+                engine.Step(DateTimeOffset.UtcNow);
+                await Task.Delay(Math.Max(50, stepMs), stopSignal.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping.
+        }
+
+        await server.StopAsync().ConfigureAwait(false);
+        Console.WriteLine($"Server stopped. Accepted {server.AcceptedConnectionCount} connection(s), served {server.ServedRequestCount} request(s), rejected {server.RejectedWriteCount} write(s).");
+        return 0;
+    }
+
+    private static async Task<int> SimulateIedAsync(string[] args)
+    {
+        var options = CliOptions.Parse(args);
+        var port = options.GetInt("port", 102);
+        if (port is < 0 or > 65535)
+            throw new ArgumentException("--port must be 0..65535 (0 binds an ephemeral port).");
+
+        var bindText = options.Get("bind", "127.0.0.1");
+        if (!System.Net.IPAddress.TryParse(bindText, out var bindAddress))
+            throw new ArgumentException($"--bind must be a valid IP address, got '{bindText}'.");
+
+        var durationSec = options.GetInt("duration-sec", 0);
+        var steps = options.GetInt("steps", 0);
+        var stepMs = options.GetInt("step-ms", 250);
+        var serverName = options.Get("name", "ARIEC61850 Virtual IED");
+
+        IedSimulatorProfile simulatorProfile;
+        if (options.TryGet("scl", out var sclPath) && !string.IsNullOrWhiteSpace(sclPath))
+        {
+            var result = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions
+            {
+                IedName = options.Get("ied", string.Empty)
+            });
+            simulatorProfile = result.Profile;
+            Console.WriteLine($"Loaded SCL model: {Path.GetFileName(sclPath)} (IED {TextOrDash(result.SelectedIedName)})");
+            foreach (var finding in result.Findings)
+                Console.WriteLine($"  NOTE: {finding}");
+        }
+        else
+        {
+            simulatorProfile = IedSimulatorProfile.CreateDefaultFeederProfile();
+            Console.WriteLine("No --scl provided; running the built-in demo feeder profile.");
+        }
+
+        var engine = new IedSimulatorEngine(simulatorProfile);
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 0; i < steps; i++)
+            engine.Step(now.AddMilliseconds(i * 20));
+        engine.Start();
+
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(
+            simulatorProfile,
+            engine.CreateSnapshot(DateTimeOffset.UtcNow),
+            new MmsReadOnlyServerProfileOptions { ServerName = serverName, Port = port == 0 ? 102 : port, IncludeSelfTest = true });
+
+        await using var server = IedSimulatorMmsServer.Create(engine, new IedSimulatorMmsServerOptions
+        {
+            Host = bindText,
+            Port = port,
+            ResponseProfileName = options.Get("response-profile", "DeterministicInitiateResponse"),
+            ServerName = serverName
+        });
+
+        server.Activity += (_, activity) =>
+        {
+            if (activity.Kind is IedSimulatorServerActivityKind.ClientConnected
+                or IedSimulatorServerActivityKind.ClientDisconnected
+                or IedSimulatorServerActivityKind.HandshakeReceived
+                or IedSimulatorServerActivityKind.HandshakeSent
+                or IedSimulatorServerActivityKind.ClientClosed
+                or IedSimulatorServerActivityKind.RequestServed
+                or IedSimulatorServerActivityKind.AssociationRejected
+                or IedSimulatorServerActivityKind.Error)
+            {
+                Console.WriteLine($"    {activity.Summary}");
+            }
+        };
+
+        try
+        {
+            server.Start();
+        }
+        catch (System.Net.Sockets.SocketException ex)
+        {
+            Console.Error.WriteLine($"ERROR: could not bind {bindAddress}:{port}. {ex.Message}");
+            if (port == 102)
+                Console.Error.WriteLine("Port 102 usually requires elevated privileges; run the shell as Administrator/root or free the port.");
+            return 2;
+        }
+
+        Console.WriteLine(serverProfile.Summary);
+        Console.WriteLine($"Virtual IED MMS server listening on {bindAddress}:{server.BoundPort} (read-only).");
+        Console.WriteLine("Point an IEC 61850 client (this toolkit's IED Discovery, IEDScout, or another MMS browser) at the address above.");
+        Console.WriteLine(durationSec > 0 ? $"Running for {durationSec}s..." : "Press Ctrl+C to stop.");
+
+        using var stopSource = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) => { e.Cancel = true; stopSource.Cancel(); };
+        if (durationSec > 0)
+            stopSource.CancelAfter(TimeSpan.FromSeconds(durationSec));
+
+        try
+        {
+            while (!stopSource.IsCancellationRequested)
+            {
+                engine.Step(DateTimeOffset.UtcNow);
+                await Task.Delay(Math.Max(50, stepMs), stopSource.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // requested stop
+        }
+
+        await server.StopAsync().ConfigureAwait(false);
+        Console.WriteLine($"Server stopped. connections={server.AcceptedConnectionCount} requests={server.ServedRequestCount} rejectedWrites={server.RejectedWriteCount}");
+        return 0;
+    }
+
     private static int MmsServerReadOnlyProfile(string[] args)
     {
         var options = CliOptions.Parse(args);
@@ -1008,7 +1351,7 @@ internal static class Cli
         var dataSetTarget = options.Get("dataset", "IED1LD0/LLN0.dsStatus");
         var rawLimit = options.GetInt("raw-limit", 30);
 
-        var simulatorProfile = IedSimulatorProfile.CreateDefaultFeederProfile();
+        var simulatorProfile = ResolveSimulatorProfile(options);
         var engine = new IedSimulatorEngine(simulatorProfile);
         var now = DateTimeOffset.UtcNow;
         for (var i = 0; i < steps; i++)
@@ -1094,7 +1437,7 @@ internal static class Cli
             throw new ArgumentException("--timeout-ms must be greater than 0.");
 
         var profileName = options.Get("name", "ARIEC61850 Virtual IED");
-        var simulatorProfile = IedSimulatorProfile.CreateDefaultFeederProfile();
+        var simulatorProfile = ResolveSimulatorProfile(options);
         var engine = new IedSimulatorEngine(simulatorProfile);
         var now = DateTimeOffset.UtcNow;
         for (var i = 0; i < steps; i++)
@@ -6127,8 +6470,11 @@ internal static class Cli
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
         Console.WriteLine("  mms-engine-profile <host-or-ip> [--port 102] [--timeout-ms 30000] [--max-report-probes N] [--read-datasets true] [--output profile.md] [--json profile.json]");
         Console.WriteLine("  mms-report-readiness-profile <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--dataset LD/LLN0.DataSet] [--strict-rcb] [--allow-urcb-fallback true|false] [--duration-sec 60] [--gi true|false] [--output report-readiness.md] [--json report-readiness.json] [--session-json session-profile.json]");
-        Console.WriteLine("  mms-server-readonly-profile [--port 102] [--name NAME] [--steps N] [--read LD/LN.DO.da] [--dataset LD/LLN0.DataSet] [--output mms-server.md] [--json mms-server.json]");
-        Console.WriteLine("  mms-listener-skeleton-profile [--host 127.0.0.1] [--port 0] [--timeout-ms 5000] [--steps N] [--output mms-listener.md] [--json mms-listener.json]");
+        Console.WriteLine("  simulator-profile-from-scl <scl-file> [--ied NAME] [--steps N] [--nominal-hz 50] [--output simulator-profile.md] [--json simulator-profile.json]");
+        Console.WriteLine("  simulate-ied [--scl FILE] [--ied NAME] [--bind 127.0.0.1] [--port 102] [--steps N] [--duration-sec 0] [--name NAME]");
+        Console.WriteLine("  simulator-run [<scl-file>] [--scl FILE] [--ied NAME] [--host 127.0.0.1] [--port 102] [--name NAME] [--step-ms 1000] [--duration-sec N]");
+        Console.WriteLine("  mms-server-readonly-profile [--scl FILE] [--ied NAME] [--port 102] [--name NAME] [--steps N] [--read LD/LN.DO.da] [--dataset LD/LLN0.DataSet] [--output mms-server.md] [--json mms-server.json]");
+        Console.WriteLine("  mms-listener-skeleton-profile [--scl FILE] [--ied NAME] [--host 127.0.0.1] [--port 0] [--timeout-ms 5000] [--steps N] [--output mms-listener.md] [--json mms-listener.json]");
         Console.WriteLine("  mms-handshake-codec-profile [--output .artifacts/out/mms-handshake-codec.md] [--json .artifacts/out/mms-handshake-codec.json]");
         Console.WriteLine("  mms-handshake-listener-profile [--port 0] [--timeout-ms 5000] [--association-profile BalancedApTitle|LegacyMinimal] [--output .artifacts/out/mms-handshake-listener.md] [--json .artifacts/out/mms-handshake-listener.json]");
         Console.WriteLine("  mms-association-response-profile [--port 0] [--timeout-ms 5000] [--association-profile BalancedApTitle|LegacyMinimal] [--response-profile DeterministicInitiateResponse|CompactInitiateResponse] [--output .artifacts/out/mms-association-response.md] [--json .artifacts/out/mms-association-response.json]");
@@ -6172,7 +6518,10 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-discover 192.0.2.10 --port 102 --max-report-probes 16");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-engine-profile 192.0.2.10 --output .artifacts/out/engineering-profile.md --json .artifacts/out/engineering-profile.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --output .artifacts/out/report-readiness.md --json .artifacts/out/report-readiness.json --session-json .artifacts/out/report-session-profile.json");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-server-readonly-profile --steps 5 --output .artifacts/out/mms-server-readonly.md --json .artifacts/out/mms-server-readonly.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- simulator-profile-from-scl samples/scl/minimal-station.scd --steps 5 --output .artifacts/out/simulator-profile.md --json .artifacts/out/simulator-profile.json");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- simulate-ied --scl samples/scl/minimal-station.scd --port 102 --steps 5");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- simulator-run samples/scl/minimal-station.scd --port 102 --duration-sec 60");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-server-readonly-profile --scl samples/scl/minimal-station.scd --steps 5 --output .artifacts/out/mms-server-readonly.md --json .artifacts/out/mms-server-readonly.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .artifacts/out/mms-listener-skeleton.md --json .artifacts/out/mms-listener-skeleton.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-handshake-codec-profile --output .artifacts/out/mms-handshake-codec.md --json .artifacts/out/mms-handshake-codec.json");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-handshake-listener-profile --port 0 --output .artifacts/out/mms-handshake-listener.md --json .artifacts/out/mms-handshake-listener.json");

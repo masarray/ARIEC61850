@@ -252,7 +252,7 @@ MMS listener skeleton self-probe:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .\.artifacts\out\mms-listener-skeleton.md --json .\.artifacts\out\mms-listener-skeleton.json
 ```
 
-This is an offline alpha server model. It validates logical-device directory, logical-node directory, point reads, DataSet reads, RCB exposure, and read-only write rejection before a live TCP/MMS listener is added.
+This is the model/self-test profile behind the live server. It validates logical-device directory, logical-node directory, point reads, DataSet reads, RCB exposure, and read-only write rejection without opening a network listener.
 
 ### N5.31 MMS handshake codec profile
 

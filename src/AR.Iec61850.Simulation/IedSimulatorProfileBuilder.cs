@@ -32,8 +32,8 @@ public sealed class IedSimulatorProfileFromSclResult
 }
 
 /// <summary>
-/// Builds an <see cref="IedSimulatorProfile"/> from a parsed SCL document so the offline simulator,
-/// the read-only MMS server model, and the loopback listener can mirror a real station instead of a
+/// Builds an <see cref="IedSimulatorProfile"/> from a parsed SCL document so the simulator runtime,
+/// the read-only MMS server model, and the live listener can mirror a real station instead of a
 /// fixed demo feeder. The bridge is deterministic and clean-room: it interprets DataSet FCDA
 /// membership, ReportControl declarations, and CDC/FC semantics only from public IEC 61850 structure.
 ///

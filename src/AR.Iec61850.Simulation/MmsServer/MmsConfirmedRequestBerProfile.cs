@@ -712,9 +712,14 @@ public sealed class MmsConfirmedBerDispatchResult
 
 public static class MmsConfirmedRequestBerDispatcher
 {
-    public static MmsConfirmedBerDispatchResult Dispatch(ReadOnlyMemory<byte> presentationPayload, MmsReadOnlyServerSession serverSession)
+    public static MmsConfirmedBerDispatchResult Dispatch(
+        ReadOnlyMemory<byte> presentationPayload,
+        MmsReadOnlyServerSession serverSession,
+        int presentationContextId = 3)
     {
         ArgumentNullException.ThrowIfNull(serverSession);
+        if (presentationContextId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(presentationContextId));
 
         if (!TryDecodeRequest(presentationPayload, out var invokeId, out var request, out var serviceKind, out var decodeMessage))
         {
@@ -734,7 +739,7 @@ public static class MmsConfirmedRequestBerDispatcher
         }
 
         var response = serverSession.Handle(request);
-        var encoded = EncodeResponse(invokeId, serviceKind, request, response);
+        var encoded = EncodeResponse(invokeId, serviceKind, request, response, presentationContextId);
         return new MmsConfirmedBerDispatchResult
         {
             IsRequestDecoded = true,
@@ -914,7 +919,12 @@ public static class MmsConfirmedRequestBerDispatcher
         return true;
     }
 
-    private static byte[] EncodeResponse(int invokeId, MmsConfirmedBerProbeKind serviceKind, MmsReadOnlyServerRequest request, MmsReadOnlyServerResponse response)
+    private static byte[] EncodeResponse(
+        int invokeId,
+        MmsConfirmedBerProbeKind serviceKind,
+        MmsReadOnlyServerRequest request,
+        MmsReadOnlyServerResponse response,
+        int presentationContextId)
     {
         var service = serviceKind switch
         {
@@ -929,7 +939,7 @@ public static class MmsConfirmedRequestBerDispatcher
         };
 
         var confirmedResponse = BerWriter.EncodeTlv(0xA1, Concat(Integer(invokeId), service));
-        return MmsPresentation.WrapIsoPresentationPData(confirmedResponse);
+        return MmsPresentation.WrapIsoPresentationPData(confirmedResponse, presentationContextId);
     }
 
     private static byte[] EncodeGetNameListResponse(MmsReadOnlyServerResponse response)
@@ -993,6 +1003,9 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static byte[] EncodeTypeSpecification(MmsReadOnlyPoint point)
     {
+        if (point.Kind.Equals("structure", StringComparison.OrdinalIgnoreCase))
+            return BerWriter.EncodeTlv(0xA2, ReadOnlySpan<byte>.Empty);
+
         if (point.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ||
             point.Kind.Equals("quality", StringComparison.OrdinalIgnoreCase))
             return BerWriter.EncodeTlv(0x84, new byte[] { 13 });

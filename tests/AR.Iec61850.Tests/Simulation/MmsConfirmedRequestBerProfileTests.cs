@@ -1,3 +1,4 @@
+using AR.Iec61850.Asn1;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Simulation;
 
@@ -21,6 +22,19 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
         Assert.True(read.IsSuccess, read.Message);
         Assert.NotNull(read.Value);
+    }
+
+    [Fact]
+    public void Dispatcher_Uses_Negotiated_Presentation_Context_Id()
+    {
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var point = serverProfile.Points.First(x => x.Reference.EndsWith("XCBR1.Pos.stVal", StringComparison.OrdinalIgnoreCase));
+        var request = MmsReadRequest.BuildSingleVariableRead(17, MmsObjectReference.Parse(point.Reference));
+
+        var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(request, session, presentationContextId: 5);
+
+        Assert.Equal((ulong)5, ReadPresentationContextId(dispatch.ResponsePresentationPayload));
     }
 
     [Fact]
@@ -54,6 +68,8 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.Equal(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), dispatch.Response.Operation);
         Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
         Assert.True(names.IsSuccess, names.Message);
+        Assert.Contains("MMXU1", names.Names);
+        Assert.Contains("MMXU1$MX", names.Names);
         Assert.Contains(names.Names, x => x.Contains("$MX$", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(names.Names, x => x.Contains("$ST$", StringComparison.OrdinalIgnoreCase));
     }
@@ -75,6 +91,23 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
         Assert.True(attributes.IsSuccess, attributes.Message);
         Assert.Equal("floating-point", attributes.MmsType);
+    }
+
+    [Fact]
+    public void Dispatcher_Accepts_Known_Hierarchy_Variable_Access_Attributes()
+    {
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var reference = new MmsObjectReference("IED1LD0", "MMXU1$MX", "MX");
+        var request = MmsVariableAccessAttributesRequest.Build(13, reference);
+
+        var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(request, session);
+        var attributes = MmsVariableAccessAttributesResponseDecoder.Decode(dispatch.ResponsePresentationPayload, 13, reference);
+
+        Assert.True(dispatch.IsRequestDecoded, dispatch.Message);
+        Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
+        Assert.True(attributes.IsSuccess, attributes.Message);
+        Assert.Equal("structure", attributes.MmsType);
     }
 
     [Fact]
@@ -157,5 +190,15 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.Contains("Native BER request decoded", markdown);
         Assert.Contains("DataSet directory dispatch verified", markdown);
         Assert.Contains("Write guard verified", markdown);
+    }
+
+    private static ulong ReadPresentationContextId(byte[] presentationPayload)
+    {
+        var offset = 4;
+        Assert.True(BerReader.TryReadTlv(presentationPayload, ref offset, out var fullyEncodedData));
+        Assert.Equal(0x61, fullyEncodedData.EncodedTag);
+        var pdvList = BerReader.ReadChildren(fullyEncodedData.Value).Single(x => x.EncodedTag == 0x30);
+        var contextId = BerReader.ReadChildren(pdvList.Value).Single(x => x.EncodedTag == 0x02);
+        return BerReader.ReadUnsignedInteger(contextId) ?? 0;
     }
 }

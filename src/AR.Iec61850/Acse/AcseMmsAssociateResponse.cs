@@ -10,7 +10,11 @@ public sealed record AcseMmsAssociateResponseProfile(
     int MaxMmsPduSize,
     int MaxOutstandingCalling,
     int MaxOutstandingCalled,
-    int DataStructureNestingLevel);
+    int DataStructureNestingLevel)
+{
+    /// <summary>Presentation context id negotiated for the MMS abstract syntax.</summary>
+    public int MmsPresentationContextId { get; init; } = 3;
+}
 
 public static class AcseMmsAssociateResponse
 {
@@ -40,14 +44,15 @@ public static class AcseMmsAssociateResponse
     public static AcseMmsAssociateResponseProfile SelectForRequest(string? name, ReadOnlySpan<byte> clientAssociateRequest)
     {
         var profile = Select(name);
-        if (!TryBuildSessionMirroredPayload(clientAssociateRequest, out var payload))
+        if (!TryBuildSessionMirroredPayload(clientAssociateRequest, out var payload, out var mmsPresentationContextId))
             return profile;
 
         return profile with
         {
             Name = $"{profile.Name}+SessionMirror",
             Description = $"{profile.Description} Session Accept parameters are mirrored from the client CN SPDU.",
-            Payload = payload
+            Payload = payload,
+            MmsPresentationContextId = mmsPresentationContextId
         };
     }
 
@@ -146,9 +151,11 @@ public static class AcseMmsAssociateResponse
 
     private static bool TryBuildSessionMirroredPayload(
         ReadOnlySpan<byte> clientAssociateRequest,
-        out byte[] payload)
+        out byte[] payload,
+        out int mmsPresentationContextId)
     {
         payload = Array.Empty<byte>();
+        mmsPresentationContextId = 3;
 
         if (!TryFindSessionUserData(clientAssociateRequest, expectedSpdu: 0x0D, out var requestUserDataOffset, out var requestUserDataLength))
             return false;
@@ -161,6 +168,7 @@ public static class AcseMmsAssociateResponse
         var negotiation = TryParsePresentationNegotiation(presentationRequest, out var parsedNegotiation)
             ? parsedNegotiation
             : BuildDefaultPresentationNegotiation();
+        mmsPresentationContextId = negotiation.MmsPresentationContextId;
         var presentationPayload = BuildPresentationAarePayload(BuildDetailedMmsInitiateResponse(), negotiation);
         try
         {
@@ -174,7 +182,7 @@ public static class AcseMmsAssociateResponse
         }
     }
 
-    private static byte[] BuildPresentationContextResultList(IReadOnlyList<PresentationContextResult> contexts)
+    private static byte[] BuildPresentationContextResultList(IReadOnlyList<PresentationContextDefinition> contexts)
     {
         var results = new byte[contexts.Count][];
         for (var i = 0; i < contexts.Count; i++)
@@ -190,10 +198,11 @@ public static class AcseMmsAssociateResponse
     private static PresentationNegotiation BuildDefaultPresentationNegotiation()
         => new(
             AcsePresentationContextId: 1,
+            MmsPresentationContextId: 3,
             Contexts:
             [
-                new PresentationContextResult(1, BerTransferSyntaxName),
-                new PresentationContextResult(3, BerTransferSyntaxName)
+                new PresentationContextDefinition(1, Array.Empty<byte>(), BerTransferSyntaxName),
+                new PresentationContextDefinition(3, MmsAbstractSyntaxName, BerTransferSyntaxName)
             ]);
 
     private static bool TryParsePresentationNegotiation(ReadOnlySpan<byte> presentationRequest, out PresentationNegotiation negotiation)
@@ -207,7 +216,7 @@ public static class AcseMmsAssociateResponse
             if (!BerReader.TryReadTlv(requestMemory, ref offset, out var cpPpdu) || cpPpdu.EncodedTag != 0x31)
                 return false;
 
-            var contexts = new List<PresentationContextResult>();
+            var contexts = new List<PresentationContextDefinition>();
             var acsePresentationContextId = 0;
 
             foreach (var item in BerReader.ReadChildren(cpPpdu.Value))
@@ -230,7 +239,12 @@ public static class AcseMmsAssociateResponse
             if (acsePresentationContextId == 0)
                 acsePresentationContextId = contexts[0].Id;
 
-            negotiation = new PresentationNegotiation(acsePresentationContextId, contexts);
+            var mmsPresentationContextId = contexts
+                .FirstOrDefault(x => x.AbstractSyntaxName.AsSpan().SequenceEqual(MmsAbstractSyntaxName))?.Id
+                ?? contexts.FirstOrDefault(x => x.Id != acsePresentationContextId)?.Id
+                ?? contexts[0].Id;
+
+            negotiation = new PresentationNegotiation(acsePresentationContextId, mmsPresentationContextId, contexts);
             return true;
         }
         catch (BerFormatException)
@@ -239,26 +253,36 @@ public static class AcseMmsAssociateResponse
         }
     }
 
-    private static IReadOnlyList<PresentationContextResult> ParsePresentationContextDefinitions(ReadOnlyMemory<byte> contextDefinitionList)
+    private static IReadOnlyList<PresentationContextDefinition> ParsePresentationContextDefinitions(ReadOnlyMemory<byte> contextDefinitionList)
     {
-        var contexts = new List<PresentationContextResult>();
+        var contexts = new List<PresentationContextDefinition>();
         foreach (var contextDefinition in BerReader.ReadChildren(contextDefinitionList))
         {
             if (contextDefinition.EncodedTag != 0x30)
                 continue;
 
             var id = 0;
+            byte[]? abstractSyntaxName = null;
             byte[]? transferSyntaxName = null;
             foreach (var field in BerReader.ReadChildren(contextDefinition.Value))
             {
                 if (field.EncodedTag == 0x02)
                     id = checked((int)(BerReader.ReadUnsignedInteger(field) ?? 0));
                 else if (field.EncodedTag == 0x30)
-                    transferSyntaxName = ReadFirstObjectIdentifierValue(field.Value);
+                {
+                    var objectIdentifier = ReadFirstObjectIdentifierValue(field.Value);
+                    if (abstractSyntaxName is null)
+                        abstractSyntaxName = objectIdentifier;
+                    else
+                        transferSyntaxName = objectIdentifier;
+                }
             }
 
             if (id > 0)
-                contexts.Add(new PresentationContextResult(id, transferSyntaxName ?? BerTransferSyntaxName));
+                contexts.Add(new PresentationContextDefinition(
+                    id,
+                    abstractSyntaxName ?? Array.Empty<byte>(),
+                    transferSyntaxName ?? BerTransferSyntaxName));
         }
 
         return contexts;
@@ -357,7 +381,12 @@ public static class AcseMmsAssociateResponse
         return false;
     }
 
-    private sealed record PresentationNegotiation(int AcsePresentationContextId, IReadOnlyList<PresentationContextResult> Contexts);
+    private static readonly byte[] MmsAbstractSyntaxName = [0x28, 0xCA, 0x22, 0x02, 0x01];
 
-    private sealed record PresentationContextResult(int Id, byte[] TransferSyntaxName);
+    private sealed record PresentationNegotiation(
+        int AcsePresentationContextId,
+        int MmsPresentationContextId,
+        IReadOnlyList<PresentationContextDefinition> Contexts);
+
+    private sealed record PresentationContextDefinition(int Id, byte[] AbstractSyntaxName, byte[] TransferSyntaxName);
 }

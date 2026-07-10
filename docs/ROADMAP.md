@@ -271,3 +271,16 @@ The IED Discovery Workbench now starts an interactive report monitor that keeps 
 ## N5.42.1 Report Value Projector
 
 The IED Discovery Workbench now projects report payload values through a report DataSet binding layer before updating the Activity Monitor. Static and dynamic reports can update readable engineering signals with value, quality, timestamp, reason, and source instead of showing raw `Struct(...)` values.
+
+## N5.46 Live MMS IED Simulator
+
+Status: implemented for the read-only discovery/read alpha path.
+
+- `IedSimulatorMmsServer` exposes a persistent TCP MMS listener with port 102 as the default.
+- The server completes TPKT/COTP/ISO Session/ACSE negotiation and mirrors the client's presentation contexts and Session Connect parameters.
+- The negotiated MMS presentation context id is retained per connection and used for all confirmed responses.
+- SCL-derived and built-in simulator models expose logical devices, logical nodes, DataSets, RCB metadata, functional-constraint hierarchy, and readable values.
+- Native MMS BER `GetNameList`, `Read`, `GetNamedVariableListAttributes`, variable-attribute probes, and read-only Write rejection are served through the reusable stack.
+- Internal discovery/read smoke passed; IEDScout remains a manual interoperability gate because it is a commercial external client.
+
+Next server milestones: complete third-party discovery evidence, negotiated MMS PDU-size/fragmentation handling, then reporting state machines. Write/control remain disabled.

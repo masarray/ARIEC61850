@@ -122,16 +122,28 @@ public sealed class MmsReadOnlyServerSession
         if (string.IsNullOrWhiteSpace(logicalDevice))
             return Fail(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, "Logical device reference is required.");
 
-        var names = Profile.Points
-            .Where(x => string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase))
-            .Select(ToMmsNamedVariableReference)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in Profile.LogicalNodes.Where(x => string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase)))
+            names.Add(node.Name);
+
+        foreach (var point in Profile.Points.Where(x => string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase)))
+        {
+            var mmsName = ToMmsNamedVariableReference(point);
+            var parts = mmsName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length > 0)
+                names.Add(parts[0]);
+            if (parts.Length > 1)
+                names.Add(string.Join('$', parts.Take(2)));
+            names.Add(mmsName);
+        }
+
+        var orderedNames = names
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        return names.Length == 0
+        return orderedNames.Length == 0
             ? Fail(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, "Logical device not found or has no named variables.")
-            : Ok(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, $"Returned {names.Length.ToString(CultureInfo.InvariantCulture)} named variable(s).", names);
+            : Ok(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, $"Returned {orderedNames.Length.ToString(CultureInfo.InvariantCulture)} named variable(s), including logical-node and functional-constraint hierarchy.", orderedNames);
     }
 
     private MmsReadOnlyServerResponse GetDataSetDirectory(string logicalDevice = "")
@@ -149,7 +161,20 @@ public sealed class MmsReadOnlyServerSession
     private MmsReadOnlyServerResponse GetVariableAccessAttributes(string target)
     {
         if (!_points.TryGetValue(target, out var point))
-            return Fail(nameof(MmsReadOnlyOperation.GetVariableAccessAttributes), target, "Readable point not found.");
+        {
+            if (!IsKnownHierarchyReference(target))
+                return Fail(nameof(MmsReadOnlyOperation.GetVariableAccessAttributes), target, "Readable point not found.");
+
+            point = new MmsReadOnlyPoint
+            {
+                Reference = target,
+                LogicalDevice = target[..target.IndexOf('/', StringComparison.Ordinal)],
+                Kind = "structure",
+                FunctionalConstraint = "",
+                Value = "structure",
+                Quality = "valid"
+            };
+        }
 
         var items = new[]
         {
@@ -167,6 +192,27 @@ public sealed class MmsReadOnlyServerSession
             Items = items,
             Values = new[] { point }
         };
+    }
+
+    private bool IsKnownHierarchyReference(string target)
+    {
+        var slash = target.IndexOf('/');
+        if (slash <= 0 || slash == target.Length - 1)
+            return false;
+
+        var logicalDevice = target[..slash];
+        var item = target[(slash + 1)..];
+        var mmsItem = item.Replace('.', '$');
+        if (Profile.LogicalNodes.Any(x =>
+                string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase) &&
+                (string.Equals(x.Name, mmsItem, StringComparison.OrdinalIgnoreCase) || mmsItem.StartsWith(x.Name + "$", StringComparison.OrdinalIgnoreCase))))
+        {
+            return true;
+        }
+
+        return Profile.Points.Any(x =>
+            string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase) &&
+            ToMmsNamedVariableReference(x).StartsWith(logicalDevice + "/" + mmsItem + "$", StringComparison.OrdinalIgnoreCase));
     }
 
     private MmsReadOnlyServerResponse Read(string target)

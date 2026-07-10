@@ -64,6 +64,9 @@ public static class LiveIedModelDiscoveryExporter
         sb.AppendLine($"- Source: {Escape(document.Source)}");
         sb.AppendLine($"- Target: {Escape(document.Host)}:{document.Port}");
         sb.AppendLine($"- IED: {Escape(document.IedName)}");
+        sb.AppendLine($"- IED identity: source={Escape(document.IedIdentity.Source)}, confidence={document.IedIdentity.Confidence}, ambiguous={document.IedIdentity.IsAmbiguous.ToString().ToLowerInvariant()}");
+        if (document.IedIdentity.CandidateNames.Count > 0)
+            sb.AppendLine($"- IED candidates: {Escape(string.Join(", ", document.IedIdentity.CandidateNames))}");
         sb.AppendLine($"- AccessPoint: {Escape(document.AccessPointName)}");
         sb.AppendLine($"- Summary: {Escape(document.Summary)}");
         sb.AppendLine();

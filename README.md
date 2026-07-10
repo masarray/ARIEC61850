@@ -333,7 +333,7 @@ Adds schema-driven DA value binding for the IED Discovery Workbench. Structured 
 
 ### Smart Value Reading Engine
 
-The IED Discovery Workbench now uses an engine-owned value presentation layer for IED identity resolution, logical-device aliases, FC-aware read targets, collapsed DO summaries, and recursive semantic decoding of `q`, `t`, vector/analogue, and control structures. The WPF app renders the engine output and does not guess MMS structure positions.
+The IED Discovery Workbench now uses an engine-owned value presentation layer for IED identity resolution, logical-device aliases, FC-aware read targets, collapsed DO summaries, and recursive semantic decoding of `q`, `t`, vector/analogue, and control structures. IED identity is derived from all live MMS domains with known logical-device suffixes, source, confidence, and candidate evidence; numerical parts such as `OLSF501` are preserved. The WPF app renders the engine output and does not guess MMS structure positions.
 
 - N5.41.5: IED Discovery smart monitoring/report readiness adds Online state gating, live polling Activity Monitor, report-driven monitor updates, and static/dynamic/occupied RCB presentation.
 

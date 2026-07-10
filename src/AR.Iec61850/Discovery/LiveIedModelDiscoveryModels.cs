@@ -17,6 +17,7 @@ public sealed class LiveIedModelDiscoveryDocument
     public string Host { get; init; } = string.Empty;
     public int Port { get; init; } = 102;
     public string IedName { get; init; } = string.Empty;
+    public LiveIedIdentity IedIdentity { get; init; } = new();
     public string AccessPointName { get; init; } = "AP1";
     public string Summary { get; init; } = string.Empty;
     public LiveIedModelDiscoveryCoverage Coverage { get; init; } = new();

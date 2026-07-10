@@ -15,11 +15,6 @@ public sealed record Iec61850DiscoveredIdentity(
 
 public static class Iec61850IdentityResolver
 {
-    private static readonly string[] KnownLdSuffixes =
-    {
-        "PROT", "CTRL", "MEAS", "DR", "LD0", "LD", "ANN", "BCU", "MU", "PQM", "MET", "SYS", "COM", "RLY", "BAY"
-    };
-
     public static Iec61850DiscoveredIdentity Resolve(LiveIedModelDiscoveryDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -28,94 +23,20 @@ public static class Iec61850IdentityResolver
 
     public static Iec61850DiscoveredIdentity ResolveFromDomains(IEnumerable<string> domains, string host, string? fallbackName = null)
     {
-        var materialized = domains
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        var prefix = LongestCommonPrefix(materialized);
-        if (prefix.Length < 3 || materialized.Length == 1)
-            prefix = InferPrefixFromKnownSuffix(materialized.FirstOrDefault() ?? string.Empty);
-
-        var name = !string.IsNullOrWhiteSpace(prefix)
-            ? prefix
-            : !string.IsNullOrWhiteSpace(fallbackName) && !fallbackName.Equals("IED", StringComparison.OrdinalIgnoreCase)
-                ? fallbackName!.Trim()
-                : host;
-
-        var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var domain in materialized)
-        {
-            var alias = domain;
-            if (!string.IsNullOrWhiteSpace(name) && domain.StartsWith(name, StringComparison.OrdinalIgnoreCase) && domain.Length > name.Length)
-                alias = domain[name.Length..];
-
-            if (string.IsNullOrWhiteSpace(alias))
-                alias = domain;
-
-            aliases[domain] = alias;
-        }
+        var identity = LiveIedIdentityResolver.Resolve(domains, host, fallbackName: fallbackName);
 
         return new Iec61850DiscoveredIdentity(
-            name,
+            identity.IedName,
             host,
-            aliases,
-            string.IsNullOrWhiteSpace(prefix) ? "Fallback" : "MmsDomainCommonPrefix",
-            string.IsNullOrWhiteSpace(prefix) ? "Low" : materialized.Length > 1 ? "High" : "Medium");
+            identity.LogicalDeviceAliases,
+            identity.Source,
+            identity.Confidence.ToString());
     }
 
     public static string DisplayLogicalDevice(Iec61850DiscoveredIdentity identity, string mmsDomain)
         => identity.LogicalDeviceAliases.TryGetValue(mmsDomain, out var alias) && !string.IsNullOrWhiteSpace(alias)
             ? alias
             : mmsDomain;
-
-    private static string LongestCommonPrefix(IReadOnlyList<string> values)
-    {
-        if (values.Count == 0)
-            return string.Empty;
-        if (values.Count == 1)
-            return string.Empty;
-
-        var prefix = values[0];
-        foreach (var value in values.Skip(1))
-        {
-            var length = 0;
-            while (length < prefix.Length && length < value.Length && char.ToUpperInvariant(prefix[length]) == char.ToUpperInvariant(value[length]))
-                length++;
-            prefix = prefix[..length];
-            if (prefix.Length == 0)
-                break;
-        }
-
-        return TrimPrefixBoundary(prefix);
-    }
-
-    private static string TrimPrefixBoundary(string prefix)
-    {
-        if (string.IsNullOrWhiteSpace(prefix))
-            return string.Empty;
-
-        var trimmed = prefix.TrimEnd('_', '-', '.', ' ');
-        while (trimmed.Length > 0 && char.IsLower(trimmed[^1]))
-            trimmed = trimmed[..^1];
-        return trimmed;
-    }
-
-    private static string InferPrefixFromKnownSuffix(string domain)
-    {
-        if (string.IsNullOrWhiteSpace(domain))
-            return string.Empty;
-
-        foreach (var suffix in KnownLdSuffixes.OrderByDescending(x => x.Length))
-        {
-            if (domain.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) && domain.Length > suffix.Length + 2)
-                return domain[..^suffix.Length].TrimEnd('_', '-', '.', ' ');
-        }
-
-        return string.Empty;
-    }
 }
 
 public sealed record Iec61850SmartReadTarget(string Reference, string FunctionalConstraint, string Purpose, int Priority);

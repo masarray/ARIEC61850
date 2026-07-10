@@ -41,13 +41,18 @@ public static class LiveIedModelDiscoveryBuilder
         var variableTypes = BuildVariableTypeDiscoveries(variableTypeList).ToArray();
         var warnings = BuildWarnings(directory, dataSets, controlBlocks, variableTypeList).ToArray();
         var coverage = BuildCoverage(logicalDevices, dataSets, reportControls, controlBlocks, variableTypes);
-        var iedName = string.IsNullOrWhiteSpace(options.IedName) ? InferIedName(directory, options.Host) : options.IedName.Trim();
+        var identity = LiveIedIdentityResolver.Resolve(
+            directory.LogicalDevices.Keys,
+            options.Host,
+            options.IedName,
+            BuildFallbackIedName(options.Host));
 
         return new LiveIedModelDiscoveryDocument
         {
             Host = options.Host.Trim(),
             Port = options.Port <= 0 ? 102 : options.Port,
-            IedName = iedName,
+            IedName = identity.IedName,
+            IedIdentity = identity,
             AccessPointName = string.IsNullOrWhiteSpace(options.AccessPointName) ? "AP1" : options.AccessPointName.Trim(),
             LogicalDevices = logicalDevices,
             DataSets = dataSets,
@@ -473,17 +478,8 @@ public static class LiveIedModelDiscoveryBuilder
     private static string FormatSummary(LiveIedModelDiscoveryCoverage coverage)
         => $"Live IED model: LD={coverage.LogicalDeviceCount}, LN={coverage.LogicalNodeCount}, DO={coverage.DataObjectCount}, DA={coverage.DataAttributeCount}, DataSets={coverage.DataSetCount}, RCB={coverage.ReportControlCount}, GoCB={coverage.GooseControlBlockCount}, SVCB={coverage.SampledValueControlBlockCount}, SGCB={coverage.SettingGroupControlCount}, LCB={coverage.LogControlCount}.";
 
-    private static string InferIedName(MmsIedModelDirectory directory, string host)
-    {
-        var firstLd = directory.LogicalDevices.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(firstLd))
-        {
-            var letters = new string(firstLd.TakeWhile(ch => char.IsLetterOrDigit(ch) && !char.IsDigit(ch)).ToArray());
-            return string.IsNullOrWhiteSpace(letters) ? firstLd : letters;
-        }
-
-        return string.IsNullOrWhiteSpace(host) ? "DISCOVERED_IED" : "IED_" + Iec61850ReferenceParts.SafeIdPart(host);
-    }
+    private static string BuildFallbackIedName(string host)
+        => string.IsNullOrWhiteSpace(host) ? "DISCOVERED_IED" : "IED_" + Iec61850ReferenceParts.SafeIdPart(host);
 
     private static string NormalizeDataSetReference(string value)
         => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Replace('$', '.');

@@ -133,6 +133,7 @@ public sealed record IedSimulatorPoint
     public string Reference { get; init; } = string.Empty;
     public string FunctionalConstraint { get; init; } = string.Empty;
     public string Kind { get; init; } = "status";
+    public string SclBType { get; init; } = string.Empty;
     public string Unit { get; init; } = string.Empty;
     public double BaseValue { get; init; }
     public double Amplitude { get; init; }
@@ -147,12 +148,14 @@ public sealed record IedSimulatorPoint
         double baseValue,
         double amplitude,
         double phaseDeg,
-        bool isDynamic = true)
+        bool isDynamic = true,
+        string sclBType = "")
         => new()
         {
             Reference = reference,
             FunctionalConstraint = functionalConstraint,
             Kind = "measurement",
+            SclBType = sclBType,
             Unit = unit,
             BaseValue = baseValue,
             Amplitude = amplitude,

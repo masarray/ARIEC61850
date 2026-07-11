@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
@@ -19,7 +20,9 @@ public partial class MainWindow : Window
     private Task? _stopServerTask;
     private bool _isClosing;
     private string _profileName = "Demo feeder";
+    private string _sclPath = "Built-in demo profile";
     private readonly Dictionary<string, SimulatorPointRow> _pointRows = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Queue<IedSimulatorServerActivity> _diagnosticActivities = new();
 
     public MainWindow()
     {
@@ -51,10 +54,12 @@ public partial class MainWindow : Window
             var result = new IedSimulatorProfileBuilder().FromScl(dialog.FileName);
             _engine = new IedSimulatorEngine(result.Profile);
             _profileName = string.IsNullOrWhiteSpace(result.SelectedIedName) ? Path.GetFileName(dialog.FileName) : result.SelectedIedName;
+            _sclPath = Path.GetFullPath(dialog.FileName);
 
             _viewModel.IsRunning = false;
             _viewModel.Events.Clear();
             _viewModel.Activities.Clear();
+            _diagnosticActivities.Clear();
             _viewModel.DataSets.Clear();
             _viewModel.Reports.Clear();
             LoadProfileToView();
@@ -154,6 +159,10 @@ public partial class MainWindow : Window
 
     private void AppendActivity(IedSimulatorServerActivity activity, IedSimulatorMmsServer server)
     {
+        _diagnosticActivities.Enqueue(activity);
+        while (_diagnosticActivities.Count > 500)
+            _diagnosticActivities.Dequeue();
+
         var target = string.IsNullOrWhiteSpace(activity.Target) ? "-" : activity.Target;
         _viewModel.Activities.Insert(0, new SimulatorActivityRow(
             activity.TimeUtc.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture),
@@ -235,6 +244,7 @@ public partial class MainWindow : Window
         await StopServerAsync();
         _viewModel.Events.Clear();
         _viewModel.Activities.Clear();
+        _diagnosticActivities.Clear();
         _viewModel.IsRunning = false;
         RefreshPointRows();
         _viewModel.Status = "Simulator reset to initial profile values.";
@@ -255,6 +265,81 @@ public partial class MainWindow : Window
         var json = JsonSerializer.Serialize(_engine.Profile, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(dialog.FileName, json);
         _viewModel.Status = $"Exported simulator profile: {dialog.FileName}";
+    }
+
+    private void CopyDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var diagnostic = BuildDiagnostics();
+            Clipboard.SetText(diagnostic);
+            _viewModel.Status = $"Copied simulator diagnostics ({_diagnosticActivities.Count} activity record(s)) to the clipboard.";
+        }
+        catch (Exception ex)
+        {
+            _viewModel.Status = $"Could not copy diagnostics: {ex.Message}";
+        }
+    }
+
+    private string BuildDiagnostics()
+    {
+        var profile = _engine.Profile;
+        var server = _server;
+        var activities = _diagnosticActivities.ToArray();
+        var failures = activities.Where(activity => !activity.Success).TakeLast(16).ToArray();
+        var recent = activities.TakeLast(220).ToArray();
+        var sb = new StringBuilder();
+
+        sb.AppendLine("ARIEC61850 IED Simulator Diagnostic Export");
+        sb.AppendLine($"CapturedUtc: {DateTimeOffset.UtcNow:O}");
+        sb.AppendLine($"IED: {_profileName}");
+        sb.AppendLine($"SCL: {_sclPath}");
+        sb.AppendLine($"Endpoint: {_viewModel.ServerEndpoint}");
+        sb.AppendLine($"ServerStatus: {_viewModel.ServerStatus}");
+        sb.AppendLine($"SimulatorStatus: {_viewModel.Status}");
+        sb.AppendLine($"ServerRunning: {server?.IsRunning.ToString() ?? "false"}");
+        sb.AppendLine($"Connections: accepted={server?.AcceptedConnectionCount.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0"}; active={server?.ActiveConnectionCount.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0"}; served={server?.ServedRequestCount.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0"}; rejectedWrites={server?.RejectedWriteCount.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0"}");
+        sb.AppendLine($"Model: LD={profile.LogicalDevices.Count}; LN={profile.LogicalNodeCount}; points={profile.PointCount}; DataSets={profile.DataSets.Count}; RCB={profile.ReportControlBlocks.Count}");
+        sb.AppendLine($"Reports: BRCB={profile.ReportControlBlocks.Count(report => report.Buffered)}; URCB={profile.ReportControlBlocks.Count(report => !report.Buffered)}");
+        sb.AppendLine();
+
+        sb.AppendLine("Failures:");
+        if (failures.Length == 0)
+            sb.AppendLine("  none");
+        else
+            AppendDiagnosticActivities(sb, failures);
+
+        sb.AppendLine();
+        sb.AppendLine($"RecentActivity ({recent.Length} of {activities.Length} retained):");
+        if (recent.Length == 0)
+            sb.AppendLine("  none");
+        else
+            AppendDiagnosticActivities(sb, recent);
+
+        return sb.ToString();
+    }
+
+    private static void AppendDiagnosticActivities(StringBuilder sb, IEnumerable<IedSimulatorServerActivity> activities)
+    {
+        foreach (var activity in activities)
+        {
+            sb.Append('[').Append(activity.TimeUtc.ToString("O", System.Globalization.CultureInfo.InvariantCulture)).Append("] ")
+                .Append(activity.Kind).Append(' ')
+                .Append(activity.Success ? "PASS" : "FAIL")
+                .Append(" remote=").Append(string.IsNullOrWhiteSpace(activity.RemoteEndPoint) ? "-" : activity.RemoteEndPoint)
+                .Append(" op=").Append(string.IsNullOrWhiteSpace(activity.Operation) ? "-" : activity.Operation)
+                .Append(" target=").Append(string.IsNullOrWhiteSpace(activity.Target) ? "-" : activity.Target)
+                .AppendLine();
+            sb.Append("  detail: ").AppendLine(string.IsNullOrWhiteSpace(activity.Message) ? "-" : activity.Message);
+            if (!string.IsNullOrWhiteSpace(activity.RequestMmsPayloadHex))
+                sb.Append("  requestMms: ").AppendLine(activity.RequestMmsPayloadHex);
+            if (!string.IsNullOrWhiteSpace(activity.ResponseMmsPayloadHex))
+                sb.Append("  responseMms: ").AppendLine(activity.ResponseMmsPayloadHex);
+            if (activity.RequestMmsPayloadBytes > 0 || activity.ResponseMmsPayloadBytes > 0)
+                sb.Append("  payloadBytes: request=").Append(activity.RequestMmsPayloadBytes.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .Append(" response=").Append(activity.ResponseMmsPayloadBytes.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .Append(" cotpSegments=").AppendLine(activity.ResponseCotpSegmentCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
     }
 
     private void LoadProfileToView()

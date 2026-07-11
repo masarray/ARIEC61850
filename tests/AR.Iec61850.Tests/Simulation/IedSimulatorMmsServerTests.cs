@@ -106,8 +106,16 @@ public sealed class IedSimulatorMmsServerTests
     [Fact]
     public async Task Server_Reassembles_Segmented_Request_And_Segments_Large_Directory_Response()
     {
-        var points = Enumerable.Range(0, 128)
-            .Select(index => IedSimulatorPoint.Status($"MMXU1.Signal{index:D3}VeryLongName.stVal", "ST", "false"))
+        var logicalNodes = Enumerable.Range(0, 128)
+            .Select(index => new IedSimulatorLogicalNode
+            {
+                Name = $"MMXU{index:D3}VeryLongLogicalNodeName",
+                LnClass = "MMXU",
+                Points =
+                [
+                    IedSimulatorPoint.Status($"MMXU{index:D3}VeryLongLogicalNodeName.Signal.stVal", "ST", "false")
+                ]
+            })
             .ToArray();
         var engine = new IedSimulatorEngine(new IedSimulatorProfile
         {
@@ -117,15 +125,7 @@ public sealed class IedSimulatorMmsServerTests
                 new IedSimulatorLogicalDevice
                 {
                     Name = "IED1LD0",
-                    LogicalNodes =
-                    [
-                        new IedSimulatorLogicalNode
-                        {
-                            Name = "MMXU1",
-                            LnClass = "MMXU",
-                            Points = points
-                        }
-                    ]
+                    LogicalNodes = logicalNodes
                 }
             ]
         });
@@ -155,11 +155,18 @@ public sealed class IedSimulatorMmsServerTests
         Assert.True(names.IsSuccess, names.Message);
         Assert.True(names.MoreFollows);
         Assert.Equal(64, names.Names.Count);
-        Assert.Contains("MMXU1", names.Names);
-        Assert.Contains("MMXU1$ST", names.Names);
-        Assert.Contains(server.RecentActivity(), activity =>
-            activity.Operation == nameof(MmsReadOnlyOperation.GetNamedVariableDirectory) &&
-            activity.Message.Contains("COTP segments=", StringComparison.Ordinal));
+        Assert.Contains("MMXU000VeryLongLogicalNodeName", names.Names);
+        Assert.DoesNotContain(names.Names, name => name.Contains('$', StringComparison.Ordinal));
+        var activity = await WaitForActivityAsync(
+            server,
+            candidate => candidate.Operation == nameof(MmsReadOnlyOperation.GetNamedVariableDirectory) &&
+                         candidate.Message.Contains("COTP segments=", StringComparison.Ordinal),
+            timeout.Token);
+        Assert.NotEmpty(activity.RequestMmsPayloadHex);
+        Assert.NotEmpty(activity.ResponseMmsPayloadHex);
+        Assert.Equal(request.Length, activity.RequestMmsPayloadBytes);
+        Assert.Equal(response.UserData.Length, activity.ResponseMmsPayloadBytes);
+        Assert.Equal(response.SegmentCount, activity.ResponseCotpSegmentCount);
 
         await server.StopAsync();
     }

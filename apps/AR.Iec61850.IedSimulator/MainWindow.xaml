@@ -85,6 +85,7 @@
                     <Button Content="Step" Click="Step_Click" Style="{StaticResource ToolbarButton}" />
                     <Button Content="Reset" Click="Reset_Click" Style="{StaticResource ToolbarButton}" />
                     <Button Content="Export" Click="Export_Click" Style="{StaticResource ToolbarButton}" />
+                    <Button Content="Copy diagnostics" Click="CopyDiagnostics_Click" ToolTip="Copy MMS protocol diagnostics to the clipboard" Style="{StaticResource ToolbarButton}" MinWidth="126" />
                     <TextBlock Text="{Binding ProfileSummary}" FontSize="12" Foreground="#475569" VerticalAlignment="Center" TextWrapping="Wrap" Margin="8,0,0,0" />
                 </WrapPanel>
             </Grid>

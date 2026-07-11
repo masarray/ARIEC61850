@@ -47,6 +47,11 @@ public sealed record IedSimulatorServerActivity
     public string Target { get; init; } = string.Empty;
     public bool Success { get; init; } = true;
     public string Message { get; init; } = string.Empty;
+    public string RequestMmsPayloadHex { get; init; } = string.Empty;
+    public string ResponseMmsPayloadHex { get; init; } = string.Empty;
+    public int RequestMmsPayloadBytes { get; init; }
+    public int ResponseMmsPayloadBytes { get; init; }
+    public int ResponseCotpSegmentCount { get; init; }
 
     public string Summary =>
         $"{TimeUtc:HH:mm:ss.fff} {Kind} {RemoteEndPoint} {Operation} {Target} {(Success ? "ok" : "fail")} {Message}".Trim();
@@ -225,6 +230,11 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
     private async Task HandleConnectionAsync(int connectionId, TcpClient client, CancellationToken cancellationToken)
     {
         var remote = SafeRemote(client);
+        var activeOperation = string.Empty;
+        var activeTarget = string.Empty;
+        var activeRequestPayload = ReadOnlyMemory<byte>.Empty;
+        var activeResponsePayload = ReadOnlyMemory<byte>.Empty;
+        var activeResponseCotpSegmentCount = 0;
         Interlocked.Increment(ref _acceptedConnections);
         Record(new IedSimulatorServerActivity
         {
@@ -247,6 +257,12 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                 if (requestPayload is null)
                     break; // client closed the association.
 
+                activeOperation = string.Empty;
+                activeTarget = string.Empty;
+                activeRequestPayload = requestPayload;
+                activeResponsePayload = ReadOnlyMemory<byte>.Empty;
+                activeResponseCotpSegmentCount = 0;
+
                 var session = _sessionFactory();
                 var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestPayload, session, association.PresentationContextId);
                 if (!dispatch.IsRequestDecoded)
@@ -257,14 +273,20 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                         RemoteEndPoint = remote,
                         Operation = "DecodeConfirmedRequest",
                         Success = false,
-                        Message = $"{dispatch.Message} MMS={FormatMmsPayload(requestPayload)}"
+                        Message = $"{dispatch.Message} MMS={FormatMmsPayload(requestPayload)}",
+                        RequestMmsPayloadHex = FormatMmsPayload(requestPayload),
+                        RequestMmsPayloadBytes = requestPayload.Length
                     });
                     break;
                 }
 
+                activeOperation = dispatch.Request.Operation.ToString();
+                activeTarget = dispatch.Request.Target;
+                activeResponsePayload = dispatch.ResponsePresentationPayload;
+                activeResponseCotpSegmentCount = CountCotpDataSegments(activeResponsePayload.Length, association.TpduSizeCode);
                 var responseSegments = await WriteCotpDataPayloadAsync(
                     stream,
-                    dispatch.ResponsePresentationPayload,
+                    activeResponsePayload,
                     association.TpduSizeCode,
                     cancellationToken).ConfigureAwait(false);
 
@@ -281,7 +303,12 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                     Success = dispatch.Response.IsSuccess,
                     Message = responseSegments == 1
                         ? dispatch.Response.Message
-                        : $"{dispatch.Response.Message} COTP segments={responseSegments.ToString(System.Globalization.CultureInfo.InvariantCulture)}."
+                        : $"{dispatch.Response.Message} COTP segments={responseSegments.ToString(System.Globalization.CultureInfo.InvariantCulture)}.",
+                    RequestMmsPayloadHex = FormatMmsPayload(activeRequestPayload),
+                    ResponseMmsPayloadHex = FormatMmsPayload(activeResponsePayload),
+                    RequestMmsPayloadBytes = activeRequestPayload.Length,
+                    ResponseMmsPayloadBytes = activeResponsePayload.Length,
+                    ResponseCotpSegmentCount = responseSegments
                 });
             }
         }
@@ -295,8 +322,15 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
             {
                 Kind = IedSimulatorServerActivityKind.Error,
                 RemoteEndPoint = remote,
+                Operation = activeOperation,
+                Target = activeTarget,
                 Success = false,
-                Message = ex.Message
+                Message = BuildTransportErrorMessage(ex, activeOperation, activeTarget, activeRequestPayload, activeResponsePayload, activeResponseCotpSegmentCount),
+                RequestMmsPayloadHex = FormatMmsPayload(activeRequestPayload, maxBytes: 4096),
+                ResponseMmsPayloadHex = FormatMmsPayload(activeResponsePayload, maxBytes: 4096),
+                RequestMmsPayloadBytes = activeRequestPayload.Length,
+                ResponseMmsPayloadBytes = activeResponsePayload.Length,
+                ResponseCotpSegmentCount = activeResponseCotpSegmentCount
             });
         }
         finally
@@ -478,13 +512,28 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var segments = CotpFrameCodec.EncodeDataSegments(payload.Span, tpduSizeCode);
-        foreach (var segment in segments)
+        for (var index = 0; index < segments.Count; index++)
         {
-            var frame = TpktFrameCodec.Encode(segment);
-            await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var frame = TpktFrameCodec.Encode(segments[index]);
+                await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or SocketException)
+            {
+                throw new IOException(
+                    $"COTP Data write failed at segment {(index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)} of {segments.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} for {payload.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)} MMS byte(s).",
+                    ex);
+            }
         }
 
         return segments.Count;
+    }
+
+    private static int CountCotpDataSegments(int payloadLength, byte tpduSizeCode)
+    {
+        var maxUserDataBytes = CotpFrameCodec.GetTpduSizeBytes(tpduSizeCode) - 3;
+        return payloadLength == 0 ? 1 : (payloadLength + maxUserDataBytes - 1) / maxUserDataBytes;
     }
 
     private static byte ReadTpduSizeCode(ReadOnlySpan<byte> parameters)
@@ -544,13 +593,26 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         catch (ObjectDisposedException) { return "-"; }
     }
 
-    private static string FormatMmsPayload(ReadOnlyMemory<byte> payload)
+    private static string FormatMmsPayload(ReadOnlyMemory<byte> payload, int maxBytes = 96)
     {
-        const int maxBytes = 96;
         var bytes = payload.Span;
-        var shown = bytes[..Math.Min(bytes.Length, maxBytes)];
+        var shown = bytes[..Math.Min(bytes.Length, Math.Max(0, maxBytes))];
         var hex = Convert.ToHexString(shown);
         return bytes.Length <= maxBytes ? hex : $"{hex}...({bytes.Length} bytes)";
+    }
+
+    private static string BuildTransportErrorMessage(
+        Exception exception,
+        string operation,
+        string target,
+        ReadOnlyMemory<byte> requestPayload,
+        ReadOnlyMemory<byte> responsePayload,
+        int responseCotpSegmentCount)
+    {
+        var context = string.IsNullOrWhiteSpace(operation)
+            ? "No confirmed MMS request was active."
+            : $"Active request={operation} target={target}; requestBytes={requestPayload.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)}; responseBytes={responsePayload.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)}; plannedCotpSegments={responseCotpSegmentCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}.";
+        return $"{exception.Message} {context}";
     }
 
     private static string FormatCotpReferences(CotpTpdu tpdu)

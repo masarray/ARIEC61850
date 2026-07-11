@@ -113,6 +113,53 @@ public sealed class MmsConfirmedRequestBerProfileTests
     }
 
     [Fact]
+    public void Dispatcher_Exposes_Report_Control_Block_Hierarchy_In_Named_Variable_Directory()
+    {
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var directoryRequest = MmsGetNameListRequest.Build(15, MmsGetNameListObjectClass.NamedVariable, "IED1LD0");
+
+        var directoryDispatch = MmsConfirmedRequestBerDispatcher.Dispatch(directoryRequest, session);
+        var names = MmsGetNameListResponseDecoder.Decode(directoryDispatch.ResponsePresentationPayload, 15);
+
+        Assert.True(directoryDispatch.Response.IsSuccess, directoryDispatch.Response.Message);
+        Assert.True(names.IsSuccess, names.Message);
+        Assert.Contains("LLN0$RP", names.Names);
+        Assert.Contains("LLN0$RP$rptStatus01", names.Names);
+
+        var reference = new MmsObjectReference("IED1LD0", "LLN0$RP$rptStatus01", "RP");
+        var attributesRequest = MmsVariableAccessAttributesRequest.Build(16, reference);
+        var attributesDispatch = MmsConfirmedRequestBerDispatcher.Dispatch(attributesRequest, session);
+        var attributes = MmsVariableAccessAttributesResponseDecoder.Decode(attributesDispatch.ResponsePresentationPayload, 16, reference);
+
+        Assert.True(attributesDispatch.Response.IsSuccess, attributesDispatch.Response.Message);
+        Assert.True(attributes.IsSuccess, attributes.Message);
+        Assert.Equal("structure", attributes.MmsType);
+        Assert.Contains(attributes.TypeSpecification!.Children, child => child.Name == "RptID");
+        Assert.Contains(attributes.TypeSpecification.Children, child => child.Name == "RptEna");
+
+        var dataSetReference = new MmsObjectReference("IED1LD0", "LLN0$RP$rptStatus01$DatSet", "RP");
+        var dataSetAttributesRequest = MmsVariableAccessAttributesRequest.Build(17, dataSetReference);
+        var dataSetAttributesDispatch = MmsConfirmedRequestBerDispatcher.Dispatch(dataSetAttributesRequest, session);
+        var dataSetAttributes = MmsVariableAccessAttributesResponseDecoder.Decode(
+            dataSetAttributesDispatch.ResponsePresentationPayload,
+            17,
+            dataSetReference);
+
+        Assert.True(dataSetAttributesDispatch.Response.IsSuccess, dataSetAttributesDispatch.Response.Message);
+        Assert.True(dataSetAttributes.IsSuccess, dataSetAttributes.Message);
+        Assert.Equal("visible-string", dataSetAttributes.MmsType);
+
+        var dataSetRead = MmsReadRequest.BuildSingleVariableRead(18, dataSetReference);
+        var dataSetReadDispatch = MmsConfirmedRequestBerDispatcher.Dispatch(dataSetRead, session);
+        var dataSetReadResult = MmsReadResponseDecoder.DecodeSingleVariable(dataSetReadDispatch.ResponsePresentationPayload, 18);
+
+        Assert.True(dataSetReadDispatch.Response.IsSuccess, dataSetReadDispatch.Response.Message);
+        Assert.True(dataSetReadResult.IsSuccess, dataSetReadResult.Message);
+        Assert.Equal(MmsDataKind.VisibleString, dataSetReadResult.Value!.Kind);
+    }
+
+    [Fact]
     public void Dispatcher_Accepts_VmdSpecific_Variable_Access_Attributes_Name()
     {
         var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
@@ -129,6 +176,65 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.True(dispatch.IsRequestDecoded, dispatch.Message);
         Assert.Equal(nameof(MmsReadOnlyOperation.GetVariableAccessAttributes), dispatch.Response.Operation);
         Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
+    }
+
+    [Fact]
+    public void Dispatcher_Accepts_FileDirectory_Request_And_Returns_Empty_ReadOnly_Directory()
+    {
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var fileName = BerWriter.EncodeTlv(0x19, ReadOnlySpan<byte>.Empty);
+        var fileDirectoryRequest = BerWriter.EncodeTlv(
+            BerClass.ContextSpecific,
+            true,
+            77,
+            BerWriter.EncodeTlv(0xA0, fileName));
+        var confirmedRequest = BerWriter.EncodeTlv(0xA0,
+            BerWriter.EncodeTlv(0x02, BerWriter.EncodeUnsignedInteger(19))
+                .Concat(fileDirectoryRequest)
+                .ToArray());
+
+        var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(
+            MmsPresentation.WrapIsoPresentationPData(confirmedRequest),
+            session);
+
+        Assert.True(dispatch.IsRequestDecoded, dispatch.Message);
+        Assert.Equal(MmsReadOnlyOperation.GetFileDirectory, dispatch.Request.Operation);
+        Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
+
+        var mms = MmsPresentation.StripPresentationPrefix(dispatch.ResponsePresentationPayload);
+        var offset = 0;
+        Assert.True(BerReader.TryReadTlv(mms, ref offset, out var response));
+        var service = BerReader.ReadChildren(response.Value).Single(x => x.Class == BerClass.ContextSpecific && x.TagNumber == 77);
+        var fields = BerReader.ReadChildren(service.Value);
+        Assert.Contains(fields, field => field.Class == BerClass.ContextSpecific && field.TagNumber == 0);
+        Assert.Contains(fields, field => field.Class == BerClass.ContextSpecific && field.TagNumber == 1);
+    }
+
+    [Fact]
+    public void Dispatcher_Reads_FunctionalConstraint_Root_As_Structure_And_Normalizes_DataSet_Name()
+    {
+        var simulatorProfile = IedSimulatorProfile.CreateDefaultFeederProfile();
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(simulatorProfile);
+        var session = new MmsReadOnlyServerSession(serverProfile);
+
+        var rootReference = new MmsObjectReference("IED1LD0", "MMXU1$MX", "MX");
+        var rootRequest = MmsReadRequest.BuildSingleVariableRead(20, rootReference);
+        var rootDispatch = MmsConfirmedRequestBerDispatcher.Dispatch(rootRequest, session);
+        var rootRead = MmsReadResponseDecoder.DecodeSingleVariable(rootDispatch.ResponsePresentationPayload, 20);
+
+        Assert.True(rootDispatch.Response.IsSuccess, rootDispatch.Response.Message);
+        Assert.True(rootRead.IsSuccess, rootRead.Message);
+        Assert.Equal(MmsDataKind.Structure, rootRead.Value!.Kind);
+        Assert.NotEmpty(rootRead.Value.Children);
+
+        var dataSetRead = session.Handle(new MmsReadOnlyServerRequest
+        {
+            Operation = MmsReadOnlyOperation.ReadDataSet,
+            Target = "IED1LD0/LLN0.ds_Meas"
+        });
+
+        Assert.True(dataSetRead.IsSuccess, dataSetRead.Message);
     }
 
     [Fact]

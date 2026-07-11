@@ -137,9 +137,17 @@ public sealed record IedSimulatorPoint
     public double BaseValue { get; init; }
     public double Amplitude { get; init; }
     public double PhaseDeg { get; init; }
+    public bool IsDynamic { get; init; }
     public string InitialValue { get; init; } = string.Empty;
 
-    public static IedSimulatorPoint Measurement(string reference, string functionalConstraint, string unit, double baseValue, double amplitude, double phaseDeg)
+    public static IedSimulatorPoint Measurement(
+        string reference,
+        string functionalConstraint,
+        string unit,
+        double baseValue,
+        double amplitude,
+        double phaseDeg,
+        bool isDynamic = true)
         => new()
         {
             Reference = reference,
@@ -149,6 +157,7 @@ public sealed record IedSimulatorPoint
             BaseValue = baseValue,
             Amplitude = amplitude,
             PhaseDeg = phaseDeg,
+            IsDynamic = isDynamic,
             InitialValue = baseValue.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
         };
 

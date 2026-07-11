@@ -17,6 +17,7 @@ public enum MmsConfirmedBerProbeKind
     GetDomainDirectory,
     GetNamedVariableDirectory,
     GetNamedVariableListDirectory,
+    GetFileDirectory,
     Read,
     GetVariableAccessAttributes,
     GetNamedVariableListAttributes,
@@ -793,6 +794,12 @@ public static class MmsConfirmedRequestBerDispatcher
 
             invokeId = (int)invoke.Value;
             var service = children[1];
+            if (service.Class == BerClass.ContextSpecific && service.TagNumber == 77)
+            {
+                serviceKind = MmsConfirmedBerProbeKind.GetFileDirectory;
+                return TryDecodeFileDirectory(service, out request, out message);
+            }
+
             switch (service.EncodedTag)
             {
                 case 0xA1:
@@ -987,6 +994,36 @@ public static class MmsConfirmedRequestBerDispatcher
         return true;
     }
 
+    private static bool TryDecodeFileDirectory(BerTlv service, out MmsReadOnlyServerRequest request, out string message)
+    {
+        var fileSpecification = string.Empty;
+        foreach (var field in BerReader.ReadChildren(service.Value))
+        {
+            if (field.Class != BerClass.ContextSpecific || field.TagNumber != 0)
+                continue;
+
+            fileSpecification = ReadNestedAscii(field.Value);
+            break;
+        }
+
+        request = new MmsReadOnlyServerRequest
+        {
+            Operation = MmsReadOnlyOperation.GetFileDirectory,
+            Target = fileSpecification
+        };
+        message = $"Decoded FileDirectory request fileSpecification='{fileSpecification}'.";
+        return true;
+    }
+
+    private static string ReadNestedAscii(ReadOnlyMemory<byte> value)
+    {
+        var offset = 0;
+        if (BerReader.TryReadTlv(value, ref offset, out var nested))
+            return BerReader.ReadAsciiString(nested);
+
+        return value.Length == 0 ? string.Empty : Encoding.ASCII.GetString(value.Span);
+    }
+
     private static bool TryDecodeWrite(BerTlv service, out MmsReadOnlyServerRequest request, out string message)
     {
         if (!TryFindFirstDomainSpecificObjectName(service.Value, out var domain, out var item))
@@ -1014,6 +1051,7 @@ public static class MmsConfirmedRequestBerDispatcher
             MmsConfirmedBerProbeKind.GetDomainDirectory or
             MmsConfirmedBerProbeKind.GetNamedVariableDirectory or
             MmsConfirmedBerProbeKind.GetNamedVariableListDirectory => EncodeGetNameListResponse(response),
+            MmsConfirmedBerProbeKind.GetFileDirectory => EncodeFileDirectoryResponse(),
             MmsConfirmedBerProbeKind.Read => EncodeReadResponse(response),
             MmsConfirmedBerProbeKind.GetVariableAccessAttributes => EncodeVariableAccessAttributesResponse(response),
             MmsConfirmedBerProbeKind.GetNamedVariableListAttributes => EncodeDataSetDirectoryResponse(response),
@@ -1056,6 +1094,17 @@ public static class MmsConfirmedRequestBerDispatcher
         return BerWriter.EncodeTlv(0xAC, Concat(deletable, listOfVariable));
     }
 
+    private static byte[] EncodeFileDirectoryResponse()
+    {
+        // FileDirectory-Response ::= SEQUENCE {
+        //   listOfDirectoryEntry [0] SEQUENCE OF DirectoryEntry,
+        //   moreFollows [1] BOOLEAN DEFAULT FALSE
+        // }
+        var entries = BerWriter.EncodeTlv(0xA0, ReadOnlySpan<byte>.Empty);
+        var moreFollows = BerWriter.EncodeTlv(0x81, BerWriter.EncodeBoolean(false));
+        return BerWriter.EncodeTlv(BerClass.ContextSpecific, true, 77, Concat(entries, moreFollows));
+    }
+
     private static byte[] EncodeDataSetVariableDefinition(string reference)
     {
         var objectName = EncodeDomainSpecificObjectNameFromReference(reference);
@@ -1088,6 +1137,9 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static byte[] EncodePointValue(MmsReadOnlyPoint point)
     {
+        if (point.Children.Count > 0)
+            return MmsDataCodec.Encode(MmsDataValue.Structure(point.Children.Select(DecodePointValue)));
+
         if (point.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ||
             point.Kind.Equals("quality", StringComparison.OrdinalIgnoreCase))
             return MmsDataCodec.Encode(MmsDataValue.BitString(3, [0x00, 0x00]));
@@ -1108,6 +1160,16 @@ public static class MmsConfirmedRequestBerDispatcher
             return MmsDataCodec.Encode(MmsDataValue.Boolean(boolean));
 
         return MmsDataCodec.Encode(MmsDataValue.VisibleString(point.Value));
+    }
+
+    private static MmsDataValue DecodePointValue(MmsReadOnlyPoint point)
+    {
+        var encoded = EncodePointValue(point);
+        var offset = 0;
+        if (!BerReader.TryReadTlv(encoded, ref offset, out var value))
+            return MmsDataValue.VisibleString(point.Value);
+
+        return MmsDataCodec.Decode(value);
     }
 
     private static byte[] EncodeTypeSpecification(MmsReadOnlyPoint point)
@@ -1217,10 +1279,28 @@ public static class MmsConfirmedRequestBerDispatcher
     {
         var path = item.Replace('$', '.');
         var parts = path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length >= 3 && parts[1].Length == 2 && parts[1].All(char.IsUpper))
+        // The second MMS segment is normally the IEC 61850 data FC. Report
+        // control block names also use the same position for RP/BR, which are
+        // not FC values and must remain part of the object name.
+        if (parts.Length >= 3 && IsDataFunctionalConstraint(parts[1]))
             path = string.Join('.', parts.Take(1).Concat(parts.Skip(2)));
         return string.IsNullOrWhiteSpace(domain) ? path : $"{domain}/{path}";
     }
+
+    private static bool IsDataFunctionalConstraint(string value)
+        => value.Equals("ST", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("MX", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("SP", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("SV", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("CF", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("DC", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("SG", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("SE", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("EX", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("CO", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("SR", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("OR", StringComparison.OrdinalIgnoreCase) ||
+           value.Equals("BL", StringComparison.OrdinalIgnoreCase);
 
     private static string ToIecDataSetReference(string domain, string item)
     {

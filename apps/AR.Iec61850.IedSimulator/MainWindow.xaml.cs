@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private Task? _stopServerTask;
     private bool _isClosing;
     private string _profileName = "Demo feeder";
+    private readonly Dictionary<string, SimulatorPointRow> _pointRows = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindow()
     {
@@ -271,9 +272,10 @@ public partial class MainWindow : Window
         _viewModel.Metrics.Add(new SimulatorMetricRow("RCB", profile.ReportControlBlocks.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
         _viewModel.Points.Clear();
+        _pointRows.Clear();
         foreach (var state in _engine.PointStates)
         {
-            _viewModel.Points.Add(new SimulatorPointRow
+            var row = new SimulatorPointRow
             {
                 Reference = state.Reference,
                 FunctionalConstraint = state.FunctionalConstraint,
@@ -283,7 +285,9 @@ public partial class MainWindow : Window
                 Quality = state.Quality,
                 Reason = state.Reason,
                 Timestamp = state.TimestampUtc.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture)
-            });
+            };
+            _viewModel.Points.Add(row);
+            _pointRows[row.Reference] = row;
         }
 
         foreach (var dataSet in profile.DataSets)
@@ -296,7 +300,7 @@ public partial class MainWindow : Window
     {
         var now = DateTimeOffset.UtcNow;
         var events = _engine.Step(now);
-        RefreshPointRows();
+        RefreshPointRows(events);
 
         foreach (var item in events.Take(20))
         {
@@ -311,18 +315,28 @@ public partial class MainWindow : Window
             _viewModel.Events.RemoveAt(_viewModel.Events.Count - 1);
     }
 
-    private void RefreshPointRows()
+    private void RefreshPointRows(IReadOnlyList<IedSimulatorEvent>? changedEvents = null)
     {
-        var states = _engine.PointStates.ToDictionary(x => x.Reference, StringComparer.OrdinalIgnoreCase);
-        foreach (var row in _viewModel.Points)
+        if (changedEvents is null)
         {
-            if (!states.TryGetValue(row.Reference, out var state))
-                continue;
-
-            row.Value = state.Value;
-            row.Quality = state.Quality;
-            row.Reason = state.Reason;
-            row.Timestamp = state.TimestampUtc.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
+            foreach (var row in _viewModel.Points)
+                RefreshPointRow(row.Reference, row);
+            return;
         }
+
+        foreach (var change in changedEvents)
+            if (_pointRows.TryGetValue(change.Reference, out var row))
+                RefreshPointRow(change.Reference, row);
+    }
+
+    private void RefreshPointRow(string reference, SimulatorPointRow row)
+    {
+        if (!_engine.TryGetPointState(reference, out var state))
+            return;
+
+        row.Value = state.Value;
+        row.Quality = state.Quality;
+        row.Reason = state.Reason;
+        row.Timestamp = state.TimestampUtc.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
     }
 }

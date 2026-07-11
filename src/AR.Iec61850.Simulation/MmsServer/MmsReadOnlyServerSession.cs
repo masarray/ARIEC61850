@@ -9,6 +9,7 @@ public enum MmsReadOnlyOperation
     GetNamedVariableDirectory,
     GetDataSetDirectory,
     GetReportControlBlockDirectory,
+    GetFileDirectory,
     GetVariableAccessAttributes,
     Read,
     ReadDataSet,
@@ -59,6 +60,7 @@ public sealed class MmsReadOnlyServerSession
             MmsReadOnlyOperation.GetNamedVariableDirectory => GetNamedVariableDirectory(request.Target),
             MmsReadOnlyOperation.GetDataSetDirectory => GetDataSetDirectory(request.Target),
             MmsReadOnlyOperation.GetReportControlBlockDirectory => GetReportControlBlockDirectory(),
+            MmsReadOnlyOperation.GetFileDirectory => GetFileDirectory(request.Target),
             MmsReadOnlyOperation.GetVariableAccessAttributes => GetVariableAccessAttributes(request.Target),
             MmsReadOnlyOperation.Read => Read(request.Target),
             MmsReadOnlyOperation.ReadDataSet => ReadDataSet(request.Target),
@@ -132,6 +134,15 @@ public sealed class MmsReadOnlyServerSession
             names.Add(mmsName);
         }
 
+        foreach (var rcb in Profile.ReportControlBlocks.Where(x => IsReferenceInLogicalDevice(x.Reference, logicalDevice)))
+        {
+            var mmsName = ToMmsControlBlockReference(rcb.Reference);
+            var parts = mmsName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length > 1)
+                names.Add(string.Join('$', parts.Take(2)));
+            names.Add(mmsName);
+        }
+
         var orderedNames = names
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -153,11 +164,21 @@ public sealed class MmsReadOnlyServerSession
     private MmsReadOnlyServerResponse GetReportControlBlockDirectory()
         => Ok(nameof(MmsReadOnlyOperation.GetReportControlBlockDirectory), string.Empty, $"Returned {Profile.ReportControlBlocks.Count.ToString(CultureInfo.InvariantCulture)} RCB(s).", Profile.ReportControlBlocks.Select(x => x.Reference).ToArray());
 
+    private MmsReadOnlyServerResponse GetFileDirectory(string fileSpecification)
+        => new()
+        {
+            IsSuccess = true,
+            Operation = nameof(MmsReadOnlyOperation.GetFileDirectory),
+            Target = fileSpecification,
+            Message = "Returned empty virtual file directory; no file service entries are configured in this read-only simulator.",
+            Items = Array.Empty<string>()
+        };
+
     private MmsReadOnlyServerResponse GetVariableAccessAttributes(string target)
     {
         if (!_points.TryGetValue(target, out var point))
         {
-            point = BuildHierarchyType(target) ?? ResolvePointWithoutDomain(target);
+            point = BuildHierarchyType(target) ?? BuildReportControlBlockType(target) ?? ResolvePointWithoutDomain(target);
             if (point == null && !IsKnownHierarchyReference(target))
             {
                 // MMS permits VMD-specific ObjectName values. They are not the
@@ -237,6 +258,115 @@ public sealed class MmsReadOnlyServerSession
             candidates,
             requestedParts.Length);
     }
+
+    private MmsReadOnlyPoint? BuildReportControlBlockType(string target)
+    {
+        var slash = target.IndexOf('/');
+        if (slash <= 0 || slash == target.Length - 1)
+            return null;
+
+        var logicalDevice = target[..slash];
+        var item = target[(slash + 1)..].Replace('.', '$');
+        var candidates = Profile.ReportControlBlocks
+            .Where(rcb => IsReferenceInLogicalDevice(rcb.Reference, logicalDevice))
+            .Where(rcb =>
+            {
+                var mmsName = ToMmsControlBlockReference(rcb.Reference);
+                return mmsName.StartsWith(item + "$", StringComparison.OrdinalIgnoreCase) ||
+                       item.StartsWith(mmsName + "$", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(mmsName, item, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToArray();
+        if (candidates.Length == 0)
+            return null;
+
+        var exact = candidates.FirstOrDefault(rcb => string.Equals(ToMmsControlBlockReference(rcb.Reference), item, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null)
+            return BuildReportControlBlockNode(logicalDevice, item, exact);
+
+        var containing = candidates
+            .Where(rcb => item.StartsWith(ToMmsControlBlockReference(rcb.Reference) + "$", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(rcb => ToMmsControlBlockReference(rcb.Reference).Length)
+            .FirstOrDefault();
+        if (containing is not null)
+        {
+            var mmsName = ToMmsControlBlockReference(containing.Reference);
+            var descendantPath = item[(mmsName.Length + 1)..]
+                .Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return ResolveReportControlBlockChild(BuildReportControlBlockNode(logicalDevice, mmsName, containing), descendantPath);
+        }
+
+        var parts = item.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var functionalConstraint = parts.Length > 1 ? parts[1] : string.Empty;
+        return new MmsReadOnlyPoint
+        {
+            Name = parts.LastOrDefault() ?? item,
+            Reference = target,
+            LogicalDevice = logicalDevice,
+            LogicalNode = parts.FirstOrDefault() ?? string.Empty,
+            FunctionalConstraint = functionalConstraint,
+            Kind = "structure",
+            Value = "structure",
+            Quality = "valid",
+            Children = candidates
+                .OrderBy(rcb => rcb.Reference, StringComparer.OrdinalIgnoreCase)
+                .Select(rcb => BuildReportControlBlockNode(logicalDevice, ToMmsControlBlockReference(rcb.Reference), rcb))
+                .ToArray()
+        };
+    }
+
+    private static MmsReadOnlyPoint? ResolveReportControlBlockChild(MmsReadOnlyPoint parent, IReadOnlyList<string> path)
+    {
+        var current = parent;
+        foreach (var part in path)
+        {
+            var child = current.Children.FirstOrDefault(candidate => string.Equals(candidate.Name, part, StringComparison.OrdinalIgnoreCase));
+            if (child is null)
+                return null;
+
+            current = child;
+        }
+
+        return current;
+    }
+
+    private static MmsReadOnlyPoint BuildReportControlBlockNode(string logicalDevice, string mmsName, MmsReadOnlyReportControlBlock rcb)
+    {
+        var parts = mmsName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var functionalConstraint = parts.Length > 1 ? parts[1] : string.Empty;
+        var reference = $"{logicalDevice}/{mmsName}";
+        return new MmsReadOnlyPoint
+        {
+            Name = parts.LastOrDefault() ?? mmsName,
+            Reference = reference,
+            LogicalDevice = logicalDevice,
+            LogicalNode = parts.FirstOrDefault() ?? string.Empty,
+            FunctionalConstraint = functionalConstraint,
+            Kind = "structure",
+            Value = "structure",
+            Quality = "valid",
+            Children =
+            [
+                ReportAttribute(reference, "RptID", rcb.ReportId),
+                ReportAttribute(reference, "RptEna", "false"),
+                ReportAttribute(reference, "DatSet", rcb.DataSetReference),
+                ReportAttribute(reference, "ConfRev", rcb.ConfRev.ToString(CultureInfo.InvariantCulture)),
+                ReportAttribute(reference, "BufTm", rcb.BufferTimeMs.ToString(CultureInfo.InvariantCulture)),
+                ReportAttribute(reference, "IntgPd", rcb.IntegrityPeriodMs.ToString(CultureInfo.InvariantCulture)),
+                ReportAttribute(reference, "GI", "false")
+            ]
+        };
+    }
+
+    private static MmsReadOnlyPoint ReportAttribute(string parentReference, string name, string value)
+        => new()
+        {
+            Name = name,
+            Reference = $"{parentReference}${name}",
+            Kind = "report-attribute",
+            Value = value ?? string.Empty,
+            Quality = "valid"
+        };
 
     private static MmsReadOnlyPoint BuildHierarchyNode(
         string reference,
@@ -330,6 +460,9 @@ public sealed class MmsReadOnlyServerSession
     private MmsReadOnlyServerResponse Read(string target)
     {
         if (!_points.TryGetValue(target, out var point))
+            point = BuildHierarchyType(target) ?? BuildReportControlBlockType(target);
+
+        if (point is null)
             return Fail(nameof(MmsReadOnlyOperation.Read), target, "Readable point not found.");
 
         return new MmsReadOnlyServerResponse
@@ -347,17 +480,17 @@ public sealed class MmsReadOnlyServerSession
         var resolvedTarget = target;
         if (!_dataSets.TryGetValue(resolvedTarget, out var dataSet))
         {
-            if (target.Contains('/', StringComparison.Ordinal))
-                return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "DataSet not found.");
-
-            var requestedName = target.Replace('.', '$');
+            var targetSlash = target.IndexOf('/');
+            var requestedName = targetSlash >= 0 && targetSlash < target.Length - 1
+                ? target[(targetSlash + 1)..].Replace('.', '$')
+                : target.Replace('.', '$');
             var matches = Profile.DataSets
-                .Where(x => string.Equals(ToMmsDataSetName(x.Reference), requestedName, StringComparison.OrdinalIgnoreCase))
+                .Where(x => DataSetReferenceMatches(x.Reference, target, requestedName))
                 .ToArray();
             if (matches.Length == 0)
-                return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "VMD-specific DataSet name was not found.");
+                return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "DataSet not found.");
             if (matches.Length > 1)
-                return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "VMD-specific DataSet name is ambiguous across logical devices.");
+                return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "DataSet reference is ambiguous across logical devices.");
 
             dataSet = matches[0];
             resolvedTarget = dataSet.Reference;
@@ -394,6 +527,24 @@ public sealed class MmsReadOnlyServerSession
         return item.Replace('.', '$');
     }
 
+    private static bool DataSetReferenceMatches(string candidateReference, string requestedReference, string requestedMmsName)
+    {
+        if (string.Equals(candidateReference, requestedReference, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var candidateSlash = candidateReference.IndexOf('/');
+        var requestedSlash = requestedReference.IndexOf('/');
+        if (requestedSlash > 0 && candidateSlash > 0 &&
+            !string.Equals(candidateReference[..candidateSlash], requestedReference[..requestedSlash], StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var candidateName = ToMmsDataSetName(candidateReference);
+        return NormalizeDataSetName(candidateName).Equals(NormalizeDataSetName(requestedMmsName), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeDataSetName(string value)
+        => new((value ?? string.Empty).Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+
     private sealed record MmsTypeCandidate(MmsReadOnlyPoint Point, string[] Parts);
 
     private static MmsReadOnlyServerResponse RejectWrite(string target)
@@ -415,6 +566,20 @@ public sealed class MmsReadOnlyServerSession
             : string.Join('$', new[] { parts[0], fc }.Concat(parts.Skip(1)));
 
         return string.IsNullOrWhiteSpace(domain) ? mmsItem : $"{domain}/{mmsItem}";
+    }
+
+    private static bool IsReferenceInLogicalDevice(string reference, string logicalDevice)
+    {
+        var slash = reference.IndexOf('/');
+        var domain = slash > 0 ? reference[..slash] : string.Empty;
+        return string.Equals(domain, logicalDevice, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ToMmsControlBlockReference(string reference)
+    {
+        var slash = reference.IndexOf('/');
+        var item = slash >= 0 && slash < reference.Length - 1 ? reference[(slash + 1)..] : reference;
+        return item.Replace('.', '$');
     }
 
     private static MmsReadOnlyServerResponse Ok(string operation, string target, string message, IReadOnlyList<string> items)

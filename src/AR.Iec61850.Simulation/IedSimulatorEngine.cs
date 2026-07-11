@@ -15,6 +15,9 @@ public sealed class IedSimulatorEngine
     public bool IsRunning { get; private set; }
     public IReadOnlyCollection<IedSimulatorPointState> PointStates => _states.Values.OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase).ToArray();
 
+    public bool TryGetPointState(string reference, out IedSimulatorPointState state)
+        => _states.TryGetValue(reference, out state!);
+
     public void Start() => IsRunning = true;
     public void Stop() => IsRunning = false;
 
@@ -50,6 +53,9 @@ public sealed class IedSimulatorEngine
             if (!_states.TryGetValue(point.Reference, out var state))
                 continue;
 
+            if (!ShouldSimulate(point))
+                continue;
+
             var previous = state.Value;
             var next = ComputeValue(point, angle);
             var reason = string.Equals(previous, next, StringComparison.Ordinal) ? "sample" : "data-change";
@@ -74,6 +80,13 @@ public sealed class IedSimulatorEngine
 
         return events;
     }
+
+    private static bool ShouldSimulate(IedSimulatorPoint point)
+        => point.IsDynamic ||
+           point.Reference.EndsWith("PTOC1.Str.general", StringComparison.OrdinalIgnoreCase) ||
+           point.Reference.EndsWith("PTOC1.Op.general", StringComparison.OrdinalIgnoreCase) ||
+           point.Reference.EndsWith("XCBR1.Pos.stVal", StringComparison.OrdinalIgnoreCase) ||
+           point.Reference.EndsWith("CSWI1.Pos.stVal", StringComparison.OrdinalIgnoreCase);
 
     public IedSimulatorSnapshot CreateSnapshot(DateTimeOffset nowUtc)
         => new()

@@ -1,3 +1,4 @@
+using AR.Iec61850.Discovery;
 using AR.Iec61850.Scl;
 using AR.Iec61850.Simulation;
 using AR.Iec61850.Tests.Scl;
@@ -92,6 +93,122 @@ public sealed class IedSimulatorProfileBuilderTests
         var points = result.Profile.LogicalDevices.SelectMany(d => d.LogicalNodes).SelectMany(n => n.Points).ToList();
         Assert.Equal(2, points.Count); // only instMag.i and Pos.stVal remain
         Assert.DoesNotContain(points, p => p.Kind == "quality" || p.Kind == "timestamp");
+    }
+
+    [Fact]
+    public void FromScl_Instantiates_Generic_Icd_Template_And_Preserves_Full_Structural_Model()
+    {
+        var document = new SclDocument
+        {
+            SourceName = "SIE7SR5.icd",
+            Ieds =
+            [
+                new SclIed { Name = "TEMPLATE", Manufacturer = "SIEMENS", Type = "7SR5" }
+            ],
+            ReportControls =
+            [
+                new SclReportControl
+                {
+                    IedName = "TEMPLATE",
+                    LdInst = "PROT",
+                    LogicalNodePath = "CSWI1",
+                    Name = "urcbA",
+                    ReportId = "SIEMENS_STATUS",
+                    ControlBlockReference = "TEMPLATEPROT/CSWI1.RP.urcbA",
+                    DataSetReference = "TEMPLATEPROT/LLN0.dsStatus",
+                    ConfigurationRevision = 7
+                }
+            ]
+        };
+        var structuralModel = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "TEMPLATEPROT",
+                    Inst = "PROT",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "LLN0",
+                            LnClass = "LLN0",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Name = "Mod",
+                                    InferredCdc = "ENS",
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            AttributePath = "stVal",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = "BOOLEAN"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "CSWI1",
+                            LnClass = "CSWI"
+                        }
+                    ]
+                },
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "TEMPLATECTRL",
+                    Inst = "CTRL",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "XCBR1",
+                            LnClass = "XCBR",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Name = "Pos",
+                                    InferredCdc = "DPC",
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            AttributePath = "stVal",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = "Dbpos"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var result = new IedSimulatorProfileBuilder().FromScl(document, structuralModel);
+        var profile = result.Profile;
+
+        Assert.Equal("TEMPLATE", result.SourceIedName);
+        Assert.Equal("SIE7SR5", result.SelectedIedName);
+        Assert.Equal("SIE7SR5", profile.Name);
+        Assert.Equal(2, result.StructuralDataAttributeCount);
+        Assert.Equal(2, profile.LogicalDevices.Count);
+        Assert.Contains(profile.LogicalDevices, device => device.Name == "SIE7SR5PROT");
+        Assert.Contains(profile.LogicalDevices, device => device.Name == "SIE7SR5CTRL");
+
+        var protection = profile.LogicalDevices.Single(device => device.Name == "SIE7SR5PROT");
+        Assert.Contains(protection.LogicalNodes, node => node.Name == "CSWI1");
+        Assert.Contains(profile.LogicalDevices.SelectMany(device => device.LogicalNodes).SelectMany(node => node.Points),
+            point => point.Reference == "LLN0.Mod.stVal" && point.FunctionalConstraint == "ST");
+        Assert.Contains(profile.ReportControlBlocks,
+            rcb => rcb.Reference == "SIE7SR5PROT/CSWI1.RP.urcbA" && rcb.ConfRev == 7);
     }
 
     [Fact]

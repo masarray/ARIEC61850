@@ -49,6 +49,28 @@ public sealed class AcseMmsAssociateResponseTests
     }
 
     [Fact]
+    public void SelectForRequest_Uses_Client_Mms_Context_Id_For_Subsequent_Data()
+    {
+        var request = AcseMmsInitiateRequest.BuildDefaultAssociationPayload().ToArray();
+        var contextDefinition = new byte[]
+        {
+            0x02, 0x01, 0x03, 0x06, 0x05, 0x28, 0xCA, 0x22, 0x02, 0x01
+        };
+        var offset = FindSequence(request, contextDefinition);
+        Assert.True(offset >= 0, "The default AARQ MMS presentation context was not found.");
+        request[offset + 2] = 0x05;
+
+        var response = AcseMmsAssociateResponse.SelectForRequest("DeterministicInitiateResponse", request);
+
+        Assert.Equal(5, response.MmsPresentationContextId);
+        var presentationPayload = ExtractSessionUserData(response.Payload);
+        var cpa = ReadSingleTlv(presentationPayload, 0x31);
+        var normalMode = BerReader.ReadChildren(cpa.Value).Single(x => x.EncodedTag == 0xA2);
+        var contextResultList = BerReader.ReadChildren(normalMode.Value).Single(x => x.EncodedTag == 0xA5);
+        Assert.Equal(2, BerReader.ReadChildren(contextResultList.Value).Count(x => x.EncodedTag == 0x30));
+    }
+
+    [Fact]
     public void SelectForRequest_Falls_Back_When_Client_Request_Is_Not_Session_Connect()
     {
         var response = AcseMmsAssociateResponse.SelectForRequest("DeterministicInitiateResponse", [0x01, 0x00]);
@@ -78,5 +100,16 @@ public sealed class AcseMmsAssociateResponseTests
         Assert.Equal(expectedTag, tlv.EncodedTag);
         Assert.Equal(payload.Length, offset);
         return tlv;
+    }
+
+    private static int FindSequence(byte[] buffer, byte[] sequence)
+    {
+        for (var i = 0; i <= buffer.Length - sequence.Length; i++)
+        {
+            if (buffer.AsSpan(i, sequence.Length).SequenceEqual(sequence))
+                return i;
+        }
+
+        return -1;
     }
 }

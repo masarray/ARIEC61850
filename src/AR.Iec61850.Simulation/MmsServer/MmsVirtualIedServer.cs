@@ -173,10 +173,11 @@ public sealed class MmsVirtualIedServer : IAsyncDisposable
             client.NoDelay = true;
             await using var stream = client.GetStream();
 
-            if (!await PerformHandshakeAsync(stream, connectionId, cancellationToken).ConfigureAwait(false))
+            var presentationContextId = await PerformHandshakeAsync(stream, connectionId, cancellationToken).ConfigureAwait(false);
+            if (!presentationContextId.HasValue)
                 return;
 
-            await ServeRequestsAsync(stream, connectionId, cancellationToken).ConfigureAwait(false);
+            await ServeRequestsAsync(stream, connectionId, presentationContextId.Value, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -191,7 +192,7 @@ public sealed class MmsVirtualIedServer : IAsyncDisposable
         }
     }
 
-    private async Task<bool> PerformHandshakeAsync(NetworkStream stream, int connectionId, CancellationToken cancellationToken)
+    private async Task<int?> PerformHandshakeAsync(NetworkStream stream, int connectionId, CancellationToken cancellationToken)
     {
         // COTP Connection Request -> Connection Confirm.
         var crFrame = await ReadTpktFrameAsync(stream, cancellationToken).ConfigureAwait(false);
@@ -199,14 +200,14 @@ public sealed class MmsVirtualIedServer : IAsyncDisposable
         if (!crTpkt.IsValid)
         {
             ServerError?.Invoke(this, new MmsVirtualIedServerErrorEventArgs { ConnectionId = connectionId, Message = $"Invalid TPKT connect frame: {crTpkt.Message}" });
-            return false;
+            return null;
         }
 
         var cr = CotpFrameCodec.Decode(crTpkt.Payload);
         if (!cr.IsValid || cr.Kind != CotpTpduKind.ConnectionRequest)
         {
             ServerError?.Invoke(this, new MmsVirtualIedServerErrorEventArgs { ConnectionId = connectionId, Message = $"Expected COTP CR, received {cr.Kind}: {cr.Message}" });
-            return false;
+            return null;
         }
 
         var cc = TpktFrameCodec.Encode(CotpFrameCodec.EncodeConnectionConfirm(cr, _options.ServerReference));
@@ -218,14 +219,14 @@ public sealed class MmsVirtualIedServer : IAsyncDisposable
         if (!aarqTpkt.IsValid)
         {
             ServerError?.Invoke(this, new MmsVirtualIedServerErrorEventArgs { ConnectionId = connectionId, Message = $"Invalid TPKT AARQ frame: {aarqTpkt.Message}" });
-            return false;
+            return null;
         }
 
         var aarqData = CotpFrameCodec.Decode(aarqTpkt.Payload);
         if (!aarqData.IsValid || aarqData.Kind != CotpTpduKind.Data)
         {
             ServerError?.Invoke(this, new MmsVirtualIedServerErrorEventArgs { ConnectionId = connectionId, Message = $"Expected COTP Data carrying AARQ, received {aarqData.Kind}: {aarqData.Message}" });
-            return false;
+            return null;
         }
 
         // Inspect for diagnostics, but remain lenient so varied clients can still associate.
@@ -234,10 +235,10 @@ public sealed class MmsVirtualIedServer : IAsyncDisposable
         var associateResponse = AcseMmsAssociateResponse.SelectForRequest(_options.ResponseProfileName, aarqData.UserData);
         var aare = TpktFrameCodec.Encode(CotpFrameCodec.EncodeData(associateResponse.Payload));
         await stream.WriteAsync(aare, cancellationToken).ConfigureAwait(false);
-        return true;
+        return associateResponse.MmsPresentationContextId;
     }
 
-    private async Task ServeRequestsAsync(NetworkStream stream, int connectionId, CancellationToken cancellationToken)
+    private async Task ServeRequestsAsync(NetworkStream stream, int connectionId, int presentationContextId, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -260,7 +261,7 @@ public sealed class MmsVirtualIedServer : IAsyncDisposable
             if (!requestData.IsValid || requestData.Kind != CotpTpduKind.Data)
                 break;
 
-            var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestData.UserData, _session);
+            var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestData.UserData, _session, presentationContextId);
             Interlocked.Increment(ref _requestCount);
 
             if (!dispatch.IsRequestDecoded)

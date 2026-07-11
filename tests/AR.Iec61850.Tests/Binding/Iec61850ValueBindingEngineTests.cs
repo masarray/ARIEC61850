@@ -36,6 +36,14 @@ public sealed class Iec61850ValueBindingEngineTests
     }
 
     [Fact]
+    public void Quality_Decoder_Does_Not_Treat_A_Short_BitString_As_IecQuality()
+    {
+        var decoded = Iec61850QualityDecoder.Decode(MmsDataValue.BitString(6, new byte[] { 0x04 }));
+
+        Assert.False(decoded.IsDecoded);
+    }
+
+    [Fact]
     public void Timestamp_Decodes_To_Readable_Time_And_Time_Quality_Rows()
     {
         var schema = Iec61850DataObjectSchemaBuilder.FromLiveDataObject(CreateSwitchPositionDataObject());

@@ -1006,7 +1006,8 @@ internal static class Cli
             var iedName = options.Get("ied", string.Empty);
             var result = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions
             {
-                IedName = iedName
+                IedName = iedName,
+                RuntimeIedName = options.Get("runtime-ied", string.Empty)
             });
             return result.Profile;
         }
@@ -1028,6 +1029,7 @@ internal static class Cli
         var result = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions
         {
             IedName = iedName,
+            RuntimeIedName = options.Get("runtime-ied", string.Empty),
             NominalFrequencyHz = options.GetDouble("nominal-hz", 50)
         });
         var profile = result.Profile;
@@ -1134,8 +1136,9 @@ internal static class Cli
 
     private static async Task<int> SimulatorRunAsync(string[] args)
     {
-        var options = CliOptions.Parse(args);
-        var sclPath = args.Length > 0 && !args[0].StartsWith("--", StringComparison.Ordinal) ? args[0] : options.Get("scl", string.Empty);
+        var hasPositionalSclPath = args.Length > 0 && !args[0].StartsWith("--", StringComparison.Ordinal);
+        var options = CliOptions.Parse(hasPositionalSclPath ? args[1..] : args);
+        var sclPath = hasPositionalSclPath ? args[0] : options.Get("scl", string.Empty);
         var host = options.Get("host", "127.0.0.1");
         var port = options.GetInt("port", 102);
         if (port is < 1 or > 65535)
@@ -1149,7 +1152,11 @@ internal static class Cli
         IedSimulatorProfile profile;
         if (!string.IsNullOrWhiteSpace(sclPath))
         {
-            var built = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions { IedName = iedName });
+            var built = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions
+            {
+                IedName = iedName,
+                RuntimeIedName = options.Get("runtime-ied", string.Empty)
+            });
             profile = built.Profile;
             Console.WriteLine($"Loaded SCL model: {Path.GetFullPath(sclPath)} (IED {TextOrDash(built.SelectedIedName)})");
             foreach (var finding in built.Findings)
@@ -1251,7 +1258,8 @@ internal static class Cli
         {
             var result = new IedSimulatorProfileBuilder().FromScl(sclPath, new IedSimulatorProfileFromSclOptions
             {
-                IedName = options.Get("ied", string.Empty)
+                IedName = options.Get("ied", string.Empty),
+                RuntimeIedName = options.Get("runtime-ied", string.Empty)
             });
             simulatorProfile = result.Profile;
             Console.WriteLine($"Loaded SCL model: {Path.GetFileName(sclPath)} (IED {TextOrDash(result.SelectedIedName)})");
@@ -6470,9 +6478,9 @@ internal static class Cli
         Console.WriteLine("  mms-discover <host-or-ip> [--port 102] [--timeout-ms 30000] [--no-report-probe] [--max-report-probes N] [--raw-limit N] [--show-raw]");
         Console.WriteLine("  mms-engine-profile <host-or-ip> [--port 102] [--timeout-ms 30000] [--max-report-probes N] [--read-datasets true] [--output profile.md] [--json profile.json]");
         Console.WriteLine("  mms-report-readiness-profile <host-or-ip> [--port 102] [--timeout-ms 120000] [--rcb LD/LN.BR.name] [--dataset LD/LLN0.DataSet] [--strict-rcb] [--allow-urcb-fallback true|false] [--duration-sec 60] [--gi true|false] [--output report-readiness.md] [--json report-readiness.json] [--session-json session-profile.json]");
-        Console.WriteLine("  simulator-profile-from-scl <scl-file> [--ied NAME] [--steps N] [--nominal-hz 50] [--output simulator-profile.md] [--json simulator-profile.json]");
-        Console.WriteLine("  simulate-ied [--scl FILE] [--ied NAME] [--bind 127.0.0.1] [--port 102] [--steps N] [--duration-sec 0] [--name NAME]");
-        Console.WriteLine("  simulator-run [<scl-file>] [--scl FILE] [--ied NAME] [--host 127.0.0.1] [--port 102] [--name NAME] [--step-ms 1000] [--duration-sec N]");
+        Console.WriteLine("  simulator-profile-from-scl <scl-file> [--ied NAME] [--runtime-ied NAME] [--steps N] [--nominal-hz 50] [--output simulator-profile.md] [--json simulator-profile.json]");
+        Console.WriteLine("  simulate-ied [--scl FILE] [--ied NAME] [--runtime-ied NAME] [--bind 127.0.0.1] [--port 102] [--steps N] [--duration-sec 0] [--name NAME]");
+        Console.WriteLine("  simulator-run [<scl-file>] [--scl FILE] [--ied NAME] [--runtime-ied NAME] [--host 127.0.0.1] [--port 102] [--name NAME] [--step-ms 1000] [--duration-sec N]");
         Console.WriteLine("  mms-server-readonly-profile [--scl FILE] [--ied NAME] [--port 102] [--name NAME] [--steps N] [--read LD/LN.DO.da] [--dataset LD/LLN0.DataSet] [--output mms-server.md] [--json mms-server.json]");
         Console.WriteLine("  mms-listener-skeleton-profile [--scl FILE] [--ied NAME] [--host 127.0.0.1] [--port 0] [--timeout-ms 5000] [--steps N] [--output mms-listener.md] [--json mms-listener.json]");
         Console.WriteLine("  mms-handshake-codec-profile [--output .artifacts/out/mms-handshake-codec.md] [--json .artifacts/out/mms-handshake-codec.json]");

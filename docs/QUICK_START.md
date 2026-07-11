@@ -103,7 +103,7 @@ Live IED discovery workspace:
 dotnet run --project .\apps\AR.Iec61850.IedDiscovery -c Release
 ```
 
-Offline IED simulator workspace:
+IED simulator workspace with read-only MMS server:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.IedSimulator -c Release
@@ -115,7 +115,16 @@ Read-only engineering workbench alpha:
 dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench -c Release
 ```
 
-The current simulator workspace is intentionally offline. It provides deterministic point values, DataSets, RCB profiles, and JSON export. A network MMS server is a later phase after the model/runtime core is stable.
+The simulator provides deterministic point values, DataSets, RCB profiles, JSON export, and a read-only MMS server on `127.0.0.1:102`. Port 102 normally requires an elevated shell on Windows.
+
+Start the CLI server and discover it from another shell:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -c Release -- simulate-ied --port 102 --duration-sec 600
+dotnet run --project .\apps\AR.Iec61850.Cli -c Release -- mms-discover 127.0.0.1 --port 102 --timeout-ms 30000 --no-report-probe
+```
+
+IEDScout should be pointed at `127.0.0.1:102`. The simulator activity monitor must progress from `COTP CR/CC` and `ACSE AARQ/AARE` to `GetNameList` requests.
 
 ## 6. Build a WPF app as a single EXE
 

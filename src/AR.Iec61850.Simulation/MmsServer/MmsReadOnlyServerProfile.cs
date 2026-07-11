@@ -151,6 +151,7 @@ public sealed record MmsReadOnlyLogicalNode
 
 public sealed record MmsReadOnlyPoint
 {
+    public string Name { get; init; } = string.Empty;
     public string Reference { get; init; } = string.Empty;
     public string LogicalDevice { get; init; } = string.Empty;
     public string LogicalNode { get; init; } = string.Empty;
@@ -160,6 +161,7 @@ public sealed record MmsReadOnlyPoint
     public string Value { get; init; } = string.Empty;
     public string Quality { get; init; } = "valid";
     public DateTimeOffset TimestampUtc { get; init; } = DateTimeOffset.UtcNow;
+    public IReadOnlyList<MmsReadOnlyPoint> Children { get; init; } = Array.Empty<MmsReadOnlyPoint>();
 }
 
 public sealed record MmsReadOnlyDataSet

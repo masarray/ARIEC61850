@@ -235,7 +235,8 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         {
             await using var stream = client.GetStream();
 
-            if (!await NegotiateAssociationAsync(stream, remote, cancellationToken).ConfigureAwait(false))
+            var presentationContextId = await NegotiateAssociationAsync(stream, remote, cancellationToken).ConfigureAwait(false);
+            if (!presentationContextId.HasValue)
                 return;
 
             while (!cancellationToken.IsCancellationRequested)
@@ -253,7 +254,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                     break;
 
                 var session = _sessionFactory();
-                var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestData.UserData, session);
+                var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestData.UserData, session, presentationContextId.Value);
                 if (!dispatch.IsRequestDecoded)
                 {
                     Record(new IedSimulatorServerActivity
@@ -262,7 +263,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                         RemoteEndPoint = remote,
                         Operation = "DecodeConfirmedRequest",
                         Success = false,
-                        Message = dispatch.Message
+                        Message = $"{dispatch.Message} MMS={FormatMmsPayload(requestData.UserData)}"
                     });
                     break;
                 }
@@ -314,7 +315,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         }
     }
 
-    private async Task<bool> NegotiateAssociationAsync(NetworkStream stream, string remote, CancellationToken cancellationToken)
+    private async Task<int?> NegotiateAssociationAsync(NetworkStream stream, string remote, CancellationToken cancellationToken)
     {
         // 1. COTP connection request -> connection confirm.
         var crFrame = await ReadTpktFrameAsync(stream, cancellationToken).ConfigureAwait(false);
@@ -387,12 +388,12 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
             RemoteEndPoint = remote,
             Operation = "ACSE AARE",
             Target = responseProfile.Name,
-            Message = $"Sent {responseProfile.Payload.Length} byte ACSE AARE + MMS InitiateResponse payload."
+            Message = $"Sent {responseProfile.Payload.Length} byte ACSE AARE + MMS InitiateResponse payload; MMS presentation context id={responseProfile.MmsPresentationContextId}."
         });
-        return true;
+        return responseProfile.MmsPresentationContextId;
     }
 
-    private bool CloseHandshake(string remote, string operation, string message)
+    private int? CloseHandshake(string remote, string operation, string message)
     {
         Record(new IedSimulatorServerActivity
         {
@@ -402,10 +403,10 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
             Success = false,
             Message = message
         });
-        return false;
+        return null;
     }
 
-    private bool Reject(string remote, string message)
+    private int? Reject(string remote, string message)
     {
         Record(new IedSimulatorServerActivity
         {
@@ -414,7 +415,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
             Success = false,
             Message = message
         });
-        return false;
+        return null;
     }
 
     private static async Task<byte[]?> ReadTpktFrameAsync(NetworkStream stream, CancellationToken cancellationToken)
@@ -467,6 +468,15 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         try { return client.Client.RemoteEndPoint?.ToString() ?? "-"; }
         catch (SocketException) { return "-"; }
         catch (ObjectDisposedException) { return "-"; }
+    }
+
+    private static string FormatMmsPayload(ReadOnlyMemory<byte> payload)
+    {
+        const int maxBytes = 96;
+        var bytes = payload.Span;
+        var shown = bytes[..Math.Min(bytes.Length, maxBytes)];
+        var hex = Convert.ToHexString(shown);
+        return bytes.Length <= maxBytes ? hex : $"{hex}...({bytes.Length} bytes)";
     }
 
     private static string FormatCotpReferences(CotpTpdu tpdu)

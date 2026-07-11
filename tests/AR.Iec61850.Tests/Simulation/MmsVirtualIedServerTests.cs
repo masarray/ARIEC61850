@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using AR.Iec61850.Acse;
+using AR.Iec61850.Asn1;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Osi;
 using AR.Iec61850.Scl;
@@ -49,6 +50,26 @@ public sealed class MmsVirtualIedServerTests
         Assert.True(domains.IsSuccess);
         Assert.Contains(domains.Names, n => n.Contains("MU01LD0", StringComparison.OrdinalIgnoreCase));
 
+        var attributesProbe = probes.First(p => p.Kind == MmsConfirmedBerProbeKind.GetVariableAccessAttributes);
+        var attributesResponse = await ExchangeAsync(stream, attributesProbe.PresentationPayload, cts.Token);
+        var attributes = MmsVariableAccessAttributesResponseDecoder.Decode(
+            attributesResponse,
+            attributesProbe.InvokeId,
+            MmsObjectReference.Parse(attributesProbe.Target));
+        Assert.True(attributes.IsSuccess);
+        Assert.NotNull(attributes.TypeSpecification);
+
+        var dataSet = serverProfile.DataSets.First();
+        var dataSetName = dataSet.Reference[(dataSet.Reference.IndexOf('/') + 1)..].Replace('.', '$');
+        var vmdSpecificDataSetRequest = BerWriter.EncodeTlv(0xA0,
+            BerWriter.EncodeTlv(0x02, BerWriter.EncodeUnsignedInteger(20))
+                .Concat(BerWriter.EncodeTlv(0xAC, BerWriter.EncodeTlv(0x80, BerWriter.EncodeAscii(dataSetName))))
+                .ToArray());
+        var dataSetResponse = await ExchangeAsync(stream, MmsPresentation.WrapIsoPresentationPData(vmdSpecificDataSetRequest), cts.Token);
+        var dataSetDirectory = MmsDataSetDirectoryResponseDecoder.Decode(dataSetResponse, 20, dataSet.Reference);
+        Assert.True(dataSetDirectory.IsSuccess, dataSetDirectory.Message);
+        Assert.NotEmpty(dataSetDirectory.Members);
+
         var readProbe = probes.First(p => p.Kind == MmsConfirmedBerProbeKind.Read);
         var readResponse = await ExchangeAsync(stream, readProbe.PresentationPayload, cts.Token);
         var read = MmsReadResponseDecoder.DecodeSingleVariable(readResponse, readProbe.InvokeId);
@@ -62,8 +83,8 @@ public sealed class MmsVirtualIedServerTests
         await server.StopAsync();
 
         Assert.True(server.AcceptedConnectionCount >= 1);
-        Assert.True(server.RequestCount >= 3);
-        Assert.True(server.SuccessCount >= 2);
+        Assert.True(server.RequestCount >= 5);
+        Assert.True(server.SuccessCount >= 4);
         Assert.True(server.FailureCount >= 1);
     }
 

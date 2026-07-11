@@ -346,7 +346,7 @@ public static class Iec61850QualityDecoder
     public static Iec61850DecodedQuality Decode(MmsDataValue? value)
     {
         value = FindFirst(value, MmsDataKind.BitString);
-        if (value?.Kind != MmsDataKind.BitString)
+        if (value?.Kind != MmsDataKind.BitString || !HasQualityBitLength(value))
             return new Iec61850DecodedQuality(false, "-", false, false, false, false, false, false, false, false, "-", false, false);
 
         var bit = BitReader(value);
@@ -374,6 +374,19 @@ public static class Iec61850QualityDecoder
             bit(10) ? "substituted" : "process",
             bit(11),
             bit(12));
+    }
+
+    private static bool HasQualityBitLength(MmsDataValue value)
+    {
+        if (value.RawValue.Count < 3)
+            return false;
+
+        var unusedBits = value.RawValue[0];
+        if (unusedBits > 7)
+            return false;
+
+        var bitCount = (value.RawValue.Count - 1) * 8 - unusedBits;
+        return bitCount >= 13;
     }
 
     private static MmsDataValue? FindFirst(MmsDataValue? value, MmsDataKind kind)

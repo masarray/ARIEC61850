@@ -86,4 +86,31 @@ public sealed class MmsReportValueProjectorTests
         Assert.Contains("2026-06-13", update.Timestamp, StringComparison.Ordinal);
         Assert.Equal("report", update.Source);
     }
+
+    [Fact]
+    public void Project_Preserves_Q_Only_Report_As_A_Partial_Companion_Update()
+    {
+        var frame = new MmsReportFrame
+        {
+            ReceivedAt = DateTimeOffset.UtcNow,
+            Values =
+            [
+                new MmsReportValue
+                {
+                    Index = 0,
+                    Member = new MmsDataSetDirectoryMember { UserReference = "LD0/XCBR1.Pos.q", FunctionalConstraint = "ST" },
+                    Value = MmsDataValue.BitString(3, [0x00, 0x00]),
+                    ReasonForInclusion = ["quality-change"]
+                }
+            ]
+        };
+
+        var update = Assert.Single(MmsReportValueProjector.Project(frame).Updates);
+
+        Assert.Equal("LD0/XCBR1.Pos", update.Reference);
+        Assert.False(update.HasValue);
+        Assert.True(update.HasQuality);
+        Assert.False(update.HasTimestamp);
+        Assert.Equal("companion-only", update.ProjectionStatus);
+    }
 }

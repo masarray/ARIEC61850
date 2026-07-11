@@ -1,5 +1,7 @@
 using System.Globalization;
+using AR.Iec61850.Discovery;
 using AR.Iec61850.Scl;
+using AR.Iec61850.Scl.Engineering;
 
 namespace AR.Iec61850.Simulation;
 
@@ -10,6 +12,13 @@ public sealed class IedSimulatorProfileFromSclOptions
 {
     /// <summary>Restrict the build to a single IED by name. Empty means the first IED in the document.</summary>
     public string IedName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Runtime IED identity exposed by the simulator. When omitted for an ICD
+    /// whose IED name is TEMPLATE, the simulator instantiates the template with
+    /// the SCL filename stem.
+    /// </summary>
+    public string RuntimeIedName { get; init; } = string.Empty;
 
     /// <summary>Include quality (<c>q</c>) and timestamp (<c>t</c>) DataSet members as readable points.</summary>
     public bool IncludeQualityAndTimestampPoints { get; init; } = true;
@@ -26,21 +35,22 @@ public sealed class IedSimulatorProfileFromSclResult
 {
     public IedSimulatorProfile Profile { get; init; } = new();
     public string SelectedIedName { get; init; } = string.Empty;
+    public string SourceIedName { get; init; } = string.Empty;
     public int DataSetMemberCount { get; init; }
+    public int StructuralDataAttributeCount { get; init; }
     public int SkippedMemberCount { get; init; }
     public IReadOnlyList<string> Findings { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>
-/// Builds an <see cref="IedSimulatorProfile"/> from a parsed SCL document so the offline simulator,
-/// the read-only MMS server model, and the loopback listener can mirror a real station instead of a
+/// Builds an <see cref="IedSimulatorProfile"/> from a parsed SCL document so the simulator runtime,
+/// the read-only MMS server model, and the live listener can mirror a real station instead of a
 /// fixed demo feeder. The bridge is deterministic and clean-room: it interprets DataSet FCDA
 /// membership, ReportControl declarations, and CDC/FC semantics only from public IEC 61850 structure.
 ///
-/// Point inventory is taken from the union of DataSet members, which are exactly the signals the
-/// station exposes to GOOSE, Sampled Values, and reports. Each non-quality/non-timestamp member
-/// becomes a readable point; quality/timestamp members become companion points so DataSet membership
-/// resolves one-to-one with no missing-member gaps.
+/// The SCL DataTypeTemplates projection is the primary source for the complete LD/LN/DO/DA model.
+/// DataSet membership enriches that model with ordered service bindings; it is not allowed to shrink
+/// the model to only the signals referenced by DataSets.
 /// </summary>
 public sealed class IedSimulatorProfileBuilder
 {
@@ -52,27 +62,46 @@ public sealed class IedSimulatorProfileBuilder
     public IedSimulatorProfileFromSclResult FromScl(string sclPath, IedSimulatorProfileFromSclOptions? options = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sclPath);
-        return FromScl(new SclParser().Load(sclPath), options);
+        var document = new SclParser().Load(sclPath);
+        var structuralModel = SclLiveModelProjectionBuilder.Load(sclPath);
+        return FromScl(document, structuralModel, options);
     }
 
     public IedSimulatorProfileFromSclResult FromScl(SclDocument document, IedSimulatorProfileFromSclOptions? options = null)
+        => FromSclCore(document, structuralModel: null, options);
+
+    public IedSimulatorProfileFromSclResult FromScl(
+        SclDocument document,
+        LiveIedModelDiscoveryDocument structuralModel,
+        IedSimulatorProfileFromSclOptions? options = null)
+        => FromSclCore(document, structuralModel, options);
+
+    private IedSimulatorProfileFromSclResult FromSclCore(
+        SclDocument document,
+        LiveIedModelDiscoveryDocument? structuralModel,
+        IedSimulatorProfileFromSclOptions? options)
     {
         ArgumentNullException.ThrowIfNull(document);
         options ??= new IedSimulatorProfileFromSclOptions();
 
         var findings = new List<string>();
 
-        var iedName = ResolveIedName(document, options.IedName, findings);
+        var sourceIedName = ResolveIedName(document, options.IedName, findings);
+        var iedName = ResolveRuntimeIedName(document, sourceIedName, options.RuntimeIedName, findings);
         var dataSets = document.DataSets
-            .Where(ds => MatchesIed(ds.IedName, iedName))
+            .Where(ds => MatchesIed(ds.IedName, sourceIedName))
             .ToList();
 
         if (dataSets.Count == 0)
-            findings.Add($"No DataSet definitions were found for IED '{iedName}'. The simulator profile will be structural only.");
+            findings.Add($"No DataSet definitions were found for IED '{sourceIedName}'. The simulator profile will expose its structural SCL model only.");
 
-        // Collect points from DataSet members, grouped by logical device (iedName+ldInst).
+        // The full SCL type projection seeds every LD/LN/DO/DA. DataSet FCDA members are
+        // then added only when they expose a leaf absent from the type projection.
         var deviceBuilders = new Dictionary<string, DeviceBuilder>(StringComparer.OrdinalIgnoreCase);
         var pointKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var structuralDataAttributeCount = structuralModel is null
+            ? 0
+            : AddStructuralModelPoints(structuralModel, sourceIedName, iedName, deviceBuilders, pointKeys, options, findings);
         var memberCount = 0;
         var skipped = 0;
 
@@ -88,7 +117,8 @@ public sealed class IedSimulatorProfileBuilder
                     continue;
                 }
 
-                var deviceName = LogicalDeviceName(entry.IedName.Length > 0 ? entry.IedName : iedName, entry.LdInst);
+                var entryIedName = RuntimeIedName(entry.IedName.Length > 0 ? entry.IedName : sourceIedName, sourceIedName, iedName);
+                var deviceName = LogicalDeviceName(entryIedName, entry.LdInst);
                 var lnName = LogicalNodeName(entry.Prefix, entry.LnClass, entry.LnInst);
                 var relativeReference = RelativeReference(lnName, entry.DoName, entry.DaName);
                 var fullReference = $"{deviceName}/{relativeReference}";
@@ -115,10 +145,10 @@ public sealed class IedSimulatorProfileBuilder
         var simulatorDataSets = dataSets
             .Select(ds => new IedSimulatorDataSet
             {
-                Reference = ds.Reference,
+                Reference = RemapIedReference(ds.Reference, sourceIedName, iedName),
                 Members = ds.Entries
                     .Where(e => options.IncludeQualityAndTimestampPoints || (!e.IsQuality && !e.IsTimestamp))
-                    .Select(e => $"{LogicalDeviceName(e.IedName.Length > 0 ? e.IedName : iedName, e.LdInst)}/{RelativeReference(LogicalNodeName(e.Prefix, e.LnClass, e.LnInst), e.DoName, e.DaName)}")
+                    .Select(e => $"{LogicalDeviceName(RuntimeIedName(e.IedName.Length > 0 ? e.IedName : sourceIedName, sourceIedName, iedName), e.LdInst)}/{RelativeReference(LogicalNodeName(e.Prefix, e.LnClass, e.LnInst), e.DoName, e.DaName)}")
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray()
             })
@@ -126,12 +156,12 @@ public sealed class IedSimulatorProfileBuilder
             .ToList();
 
         var reportControlBlocks = document.ReportControls
-            .Where(rc => MatchesIed(rc.IedName, iedName))
+            .Where(rc => MatchesIed(rc.IedName, sourceIedName))
             .Select(rc => new IedSimulatorReportControlBlock
             {
-                Reference = rc.ControlBlockReference,
+                Reference = RemapIedReference(rc.ControlBlockReference, sourceIedName, iedName),
                 Buffered = rc.Buffered,
-                DataSetReference = rc.DataSetReference,
+                DataSetReference = RemapIedReference(rc.DataSetReference, sourceIedName, iedName),
                 ReportId = string.IsNullOrWhiteSpace(rc.ReportId) ? rc.Name : rc.ReportId,
                 ConfRev = (int)rc.ConfigurationRevision,
                 BufferTimeMs = (int)rc.BufferTimeMilliseconds,
@@ -144,7 +174,7 @@ public sealed class IedSimulatorProfileBuilder
             .OrderBy(rc => rc.Reference, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var ied = document.Ieds.FirstOrDefault(i => MatchesIed(i.Name, iedName));
+        var ied = document.Ieds.FirstOrDefault(i => MatchesIed(i.Name, sourceIedName));
 
         var profile = new IedSimulatorProfile
         {
@@ -168,10 +198,81 @@ public sealed class IedSimulatorProfileBuilder
         {
             Profile = profile,
             SelectedIedName = iedName,
+            SourceIedName = sourceIedName,
             DataSetMemberCount = memberCount,
+            StructuralDataAttributeCount = structuralDataAttributeCount,
             SkippedMemberCount = skipped,
             Findings = findings
         };
+    }
+
+    private static int AddStructuralModelPoints(
+        LiveIedModelDiscoveryDocument structuralModel,
+        string sourceIedName,
+        string runtimeIedName,
+        IDictionary<string, DeviceBuilder> deviceBuilders,
+        ISet<string> pointKeys,
+        IedSimulatorProfileFromSclOptions options,
+        ICollection<string> findings)
+    {
+        var added = 0;
+        var missingFunctionalConstraint = 0;
+
+        foreach (var sourceDevice in structuralModel.LogicalDevices
+                     .Where(device => MatchesIedDomain(device.MmsDomain, sourceIedName))
+                     .OrderBy(device => device.MmsDomain, StringComparer.OrdinalIgnoreCase))
+        {
+            var deviceName = RemapMmsDomain(sourceDevice.MmsDomain, sourceIedName, runtimeIedName);
+            if (!deviceBuilders.TryGetValue(deviceName, out var device))
+            {
+                device = new DeviceBuilder(deviceName);
+                deviceBuilders[deviceName] = device;
+            }
+
+            foreach (var sourceNode in sourceDevice.LogicalNodes.OrderBy(node => node.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                var node = device.GetOrAddNode(sourceNode.Name, sourceNode.LnClass);
+                foreach (var dataObject in sourceNode.DataObjects)
+                {
+                    foreach (var attribute in dataObject.Attributes)
+                    {
+                        var functionalConstraint = attribute.FunctionalConstraint.Trim();
+                        if (string.IsNullOrWhiteSpace(functionalConstraint))
+                        {
+                            missingFunctionalConstraint++;
+                            continue;
+                        }
+
+                        var relativeReference = RelativeReference(sourceNode.Name, dataObject.Name, attribute.AttributePath);
+                        var fullReference = $"{deviceName}/{relativeReference}";
+                        if (!pointKeys.Add(fullReference))
+                            continue;
+
+                        var attributePath = attribute.AttributePath;
+                        node.Points.Add(CreatePoint(relativeReference, new SclDataSetEntry
+                        {
+                            IedName = runtimeIedName,
+                            LdInst = sourceDevice.Inst,
+                            LnClass = sourceNode.LnClass,
+                            LnInst = sourceNode.LnInst,
+                            DoName = dataObject.Name,
+                            DaName = attributePath,
+                            Fc = functionalConstraint,
+                            Cdc = dataObject.InferredCdc,
+                            BType = attribute.SclBType,
+                            IsQuality = attributePath.EndsWith("q", StringComparison.OrdinalIgnoreCase),
+                            IsTimestamp = attributePath.EndsWith("t", StringComparison.OrdinalIgnoreCase)
+                        }, options));
+                        added++;
+                    }
+                }
+            }
+        }
+
+        if (missingFunctionalConstraint > 0)
+            findings.Add($"Skipped {missingFunctionalConstraint.ToString(CultureInfo.InvariantCulture)} SCL data attribute(s) without a functional constraint; their logical nodes remain present in the server model.");
+
+        return added;
     }
 
     private static IedSimulatorPoint CreatePoint(string relativeReference, SclDataSetEntry entry, IedSimulatorProfileFromSclOptions options)
@@ -203,7 +304,8 @@ public sealed class IedSimulatorProfileBuilder
                 unit,
                 baseValue,
                 amplitude,
-                ResolvePhaseDegrees(entry));
+                ResolvePhaseDegrees(entry),
+                IsDynamicMeasurement(entry));
         }
 
         return new IedSimulatorPoint
@@ -227,6 +329,10 @@ public sealed class IedSimulatorProfileBuilder
         return string.Equals(entry.Fc, "MX", StringComparison.OrdinalIgnoreCase) &&
                bType is "FLOAT32" or "FLOAT64" or "INT32" or "INT16";
     }
+
+    private static bool IsDynamicMeasurement(SclDataSetEntry entry)
+        => entry.DaName.EndsWith("cVal.mag.f", StringComparison.OrdinalIgnoreCase) ||
+           entry.DaName.EndsWith("instMag.f", StringComparison.OrdinalIgnoreCase);
 
     private static (double BaseValue, double Amplitude, string Unit) ResolveMeasurementShape(SclDataSetEntry entry)
     {
@@ -308,6 +414,54 @@ public sealed class IedSimulatorProfileBuilder
 
         var firstDataSetIed = document.DataSets.Select(ds => ds.IedName).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
         return firstDataSetIed ?? string.Empty;
+    }
+
+    private static string ResolveRuntimeIedName(SclDocument document, string sourceIedName, string requestedRuntimeIedName, ICollection<string> findings)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedRuntimeIedName))
+            return requestedRuntimeIedName.Trim();
+
+        if (!sourceIedName.Equals("TEMPLATE", StringComparison.OrdinalIgnoreCase))
+            return sourceIedName;
+
+        var sourceFileName = Path.GetFileNameWithoutExtension(document.SourceName);
+        if (!string.IsNullOrWhiteSpace(sourceFileName) && !sourceFileName.Equals("TEMPLATE", StringComparison.OrdinalIgnoreCase))
+        {
+            findings.Add($"SCL IED '{sourceIedName}' is a generic ICD template; the simulator instantiated it as runtime IED '{sourceFileName}'.");
+            return sourceFileName;
+        }
+
+        return sourceIedName;
+    }
+
+    private static bool MatchesIedDomain(string domain, string sourceIedName)
+        => !string.IsNullOrWhiteSpace(domain) &&
+           (domain.Equals(sourceIedName, StringComparison.OrdinalIgnoreCase) ||
+            domain.StartsWith(sourceIedName, StringComparison.OrdinalIgnoreCase));
+
+    private static string RuntimeIedName(string candidateIedName, string sourceIedName, string runtimeIedName)
+        => MatchesIed(candidateIedName, sourceIedName) ? runtimeIedName : candidateIedName;
+
+    private static string RemapIedReference(string reference, string sourceIedName, string runtimeIedName)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return string.Empty;
+
+        var slash = reference.IndexOf('/');
+        if (slash <= 0)
+            return reference;
+
+        var domain = reference[..slash];
+        return $"{RemapMmsDomain(domain, sourceIedName, runtimeIedName)}{reference[slash..]}";
+    }
+
+    private static string RemapMmsDomain(string domain, string sourceIedName, string runtimeIedName)
+    {
+        if (sourceIedName.Equals(runtimeIedName, StringComparison.OrdinalIgnoreCase) ||
+            !MatchesIedDomain(domain, sourceIedName))
+            return domain;
+
+        return runtimeIedName + domain[sourceIedName.Length..];
     }
 
     private static bool MatchesIed(string candidate, string iedName)

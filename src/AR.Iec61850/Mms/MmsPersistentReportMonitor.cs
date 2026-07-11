@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace AR.Iec61850.Mms;
 
 public sealed class MmsPersistentReportMonitorSession
@@ -36,6 +38,7 @@ public sealed class MmsPersistentReportMonitorSession
     public int ReportCount { get; internal set; }
     public int PollReadCount { get; internal set; }
     public bool IsStopped { get; internal set; }
+    internal ConcurrentQueue<MmsReportFrame> PendingReports { get; } = new();
 
     public string Summary =>
         $"persistent report monitor: rcb={ReportControl.Reference}, dataset={Plan.DataSetReference}, mode={Plan.Mode}, reports={ReportCount}, stopped={IsStopped}";
@@ -69,6 +72,17 @@ public sealed class MmsPersistentReportMonitorStopResult
 
 public sealed partial class MmsClientSession
 {
+    private readonly object _persistentReportMonitorSync = new();
+    private readonly HashSet<MmsPersistentReportMonitorSession> _persistentReportMonitors = new();
+    private int _unroutedPersistentReportCount;
+
+    /// <summary>
+    /// Number of InformationReport PDUs that could not be assigned unambiguously
+    /// to an active persistent monitor. They are deliberately not projected
+    /// against an arbitrary DataSet.
+    /// </summary>
+    public int UnroutedPersistentReportCount => Volatile.Read(ref _unroutedPersistentReportCount);
+
     public async Task<MmsPersistentReportMonitorStartResult> StartPersistentReportMonitorAsync(
         MmsReportSubscriptionPlan plan,
         bool triggerGeneralInterrogation = true,
@@ -217,6 +231,7 @@ public sealed partial class MmsClientSession
                 dataSetCreated,
                 reservationTouched,
                 enabledByThisClient);
+            RegisterPersistentReportMonitor(session);
 
             return new MmsPersistentReportMonitorStartResult
             {
@@ -260,28 +275,17 @@ public sealed partial class MmsClientSession
         var reports = new List<MmsReportFrame>();
         var pollReads = new List<MmsReportPollRead>();
         var writes = new List<MmsReportAttributeWriteStep>();
-        Func<CancellationToken, Task<MmsReportAttributeWriteStep>>? giWriter = null;
-        TimeSpan? giInterval = null;
-        if (triggerGeneralInterrogation)
-        {
-            giWriter = token => WriteReportAttributeAsync(session.ReportControl, "GI", MmsDataValue.Boolean(true), token);
-            giInterval = TimeSpan.FromMilliseconds(1);
-        }
-
-        var received = await ReceiveInformationReportsAsync(
-            session.Plan.Members,
+        await ReceiveAndDispatchPersistentReportsAsync(
+            session,
             duration <= TimeSpan.Zero ? TimeSpan.FromMilliseconds(250) : duration,
             pollDirectory,
             pollReferences,
             pollInterval,
+            triggerGeneralInterrogation,
+            reports,
             pollReads,
-            soakSnapshots: null,
-            soakSnapshotInterval: null,
-            giWriter,
-            giInterval,
             writes,
             cancellationToken).ConfigureAwait(false);
-        reports.AddRange(received);
 
         if (reports.Count > 0)
         {
@@ -310,6 +314,7 @@ public sealed partial class MmsClientSession
 
         var writes = new List<MmsReportAttributeWriteStep>();
         var success = true;
+        UnregisterPersistentReportMonitor(session);
 
         if (session.EnabledByThisClient)
         {
@@ -376,4 +381,276 @@ public sealed partial class MmsClientSession
                 : $"Persistent report monitor stop completed with cleanup warnings for {session.ReportControl.Reference}."
         };
     }
+
+    private void RegisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
+    {
+        lock (_persistentReportMonitorSync)
+            _persistentReportMonitors.Add(session);
+    }
+
+    private void UnregisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
+    {
+        lock (_persistentReportMonitorSync)
+            _persistentReportMonitors.Remove(session);
+
+        while (session.PendingReports.TryDequeue(out _))
+        {
+        }
+    }
+
+    private MmsPersistentReportMonitorSession[] SnapshotPersistentReportMonitors()
+    {
+        lock (_persistentReportMonitorSync)
+            return _persistentReportMonitors.Where(x => !x.IsStopped).ToArray();
+    }
+
+    private void ClearPersistentReportMonitors()
+    {
+        lock (_persistentReportMonitorSync)
+        {
+            foreach (var session in _persistentReportMonitors)
+            {
+                session.IsStopped = true;
+                while (session.PendingReports.TryDequeue(out _))
+                {
+                }
+            }
+
+            _persistentReportMonitors.Clear();
+            Interlocked.Exchange(ref _unroutedPersistentReportCount, 0);
+        }
+    }
+
+    private async Task ReceiveAndDispatchPersistentReportsAsync(
+        MmsPersistentReportMonitorSession requestedSession,
+        TimeSpan duration,
+        MmsIedModelDirectory? pollDirectory,
+        IReadOnlyList<string>? pollReferences,
+        TimeSpan? pollInterval,
+        bool triggerGeneralInterrogation,
+        List<MmsReportFrame> reports,
+        List<MmsReportPollRead> pollReads,
+        List<MmsReportAttributeWriteStep> writes,
+        CancellationToken cancellationToken)
+    {
+        var references = pollReferences?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? Array.Empty<string>();
+        var effectiveDuration = duration <= TimeSpan.Zero ? TimeSpan.FromMilliseconds(250) : duration;
+        var deadline = DateTimeOffset.UtcNow + effectiveDuration;
+        var effectivePollInterval = pollInterval.GetValueOrDefault(TimeSpan.FromSeconds(1));
+        if (effectivePollInterval <= TimeSpan.Zero)
+            effectivePollInterval = TimeSpan.FromSeconds(1);
+
+        var nextPollAt = DateTimeOffset.UtcNow;
+        var giPending = triggerGeneralInterrogation;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DrainPendingReports(requestedSession, reports);
+
+            var routedAny = false;
+            while (TryDequeueInformationReport(out var queuedPayload))
+            {
+                RoutePersistentInformationReport(queuedPayload);
+                routedAny = true;
+            }
+
+            DrainPendingReports(requestedSession, reports);
+            if (routedAny)
+                continue;
+
+            if (giPending)
+            {
+                writes.Add(await WriteReportAttributeAsync(
+                    requestedSession.ReportControl,
+                    "GI",
+                    MmsDataValue.Boolean(true),
+                    cancellationToken).ConfigureAwait(false));
+                giPending = false;
+                continue;
+            }
+
+            if (pollDirectory != null && references.Length > 0 && DateTimeOffset.UtcNow >= nextPollAt)
+            {
+                foreach (var reference in references)
+                {
+                    if (DateTimeOffset.UtcNow >= deadline)
+                        break;
+
+                    pollReads.Add(await ReadReportPollReferenceAsync(
+                        pollDirectory,
+                        reference,
+                        cancellationToken).ConfigureAwait(false));
+                }
+
+                nextPollAt = DateTimeOffset.UtcNow + effectivePollInterval;
+                continue;
+            }
+
+            var remaining = deadline - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                break;
+
+            if (IsReceivePumpRunning)
+            {
+                var delay = remaining < TimeSpan.FromMilliseconds(25) ? remaining : TimeSpan.FromMilliseconds(25);
+                if (delay > TimeSpan.Zero)
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            if (!_cotp.HasDataAvailable)
+            {
+                var delay = remaining < TimeSpan.FromMilliseconds(25) ? remaining : TimeSpan.FromMilliseconds(25);
+                if (delay > TimeSpan.Zero)
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            var payload = await _cotp.ReceiveDataAsync(cancellationToken).ConfigureAwait(false);
+            var route = _receiveRouter.Route(payload);
+            LastReceiveRoutingSummary = route.Message;
+        }
+
+        DrainPendingReports(requestedSession, reports);
+    }
+
+    private static void DrainPendingReports(MmsPersistentReportMonitorSession session, List<MmsReportFrame> destination)
+    {
+        while (session.PendingReports.TryDequeue(out var frame))
+            destination.Add(frame);
+    }
+
+    private void RoutePersistentInformationReport(byte[] payload)
+    {
+        if (!MmsInformationReportDecoder.IsInformationReport(payload))
+            return;
+
+        MmsInformationReport decoded;
+        try
+        {
+            decoded = MmsInformationReportDecoder.Decode(payload);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
+        {
+            Interlocked.Increment(ref _unroutedPersistentReportCount);
+            LastReceiveRoutingSummary = $"InformationReport decode failed before RCB routing: {ex.GetType().Name}: {ex.Message}";
+            return;
+        }
+
+        var header = MmsReportFrameMapper.DecodeHeader(decoded);
+        var active = SnapshotPersistentReportMonitors();
+        var target = SelectPersistentReportMonitor(active, header, out var evidence);
+        if (target == null)
+        {
+            Interlocked.Increment(ref _unroutedPersistentReportCount);
+            LastReceiveRoutingSummary =
+                $"Unrouted InformationReport: RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}, activeRCB={active.Length}. {evidence}";
+            return;
+        }
+
+        var frame = MmsReportFrameMapper.Map(decoded, target.Plan.Members, DateTimeOffset.UtcNow);
+        target.PendingReports.Enqueue(frame);
+        LastReceiveRoutingSummary =
+            $"Routed InformationReport to {target.ReportControl.Reference} by {evidence}. RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}.";
+    }
+
+    internal static MmsPersistentReportMonitorSession? SelectPersistentReportMonitor(
+        IReadOnlyList<MmsPersistentReportMonitorSession> active,
+        MmsReportHeader header,
+        out string evidence)
+    {
+        ArgumentNullException.ThrowIfNull(active);
+        ArgumentNullException.ThrowIfNull(header);
+        var candidates = active.Where(x => !x.IsStopped).ToArray();
+        if (candidates.Length == 0)
+        {
+            evidence = "no active persistent monitor";
+            return null;
+        }
+
+        var reportId = NormalizeRoutingReference(header.ReportId);
+        if (!string.IsNullOrWhiteSpace(reportId))
+        {
+            var exactRptId = candidates
+                .Where(x => NormalizeRoutingReference(x.ReportControl.ReportId).Equals(reportId, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (exactRptId.Length == 1)
+            {
+                evidence = "exact RptID";
+                return exactRptId[0];
+            }
+
+            var rcbAffinity = candidates.Where(x => HasRcbNameAffinity(reportId, x.ReportControl)).ToArray();
+            if (rcbAffinity.Length == 1)
+            {
+                evidence = "RptID-to-RCB name affinity";
+                return rcbAffinity[0];
+            }
+        }
+
+        var dataSet = NormalizeRoutingReference(header.DataSetReference);
+        if (!string.IsNullOrWhiteSpace(dataSet))
+        {
+            var exactDataSet = candidates
+                .Where(x => NormalizeRoutingReference(x.Plan.DataSetReference).Equals(dataSet, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (exactDataSet.Length == 1)
+            {
+                evidence = "exact DataSet";
+                return exactDataSet[0];
+            }
+
+            var dataSetTail = RoutingTail(dataSet);
+            var tailMatches = candidates
+                .Where(x => RoutingTail(NormalizeRoutingReference(x.Plan.DataSetReference)).Equals(dataSetTail, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (!string.IsNullOrWhiteSpace(dataSetTail) && tailMatches.Length == 1)
+            {
+                evidence = "DataSet tail";
+                return tailMatches[0];
+            }
+        }
+
+        if (candidates.Length == 1)
+        {
+            evidence = "single active monitor fallback";
+            return candidates[0];
+        }
+
+        evidence = "ambiguous report identity; report was not projected against an arbitrary DataSet";
+        return null;
+    }
+
+    private static bool HasRcbNameAffinity(string reportId, MmsReportControlCandidate reportControl)
+    {
+        var name = NormalizeRoutingReference(reportControl.Name);
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        return reportId.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+               reportId.EndsWith("." + name, StringComparison.OrdinalIgnoreCase) ||
+               reportId.EndsWith("/" + name, StringComparison.OrdinalIgnoreCase) ||
+               reportId.Contains("." + name + ".", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string RoutingTail(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return string.Empty;
+
+        var slash = reference.LastIndexOf('/');
+        var dot = reference.LastIndexOf('.');
+        var index = Math.Max(slash, dot);
+        return index >= 0 && index + 1 < reference.Length ? reference[(index + 1)..] : reference;
+    }
+
+    private static string NormalizeRoutingReference(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.').Replace('\\', '/').TrimEnd('.');
+
+    private static string RoutingTextOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 }

@@ -33,6 +33,8 @@ The default probe exercises:
 - `GetNameList` for logical device directory
 - `GetNameList` for logical node / named variable directory
 - `GetNameList` for DataSet / named variable list directory
+- paged `GetNameList` responses with `continueAfter` and `moreFollows`
+- logical-node and functional-constraint hierarchy entries in named-variable browse results
 - `Read` for one simulated point
 - `GetNamedVariableListAttributes` for one DataSet
 - `Write` rejection to verify the read-only guard

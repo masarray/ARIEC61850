@@ -263,7 +263,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                         RemoteEndPoint = remote,
                         Operation = "DecodeConfirmedRequest",
                         Success = false,
-                        Message = dispatch.Message
+                        Message = $"{dispatch.Message} MMS={FormatMmsPayload(requestData.UserData)}"
                     });
                     break;
                 }
@@ -468,6 +468,15 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         try { return client.Client.RemoteEndPoint?.ToString() ?? "-"; }
         catch (SocketException) { return "-"; }
         catch (ObjectDisposedException) { return "-"; }
+    }
+
+    private static string FormatMmsPayload(ReadOnlyMemory<byte> payload)
+    {
+        const int maxBytes = 96;
+        var bytes = payload.Span;
+        var shown = bytes[..Math.Min(bytes.Length, maxBytes)];
+        var hex = Convert.ToHexString(shown);
+        return bytes.Length <= maxBytes ? hex : $"{hex}...({bytes.Length} bytes)";
     }
 
     private static string FormatCotpReferences(CotpTpdu tpdu)

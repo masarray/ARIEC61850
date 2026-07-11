@@ -68,8 +68,8 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.Equal(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), dispatch.Response.Operation);
         Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
         Assert.True(names.IsSuccess, names.Message);
-        Assert.Contains("MMXU1", names.Names);
         Assert.Contains("MMXU1$MX", names.Names);
+        Assert.DoesNotContain("MMXU1", names.Names);
         Assert.Contains(names.Names, x => x.Contains("$MX$", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(names.Names, x => x.Contains("$ST$", StringComparison.OrdinalIgnoreCase));
     }
@@ -108,6 +108,8 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
         Assert.True(attributes.IsSuccess, attributes.Message);
         Assert.Equal("structure", attributes.MmsType);
+        Assert.Contains(attributes.TypeSpecification!.Children, x => x.Name == "A");
+        Assert.Contains(attributes.TypeSpecification.Children, x => x.Name == "PhV");
     }
 
     [Fact]

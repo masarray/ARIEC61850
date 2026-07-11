@@ -49,6 +49,15 @@ public sealed class MmsVirtualIedServerTests
         Assert.True(domains.IsSuccess);
         Assert.Contains(domains.Names, n => n.Contains("MU01LD0", StringComparison.OrdinalIgnoreCase));
 
+        var attributesProbe = probes.First(p => p.Kind == MmsConfirmedBerProbeKind.GetVariableAccessAttributes);
+        var attributesResponse = await ExchangeAsync(stream, attributesProbe.PresentationPayload, cts.Token);
+        var attributes = MmsVariableAccessAttributesResponseDecoder.Decode(
+            attributesResponse,
+            attributesProbe.InvokeId,
+            MmsObjectReference.Parse(attributesProbe.Target));
+        Assert.True(attributes.IsSuccess);
+        Assert.NotNull(attributes.TypeSpecification);
+
         var readProbe = probes.First(p => p.Kind == MmsConfirmedBerProbeKind.Read);
         var readResponse = await ExchangeAsync(stream, readProbe.PresentationPayload, cts.Token);
         var read = MmsReadResponseDecoder.DecodeSingleVariable(readResponse, readProbe.InvokeId);
@@ -62,8 +71,8 @@ public sealed class MmsVirtualIedServerTests
         await server.StopAsync();
 
         Assert.True(server.AcceptedConnectionCount >= 1);
-        Assert.True(server.RequestCount >= 3);
-        Assert.True(server.SuccessCount >= 2);
+        Assert.True(server.RequestCount >= 4);
+        Assert.True(server.SuccessCount >= 3);
         Assert.True(server.FailureCount >= 1);
     }
 

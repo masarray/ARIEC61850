@@ -123,15 +123,10 @@ public sealed class MmsReadOnlyServerSession
             return Fail(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, "Logical device reference is required.");
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var node in Profile.LogicalNodes.Where(x => string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase)))
-            names.Add(node.Name);
-
         foreach (var point in Profile.Points.Where(x => string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase)))
         {
             var mmsName = ToMmsNamedVariableReference(point);
             var parts = mmsName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length > 0)
-                names.Add(parts[0]);
             if (parts.Length > 1)
                 names.Add(string.Join('$', parts.Take(2)));
             names.Add(mmsName);
@@ -162,7 +157,7 @@ public sealed class MmsReadOnlyServerSession
     {
         if (!_points.TryGetValue(target, out var point))
         {
-            point = ResolvePointWithoutDomain(target);
+            point = BuildHierarchyType(target) ?? ResolvePointWithoutDomain(target);
             if (point == null && !IsKnownHierarchyReference(target))
             {
                 // MMS permits VMD-specific ObjectName values. They are not the
@@ -213,6 +208,82 @@ public sealed class MmsReadOnlyServerSession
             Items = items,
             Values = new[] { point }
         };
+    }
+
+    private MmsReadOnlyPoint? BuildHierarchyType(string target)
+    {
+        var slash = target.IndexOf('/');
+        if (slash <= 0 || slash == target.Length - 1)
+            return null;
+
+        var domain = target[..slash];
+        var item = target[(slash + 1)..].Replace('.', '$');
+        var requestedParts = item.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (requestedParts.Length == 0)
+            return null;
+
+        var candidates = Profile.Points
+            .Where(point => string.Equals(point.LogicalDevice, domain, StringComparison.OrdinalIgnoreCase))
+            .Select(point => new MmsTypeCandidate(point, MmsItemParts(point)))
+            .Where(x => x.Parts.Length >= requestedParts.Length && x.Parts.Take(requestedParts.Length).SequenceEqual(requestedParts, StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        if (candidates.Length == 0)
+            return null;
+
+        return BuildHierarchyNode(
+            reference: target,
+            name: requestedParts[^1],
+            functionalConstraint: candidates[0].Point.FunctionalConstraint,
+            candidates,
+            requestedParts.Length);
+    }
+
+    private static MmsReadOnlyPoint BuildHierarchyNode(
+        string reference,
+        string name,
+        string functionalConstraint,
+        IReadOnlyList<MmsTypeCandidate> candidates,
+        int nextPartIndex)
+    {
+        var exact = candidates.Where(x => x.Parts.Length == nextPartIndex).ToArray();
+        var groups = candidates
+            .Where(x => x.Parts.Length > nextPartIndex)
+            .GroupBy(x => x.Parts[nextPartIndex], StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (groups.Length == 0 && exact.Length == 1)
+            return exact[0].Point with { Name = name };
+
+        var children = groups
+            .Select(group => BuildHierarchyNode(
+                reference + "$" + group.Key,
+                group.Key,
+                functionalConstraint,
+                group.ToArray(),
+                nextPartIndex + 1))
+            .ToArray();
+
+        return new MmsReadOnlyPoint
+        {
+            Name = name,
+            Reference = reference,
+            LogicalDevice = candidates[0].Point.LogicalDevice,
+            LogicalNode = candidates[0].Point.LogicalNode,
+            FunctionalConstraint = functionalConstraint,
+            Kind = "structure",
+            Value = "structure",
+            Quality = "valid",
+            Children = children
+        };
+    }
+
+    private static string[] MmsItemParts(MmsReadOnlyPoint point)
+    {
+        var mmsReference = ToMmsNamedVariableReference(point);
+        var slash = mmsReference.IndexOf('/');
+        var item = slash >= 0 ? mmsReference[(slash + 1)..] : mmsReference;
+        return item.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     private MmsReadOnlyPoint? ResolvePointWithoutDomain(string target)
@@ -295,10 +366,12 @@ public sealed class MmsReadOnlyServerSession
             Operation = nameof(MmsReadOnlyOperation.ReadDataSet),
             Target = target,
             Message = $"Returned {values.Count.ToString(CultureInfo.InvariantCulture)} DataSet member value(s).",
-            Items = dataSet.Members.ToArray(),
+            Items = values.Select(ToMmsNamedVariableReference).ToArray(),
             Values = values.ToArray()
         };
     }
+
+    private sealed record MmsTypeCandidate(MmsReadOnlyPoint Point, string[] Parts);
 
     private static MmsReadOnlyServerResponse RejectWrite(string target)
         => Fail(nameof(MmsReadOnlyOperation.Write), target, "Write operation rejected because this alpha server profile is read-only.");

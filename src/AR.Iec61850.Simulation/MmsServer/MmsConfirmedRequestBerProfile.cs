@@ -876,7 +876,7 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static bool TryDecodeGetVariableAccessAttributes(BerTlv service, out MmsReadOnlyServerRequest request, out string message)
     {
-        if (!TryDecodeObjectName(service.Value, out var domain, out var item))
+        if (!TryDecodeVariableAccessAttributesName(service.Value, out var domain, out var item))
         {
             request = new MmsReadOnlyServerRequest();
             message = "GetVariableAccessAttributes request has no decodable MMS ObjectName.";
@@ -887,6 +887,26 @@ public static class MmsConfirmedRequestBerDispatcher
         request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetVariableAccessAttributes, Target = target };
         message = $"Decoded GetVariableAccessAttributes request target={target}.";
         return true;
+    }
+
+    private static bool TryDecodeVariableAccessAttributesName(ReadOnlyMemory<byte> buffer, out string domain, out string item)
+    {
+        domain = string.Empty;
+        item = string.Empty;
+
+        var offset = 0;
+        if (!BerReader.TryReadTlv(buffer, ref offset, out var requestChoice))
+            return false;
+
+        // GetVariableAccessAttributes-Request ::= CHOICE {
+        //   name [0] ObjectName,
+        //   address [1] Address }
+        // IEDScout uses the standard named-variable branch. Accept a direct
+        // ObjectName only as a compatibility fallback for earlier local probes.
+        if (requestChoice.Class == BerClass.ContextSpecific && requestChoice.TagNumber == 0 && requestChoice.Constructed)
+            return TryDecodeObjectName(requestChoice.Value, out domain, out item);
+
+        return TryDecodeObjectName(requestChoice, out domain, out item);
     }
 
     private static bool TryDecodeObjectName(ReadOnlyMemory<byte> buffer, out string domain, out string item)
@@ -914,7 +934,7 @@ public static class MmsConfirmedRequestBerDispatcher
         if (objectName.TagNumber == 1 && objectName.Constructed)
         {
             var identifiers = BerReader.ReadChildren(objectName.Value)
-                .Where(x => x.Class == BerClass.Universal && x.EncodedTag is 0x1A or 0x16)
+                .Where(x => x.Class == BerClass.Universal && x.EncodedTag is 0x0C or 0x1A or 0x16)
                 .Select(BerReader.ReadAsciiString)
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .ToArray();
@@ -926,15 +946,15 @@ public static class MmsConfirmedRequestBerDispatcher
             }
         }
 
-        // VMD-specific, AA-specific, and ISO-specific ObjectName choices carry
-        // one identifier. They are valid MMS names even though they do not have
-        // an IEC 61850 logical-device domain prefix.
-        if (objectName.TagNumber is 0 or 2 or 3)
+        // VMD-specific and AA-specific ObjectName choices carry one identifier.
+        // They are valid MMS names even though they do not have an IEC 61850
+        // logical-device domain prefix.
+        if (objectName.TagNumber is 0 or 2)
         {
             if (objectName.Constructed)
             {
                 var identifier = BerReader.ReadChildren(objectName.Value)
-                    .FirstOrDefault(x => x.Class == BerClass.Universal && x.EncodedTag is 0x1A or 0x16);
+                    .FirstOrDefault(x => x.Class == BerClass.Universal && x.EncodedTag is 0x0C or 0x1A or 0x16);
                 if (identifier.EncodedTag != 0)
                     item = BerReader.ReadAsciiString(identifier);
             }
@@ -1033,11 +1053,15 @@ public static class MmsConfirmedRequestBerDispatcher
     private static byte[] EncodeVariableAccessAttributesResponse(MmsReadOnlyServerResponse response)
     {
         var deletable = BerWriter.EncodeTlv(0x80, new byte[] { 0x00 });
-        var typeSpecification = response.IsSuccess && response.Values.Count > 0
+        var typeDescription = response.IsSuccess && response.Values.Count > 0
             ? EncodeTypeSpecification(response.Values[0])
             : BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger(255));
 
-        return BerWriter.EncodeTlv(0xA6, Concat(deletable, typeSpecification));
+        // The response contains typeDescription [2] TypeDescription. The [2]
+        // field is explicit, so the actual TypeDescription is nested inside it.
+        var typeDescriptionField = BerWriter.EncodeTlv(0xA2, typeDescription);
+
+        return BerWriter.EncodeTlv(0xA6, Concat(deletable, typeDescriptionField));
     }
 
     private static byte[] EncodeWriteResponse(MmsReadOnlyServerResponse response)
@@ -1051,6 +1075,18 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static byte[] EncodePointValue(MmsReadOnlyPoint point)
     {
+        if (point.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ||
+            point.Kind.Equals("quality", StringComparison.OrdinalIgnoreCase))
+            return MmsDataCodec.Encode(MmsDataValue.BitString(3, [0x00, 0x00]));
+
+        if (point.Reference.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) &&
+            point.Value.Equals("closed", StringComparison.OrdinalIgnoreCase))
+            return MmsDataCodec.Encode(MmsDataValue.Integer(2));
+
+        if (point.Reference.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) &&
+            point.Value.Equals("open", StringComparison.OrdinalIgnoreCase))
+            return MmsDataCodec.Encode(MmsDataValue.Integer(1));
+
         if (point.Kind.Equals("measurement", StringComparison.OrdinalIgnoreCase) &&
             float.TryParse(point.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
             return MmsDataCodec.Encode(MmsDataValue.FloatingPoint(number));
@@ -1063,8 +1099,11 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static byte[] EncodeTypeSpecification(MmsReadOnlyPoint point)
     {
-        if (point.Kind.Equals("structure", StringComparison.OrdinalIgnoreCase))
-            return BerWriter.EncodeTlv(0xA2, ReadOnlySpan<byte>.Empty);
+        if (point.Kind.Equals("structure", StringComparison.OrdinalIgnoreCase) || point.Children.Count > 0)
+        {
+            var components = Concat(point.Children.Select(EncodeStructureComponent).ToArray());
+            return BerWriter.EncodeTlv(0xA2, BerWriter.EncodeTlv(0xA1, components));
+        }
 
         if (point.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ||
             point.Kind.Equals("quality", StringComparison.OrdinalIgnoreCase))
@@ -1075,12 +1114,34 @@ public static class MmsConfirmedRequestBerDispatcher
             return BerWriter.EncodeTlv(0x91, ReadOnlySpan<byte>.Empty);
 
         if (point.Kind.Equals("measurement", StringComparison.OrdinalIgnoreCase))
-            return BerWriter.EncodeTlv(0x87, BerWriter.EncodeUnsignedInteger(32));
+            return BerWriter.EncodeTlv(0x87, new byte[] { 32, 8 });
+
+        if (point.Reference.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase))
+            return BerWriter.EncodeTlv(0x85, new byte[] { 32 });
 
         if (bool.TryParse(point.Value, out _))
             return BerWriter.EncodeTlv(0x83, ReadOnlySpan<byte>.Empty);
 
         return BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger(255));
+    }
+
+    private static byte[] EncodeStructureComponent(MmsReadOnlyPoint point)
+    {
+        var name = string.IsNullOrWhiteSpace(point.Name)
+            ? LastMmsSegment(point.Reference)
+            : point.Name;
+        var componentName = BerWriter.EncodeTlv(0x80, BerWriter.EncodeAscii(name));
+        var componentType = BerWriter.EncodeTlv(0xA1, EncodeTypeSpecification(point));
+        return BerWriter.EncodeTlv(0x30, Concat(componentName, componentType));
+    }
+
+    private static string LastMmsSegment(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return string.Empty;
+
+        var separator = Math.Max(reference.LastIndexOf('$'), reference.LastIndexOf('.'));
+        return separator >= 0 && separator + 1 < reference.Length ? reference[(separator + 1)..] : reference;
     }
 
     private static string DecodeObjectScopeDomain(BerTlv objectScopeField)
@@ -1127,7 +1188,7 @@ public static class MmsConfirmedRequestBerDispatcher
             return false;
 
         var ids = BerReader.ReadChildren(objectName.Value)
-            .Where(x => x.EncodedTag is 0x1A or 0x16)
+            .Where(x => x.EncodedTag is 0x0C or 0x1A or 0x16)
             .Select(BerReader.ReadAsciiString)
             .ToArray();
 

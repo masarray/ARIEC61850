@@ -12,11 +12,18 @@ public sealed class MmsVariableAccessAttributesTests
             7,
             new MmsObjectReference("LD0", "LLN0$ST$Mod$stVal", "ST"));
 
-        var hex = Convert.ToHexString(request);
+        var mms = MmsPresentation.StripPresentationPrefix(request);
+        var offset = 0;
+        Assert.True(BerReader.TryReadTlv(mms, ref offset, out var confirmed));
+        var service = BerReader.ReadChildren(confirmed.Value)[1];
+        var namedVariable = BerReader.ReadChildren(service.Value).Single();
+        var objectName = BerReader.ReadChildren(namedVariable.Value).Single();
 
-        Assert.Contains("A6", hex, StringComparison.Ordinal);
-        Assert.Contains("4C4430", hex, StringComparison.Ordinal);
-        Assert.Contains("4C4C4E30245354244D6F6424737456616C", hex, StringComparison.Ordinal);
+        Assert.Equal(0xA6, service.EncodedTag);
+        Assert.Equal(0xA0, namedVariable.EncodedTag);
+        Assert.Equal(0xA1, objectName.EncodedTag);
+        var identifiers = BerReader.ReadChildren(objectName.Value).Select(BerReader.ReadAsciiString).ToArray();
+        Assert.Equal(["LD0", "LLN0$ST$Mod$stVal"], identifiers);
     }
 
     [Fact]
@@ -26,7 +33,7 @@ public sealed class MmsVariableAccessAttributesTests
         var response = BuildResponse(
             3,
             BerWriter.EncodeTlv(0x80, new byte[] { 0x00 }),
-            BerWriter.EncodeTlv(0x83, ReadOnlySpan<byte>.Empty));
+            BerWriter.EncodeTlv(0xA2, BerWriter.EncodeTlv(0x83, ReadOnlySpan<byte>.Empty)));
 
         var result = MmsVariableAccessAttributesResponseDecoder.Decode(response, 3, reference);
 
@@ -43,8 +50,9 @@ public sealed class MmsVariableAccessAttributesTests
         var stVal = BuildComponent("stVal", BerWriter.EncodeTlv(0x83, ReadOnlySpan<byte>.Empty));
         var q = BuildComponent("q", BerWriter.EncodeTlv(0x84, new byte[] { 13 }));
         var t = BuildComponent("t", BerWriter.EncodeTlv(0x91, ReadOnlySpan<byte>.Empty));
-        var structure = BerWriter.EncodeTlv(0xA2, Concat(stVal, q, t));
-        var response = BuildResponse(4, structure);
+        var components = BerWriter.EncodeTlv(0xA1, Concat(stVal, q, t));
+        var structure = BerWriter.EncodeTlv(0xA2, components);
+        var response = BuildResponse(4, BerWriter.EncodeTlv(0xA2, structure));
 
         var result = MmsVariableAccessAttributesResponseDecoder.Decode(response, 4, reference);
 

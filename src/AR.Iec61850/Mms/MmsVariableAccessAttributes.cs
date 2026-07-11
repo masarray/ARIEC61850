@@ -59,7 +59,10 @@ public static class MmsVariableAccessAttributesRequest
             throw new ArgumentException("MMS item name is empty.", nameof(reference));
 
         var objectName = MmsDataSetDirectoryRequest.EncodeDomainSpecificObjectName(reference.Domain.Trim(), reference.Item.Trim());
-        var getVariableAccessAttributes = BerWriter.EncodeTlv(0xA6, objectName);
+        // GetVariableAccessAttributes-Request is a CHOICE. A named variable
+        // is encoded as name [0] followed by ObjectName, not ObjectName alone.
+        var namedVariable = BerWriter.EncodeTlv(0xA0, objectName);
+        var getVariableAccessAttributes = BerWriter.EncodeTlv(0xA6, namedVariable);
         var confirmedRequest = BerWriter.EncodeTlv(0xA0, MmsPresentation.Concat(MmsPresentation.Integer(invokeId), getVariableAccessAttributes));
         return MmsPresentation.WrapIsoPresentationPData(confirmedRequest);
     }
@@ -121,6 +124,12 @@ public static class MmsVariableAccessAttributesResponseDecoder
                     continue;
                 }
 
+                if (TryDecodeExplicitTypeDescription(child, out var explicitType))
+                {
+                    type = explicitType;
+                    break;
+                }
+
                 if (TryDecodeTypeSpecification(child, string.Empty, out var childType))
                 {
                     type = childType;
@@ -155,6 +164,19 @@ public static class MmsVariableAccessAttributesResponseDecoder
         {
             return Fail(reference, $"GetVariableAccessAttributes response decode failed: {ex.GetType().Name}: {ex.Message}", hex);
         }
+    }
+
+    private static bool TryDecodeExplicitTypeDescription(BerTlv field, out MmsTypeSpecificationNode type)
+    {
+        type = default!;
+        if (field.Class != BerClass.ContextSpecific || field.TagNumber != 2 || !field.Constructed)
+            return false;
+
+        var children = BerReader.ReadChildren(field.Value);
+        if (children.Count != 1)
+            return false;
+
+        return TryDecodeTypeSpecification(children[0], string.Empty, out type);
     }
 
     internal static bool TryDecodeTypeSpecification(BerTlv tlv, string componentName, out MmsTypeSpecificationNode node)
@@ -282,6 +304,16 @@ public static class MmsVariableAccessAttributesResponseDecoder
 
         foreach (var child in children)
         {
+            if (child.Class == BerClass.ContextSpecific && child.TagNumber == 1 && child.Constructed)
+            {
+                foreach (var componentSequence in BerReader.ReadChildren(child.Value))
+                {
+                    var component = DecodeStructureComponent(componentSequence, anonymousIndex++);
+                    if (component != null)
+                        components.Add(component);
+                }
+            }
+            else
             if (child.EncodedTag == 0x30 || child.Class == BerClass.Universal && child.Constructed)
             {
                 var component = DecodeStructureComponent(child, anonymousIndex++);

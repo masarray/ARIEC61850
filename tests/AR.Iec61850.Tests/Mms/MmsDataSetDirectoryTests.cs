@@ -35,9 +35,11 @@ public sealed class MmsDataSetDirectoryTests
             BerWriter.EncodeTlv(0x1A, BerWriter.EncodeAscii("LD0"))
                 .Concat(BerWriter.EncodeTlv(0x1A, BerWriter.EncodeAscii("GGIO1$ST$Ind1$stVal")))
                 .ToArray());
+        var variableSpecification = BerWriter.EncodeTlv(0x30, BerWriter.EncodeTlv(0xA0, memberObjectName));
+        var listOfVariable = BerWriter.EncodeTlv(0xA1, variableSpecification);
         var service = BerWriter.EncodeTlv(0xAC,
             BerWriter.EncodeTlv(0x80, [0x00])
-                .Concat(memberObjectName)
+                .Concat(listOfVariable)
                 .ToArray());
         var response = BerWriter.EncodeTlv(0xA1,
             new byte[] { 0x02, 0x01, 0x01 }

@@ -344,8 +344,24 @@ public sealed class MmsReadOnlyServerSession
 
     private MmsReadOnlyServerResponse ReadDataSet(string target)
     {
-        if (!_dataSets.TryGetValue(target, out var dataSet))
-            return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "DataSet not found.");
+        var resolvedTarget = target;
+        if (!_dataSets.TryGetValue(resolvedTarget, out var dataSet))
+        {
+            if (target.Contains('/', StringComparison.Ordinal))
+                return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "DataSet not found.");
+
+            var requestedName = target.Replace('.', '$');
+            var matches = Profile.DataSets
+                .Where(x => string.Equals(ToMmsDataSetName(x.Reference), requestedName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (matches.Length == 0)
+                return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "VMD-specific DataSet name was not found.");
+            if (matches.Length > 1)
+                return Fail(nameof(MmsReadOnlyOperation.ReadDataSet), target, "VMD-specific DataSet name is ambiguous across logical devices.");
+
+            dataSet = matches[0];
+            resolvedTarget = dataSet.Reference;
+        }
 
         var values = new List<MmsReadOnlyPoint>();
         var missing = new List<string>();
@@ -364,11 +380,18 @@ public sealed class MmsReadOnlyServerSession
         {
             IsSuccess = true,
             Operation = nameof(MmsReadOnlyOperation.ReadDataSet),
-            Target = target,
+            Target = resolvedTarget,
             Message = $"Returned {values.Count.ToString(CultureInfo.InvariantCulture)} DataSet member value(s).",
             Items = values.Select(ToMmsNamedVariableReference).ToArray(),
             Values = values.ToArray()
         };
+    }
+
+    private static string ToMmsDataSetName(string reference)
+    {
+        var slash = reference.IndexOf('/');
+        var item = slash >= 0 && slash < reference.Length - 1 ? reference[(slash + 1)..] : reference;
+        return item.Replace('.', '$');
     }
 
     private sealed record MmsTypeCandidate(MmsReadOnlyPoint Point, string[] Parts);

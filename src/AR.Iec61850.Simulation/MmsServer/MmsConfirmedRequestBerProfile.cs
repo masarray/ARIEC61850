@@ -971,10 +971,13 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static bool TryDecodeGetNamedVariableListAttributes(BerTlv service, out MmsReadOnlyServerRequest request, out string message)
     {
-        if (!TryDecodeDomainSpecificObjectName(service.Value, out var domain, out var item))
+        // GetNamedVariableListAttributes-Request ::= ObjectName. IEDScout
+        // legitimately probes the VMD-specific form (0x80) for LLN0$DataSet
+        // names, while ordinary IEC 61850 DataSets use domain-specific (0xA1).
+        if (!TryDecodeObjectName(service.Value, out var domain, out var item))
         {
             request = new MmsReadOnlyServerRequest();
-            message = "GetNamedVariableListAttributes request has no domain-specific object name.";
+            message = "GetNamedVariableListAttributes request has no decodable MMS ObjectName.";
             return false;
         }
 
@@ -1042,12 +1045,22 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static byte[] EncodeDataSetDirectoryResponse(MmsReadOnlyServerResponse response)
     {
-        var objectNames = response.IsSuccess
-            ? Concat(response.Items.Select(EncodeDomainSpecificObjectNameFromReference).ToArray())
+        var variableDefinitions = response.IsSuccess
+            ? Concat(response.Items.Select(EncodeDataSetVariableDefinition).ToArray())
             : Array.Empty<byte>();
         var deletable = BerWriter.EncodeTlv(0x80, new byte[] { 0x00 });
-        var listOfVariable = BerWriter.EncodeTlv(0xA0, objectNames);
+        // GetNamedVariableListAttributes-Response.listOfVariable is [1]
+        // IMPLICIT SEQUENCE OF VariableSpecification. Each member is a
+        // SEQUENCE containing VariableSpecification.name [0] ObjectName.
+        var listOfVariable = BerWriter.EncodeTlv(0xA1, variableDefinitions);
         return BerWriter.EncodeTlv(0xAC, Concat(deletable, listOfVariable));
+    }
+
+    private static byte[] EncodeDataSetVariableDefinition(string reference)
+    {
+        var objectName = EncodeDomainSpecificObjectNameFromReference(reference);
+        var variableSpecificationName = BerWriter.EncodeTlv(0xA0, objectName);
+        return BerWriter.EncodeTlv(0x30, variableSpecificationName);
     }
 
     private static byte[] EncodeVariableAccessAttributesResponse(MmsReadOnlyServerResponse response)

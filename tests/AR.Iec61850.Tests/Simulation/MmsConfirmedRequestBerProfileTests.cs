@@ -150,6 +150,45 @@ public sealed class MmsConfirmedRequestBerProfileTests
     }
 
     [Fact]
+    public void Dispatcher_Accepts_IedScout_VmdSpecific_DataSet_Request_And_Encodes_Standard_Response()
+    {
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var dataSet = serverProfile.DataSets.First(x => x.Reference.EndsWith("dsMeas", StringComparison.OrdinalIgnoreCase));
+
+        // Captured IEDScout form: GetNamedVariableListAttributes [12] with a
+        // VMD-specific ObjectName (0x80) carrying LLN0$dsMeas.
+        var vmdSpecificName = BerWriter.EncodeTlv(0x80, BerWriter.EncodeAscii("LLN0$dsMeas"));
+        var service = BerWriter.EncodeTlv(0xAC, vmdSpecificName);
+        var confirmedRequest = BerWriter.EncodeTlv(0xA0,
+            BerWriter.EncodeTlv(0x02, BerWriter.EncodeUnsignedInteger(7))
+                .Concat(service)
+                .ToArray());
+        var request = MmsPresentation.WrapIsoPresentationPData(confirmedRequest);
+
+        var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(request, session);
+        var directory = MmsDataSetDirectoryResponseDecoder.Decode(dispatch.ResponsePresentationPayload, 7, dataSet.Reference);
+
+        Assert.True(dispatch.IsRequestDecoded, dispatch.Message);
+        Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
+        Assert.Equal(dataSet.Reference, dispatch.Response.Target);
+        Assert.True(directory.IsSuccess, directory.Message);
+        Assert.NotEmpty(directory.Members);
+
+        var mms = MmsPresentation.StripPresentationPrefix(dispatch.ResponsePresentationPayload);
+        var offset = 0;
+        Assert.True(BerReader.TryReadTlv(mms, ref offset, out var response));
+        var responseChildren = BerReader.ReadChildren(response.Value);
+        var responseService = Assert.Single(responseChildren.Where(x => x.EncodedTag == 0xAC));
+        var listOfVariable = Assert.Single(BerReader.ReadChildren(responseService.Value).Where(x => x.EncodedTag == 0xA1));
+        var variableDefinitions = BerReader.ReadChildren(listOfVariable.Value).Where(x => x.EncodedTag == 0x30).ToArray();
+        Assert.NotEmpty(variableDefinitions);
+        var variableDefinition = variableDefinitions[0];
+        var variableSpecification = Assert.Single(BerReader.ReadChildren(variableDefinition.Value).Where(x => x.EncodedTag == 0xA0));
+        Assert.Contains(BerReader.ReadChildren(variableSpecification.Value), x => x.EncodedTag == 0xA1);
+    }
+
+    [Fact]
     public void Dispatcher_Rejects_Native_Ber_Write_Request_With_Decodable_Write_Failure()
     {
         var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());

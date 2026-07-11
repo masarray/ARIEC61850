@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using AR.Iec61850.Acse;
+using AR.Iec61850.Mms;
 using AR.Iec61850.Osi;
 using AR.Iec61850.Simulation;
 
@@ -103,6 +104,67 @@ public sealed class IedSimulatorMmsServerTests
     }
 
     [Fact]
+    public async Task Server_Reassembles_Segmented_Request_And_Segments_Large_Directory_Response()
+    {
+        var points = Enumerable.Range(0, 128)
+            .Select(index => IedSimulatorPoint.Status($"MMXU1.Signal{index:D3}VeryLongName.stVal", "ST", "false"))
+            .ToArray();
+        var engine = new IedSimulatorEngine(new IedSimulatorProfile
+        {
+            Name = "Segmented IED",
+            LogicalDevices =
+            [
+                new IedSimulatorLogicalDevice
+                {
+                    Name = "IED1LD0",
+                    LogicalNodes =
+                    [
+                        new IedSimulatorLogicalNode
+                        {
+                            Name = "MMXU1",
+                            LnClass = "MMXU",
+                            Points = points
+                        }
+                    ]
+                }
+            ]
+        });
+        await using var server = IedSimulatorMmsServer.Create(engine, new IedSimulatorMmsServerOptions
+        {
+            Host = "127.0.0.1",
+            Port = 0
+        });
+
+        server.Start();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", server.BoundPort, timeout.Token);
+        await using var stream = client.GetStream();
+        await EstablishAssociationAsync(stream, timeout.Token);
+
+        var request = MmsGetNameListRequest.Build(41, MmsGetNameListObjectClass.NamedVariable, "IED1LD0");
+        var split = request.Length / 2;
+        await stream.WriteAsync(TpktFrameCodec.Encode(CotpFrameCodec.EncodeData(request.AsSpan(0, split), endOfTransmission: false)), timeout.Token);
+        await stream.WriteAsync(TpktFrameCodec.Encode(CotpFrameCodec.EncodeData(request.AsSpan(split), endOfTransmission: true)), timeout.Token);
+
+        var response = await ReadCotpDataPayloadAsync(stream, timeout.Token);
+        var names = MmsGetNameListResponseDecoder.Decode(response.UserData, expectedInvokeId: 41);
+
+        Assert.True(response.SegmentCount > 1, $"Expected a segmented response, received {response.SegmentCount} TPDU.");
+        Assert.True(names.IsSuccess, names.Message);
+        Assert.True(names.MoreFollows);
+        Assert.Equal(64, names.Names.Count);
+        Assert.Contains("MMXU1", names.Names);
+        Assert.Contains("MMXU1$ST", names.Names);
+        Assert.Contains(server.RecentActivity(), activity =>
+            activity.Operation == nameof(MmsReadOnlyOperation.GetNamedVariableDirectory) &&
+            activity.Message.Contains("COTP segments=", StringComparison.Ordinal));
+
+        await server.StopAsync();
+    }
+
+    [Fact]
     public async Task StopAsync_Completes_When_A_Client_Is_Connected_But_Idle()
     {
         var engine = new IedSimulatorEngine(IedSimulatorProfile.CreateDefaultFeederProfile());
@@ -134,6 +196,38 @@ public sealed class IedSimulatorMmsServerTests
         Buffer.BlockCopy(header, 0, frame, 0, header.Length);
         Buffer.BlockCopy(body, 0, frame, header.Length, body.Length);
         return frame;
+    }
+
+    private static async Task EstablishAssociationAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        await stream.WriteAsync(TpktFrameCodec.Encode(CotpFrameCodec.EncodeDefaultConnectRequest()), cancellationToken);
+        var cc = CotpFrameCodec.Decode(TpktFrameCodec.Decode(await ReadTpktFrameAsync(stream, cancellationToken)).Payload);
+        Assert.True(cc.IsValid, cc.Message);
+        Assert.Equal(CotpTpduKind.ConnectionConfirm, cc.Kind);
+
+        await stream.WriteAsync(
+            TpktFrameCodec.Encode(CotpFrameCodec.EncodeData(AcseMmsInitiateRequest.BuildDefaultAssociationPayload())),
+            cancellationToken);
+        var aare = await ReadCotpDataPayloadAsync(stream, cancellationToken);
+        Assert.NotEmpty(aare.UserData);
+    }
+
+    private static async Task<(byte[] UserData, int SegmentCount)> ReadCotpDataPayloadAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        var segments = new List<byte[]>();
+        while (true)
+        {
+            var tpkt = TpktFrameCodec.Decode(await ReadTpktFrameAsync(stream, cancellationToken));
+            Assert.True(tpkt.IsValid, tpkt.Message);
+
+            var data = CotpFrameCodec.Decode(tpkt.Payload);
+            Assert.True(data.IsValid, data.Message);
+            Assert.Equal(CotpTpduKind.Data, data.Kind);
+
+            segments.Add(data.UserData);
+            if (data.EndOfTransmission)
+                return (segments.SelectMany(segment => segment).ToArray(), segments.Count);
+        }
     }
 
     private static async Task<byte[]> ReadExactAsync(NetworkStream stream, int count, CancellationToken cancellationToken)

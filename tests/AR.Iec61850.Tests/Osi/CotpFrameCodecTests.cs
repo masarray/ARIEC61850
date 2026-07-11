@@ -33,6 +33,30 @@ public class CotpFrameCodecTests
     }
 
     [Fact]
+    public void EncodeDataSegments_Respects_Negotiated_Tpdu_Size_And_Marks_Only_Final_Segment_Eot()
+    {
+        var userData = Enumerable.Range(0, 2500).Select(index => (byte)(index % 251)).ToArray();
+
+        var encoded = CotpFrameCodec.EncodeDataSegments(userData, tpduSizeCode: 0x0A);
+        var decoded = encoded.Select(segment => CotpFrameCodec.Decode(segment)).ToArray();
+
+        Assert.Equal(3, encoded.Count);
+        Assert.All(encoded, segment => Assert.True(segment.Length <= 1024));
+        Assert.All(decoded, segment => Assert.True(segment.IsValid, segment.Message));
+        Assert.All(decoded[..^1], segment => Assert.False(segment.EndOfTransmission));
+        Assert.True(decoded[^1].EndOfTransmission);
+        Assert.Equal(userData, decoded.SelectMany(segment => segment.UserData).ToArray());
+    }
+
+    [Theory]
+    [InlineData(0x06)]
+    [InlineData(0x10)]
+    public void GetTpduSizeBytes_Rejects_Invalid_Size_Code(byte tpduSizeCode)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => CotpFrameCodec.GetTpduSizeBytes(tpduSizeCode));
+    }
+
+    [Fact]
     public void EncodeDecode_ConnectionConfirm()
     {
         var encoded = CotpFrameCodec.EncodeConnectionConfirm(0x0001, 0x1001);

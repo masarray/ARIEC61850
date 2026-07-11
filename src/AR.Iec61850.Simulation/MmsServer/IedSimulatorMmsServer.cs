@@ -69,6 +69,8 @@ public sealed record IedSimulatorServerActivity
 /// </summary>
 public sealed class IedSimulatorMmsServer : IAsyncDisposable
 {
+    private sealed record MmsAssociation(int PresentationContextId, byte TpduSizeCode);
+
     private readonly Func<MmsReadOnlyServerSession> _sessionFactory;
     private readonly IedSimulatorMmsServerOptions _options;
     private readonly ConcurrentQueue<IedSimulatorServerActivity> _activity = new();
@@ -235,26 +237,18 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         {
             await using var stream = client.GetStream();
 
-            var presentationContextId = await NegotiateAssociationAsync(stream, remote, cancellationToken).ConfigureAwait(false);
-            if (!presentationContextId.HasValue)
+            var association = await NegotiateAssociationAsync(stream, remote, cancellationToken).ConfigureAwait(false);
+            if (association is null)
                 return;
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var requestFrame = await ReadTpktFrameAsync(stream, cancellationToken).ConfigureAwait(false);
-                if (requestFrame is null)
+                var requestPayload = await ReadCotpDataPayloadAsync(stream, cancellationToken).ConfigureAwait(false);
+                if (requestPayload is null)
                     break; // client closed the association.
 
-                var requestTpkt = TpktFrameCodec.Decode(requestFrame);
-                if (!requestTpkt.IsValid)
-                    break;
-
-                var requestData = CotpFrameCodec.Decode(requestTpkt.Payload);
-                if (!requestData.IsValid || requestData.Kind != CotpTpduKind.Data)
-                    break;
-
                 var session = _sessionFactory();
-                var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestData.UserData, session, presentationContextId.Value);
+                var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestPayload, session, association.PresentationContextId);
                 if (!dispatch.IsRequestDecoded)
                 {
                     Record(new IedSimulatorServerActivity
@@ -263,13 +257,16 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                         RemoteEndPoint = remote,
                         Operation = "DecodeConfirmedRequest",
                         Success = false,
-                        Message = $"{dispatch.Message} MMS={FormatMmsPayload(requestData.UserData)}"
+                        Message = $"{dispatch.Message} MMS={FormatMmsPayload(requestPayload)}"
                     });
                     break;
                 }
 
-                var responseFrame = TpktFrameCodec.Encode(CotpFrameCodec.EncodeData(dispatch.ResponsePresentationPayload));
-                await stream.WriteAsync(responseFrame, cancellationToken).ConfigureAwait(false);
+                var responseSegments = await WriteCotpDataPayloadAsync(
+                    stream,
+                    dispatch.ResponsePresentationPayload,
+                    association.TpduSizeCode,
+                    cancellationToken).ConfigureAwait(false);
 
                 Interlocked.Increment(ref _servedRequests);
                 if (dispatch.Request.Operation == MmsReadOnlyOperation.Write && !dispatch.Response.IsSuccess)
@@ -282,7 +279,9 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                     Operation = dispatch.Request.Operation.ToString(),
                     Target = dispatch.Request.Target,
                     Success = dispatch.Response.IsSuccess,
-                    Message = dispatch.Response.Message
+                    Message = responseSegments == 1
+                        ? dispatch.Response.Message
+                        : $"{dispatch.Response.Message} COTP segments={responseSegments.ToString(System.Globalization.CultureInfo.InvariantCulture)}."
                 });
             }
         }
@@ -315,7 +314,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         }
     }
 
-    private async Task<int?> NegotiateAssociationAsync(NetworkStream stream, string remote, CancellationToken cancellationToken)
+    private async Task<MmsAssociation?> NegotiateAssociationAsync(NetworkStream stream, string remote, CancellationToken cancellationToken)
     {
         // 1. COTP connection request -> connection confirm.
         var crFrame = await ReadTpktFrameAsync(stream, cancellationToken).ConfigureAwait(false);
@@ -353,19 +352,11 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         });
 
         // 2. ACSE AARQ (in COTP Data) -> AARE + MMS InitiateResponse.
-        var aarqFrame = await ReadTpktFrameAsync(stream, cancellationToken).ConfigureAwait(false);
-        if (aarqFrame is null)
+        var aarqPayload = await ReadCotpDataPayloadAsync(stream, cancellationToken).ConfigureAwait(false);
+        if (aarqPayload is null)
             return CloseHandshake(remote, "ACSE AARQ", "Client closed after COTP CC before sending ACSE AARQ.");
 
-        var aarqTpkt = TpktFrameCodec.Decode(aarqFrame);
-        if (!aarqTpkt.IsValid)
-            return Reject(remote, $"Invalid TPKT AARQ frame: {aarqTpkt.Message}");
-
-        var aarqData = CotpFrameCodec.Decode(aarqTpkt.Payload);
-        if (!aarqData.IsValid || aarqData.Kind != CotpTpduKind.Data)
-            return Reject(remote, $"Expected COTP Data carrying AARQ, received {aarqData.Kind}: {aarqData.Message}");
-
-        var inspection = AcseAssociationPayloadInspector.Inspect(aarqData.UserData);
+        var inspection = AcseAssociationPayloadInspector.Inspect(aarqPayload);
         Record(new IedSimulatorServerActivity
         {
             Kind = IedSimulatorServerActivityKind.HandshakeReceived,
@@ -379,21 +370,21 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         if (!inspection.HasAcseAarq || !inspection.HasUserInformation)
             return Reject(remote, $"Payload does not look like an ACSE associate request. {inspection.Message}");
 
-        var responseProfile = AcseMmsAssociateResponse.SelectForRequest(_options.ResponseProfileName, aarqData.UserData);
-        var aareFrame = TpktFrameCodec.Encode(CotpFrameCodec.EncodeData(responseProfile.Payload));
-        await stream.WriteAsync(aareFrame, cancellationToken).ConfigureAwait(false);
+        var responseProfile = AcseMmsAssociateResponse.SelectForRequest(_options.ResponseProfileName, aarqPayload);
+        var tpduSizeCode = ReadTpduSizeCode(cc.Parameters);
+        var aareSegments = await WriteCotpDataPayloadAsync(stream, responseProfile.Payload, tpduSizeCode, cancellationToken).ConfigureAwait(false);
         Record(new IedSimulatorServerActivity
         {
             Kind = IedSimulatorServerActivityKind.HandshakeSent,
             RemoteEndPoint = remote,
             Operation = "ACSE AARE",
             Target = responseProfile.Name,
-            Message = $"Sent {responseProfile.Payload.Length} byte ACSE AARE + MMS InitiateResponse payload; MMS presentation context id={responseProfile.MmsPresentationContextId}."
+            Message = $"Sent {responseProfile.Payload.Length} byte ACSE AARE + MMS InitiateResponse payload in {aareSegments.ToString(System.Globalization.CultureInfo.InvariantCulture)} COTP segment(s); MMS presentation context id={responseProfile.MmsPresentationContextId}."
         });
-        return responseProfile.MmsPresentationContextId;
+        return new MmsAssociation(responseProfile.MmsPresentationContextId, tpduSizeCode);
     }
 
-    private int? CloseHandshake(string remote, string operation, string message)
+    private MmsAssociation? CloseHandshake(string remote, string operation, string message)
     {
         Record(new IedSimulatorServerActivity
         {
@@ -406,7 +397,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         return null;
     }
 
-    private int? Reject(string remote, string message)
+    private MmsAssociation? Reject(string remote, string message)
     {
         Record(new IedSimulatorServerActivity
         {
@@ -435,6 +426,89 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         Buffer.BlockCopy(header, 0, frame, 0, header.Length);
         Buffer.BlockCopy(body, 0, frame, header.Length, body.Length);
         return frame;
+    }
+
+    private static async Task<byte[]?> ReadCotpDataPayloadAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        List<byte[]>? segments = null;
+        while (true)
+        {
+            var frame = await ReadTpktFrameAsync(stream, cancellationToken).ConfigureAwait(false);
+            if (frame is null)
+            {
+                if (segments is null)
+                    return null;
+
+                throw new InvalidDataException("COTP Data sequence ended before its final EOT segment.");
+            }
+
+            var tpkt = TpktFrameCodec.Decode(frame);
+            if (!tpkt.IsValid)
+                throw new InvalidDataException($"Invalid TPKT Data frame: {tpkt.Message}");
+
+            var data = CotpFrameCodec.Decode(tpkt.Payload);
+            if (!data.IsValid || data.Kind != CotpTpduKind.Data)
+                throw new InvalidDataException($"Expected COTP Data TPDU, received {data.Kind}: {data.Message}");
+
+            segments ??= new List<byte[]>();
+            segments.Add(data.UserData);
+            if (data.EndOfTransmission)
+                break;
+        }
+
+        if (segments.Count == 1)
+            return segments[0];
+
+        var totalLength = segments.Sum(segment => segment.Length);
+        var payload = new byte[totalLength];
+        var offset = 0;
+        foreach (var segment in segments)
+        {
+            Buffer.BlockCopy(segment, 0, payload, offset, segment.Length);
+            offset += segment.Length;
+        }
+
+        return payload;
+    }
+
+    private static async Task<int> WriteCotpDataPayloadAsync(
+        NetworkStream stream,
+        ReadOnlyMemory<byte> payload,
+        byte tpduSizeCode,
+        CancellationToken cancellationToken)
+    {
+        var segments = CotpFrameCodec.EncodeDataSegments(payload.Span, tpduSizeCode);
+        foreach (var segment in segments)
+        {
+            var frame = TpktFrameCodec.Encode(segment);
+            await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+        }
+
+        return segments.Count;
+    }
+
+    private static byte ReadTpduSizeCode(ReadOnlySpan<byte> parameters)
+    {
+        const byte defaultTpduSizeCode = 0x0A;
+        var offset = 0;
+        while (offset + 2 <= parameters.Length)
+        {
+            var code = parameters[offset];
+            var length = parameters[offset + 1];
+            var next = offset + 2 + length;
+            if (next > parameters.Length)
+                break;
+
+            if (code == 0xC0 && length == 1)
+            {
+                var tpduSizeCode = parameters[offset + 2];
+                return tpduSizeCode is >= 7 and <= 15 ? tpduSizeCode : defaultTpduSizeCode;
+            }
+
+            offset = next;
+        }
+
+        return defaultTpduSizeCode;
     }
 
     private static async Task<byte[]?> ReadExactOrNullAsync(NetworkStream stream, int count, CancellationToken cancellationToken)

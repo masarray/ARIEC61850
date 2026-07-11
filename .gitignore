@@ -31,6 +31,22 @@
 *.nupkg
 *.snupkg
 *.binlog
+*.trx
+*.coverage
+*.coveragexml
+coverage.cobertura.xml
+coverage.opencover.xml
+
+# MSBuild files and test-runner output sometimes emitted outside bin/obj
+**/[Bb]in/
+**/[Oo]bj/
+**/[Tt]est[Rr]esults/
+**/[Cc]overage*/
+*.csproj.FileListAbsolute.txt
+*.nuget.g.props
+*.nuget.g.targets
+project.assets.json
+project.nuget.cache
 
 # Centralized local build/publish output from Directory.Build.props and scripts
 .artifacts/
@@ -39,6 +55,17 @@ out/
 publish/
 release/
 $(MSBuildProjectDirectory)/
+
+# Local Windows packages and archives produced by publish/installer workflows
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.msi
+*.cab
+*.zip
 
 # Runtime evidence and lab captures
 evidence/

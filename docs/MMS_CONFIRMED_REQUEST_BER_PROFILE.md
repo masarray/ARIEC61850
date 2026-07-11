@@ -34,6 +34,7 @@ The default probe exercises:
 - `GetNameList` for logical node / named variable directory
 - `GetNameList` for DataSet / named variable list directory
 - paged `GetNameList` responses with `continueAfter` and `moreFollows`
+- COTP Data TPDU reassembly and response segmentation constrained by the TPDU-size negotiated during COTP connection setup
 - logical-node and functional-constraint hierarchy entries in named-variable browse results
 - `Read` for one simulated point
 - `GetNamedVariableListAttributes` for one DataSet
@@ -57,4 +58,4 @@ The profile reports whether the following gates passed:
 
 ## Scope
 
-This profile intentionally keeps the server read-only and deterministic. It does not yet implement a production MMS server listener, segmentation, full service coverage, access control, control model, file service, log service, or setting group service.
+This profile intentionally keeps the server read-only and deterministic. It does not yet implement full MMS service coverage, access control, control model, file service, log service, or setting group service.

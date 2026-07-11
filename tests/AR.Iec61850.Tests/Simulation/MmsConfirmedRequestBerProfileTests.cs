@@ -111,6 +111,25 @@ public sealed class MmsConfirmedRequestBerProfileTests
     }
 
     [Fact]
+    public void Dispatcher_Accepts_VmdSpecific_Variable_Access_Attributes_Name()
+    {
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var objectName = BerWriter.EncodeTlv(0x82, BerWriter.EncodeAscii("A50PTOC1"));
+        var service = BerWriter.EncodeTlv(0xA6, objectName);
+        var invoke = BerWriter.EncodeTlv(0x02, BerWriter.EncodeUnsignedInteger(14));
+        var request = BerWriter.EncodeTlv(0xA0, invoke.Concat(service).ToArray());
+
+        var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(
+            MmsPresentation.WrapIsoPresentationPData(request),
+            session);
+
+        Assert.True(dispatch.IsRequestDecoded, dispatch.Message);
+        Assert.Equal(nameof(MmsReadOnlyOperation.GetVariableAccessAttributes), dispatch.Response.Operation);
+        Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
+    }
+
+    [Fact]
     public void Dispatcher_Decodes_DataSet_Directory_Request()
     {
         var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());

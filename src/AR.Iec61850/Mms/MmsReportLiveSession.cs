@@ -333,6 +333,100 @@ public static class MmsReportFrameMapper
         };
     }
 
+    /// <summary>
+    /// Decodes report identity and optional header fields without requiring a
+    /// DataSet member list. Routing must happen before value projection when
+    /// multiple persistent monitors share one MMS association.
+    /// </summary>
+    public static MmsReportHeader DecodeHeader(MmsInformationReport decoded)
+    {
+        ArgumentNullException.ThrowIfNull(decoded);
+        var items = decoded.Items;
+        if (items.Count == 0)
+            return new MmsReportHeader();
+
+        var reportId = IsTextValue(items[0].Value) ? ToText(items[0].Value) : string.Empty;
+        if (items.Count < 2 || items[1].Value?.Kind != MmsDataKind.BitString)
+            return new MmsReportHeader { ReportId = reportId };
+
+        var optionalFields = DecodeOptionalFields(items[1].Value!);
+        var cursor = 2;
+        ulong? sequenceNumber = null;
+        ulong? subSequenceNumber = null;
+        bool? moreSegmentsFollow = null;
+        var timeOfEntry = string.Empty;
+        var dataSet = string.Empty;
+        bool? bufferOverflow = null;
+        var entryIdHex = string.Empty;
+        ulong? confRev = null;
+
+        if (optionalFields.HasSequenceNumber)
+        {
+            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var sequence))
+                sequenceNumber = sequence;
+            cursor++;
+        }
+
+        if (optionalFields.HasReportTimestamp)
+        {
+            if (cursor < items.Count && items[cursor].Value is { } timeValue && IsTimeValue(timeValue))
+                timeOfEntry = MmsDataValueRenderer.ToCompactString(timeValue);
+            cursor++;
+        }
+
+        if (optionalFields.HasDataSetName)
+        {
+            if (cursor < items.Count && IsTextValue(items[cursor].Value))
+                dataSet = ToText(items[cursor].Value);
+            cursor++;
+        }
+
+        if (optionalFields.HasBufferOverflow)
+        {
+            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.Boolean && items[cursor].Value?.Value is bool flag)
+                bufferOverflow = flag;
+            cursor++;
+        }
+
+        if (optionalFields.HasEntryId)
+        {
+            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.OctetString)
+                entryIdHex = Convert.ToHexString(items[cursor].Value!.RawValue.ToArray());
+            cursor++;
+        }
+
+        if (optionalFields.HasConfRevision)
+        {
+            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var revision))
+                confRev = revision;
+            cursor++;
+        }
+
+        if (optionalFields.HasSegmentation)
+        {
+            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var subSequence))
+                subSequenceNumber = subSequence;
+            cursor++;
+
+            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.Boolean && items[cursor].Value?.Value is bool more)
+                moreSegmentsFollow = more;
+        }
+
+        return new MmsReportHeader
+        {
+            ReportId = reportId,
+            OptionalFields = optionalFields,
+            SequenceNumber = sequenceNumber,
+            SubSequenceNumber = subSequenceNumber,
+            MoreSegmentsFollow = moreSegmentsFollow,
+            TimeOfEntry = timeOfEntry,
+            DataSetReference = dataSet,
+            BufferOverflow = bufferOverflow,
+            EntryIdHex = entryIdHex,
+            ConfRev = confRev
+        };
+    }
+
     private readonly record struct ReportValueMapping(
         bool IsMapped,
         MmsReportHeader Header,

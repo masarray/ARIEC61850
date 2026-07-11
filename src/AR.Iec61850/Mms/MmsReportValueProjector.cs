@@ -13,6 +13,9 @@ public sealed class MmsReportSignalUpdate
     public string Timestamp { get; init; } = "-";
     public string Reason { get; init; } = "-";
     public DateTimeOffset UpdatedAt { get; init; }
+    public bool HasValue { get; init; }
+    public bool HasQuality { get; init; }
+    public bool HasTimestamp { get; init; }
     public bool IsProjectedChild { get; init; }
     public string ProjectionStatus { get; init; } = string.Empty;
 
@@ -71,12 +74,52 @@ public static class MmsReportValueProjector
             .GroupBy(x => Normalize(x.TimestampBaseReference), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.Last().Value, StringComparer.OrdinalIgnoreCase);
 
-        var updates = candidates
+        var valueUpdates = candidates
             .Where(x => !x.IsQualityCarrier && !x.IsTimestampCarrier)
             .Select(x => Enrich(x, qualityByBase, timestampByBase))
             .Where(x => !string.IsNullOrWhiteSpace(x.Reference))
             .GroupBy(x => Normalize(x.Reference) + "|" + x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
             .Select(x => x.Last())
+            .ToList();
+
+        // qchg/t-only reports are legal. Preserve the companion update so a consumer
+        // can refresh quality or timestamp without overwriting the current value.
+        var normalBases = valueUpdates
+            .Select(update => Normalize(BaseDataObjectReference(update.Reference)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var companionGroups = candidates
+            .Where(x => x.IsQualityCarrier || x.IsTimestampCarrier)
+            .GroupBy(x => Normalize(x.IsQualityCarrier ? x.QualityBaseReference : x.TimestampBaseReference), StringComparer.OrdinalIgnoreCase);
+        foreach (var group in companionGroups)
+        {
+            if (string.IsNullOrWhiteSpace(group.Key) || normalBases.Contains(group.Key))
+                continue;
+
+            var qualityCarrier = group.LastOrDefault(x => x.IsQualityCarrier);
+            var timestampCarrier = group.LastOrDefault(x => x.IsTimestampCarrier);
+            var carrier = qualityCarrier ?? timestampCarrier;
+            if (carrier == null)
+                continue;
+
+            valueUpdates.Add(new MmsReportSignalUpdate
+            {
+                Reference = group.Key,
+                FunctionalConstraint = carrier.FunctionalConstraint,
+                DisplayName = ShortReference(group.Key),
+                Source = "report",
+                Value = "-",
+                Quality = qualityCarrier?.Value ?? "-",
+                Timestamp = timestampCarrier?.Value ?? "-",
+                Reason = string.Join(",", group.Select(x => x.Reason).Where(x => !string.IsNullOrWhiteSpace(x) && x != "-").Distinct(StringComparer.OrdinalIgnoreCase)),
+                UpdatedAt = group.Max(x => x.UpdatedAt),
+                HasValue = false,
+                HasQuality = qualityCarrier != null,
+                HasTimestamp = timestampCarrier != null,
+                ProjectionStatus = "companion-only"
+            });
+        }
+
+        var updates = valueUpdates
             .OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -119,6 +162,9 @@ public static class MmsReportValueProjector
             Timestamp = string.IsNullOrWhiteSpace(t) ? "-" : t,
             Reason = string.IsNullOrWhiteSpace(candidate.Reason) ? "-" : candidate.Reason,
             UpdatedAt = candidate.UpdatedAt,
+            HasValue = true,
+            HasQuality = !string.IsNullOrWhiteSpace(q) && q != "-",
+            HasTimestamp = !string.IsNullOrWhiteSpace(t) && t != "-",
             IsProjectedChild = candidate.IsProjectedChild,
             ProjectionStatus = candidate.ProjectionStatus
         };

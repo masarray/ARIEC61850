@@ -876,10 +876,10 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static bool TryDecodeGetVariableAccessAttributes(BerTlv service, out MmsReadOnlyServerRequest request, out string message)
     {
-        if (!TryDecodeDomainSpecificObjectName(service.Value, out var domain, out var item))
+        if (!TryDecodeObjectName(service.Value, out var domain, out var item))
         {
             request = new MmsReadOnlyServerRequest();
-            message = "GetVariableAccessAttributes request has no domain-specific object name.";
+            message = "GetVariableAccessAttributes request has no decodable MMS ObjectName.";
             return false;
         }
 
@@ -887,6 +887,66 @@ public static class MmsConfirmedRequestBerDispatcher
         request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetVariableAccessAttributes, Target = target };
         message = $"Decoded GetVariableAccessAttributes request target={target}.";
         return true;
+    }
+
+    private static bool TryDecodeObjectName(ReadOnlyMemory<byte> buffer, out string domain, out string item)
+    {
+        domain = string.Empty;
+        item = string.Empty;
+
+        var offset = 0;
+        if (!BerReader.TryReadTlv(buffer, ref offset, out var objectName))
+            return false;
+
+        return TryDecodeObjectName(objectName, out domain, out item);
+    }
+
+    private static bool TryDecodeObjectName(BerTlv objectName, out string domain, out string item)
+    {
+        domain = string.Empty;
+        item = string.Empty;
+
+        if (objectName.Class != BerClass.ContextSpecific)
+            return false;
+
+        // ObjectName.domain-specific is a context-specific constructed sequence
+        // containing domainId and itemId identifiers.
+        if (objectName.TagNumber == 1 && objectName.Constructed)
+        {
+            var identifiers = BerReader.ReadChildren(objectName.Value)
+                .Where(x => x.Class == BerClass.Universal && x.EncodedTag is 0x1A or 0x16)
+                .Select(BerReader.ReadAsciiString)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToArray();
+            if (identifiers.Length >= 2)
+            {
+                domain = identifiers[0];
+                item = identifiers[1];
+                return true;
+            }
+        }
+
+        // VMD-specific, AA-specific, and ISO-specific ObjectName choices carry
+        // one identifier. They are valid MMS names even though they do not have
+        // an IEC 61850 logical-device domain prefix.
+        if (objectName.TagNumber is 0 or 2 or 3)
+        {
+            if (objectName.Constructed)
+            {
+                var identifier = BerReader.ReadChildren(objectName.Value)
+                    .FirstOrDefault(x => x.Class == BerClass.Universal && x.EncodedTag is 0x1A or 0x16);
+                if (identifier.EncodedTag != 0)
+                    item = BerReader.ReadAsciiString(identifier);
+            }
+            else
+            {
+                item = BerReader.ReadAsciiString(objectName);
+            }
+
+            return !string.IsNullOrWhiteSpace(item);
+        }
+
+        return false;
     }
 
     private static bool TryDecodeGetNamedVariableListAttributes(BerTlv service, out MmsReadOnlyServerRequest request, out string message)

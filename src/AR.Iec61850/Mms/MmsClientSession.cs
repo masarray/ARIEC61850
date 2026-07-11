@@ -1003,6 +1003,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
         _cotp.Reset();
         await _tpkt.DisposeAsync().ConfigureAwait(false);
         _receiveRouter.Clear();
+        ClearPersistentReportMonitors();
     }
 
     private static IReadOnlyList<(string Profile, MmsObjectReference Reference)> BuildReadCandidates(MmsObjectReference reference)

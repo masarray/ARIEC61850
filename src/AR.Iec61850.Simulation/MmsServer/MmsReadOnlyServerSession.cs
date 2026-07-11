@@ -162,18 +162,39 @@ public sealed class MmsReadOnlyServerSession
     {
         if (!_points.TryGetValue(target, out var point))
         {
-            if (!IsKnownHierarchyReference(target))
-                return Fail(nameof(MmsReadOnlyOperation.GetVariableAccessAttributes), target, "Readable point not found.");
-
-            point = new MmsReadOnlyPoint
+            point = ResolvePointWithoutDomain(target);
+            if (point == null && !IsKnownHierarchyReference(target))
             {
-                Reference = target,
-                LogicalDevice = target[..target.IndexOf('/', StringComparison.Ordinal)],
-                Kind = "structure",
-                FunctionalConstraint = "",
-                Value = "structure",
-                Quality = "valid"
-            };
+                // MMS permits VMD-specific ObjectName values. They are not the
+                // normal IEC 61850 LD/LN path, but IED browsers may probe one
+                // while building their initial type catalogue. Keep the
+                // read-only association alive and return a conservative
+                // structure specification instead of dropping the socket.
+                if (target.Contains('/', StringComparison.Ordinal) || string.IsNullOrWhiteSpace(target))
+                    return Fail(nameof(MmsReadOnlyOperation.GetVariableAccessAttributes), target, "Readable point not found.");
+
+                point = new MmsReadOnlyPoint
+                {
+                    Reference = target,
+                    Kind = "structure",
+                    FunctionalConstraint = string.Empty,
+                    Value = "structure",
+                    Quality = "valid"
+                };
+            }
+
+            if (point == null)
+            {
+                point = new MmsReadOnlyPoint
+                {
+                    Reference = target,
+                    LogicalDevice = target[..target.IndexOf('/', StringComparison.Ordinal)],
+                    Kind = "structure",
+                    FunctionalConstraint = "",
+                    Value = "structure",
+                    Quality = "valid"
+                };
+            }
         }
 
         var items = new[]
@@ -192,6 +213,26 @@ public sealed class MmsReadOnlyServerSession
             Items = items,
             Values = new[] { point }
         };
+    }
+
+    private MmsReadOnlyPoint? ResolvePointWithoutDomain(string target)
+    {
+        if (string.IsNullOrWhiteSpace(target) || target.Contains('/', StringComparison.Ordinal))
+            return null;
+
+        var normalized = target.Replace('.', '$');
+        var matches = Profile.Points
+            .Where(x =>
+            {
+                var item = ToMmsNamedVariableReference(x);
+                var slash = item.IndexOf('/');
+                var relative = slash >= 0 ? item[(slash + 1)..] : item;
+                return string.Equals(relative, normalized, StringComparison.OrdinalIgnoreCase) ||
+                       relative.EndsWith("$" + normalized, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToArray();
+
+        return matches.Length == 1 ? matches[0] : null;
     }
 
     private bool IsKnownHierarchyReference(string target)

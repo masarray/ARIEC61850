@@ -130,23 +130,25 @@ public sealed class MmsReadOnlyServerSession
         foreach (var point in Profile.Points.Where(x => string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase)))
         {
             var mmsName = ToMmsNamedVariableReference(point);
-            var parts = mmsName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var directoryName = ToMmsDirectoryItemName(mmsName);
+            var parts = directoryName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length > 0)
                 names.Add(parts[0]);
             if (parts.Length > 1)
                 names.Add(string.Join('$', parts.Take(2)));
-            names.Add(ToMmsDirectoryItemName(mmsName));
+            names.Add(directoryName);
         }
 
         foreach (var rcb in Profile.ReportControlBlocks.Where(x => IsReferenceInLogicalDevice(x.Reference, logicalDevice)))
         {
             var mmsName = ToMmsControlBlockReference(rcb.Reference);
-            var parts = mmsName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var directoryName = ToMmsDirectoryItemName(mmsName);
+            var parts = directoryName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length > 0)
                 names.Add(parts[0]);
             if (parts.Length > 1)
                 names.Add(string.Join('$', parts.Take(2)));
-            names.Add(mmsName);
+            names.Add(directoryName);
         }
 
         var orderedNames = names
@@ -563,7 +565,7 @@ public sealed class MmsReadOnlyServerSession
 
     private static string ToMmsDirectoryItemName(string reference)
     {
-        var slash = reference.IndexOf('/');
+        var slash = reference.LastIndexOf('/');
         var item = slash >= 0 && slash < reference.Length - 1 ? reference[(slash + 1)..] : reference;
         return item.Replace('.', '$');
     }
@@ -602,12 +604,14 @@ public sealed class MmsReadOnlyServerSession
         }
 
         var moreFollows = start + page.Count < allItems.Count;
+        var firstItem = page.FirstOrDefault() ?? string.Empty;
+        var lastItem = page.LastOrDefault() ?? string.Empty;
         return new MmsReadOnlyServerResponse
         {
             IsSuccess = true,
             Operation = operation,
             Target = target,
-            Message = $"Returned page {page.Count.ToString(CultureInfo.InvariantCulture)} of {allItems.Count.ToString(CultureInfo.InvariantCulture)} {itemDescription}; moreFollows={moreFollows}.",
+            Message = $"Returned page {page.Count.ToString(CultureInfo.InvariantCulture)} of {allItems.Count.ToString(CultureInfo.InvariantCulture)} {itemDescription}; first={firstItem}; last={lastItem}; continueAfter={continueAfter}; moreFollows={moreFollows}.",
             Items = page,
             MoreFollows = moreFollows
         };
@@ -620,9 +624,11 @@ public sealed class MmsReadOnlyServerSession
 
     private static string ToMmsNamedVariableReference(MmsReadOnlyPoint point)
     {
-        var path = point.Reference;
-        var slash = path.IndexOf('/');
-        var domain = slash > 0 ? path[..slash] : point.LogicalDevice;
+        var path = point.Reference.Trim();
+        var slash = path.LastIndexOf('/');
+        var domain = string.IsNullOrWhiteSpace(point.LogicalDevice)
+            ? slash > 0 ? path[..slash] : string.Empty
+            : point.LogicalDevice;
         var itemPath = slash >= 0 && slash < path.Length - 1 ? path[(slash + 1)..] : path;
         var parts = itemPath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length == 0)
@@ -645,7 +651,7 @@ public sealed class MmsReadOnlyServerSession
 
     private static string ToMmsControlBlockReference(string reference)
     {
-        var slash = reference.IndexOf('/');
+        var slash = reference.LastIndexOf('/');
         var item = slash >= 0 && slash < reference.Length - 1 ? reference[(slash + 1)..] : reference;
         return item.Replace('.', '$');
     }

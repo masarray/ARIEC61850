@@ -120,6 +120,7 @@ public sealed class MmsConfirmedRequestBerProfileTests
             Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
             Assert.True(page.IsSuccess, page.Message);
             Assert.NotEmpty(page.Names);
+            Assert.DoesNotContain(page.Names, name => name.Contains('/', StringComparison.Ordinal));
             Assert.All(page.Names, name => Assert.True(discovered.Add(name), $"Duplicate directory item: {name}"));
 
             continueAfter = page.Names[^1];
@@ -133,6 +134,31 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.Contains("MMXU1", discovered);
         Assert.Contains("MMXU1$ST", discovered);
         Assert.Contains("MMXU1$ST$S129$stVal", discovered);
+    }
+
+    [Fact]
+    public void Directory_Normalizes_Nested_Domain_Prefixes_Before_Paging()
+    {
+        var simulatorProfile = IedSimulatorProfile.CreateDefaultFeederProfile();
+        var baseProfile = new MmsReadOnlyServerModelBuilder().Build(simulatorProfile);
+        var nestedProfile = baseProfile with
+        {
+            Points = baseProfile.Points
+                .Select(point => point with { Reference = $"{point.LogicalDevice}/{point.Reference}" })
+                .ToArray()
+        };
+        var session = new MmsReadOnlyServerSession(nestedProfile);
+
+        var response = session.Handle(new MmsReadOnlyServerRequest
+        {
+            Operation = MmsReadOnlyOperation.GetNamedVariableDirectory,
+            Target = "IED1LD0"
+        });
+
+        Assert.True(response.IsSuccess, response.Message);
+        Assert.DoesNotContain(response.Items, item => item.Contains('/', StringComparison.Ordinal));
+        Assert.Contains("MMXU1", response.Items);
+        Assert.Contains("MMXU1$MX", response.Items);
     }
 
     [Fact]

@@ -1201,7 +1201,7 @@ public static class MmsConfirmedRequestBerDispatcher
             return BerWriter.EncodeTlv(0x91, ReadOnlySpan<byte>.Empty);
 
         if (point.Kind.Equals("measurement", StringComparison.OrdinalIgnoreCase))
-            return BerWriter.EncodeTlv(0x87, new byte[] { 32, 8 });
+            return EncodeFloatingPointTypeSpecification(formatWidth: 32, exponentWidth: 8);
 
         if (point.Reference.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase))
             return BerWriter.EncodeTlv(0x85, new byte[] { 32 });
@@ -1274,10 +1274,10 @@ public static class MmsConfirmedRequestBerDispatcher
             return BerWriter.EncodeTlv(0x86, BerWriter.EncodeUnsignedInteger((ulong)SclIntegerWidth(bType, 32)));
 
         if (bType == "FLOAT32")
-            return BerWriter.EncodeTlv(0x87, new byte[] { 32, 8 });
+            return EncodeFloatingPointTypeSpecification(formatWidth: 32, exponentWidth: 8);
 
         if (bType == "FLOAT64")
-            return BerWriter.EncodeTlv(0x87, new byte[] { 64, 11 });
+            return EncodeFloatingPointTypeSpecification(formatWidth: 64, exponentWidth: 11);
 
         if (bType.StartsWith("OCTET", StringComparison.Ordinal))
             return BerWriter.EncodeTlv(0x89, BerWriter.EncodeUnsignedInteger((ulong)SclStringLength(bType, 64)));
@@ -1293,6 +1293,13 @@ public static class MmsConfirmedRequestBerDispatcher
 
         return null;
     }
+
+    private static byte[] EncodeFloatingPointTypeSpecification(byte formatWidth, byte exponentWidth)
+        => BerWriter.EncodeTlv(
+            0xA7,
+            Concat(
+                BerWriter.EncodeTlv(0x02, [formatWidth]),
+                BerWriter.EncodeTlv(0x02, [exponentWidth])));
 
     private static string NormalizeSclBType(string value)
         => (value ?? string.Empty).Trim().Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant();

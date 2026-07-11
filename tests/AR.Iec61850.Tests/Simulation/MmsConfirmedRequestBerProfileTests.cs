@@ -173,6 +173,9 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
         Assert.True(attributes.IsSuccess, attributes.Message);
         Assert.Equal("floating-point", attributes.MmsType);
+        Assert.Equal("FLOAT32", attributes.SclBType);
+        Assert.Equal("formatWidth=32; exponentWidth=8", attributes.TypeSpecification!.Detail);
+        Assert.Contains("A706020120020108", Convert.ToHexString(dispatch.ResponsePresentationPayload));
     }
 
     [Fact]

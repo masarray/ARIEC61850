@@ -283,6 +283,7 @@ public sealed class IedSimulatorProfileBuilder
                 Reference = relativeReference,
                 FunctionalConstraint = string.IsNullOrWhiteSpace(entry.Fc) ? "MX" : entry.Fc,
                 Kind = "quality",
+                SclBType = entry.BType,
                 InitialValue = "valid"
             };
 
@@ -292,6 +293,7 @@ public sealed class IedSimulatorProfileBuilder
                 Reference = relativeReference,
                 FunctionalConstraint = string.IsNullOrWhiteSpace(entry.Fc) ? "MX" : entry.Fc,
                 Kind = "timestamp",
+                SclBType = entry.BType,
                 InitialValue = "0"
             };
 
@@ -305,7 +307,8 @@ public sealed class IedSimulatorProfileBuilder
                 baseValue,
                 amplitude,
                 ResolvePhaseDegrees(entry),
-                IsDynamicMeasurement(entry));
+                IsDynamicMeasurement(entry),
+                entry.BType);
         }
 
         return new IedSimulatorPoint
@@ -313,6 +316,7 @@ public sealed class IedSimulatorProfileBuilder
             Reference = relativeReference,
             FunctionalConstraint = string.IsNullOrWhiteSpace(entry.Fc) ? "ST" : entry.Fc,
             Kind = "status",
+            SclBType = entry.BType,
             InitialValue = ResolveStatusInitialValue(entry)
         };
     }

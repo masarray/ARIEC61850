@@ -37,10 +37,12 @@ public sealed class IedSimulatorProfileBuilderTests
         Assert.Equal("measurement", current.Kind);
         Assert.Equal("A", current.Unit);
         Assert.Equal("MX", current.FunctionalConstraint);
+        Assert.Equal("INT32", current.SclBType);
 
         var breaker = points.Single(p => p.Reference == "XCBR1.Pos.stVal");
         Assert.Equal("status", breaker.Kind);
         Assert.Equal("closed", breaker.InitialValue);
+        Assert.Equal("BOOLEAN", breaker.SclBType);
 
         Assert.Contains(points, p => p.Reference == "XCBR1.Pos.q" && p.Kind == "quality" && p.InitialValue == "valid");
         Assert.Contains(points, p => p.Reference == "XCBR1.Pos.t" && p.Kind == "timestamp");

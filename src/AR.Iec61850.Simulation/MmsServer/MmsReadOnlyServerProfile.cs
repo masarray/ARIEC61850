@@ -157,6 +157,7 @@ public sealed record MmsReadOnlyPoint
     public string LogicalNode { get; init; } = string.Empty;
     public string FunctionalConstraint { get; init; } = string.Empty;
     public string Kind { get; init; } = string.Empty;
+    public string SclBType { get; init; } = string.Empty;
     public string Unit { get; init; } = string.Empty;
     public string Value { get; init; } = string.Empty;
     public string Quality { get; init; } = "valid";

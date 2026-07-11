@@ -42,6 +42,7 @@ public sealed class MmsReadOnlyServerModelBuilder
                         LogicalNode = node.Name,
                         FunctionalConstraint = point.FunctionalConstraint,
                         Kind = point.Kind,
+                        SclBType = point.SclBType,
                         Unit = point.Unit,
                         Value = state?.Value ?? point.InitialValue,
                         Quality = state?.Quality ?? "valid",
@@ -122,11 +123,13 @@ public sealed class MmsReadOnlyServerModelBuilder
             GeneratedAtUtc = DateTimeOffset.UtcNow,
             ServerName = options.ServerName,
             Port = options.Port,
-            LogicalDevices = logicalDevices.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray(),
-            LogicalNodes = logicalNodes.OrderBy(x => x.LogicalDevice, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray(),
-            Points = points.OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase).ToArray(),
-            DataSets = dataSets.OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase).ToArray(),
-            ReportControlBlocks = rcbs.OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase).ToArray(),
+            // SCL declaration order is evidence. Preserve it for MMS browse and
+            // TypeDescription construction instead of normalizing alphabetically.
+            LogicalDevices = logicalDevices.ToArray(),
+            LogicalNodes = logicalNodes.ToArray(),
+            Points = points.ToArray(),
+            DataSets = dataSets.ToArray(),
+            ReportControlBlocks = rcbs.ToArray(),
             Diagnostics = diagnostics.ToArray()
         };
 

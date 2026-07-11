@@ -161,6 +161,43 @@ public static class CotpFrameCodec
         return frame;
     }
 
+    /// <summary>
+    /// Splits a COTP user-data payload into Data TPDUs that do not exceed the
+    /// negotiated TPDU size. The TPDU-size parameter includes the three-byte
+    /// Data TPDU header, so each segment reserves that header before carrying
+    /// presentation data. Only the final segment has EOT set.
+    /// </summary>
+    public static IReadOnlyList<byte[]> EncodeDataSegments(ReadOnlySpan<byte> userData, byte tpduSizeCode)
+    {
+        var maximumTpduBytes = GetTpduSizeBytes(tpduSizeCode);
+        var maximumUserDataBytes = maximumTpduBytes - 3;
+        if (maximumUserDataBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(tpduSizeCode), "COTP TPDU size is too small for a Data TPDU.");
+
+        if (userData.Length == 0)
+            return [EncodeData(ReadOnlySpan<byte>.Empty)];
+
+        var segments = new List<byte[]>((userData.Length + maximumUserDataBytes - 1) / maximumUserDataBytes);
+        for (var offset = 0; offset < userData.Length;)
+        {
+            var length = Math.Min(maximumUserDataBytes, userData.Length - offset);
+            var isFinal = offset + length == userData.Length;
+            segments.Add(EncodeData(userData.Slice(offset, length), isFinal));
+            offset += length;
+        }
+
+        return segments;
+    }
+
+    /// <summary>Returns the complete COTP TPDU capacity encoded by parameter C0.</summary>
+    public static int GetTpduSizeBytes(byte tpduSizeCode)
+    {
+        if (tpduSizeCode is < 7 or > 15)
+            throw new ArgumentOutOfRangeException(nameof(tpduSizeCode), "COTP TPDU size code must be in the range 0x07..0x0F.");
+
+        return 1 << tpduSizeCode;
+    }
+
     public static byte[] EncodeDefaultConnectRequest() => CotpConnectRequest.BuildDefault();
 
     private static byte[] BuildConnectionConfirmParameters(ReadOnlySpan<byte> requestParameters, byte tpduSize)

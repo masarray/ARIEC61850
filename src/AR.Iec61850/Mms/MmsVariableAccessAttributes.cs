@@ -212,7 +212,7 @@ public static class MmsVariableAccessAttributesResponseDecoder
                 node = Basic(componentName, "unsigned", "INT32U", tlv);
                 return true;
             case 7:
-                node = Basic(componentName, "floating-point", "FLOAT32", tlv);
+                node = DecodeFloatingPointType(tlv, componentName);
                 return true;
             case 9:
                 node = Basic(componentName, "octet-string", "Octet64", tlv);
@@ -334,6 +334,29 @@ public static class MmsVariableAccessAttributesResponseDecoder
             Size = components.Count,
             Detail = $"components={components.Count}",
             Children = components.ToArray()
+        };
+    }
+
+    private static MmsTypeSpecificationNode DecodeFloatingPointType(BerTlv tlv, string componentName)
+    {
+        var fields = tlv.Constructed
+            ? BerReader.ReadChildren(tlv.Value)
+                .Where(field => field.Class == BerClass.Universal && field.TagNumber == 2)
+                .ToArray()
+            : Array.Empty<BerTlv>();
+        var formatWidth = fields.Length > 0 ? BerReader.ReadUnsignedInteger(fields[0]) : null;
+        var exponentWidth = fields.Length > 1 ? BerReader.ReadUnsignedInteger(fields[1]) : null;
+        var isFloat64 = formatWidth == 64;
+
+        return new MmsTypeSpecificationNode
+        {
+            Name = componentName,
+            MmsType = "floating-point",
+            SclBType = isFloat64 ? "FLOAT64" : "FLOAT32",
+            Size = formatWidth is > 0 and <= int.MaxValue ? (int)formatWidth.Value : null,
+            Detail = formatWidth.HasValue && exponentWidth.HasValue
+                ? $"formatWidth={formatWidth.Value}; exponentWidth={exponentWidth.Value}"
+                : string.Empty
         };
     }
 

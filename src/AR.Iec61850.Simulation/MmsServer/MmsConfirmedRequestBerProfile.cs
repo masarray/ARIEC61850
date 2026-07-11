@@ -1144,6 +1144,10 @@ public static class MmsConfirmedRequestBerDispatcher
         if (point.Children.Count > 0)
             return MmsDataCodec.Encode(MmsDataValue.Structure(point.Children.Select(DecodePointValue)));
 
+        var sclValue = TryEncodeSclPointValue(point);
+        if (sclValue is not null)
+            return MmsDataCodec.Encode(sclValue);
+
         if (point.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ||
             point.Kind.Equals("quality", StringComparison.OrdinalIgnoreCase))
             return MmsDataCodec.Encode(MmsDataValue.BitString(3, [0x00, 0x00]));
@@ -1184,6 +1188,10 @@ public static class MmsConfirmedRequestBerDispatcher
             return BerWriter.EncodeTlv(0xA2, BerWriter.EncodeTlv(0xA1, components));
         }
 
+        var sclType = TryEncodeSclTypeSpecification(point.SclBType);
+        if (sclType is not null)
+            return sclType;
+
         if (point.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ||
             point.Kind.Equals("quality", StringComparison.OrdinalIgnoreCase))
             return BerWriter.EncodeTlv(0x84, new byte[] { 13 });
@@ -1193,7 +1201,7 @@ public static class MmsConfirmedRequestBerDispatcher
             return BerWriter.EncodeTlv(0x91, ReadOnlySpan<byte>.Empty);
 
         if (point.Kind.Equals("measurement", StringComparison.OrdinalIgnoreCase))
-            return BerWriter.EncodeTlv(0x87, new byte[] { 32, 8 });
+            return EncodeFloatingPointTypeSpecification(formatWidth: 32, exponentWidth: 8);
 
         if (point.Reference.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase))
             return BerWriter.EncodeTlv(0x85, new byte[] { 32 });
@@ -1202,6 +1210,123 @@ public static class MmsConfirmedRequestBerDispatcher
             return BerWriter.EncodeTlv(0x83, ReadOnlySpan<byte>.Empty);
 
         return BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger(255));
+    }
+
+    private static MmsDataValue? TryEncodeSclPointValue(MmsReadOnlyPoint point)
+    {
+        var bType = NormalizeSclBType(point.SclBType);
+        if (bType.Length == 0 || bType == "STRUCT")
+            return null;
+
+        if (bType is "QUALITY" or "CHECK")
+            return MmsDataValue.BitString(bType == "QUALITY" ? (byte)3 : (byte)6, [0x00, 0x00]);
+
+        if (bType is "TIMESTAMP" or "ENTRYTIME")
+            return MmsDataValue.UtcTime(new Iec61850UtcTime(point.TimestampUtc, Quality: 0));
+
+        if (bType is "BOOLEAN" or "BOOL")
+            return MmsDataValue.Boolean(bool.TryParse(point.Value, out var boolean) && boolean);
+
+        if (bType is "DBPOS" or "TCMD" && TryMapStatusToInteger(point.Value, out var mappedStatus))
+            return MmsDataValue.Integer(mappedStatus);
+
+        if (IsSignedSclInteger(bType) && long.TryParse(point.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var signed))
+            return MmsDataValue.Integer(signed);
+
+        if (IsUnsignedSclInteger(bType) && ulong.TryParse(point.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unsigned))
+            return MmsDataValue.Unsigned(unsigned);
+
+        if (bType.StartsWith("FLOAT", StringComparison.Ordinal) &&
+            double.TryParse(point.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var floating))
+            return MmsDataValue.FloatingPoint(floating);
+
+        if (bType.StartsWith("OCTET", StringComparison.Ordinal))
+            return MmsDataValue.OctetString(Encoding.ASCII.GetBytes(point.Value));
+
+        if (bType.StartsWith("UNICODE", StringComparison.Ordinal) || bType.StartsWith("MMSSTRING", StringComparison.Ordinal))
+            return MmsDataValue.MmsString(point.Value);
+
+        if (bType.StartsWith("VISSTRING", StringComparison.Ordinal) || bType == "OBJREF")
+            return MmsDataValue.VisibleString(point.Value);
+
+        return null;
+    }
+
+    private static byte[]? TryEncodeSclTypeSpecification(string sclBType)
+    {
+        var bType = NormalizeSclBType(sclBType);
+        if (bType.Length == 0 || bType == "STRUCT")
+            return null;
+
+        if (bType is "BOOLEAN" or "BOOL")
+            return BerWriter.EncodeTlv(0x83, ReadOnlySpan<byte>.Empty);
+
+        if (bType == "QUALITY")
+            return BerWriter.EncodeTlv(0x84, new byte[] { 13 });
+
+        if (bType == "CHECK")
+            return BerWriter.EncodeTlv(0x84, new byte[] { 2 });
+
+        if (IsSignedSclInteger(bType) || bType is "DBPOS" or "TCMD")
+            return BerWriter.EncodeTlv(0x85, BerWriter.EncodeUnsignedInteger((ulong)SclIntegerWidth(bType, 32)));
+
+        if (IsUnsignedSclInteger(bType))
+            return BerWriter.EncodeTlv(0x86, BerWriter.EncodeUnsignedInteger((ulong)SclIntegerWidth(bType, 32)));
+
+        if (bType == "FLOAT32")
+            return EncodeFloatingPointTypeSpecification(formatWidth: 32, exponentWidth: 8);
+
+        if (bType == "FLOAT64")
+            return EncodeFloatingPointTypeSpecification(formatWidth: 64, exponentWidth: 11);
+
+        if (bType.StartsWith("OCTET", StringComparison.Ordinal))
+            return BerWriter.EncodeTlv(0x89, BerWriter.EncodeUnsignedInteger((ulong)SclStringLength(bType, 64)));
+
+        if (bType.StartsWith("VISSTRING", StringComparison.Ordinal) || bType == "OBJREF")
+            return BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger((ulong)SclStringLength(bType, 255)));
+
+        if (bType.StartsWith("UNICODE", StringComparison.Ordinal) || bType.StartsWith("MMSSTRING", StringComparison.Ordinal))
+            return BerWriter.EncodeTlv(0x90, BerWriter.EncodeUnsignedInteger((ulong)SclStringLength(bType, 255)));
+
+        if (bType is "TIMESTAMP" or "ENTRYTIME")
+            return BerWriter.EncodeTlv(0x91, ReadOnlySpan<byte>.Empty);
+
+        return null;
+    }
+
+    private static byte[] EncodeFloatingPointTypeSpecification(byte formatWidth, byte exponentWidth)
+        => BerWriter.EncodeTlv(
+            0xA7,
+            Concat(
+                BerWriter.EncodeTlv(0x02, [formatWidth]),
+                BerWriter.EncodeTlv(0x02, [exponentWidth])));
+
+    private static string NormalizeSclBType(string value)
+        => (value ?? string.Empty).Trim().Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
+
+    private static bool IsSignedSclInteger(string bType)
+        => bType.StartsWith("INT", StringComparison.Ordinal) && !bType.EndsWith("U", StringComparison.Ordinal) || bType == "ENUM";
+
+    private static bool IsUnsignedSclInteger(string bType)
+        => bType.StartsWith("INT", StringComparison.Ordinal) && bType.EndsWith("U", StringComparison.Ordinal);
+
+    private static int SclIntegerWidth(string bType, int fallback)
+    {
+        var digits = new string(bType.Where(char.IsDigit).ToArray());
+        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var width) && width > 0 ? width : fallback;
+    }
+
+    private static int SclStringLength(string bType, int fallback)
+    {
+        var digits = new string(bType.Where(char.IsDigit).ToArray());
+        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var length) && length > 0 ? length : fallback;
+    }
+
+    private static bool TryMapStatusToInteger(string value, out long result)
+    {
+        result = value.Equals("closed", StringComparison.OrdinalIgnoreCase) ? 2 :
+            value.Equals("open", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        return value.Equals("closed", StringComparison.OrdinalIgnoreCase) || value.Equals("open", StringComparison.OrdinalIgnoreCase);
     }
 
     private static byte[] EncodeStructureComponent(MmsReadOnlyPoint point)

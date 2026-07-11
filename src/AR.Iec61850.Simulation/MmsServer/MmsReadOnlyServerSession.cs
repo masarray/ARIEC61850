@@ -39,6 +39,14 @@ public sealed record MmsReadOnlyServerResponse
 
 public sealed class MmsReadOnlyServerSession
 {
+    // IEC 61850-8-1 Figure 4 recommended order. Existing UCA 2.0-compatible
+    // clients may rely on this when walking a logical-node TypeDescription.
+    private static readonly string[] FunctionalConstraintOrder =
+    [
+        "MX", "ST", "CO", "CF", "DC", "SP", "SG", "RP", "LG", "BR",
+        "GO", "GS", "SV", "SE", "MS", "US", "EX", "SR", "OR", "BL"
+    ];
+
     private readonly Dictionary<string, MmsReadOnlyPoint> _points;
     private readonly Dictionary<string, MmsReadOnlyDataSet> _dataSets;
 
@@ -126,33 +134,13 @@ public sealed class MmsReadOnlyServerSession
         if (string.IsNullOrWhiteSpace(logicalDevice))
             return Fail(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, "Logical device reference is required.");
 
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var point in Profile.Points.Where(x => string.Equals(x.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase)))
-        {
-            var mmsName = ToMmsNamedVariableReference(point);
-            var directoryName = ToMmsDirectoryItemName(mmsName);
-            var parts = directoryName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length > 0)
-                names.Add(parts[0]);
-            if (parts.Length > 1)
-                names.Add(string.Join('$', parts.Take(2)));
-            names.Add(directoryName);
-        }
-
-        foreach (var rcb in Profile.ReportControlBlocks.Where(x => IsReferenceInLogicalDevice(x.Reference, logicalDevice)))
-        {
-            var mmsName = ToMmsControlBlockReference(rcb.Reference);
-            var directoryName = ToMmsDirectoryItemName(mmsName);
-            var parts = directoryName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length > 0)
-                names.Add(parts[0]);
-            if (parts.Length > 1)
-                names.Add(string.Join('$', parts.Take(2)));
-            names.Add(directoryName);
-        }
-
-        var orderedNames = names
-            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+        // IEC 61850 maps GetLogicalNodeDirectory to MMS GetNameList(NamedVariable).
+        // DOs, DAs, FCs, and report control blocks are components of the LN's MMS
+        // TypeSpecification and must not be advertised as separate domain variables.
+        var orderedNames = Profile.LogicalNodes
+            .Where(node => string.Equals(node.LogicalDevice, logicalDevice, StringComparison.OrdinalIgnoreCase))
+            .Select(node => node.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         return orderedNames.Length == 0
@@ -162,7 +150,7 @@ public sealed class MmsReadOnlyServerSession
                 logicalDevice,
                 orderedNames,
                 continueAfter,
-                "named variable(s), including logical-node and functional-constraint hierarchy");
+                "logical node named variable(s)");
     }
 
     private MmsReadOnlyServerResponse GetDataSetDirectory(string logicalDevice = "", string continueAfter = "")
@@ -266,15 +254,16 @@ public sealed class MmsReadOnlyServerSession
             .Select(point => new MmsTypeCandidate(point, MmsItemParts(point)))
             .Where(x => x.Parts.Length >= requestedParts.Length && x.Parts.Take(requestedParts.Length).SequenceEqual(requestedParts, StringComparer.OrdinalIgnoreCase))
             .ToArray();
-        if (candidates.Length == 0)
-            return null;
-
-        return BuildHierarchyNode(
-            reference: target,
-            name: requestedParts[^1],
-            functionalConstraint: candidates[0].Point.FunctionalConstraint,
-            candidates,
-            requestedParts.Length);
+        var dataHierarchy = candidates.Length == 0
+            ? null
+            : BuildHierarchyNode(
+                reference: target,
+                name: requestedParts[^1],
+                functionalConstraint: candidates[0].Point.FunctionalConstraint,
+                candidates,
+                requestedParts.Length);
+        var reportHierarchy = BuildReportControlBlockType(target);
+        return MergeHierarchyNodes(dataHierarchy, reportHierarchy);
     }
 
     private MmsReadOnlyPoint? BuildReportControlBlockType(string target)
@@ -285,50 +274,70 @@ public sealed class MmsReadOnlyServerSession
 
         var logicalDevice = target[..slash];
         var item = target[(slash + 1)..].Replace('.', '$');
-        var candidates = Profile.ReportControlBlocks
-            .Where(rcb => IsReferenceInLogicalDevice(rcb.Reference, logicalDevice))
-            .Where(rcb =>
-            {
-                var mmsName = ToMmsControlBlockReference(rcb.Reference);
-                return mmsName.StartsWith(item + "$", StringComparison.OrdinalIgnoreCase) ||
-                       item.StartsWith(mmsName + "$", StringComparison.OrdinalIgnoreCase) ||
-                       string.Equals(mmsName, item, StringComparison.OrdinalIgnoreCase);
-            })
-            .ToArray();
-        if (candidates.Length == 0)
+        var requestedParts = item.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (requestedParts.Length == 0)
             return null;
 
-        var exact = candidates.FirstOrDefault(rcb => string.Equals(ToMmsControlBlockReference(rcb.Reference), item, StringComparison.OrdinalIgnoreCase));
-        if (exact is not null)
-            return BuildReportControlBlockNode(logicalDevice, item, exact);
-
-        var containing = candidates
-            .Where(rcb => item.StartsWith(ToMmsControlBlockReference(rcb.Reference) + "$", StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(rcb => ToMmsControlBlockReference(rcb.Reference).Length)
+        var allCandidates = Profile.ReportControlBlocks
+            .Where(rcb => IsReferenceInLogicalDevice(rcb.Reference, logicalDevice))
+            .Select(rcb => new MmsReportControlCandidate(rcb, ToMmsControlBlockReference(rcb.Reference)
+                .Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)))
+            .ToArray();
+        var containing = allCandidates
+            .Where(candidate => item.StartsWith(candidate.MmsName + "$", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(candidate => candidate.MmsName.Length)
             .FirstOrDefault();
         if (containing is not null)
         {
-            var mmsName = ToMmsControlBlockReference(containing.Reference);
-            var descendantPath = item[(mmsName.Length + 1)..]
+            var descendantPath = item[(containing.MmsName.Length + 1)..]
                 .Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            return ResolveReportControlBlockChild(BuildReportControlBlockNode(logicalDevice, mmsName, containing), descendantPath);
+            return ResolveReportControlBlockChild(BuildReportControlBlockNode(logicalDevice, containing.MmsName, containing.ReportControlBlock), descendantPath);
         }
 
-        var parts = item.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var functionalConstraint = parts.Length > 1 ? parts[1] : string.Empty;
+        var candidates = allCandidates
+            .Where(candidate => candidate.Parts.Length >= requestedParts.Length &&
+                                candidate.Parts.Take(requestedParts.Length).SequenceEqual(requestedParts, StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        return candidates.Length == 0
+            ? null
+            : BuildReportControlBlockHierarchyNode(logicalDevice, target, requestedParts[^1], candidates, requestedParts.Length);
+    }
+
+    private static MmsReadOnlyPoint BuildReportControlBlockHierarchyNode(
+        string logicalDevice,
+        string reference,
+        string name,
+        IReadOnlyList<MmsReportControlCandidate> candidates,
+        int nextPartIndex)
+    {
+        var exact = candidates.Where(candidate => candidate.Parts.Length == nextPartIndex).ToArray();
+        var groups = candidates
+            .Where(candidate => candidate.Parts.Length > nextPartIndex)
+            .GroupBy(candidate => candidate.Parts[nextPartIndex], StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (nextPartIndex == 1)
+            groups = groups.OrderBy(group => FunctionalConstraintSortIndex(group.Key)).ToArray();
+
+        if (groups.Length == 0 && exact.Length == 1)
+            return BuildReportControlBlockNode(logicalDevice, exact[0].MmsName, exact[0].ReportControlBlock);
+
         return new MmsReadOnlyPoint
         {
-            Name = parts.LastOrDefault() ?? item,
-            Reference = target,
+            Name = name,
+            Reference = reference,
             LogicalDevice = logicalDevice,
-            LogicalNode = parts.FirstOrDefault() ?? string.Empty,
-            FunctionalConstraint = functionalConstraint,
+            LogicalNode = candidates[0].Parts[0],
+            FunctionalConstraint = nextPartIndex > 1 ? candidates[0].Parts[1] : string.Empty,
             Kind = "structure",
             Value = "structure",
             Quality = "valid",
-            Children = candidates
-                .OrderBy(rcb => rcb.Reference, StringComparer.OrdinalIgnoreCase)
-                .Select(rcb => BuildReportControlBlockNode(logicalDevice, ToMmsControlBlockReference(rcb.Reference), rcb))
+            Children = groups
+                .Select(group => BuildReportControlBlockHierarchyNode(
+                    logicalDevice,
+                    reference + "$" + group.Key,
+                    group.Key,
+                    group.ToArray(),
+                    nextPartIndex + 1))
                 .ToArray()
         };
     }
@@ -397,8 +406,9 @@ public sealed class MmsReadOnlyServerSession
         var groups = candidates
             .Where(x => x.Parts.Length > nextPartIndex)
             .GroupBy(x => x.Parts[nextPartIndex], StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        if (nextPartIndex == 1)
+            groups = groups.OrderBy(group => FunctionalConstraintSortIndex(group.Key)).ToArray();
 
         if (groups.Length == 0 && exact.Length == 1)
             return exact[0].Point with { Name = name };
@@ -424,6 +434,51 @@ public sealed class MmsReadOnlyServerSession
             Quality = "valid",
             Children = children
         };
+    }
+
+    private static MmsReadOnlyPoint? MergeHierarchyNodes(MmsReadOnlyPoint? primary, MmsReadOnlyPoint? supplemental)
+    {
+        if (primary is null)
+            return supplemental;
+        if (supplemental is null)
+            return primary;
+
+        var children = primary.Children.ToList();
+        foreach (var supplementalChild in supplemental.Children)
+        {
+            var index = children.FindIndex(child => string.Equals(child.Name, supplementalChild.Name, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+                children.Add(supplementalChild);
+            else
+                children[index] = MergeHierarchyNodes(children[index], supplementalChild)!;
+        }
+
+        return primary with
+        {
+            Children = IsLogicalNodeRoot(primary)
+                ? OrderFunctionalConstraintChildren(children)
+                : children.ToArray()
+        };
+    }
+
+    private static bool IsLogicalNodeRoot(MmsReadOnlyPoint point)
+        => !string.IsNullOrWhiteSpace(point.LogicalNode) &&
+           string.Equals(point.Name, point.LogicalNode, StringComparison.OrdinalIgnoreCase);
+
+    private static MmsReadOnlyPoint[] OrderFunctionalConstraintChildren(IReadOnlyList<MmsReadOnlyPoint> children)
+        => children
+            .Select((child, index) => new { child, index })
+            .OrderBy(entry => FunctionalConstraintSortIndex(entry.child.Name))
+            .ThenBy(entry => entry.index)
+            .Select(entry => entry.child)
+            .ToArray();
+
+    private static int FunctionalConstraintSortIndex(string value)
+    {
+        var index = Array.FindIndex(
+            FunctionalConstraintOrder,
+            functionalConstraint => string.Equals(functionalConstraint, value, StringComparison.OrdinalIgnoreCase));
+        return index >= 0 ? index : int.MaxValue;
     }
 
     private static string[] MmsItemParts(MmsReadOnlyPoint point)
@@ -618,6 +673,10 @@ public sealed class MmsReadOnlyServerSession
     }
 
     private sealed record MmsTypeCandidate(MmsReadOnlyPoint Point, string[] Parts);
+    private sealed record MmsReportControlCandidate(MmsReadOnlyReportControlBlock ReportControlBlock, string[] Parts)
+    {
+        public string MmsName => string.Join('$', Parts);
+    }
 
     private static MmsReadOnlyServerResponse RejectWrite(string target)
         => Fail(nameof(MmsReadOnlyOperation.Write), target, "Write operation rejected because this alpha server profile is read-only.");

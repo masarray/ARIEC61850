@@ -846,6 +846,10 @@ public static class MmsConfirmedRequestBerDispatcher
         }
 
         var domain = DecodeObjectScopeDomain(objectScopeField);
+        var continueAfterField = children.FirstOrDefault(x => x.Class == BerClass.ContextSpecific && x.TagNumber == 2);
+        var continueAfter = continueAfterField.EncodedTag == 0
+            ? string.Empty
+            : BerReader.ReadAsciiString(continueAfterField);
         if (objectClass == (int)MmsGetNameListObjectClass.Domain)
         {
             serviceKind = MmsConfirmedBerProbeKind.GetDomainDirectory;
@@ -854,15 +858,15 @@ public static class MmsConfirmedRequestBerDispatcher
         else if (objectClass == (int)MmsGetNameListObjectClass.NamedVariableList)
         {
             serviceKind = MmsConfirmedBerProbeKind.GetNamedVariableListDirectory;
-            request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetDataSetDirectory, Target = domain };
+            request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetDataSetDirectory, Target = domain, ContinueAfter = continueAfter };
         }
         else
         {
             serviceKind = MmsConfirmedBerProbeKind.GetNamedVariableDirectory;
-            request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetNamedVariableDirectory, Target = domain };
+            request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.GetNamedVariableDirectory, Target = domain, ContinueAfter = continueAfter };
         }
 
-        message = $"Decoded GetNameList objectClass={objectClass} domain={domain}.";
+        message = $"Decoded GetNameList objectClass={objectClass} domain={domain} continueAfter={continueAfter}.";
         return true;
     }
 
@@ -1068,7 +1072,7 @@ public static class MmsConfirmedRequestBerDispatcher
         var names = response.Items.Select(ToMmsNameForDirectory).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var encodedNames = Concat(names.Select(VisibleString).ToArray());
         var listOfIdentifier = BerWriter.EncodeTlv(0xA0, encodedNames);
-        var moreFollows = BerWriter.EncodeTlv(0x81, new byte[] { 0x00 });
+        var moreFollows = BerWriter.EncodeTlv(0x81, new byte[] { response.MoreFollows ? (byte)0xFF : (byte)0x00 });
         return BerWriter.EncodeTlv(0xA1, Concat(listOfIdentifier, moreFollows));
     }
 

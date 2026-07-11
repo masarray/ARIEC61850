@@ -21,6 +21,7 @@ public sealed record MmsReadOnlyServerRequest
     public MmsReadOnlyOperation Operation { get; init; }
     public string Target { get; init; } = string.Empty;
     public string Value { get; init; } = string.Empty;
+    public string ContinueAfter { get; init; } = string.Empty;
 }
 
 public sealed record MmsReadOnlyServerResponse
@@ -31,6 +32,7 @@ public sealed record MmsReadOnlyServerResponse
     public string Message { get; init; } = string.Empty;
     public IReadOnlyList<string> Items { get; init; } = Array.Empty<string>();
     public IReadOnlyList<MmsReadOnlyPoint> Values { get; init; } = Array.Empty<MmsReadOnlyPoint>();
+    public bool MoreFollows { get; init; }
 
     public string Summary => $"{(IsSuccess ? "OK" : "FAIL")} {Operation} {Target}: {Message}";
 }
@@ -57,8 +59,8 @@ public sealed class MmsReadOnlyServerSession
         {
             MmsReadOnlyOperation.GetLogicalDeviceDirectory => GetLogicalDeviceDirectory(),
             MmsReadOnlyOperation.GetLogicalNodeDirectory => GetLogicalNodeDirectory(request.Target),
-            MmsReadOnlyOperation.GetNamedVariableDirectory => GetNamedVariableDirectory(request.Target),
-            MmsReadOnlyOperation.GetDataSetDirectory => GetDataSetDirectory(request.Target),
+            MmsReadOnlyOperation.GetNamedVariableDirectory => GetNamedVariableDirectory(request.Target, request.ContinueAfter),
+            MmsReadOnlyOperation.GetDataSetDirectory => GetDataSetDirectory(request.Target, request.ContinueAfter),
             MmsReadOnlyOperation.GetReportControlBlockDirectory => GetReportControlBlockDirectory(),
             MmsReadOnlyOperation.GetFileDirectory => GetFileDirectory(request.Target),
             MmsReadOnlyOperation.GetVariableAccessAttributes => GetVariableAccessAttributes(request.Target),
@@ -119,7 +121,7 @@ public sealed class MmsReadOnlyServerSession
             : Ok(nameof(MmsReadOnlyOperation.GetLogicalNodeDirectory), logicalDevice, $"Returned {nodes.Length.ToString(CultureInfo.InvariantCulture)} logical node(s).", nodes);
     }
 
-    private MmsReadOnlyServerResponse GetNamedVariableDirectory(string logicalDevice)
+    private MmsReadOnlyServerResponse GetNamedVariableDirectory(string logicalDevice, string continueAfter)
     {
         if (string.IsNullOrWhiteSpace(logicalDevice))
             return Fail(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, "Logical device reference is required.");
@@ -129,15 +131,19 @@ public sealed class MmsReadOnlyServerSession
         {
             var mmsName = ToMmsNamedVariableReference(point);
             var parts = mmsName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length > 0)
+                names.Add(parts[0]);
             if (parts.Length > 1)
                 names.Add(string.Join('$', parts.Take(2)));
-            names.Add(mmsName);
+            names.Add(ToMmsDirectoryItemName(mmsName));
         }
 
         foreach (var rcb in Profile.ReportControlBlocks.Where(x => IsReferenceInLogicalDevice(x.Reference, logicalDevice)))
         {
             var mmsName = ToMmsControlBlockReference(rcb.Reference);
             var parts = mmsName.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length > 0)
+                names.Add(parts[0]);
             if (parts.Length > 1)
                 names.Add(string.Join('$', parts.Take(2)));
             names.Add(mmsName);
@@ -149,16 +155,26 @@ public sealed class MmsReadOnlyServerSession
 
         return orderedNames.Length == 0
             ? Fail(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, "Logical device not found or has no named variables.")
-            : Ok(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), logicalDevice, $"Returned {orderedNames.Length.ToString(CultureInfo.InvariantCulture)} named variable(s), including logical-node and functional-constraint hierarchy.", orderedNames);
+            : Page(
+                nameof(MmsReadOnlyOperation.GetNamedVariableDirectory),
+                logicalDevice,
+                orderedNames,
+                continueAfter,
+                "named variable(s), including logical-node and functional-constraint hierarchy");
     }
 
-    private MmsReadOnlyServerResponse GetDataSetDirectory(string logicalDevice = "")
+    private MmsReadOnlyServerResponse GetDataSetDirectory(string logicalDevice = "", string continueAfter = "")
     {
         var dataSets = string.IsNullOrWhiteSpace(logicalDevice)
             ? Profile.DataSets.ToArray()
             : Profile.DataSets.Where(x => x.Reference.StartsWith($"{logicalDevice}/", StringComparison.OrdinalIgnoreCase)).ToArray();
 
-        return Ok(nameof(MmsReadOnlyOperation.GetDataSetDirectory), logicalDevice, $"Returned {dataSets.Length.ToString(CultureInfo.InvariantCulture)} DataSet(s).", dataSets.Select(x => x.Reference).ToArray());
+        return Page(
+            nameof(MmsReadOnlyOperation.GetDataSetDirectory),
+            logicalDevice,
+            dataSets.Select(x => x.Reference).ToArray(),
+            continueAfter,
+            "DataSet(s)");
     }
 
     private MmsReadOnlyServerResponse GetReportControlBlockDirectory()
@@ -544,6 +560,58 @@ public sealed class MmsReadOnlyServerSession
 
     private static string NormalizeDataSetName(string value)
         => new((value ?? string.Empty).Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+
+    private static string ToMmsDirectoryItemName(string reference)
+    {
+        var slash = reference.IndexOf('/');
+        var item = slash >= 0 && slash < reference.Length - 1 ? reference[(slash + 1)..] : reference;
+        return item.Replace('.', '$');
+    }
+
+    private static MmsReadOnlyServerResponse Page(
+        string operation,
+        string target,
+        IReadOnlyList<string> allItems,
+        string continueAfter,
+        string itemDescription)
+    {
+        const int maxItems = 64;
+        const int maxEncodedBytes = 8192;
+        var start = 0;
+        if (!string.IsNullOrWhiteSpace(continueAfter))
+        {
+            var exact = Array.FindIndex(allItems.ToArray(), x => string.Equals(x, continueAfter, StringComparison.OrdinalIgnoreCase));
+            start = exact >= 0
+                ? exact + 1
+                : Array.FindIndex(allItems.ToArray(), x => string.Compare(x, continueAfter, StringComparison.OrdinalIgnoreCase) > 0);
+            if (start < 0)
+                start = allItems.Count;
+        }
+
+        var page = new List<string>(Math.Min(maxItems, Math.Max(0, allItems.Count - start)));
+        var encodedBytes = 0;
+        for (var index = start; index < allItems.Count && page.Count < maxItems; index++)
+        {
+            var item = allItems[index];
+            var itemBytes = System.Text.Encoding.ASCII.GetByteCount(item) + 2;
+            if (page.Count > 0 && encodedBytes + itemBytes > maxEncodedBytes)
+                break;
+
+            page.Add(item);
+            encodedBytes += itemBytes;
+        }
+
+        var moreFollows = start + page.Count < allItems.Count;
+        return new MmsReadOnlyServerResponse
+        {
+            IsSuccess = true,
+            Operation = operation,
+            Target = target,
+            Message = $"Returned page {page.Count.ToString(CultureInfo.InvariantCulture)} of {allItems.Count.ToString(CultureInfo.InvariantCulture)} {itemDescription}; moreFollows={moreFollows}.",
+            Items = page,
+            MoreFollows = moreFollows
+        };
+    }
 
     private sealed record MmsTypeCandidate(MmsReadOnlyPoint Point, string[] Parts);
 

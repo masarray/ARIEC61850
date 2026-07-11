@@ -68,10 +68,71 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.Equal(nameof(MmsReadOnlyOperation.GetNamedVariableDirectory), dispatch.Response.Operation);
         Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
         Assert.True(names.IsSuccess, names.Message);
+        Assert.Contains("MMXU1", names.Names);
         Assert.Contains("MMXU1$MX", names.Names);
-        Assert.DoesNotContain("MMXU1", names.Names);
         Assert.Contains(names.Names, x => x.Contains("$MX$", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(names.Names, x => x.Contains("$ST$", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Dispatcher_Paginates_Large_NamedVariable_Directory_And_Honors_ContinueAfter()
+    {
+        var points = Enumerable.Range(0, 130)
+            .Select(index => IedSimulatorPoint.Status($"MMXU1.S{index}.stVal", "ST", "false"))
+            .ToArray();
+        var simulatorProfile = new IedSimulatorProfile
+        {
+            Name = "Paged IED",
+            LogicalDevices =
+            [
+                new IedSimulatorLogicalDevice
+                {
+                    Name = "IED1LD0",
+                    LogicalNodes =
+                    [
+                        new IedSimulatorLogicalNode
+                        {
+                            Name = "MMXU1",
+                            LnClass = "MMXU",
+                            Points = points
+                        }
+                    ]
+                }
+            ]
+        };
+        var serverProfile = new MmsReadOnlyServerModelBuilder().Build(simulatorProfile);
+        var session = new MmsReadOnlyServerSession(serverProfile);
+        var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var continueAfter = string.Empty;
+        var pageCount = 0;
+
+        do
+        {
+            var request = MmsGetNameListRequest.Build(
+                30 + pageCount,
+                MmsGetNameListObjectClass.NamedVariable,
+                "IED1LD0",
+                continueAfter);
+            var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(request, session);
+            var page = MmsGetNameListResponseDecoder.Decode(dispatch.ResponsePresentationPayload, 30 + pageCount);
+
+            Assert.True(dispatch.IsRequestDecoded, dispatch.Message);
+            Assert.True(dispatch.Response.IsSuccess, dispatch.Response.Message);
+            Assert.True(page.IsSuccess, page.Message);
+            Assert.NotEmpty(page.Names);
+            Assert.All(page.Names, name => Assert.True(discovered.Add(name), $"Duplicate directory item: {name}"));
+
+            continueAfter = page.Names[^1];
+            pageCount++;
+            if (!page.MoreFollows)
+                break;
+        }
+        while (pageCount < 8);
+
+        Assert.True(pageCount > 1, $"Expected multiple pages, received {pageCount}.");
+        Assert.Contains("MMXU1", discovered);
+        Assert.Contains("MMXU1$ST", discovered);
+        Assert.Contains("MMXU1$ST$S129$stVal", discovered);
     }
 
     [Fact]

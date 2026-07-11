@@ -16,6 +16,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _timer;
     private IedSimulatorEngine _engine;
     private IedSimulatorMmsServer? _server;
+    private Task? _stopServerTask;
+    private bool _isClosing;
     private string _profileName = "Demo feeder";
 
     public MainWindow()
@@ -29,7 +31,7 @@ public partial class MainWindow : Window
         LoadProfileToView();
     }
 
-    private void OpenScl_Click(object sender, RoutedEventArgs e)
+    private async void OpenScl_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
@@ -42,7 +44,7 @@ public partial class MainWindow : Window
 
         try
         {
-            StopServer();
+            await StopServerAsync();
             _timer.Stop();
 
             var result = new IedSimulatorProfileBuilder().FromScl(dialog.FileName);
@@ -67,18 +69,24 @@ public partial class MainWindow : Window
 
     private void Start_Click(object sender, RoutedEventArgs e)
     {
+        if (_stopServerTask is not null)
+        {
+            _viewModel.Status = "MMS server is still stopping. Please wait before starting it again.";
+            return;
+        }
+
         _engine.Start();
         _timer.Start();
         _viewModel.IsRunning = true;
         StartServer();
     }
 
-    private void Stop_Click(object sender, RoutedEventArgs e)
+    private async void Stop_Click(object sender, RoutedEventArgs e)
     {
         _timer.Stop();
         _engine.Stop();
         _viewModel.IsRunning = false;
-        StopServer();
+        await StopServerAsync();
         _viewModel.Status = "Simulator stopped.";
     }
 
@@ -110,23 +118,37 @@ public partial class MainWindow : Window
         }
     }
 
-    private void StopServer()
+    private Task StopServerAsync()
     {
+        if (_stopServerTask is not null)
+            return _stopServerTask;
+
         var server = _server;
         _server = null;
         if (server is null)
-            return;
+            return Task.CompletedTask;
+
+        _stopServerTask = StopServerCoreAsync(server);
+        return _stopServerTask;
+    }
+
+    private async Task StopServerCoreAsync(IedSimulatorMmsServer server)
+    {
+        _viewModel.ServerStatus = "MMS server: stopping...";
 
         try
         {
-            server.StopAsync().GetAwaiter().GetResult();
+            await server.StopAsync();
         }
         catch
         {
             // ignore shutdown errors
         }
-
-        _viewModel.ServerStatus = "MMS server: stopped.";
+        finally
+        {
+            _stopServerTask = null;
+            _viewModel.ServerStatus = "MMS server: stopped.";
+        }
     }
 
     private void AppendActivity(IedSimulatorServerActivity activity, IedSimulatorMmsServer server)
@@ -160,12 +182,42 @@ public partial class MainWindow : Window
         };
     }
 
-    private void OnUi(Action action) => Dispatcher.Invoke(action);
-
-    protected override void OnClosed(EventArgs e)
+    private void OnUi(Action action)
     {
-        StopServer();
-        base.OnClosed(e);
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+
+        if (Dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        try
+        {
+            _ = Dispatcher.BeginInvoke(action);
+        }
+        catch (InvalidOperationException)
+        {
+            // Dispatcher has begun shutting down.
+        }
+    }
+
+    protected override async void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_isClosing && (_server is not null || _stopServerTask is not null))
+        {
+            e.Cancel = true;
+            _isClosing = true;
+            _timer.Stop();
+            _engine.Stop();
+            _viewModel.IsRunning = false;
+            await StopServerAsync();
+            Close();
+            return;
+        }
+
+        base.OnClosing(e);
     }
 
     private void Step_Click(object sender, RoutedEventArgs e)
@@ -174,12 +226,12 @@ public partial class MainWindow : Window
         _viewModel.Status = "Manual simulation step executed.";
     }
 
-    private void Reset_Click(object sender, RoutedEventArgs e)
+    private async void Reset_Click(object sender, RoutedEventArgs e)
     {
         _timer.Stop();
         _engine.Stop();
         _engine.Reset();
-        StopServer();
+        await StopServerAsync();
         _viewModel.Events.Clear();
         _viewModel.Activities.Clear();
         _viewModel.IsRunning = false;

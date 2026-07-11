@@ -102,6 +102,29 @@ public sealed class IedSimulatorMmsServerTests
         Assert.Contains("before sending ACSE AARQ", closed.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task StopAsync_Completes_When_A_Client_Is_Connected_But_Idle()
+    {
+        var engine = new IedSimulatorEngine(IedSimulatorProfile.CreateDefaultFeederProfile());
+        await using var server = IedSimulatorMmsServer.Create(engine, new IedSimulatorMmsServerOptions
+        {
+            Host = "127.0.0.1",
+            Port = 0
+        });
+
+        server.Start();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", server.BoundPort, timeout.Token);
+        _ = await WaitForActivityAsync(server, a => a.Kind == IedSimulatorServerActivityKind.ClientConnected, timeout.Token);
+
+        await server.StopAsync().WaitAsync(timeout.Token);
+
+        Assert.False(server.IsRunning);
+        Assert.Contains(server.RecentActivity(), a => a.Kind == IedSimulatorServerActivityKind.ServerStopped);
+    }
+
     private static async Task<byte[]> ReadTpktFrameAsync(NetworkStream stream, CancellationToken cancellationToken)
     {
         var header = await ReadExactAsync(stream, TpktFrameCodec.HeaderLength, cancellationToken);

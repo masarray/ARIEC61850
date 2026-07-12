@@ -10,6 +10,7 @@ ARIEC61850
 │  │  ├─ Osi / TPKT + COTP
 │  │  ├─ Acse / MMS association helpers
 │  │  ├─ Mms / discovery, read, write, datasets, RCBs, reporting
+│  │  ├─ Control / typed control discovery, exact MMS binding, sequence execution
 │  │  ├─ Goose / GOOSE frame builder/parser/session helpers
 │  │  ├─ SampledValues / SV frame builder/parser/payload model
 │  │  ├─ Scl / SCL parser and publisher profiles
@@ -47,6 +48,8 @@ ARIEC61850
 ### Core protocol layer
 
 `src/AR.Iec61850` contains the reusable implementation: BER, MMS, GOOSE, SV, PCAP, SCL, and diagnostics.
+
+The `Control` namespace sits above the generic MMS services. It discovers `ctlModel` and the exact live variable specification, owns Direct/SBO normal/enhanced state, and consumes InformationReport command termination through the single association receive pump. Public generic MMS write is blocked for `Oper`, `SBOw`, and `Cancel`.
 
 ### Simulation layer
 

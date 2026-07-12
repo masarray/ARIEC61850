@@ -14,6 +14,7 @@ public sealed class MmsInformationReportItem
 public sealed class MmsInformationReport
 {
     public bool IsSuccess { get; init; }
+    public IReadOnlyList<string> VariableReferences { get; init; } = Array.Empty<string>();
     public IReadOnlyList<MmsInformationReportItem> Items { get; init; } = Array.Empty<MmsInformationReportItem>();
     public string Message { get; init; } = string.Empty;
     public string ResponseHexPreview { get; init; } = string.Empty;
@@ -49,14 +50,16 @@ public static class MmsInformationReportDecoder
             if (info.EncodedTag == 0)
                 return Fail("MMS Unconfirmed-PDU has no informationReport service node [0].", hex);
 
+            var variableReferences = DecodeVariableReferences(info).ToArray();
             var accessResults = DecodeInformationReportAccessResults(info).ToArray();
 
             return new MmsInformationReport
             {
                 IsSuccess = accessResults.Length > 0,
+                VariableReferences = variableReferences,
                 Items = accessResults,
                 Message = accessResults.Length > 0
-                    ? $"MMS InformationReport decoded {accessResults.Length} access result(s)."
+                    ? $"MMS InformationReport decoded {accessResults.Length} access result(s) and {variableReferences.Length} variable reference(s)."
                     : "MMS InformationReport was decoded, but no access results were found.",
                 ResponseHexPreview = hex
             };
@@ -65,6 +68,81 @@ public static class MmsInformationReportDecoder
         {
             return Fail($"MMS InformationReport decode failed: {ex.GetType().Name}: {ex.Message}", hex);
         }
+    }
+
+    private static IEnumerable<string> DecodeVariableReferences(BerTlv informationReport)
+    {
+        if (!informationReport.Constructed)
+            yield break;
+
+        var children = BerReader.ReadChildren(informationReport.Value);
+        if (children.Count == 0)
+            yield break;
+
+        // VariableAccessSpecification is the first service field. In IEC 61850
+        // InformationReport traffic it is normally listOfVariable [0], but some
+        // servers use variableListName [1]. Preserve all decodable names.
+        var specification = children[0];
+        foreach (var reference in DecodeObjectNames(specification))
+            yield return reference;
+    }
+
+    private static IEnumerable<string> DecodeObjectNames(BerTlv node)
+    {
+        if (!node.Constructed)
+            yield break;
+
+        if (TryDecodeObjectName(node, out var direct))
+            yield return direct;
+
+        foreach (var child in BerReader.ReadChildren(node.Value))
+        {
+            foreach (var nested in DecodeObjectNames(child))
+                yield return nested;
+        }
+    }
+
+    private static bool TryDecodeObjectName(BerTlv node, out string reference)
+    {
+        reference = string.Empty;
+        if (!node.Constructed)
+            return false;
+
+        var children = BerReader.ReadChildren(node.Value);
+
+        // ObjectName.domain-specific [1] ::= SEQUENCE { domainID, itemID }
+        if (node.Class == BerClass.ContextSpecific && node.TagNumber == 1 && children.Count >= 2)
+        {
+            var domain = TryReadIdentifier(children[0]);
+            var item = TryReadIdentifier(children[1]);
+            if (!string.IsNullOrWhiteSpace(domain) && !string.IsNullOrWhiteSpace(item))
+            {
+                reference = $"{domain}/{item}";
+                return true;
+            }
+        }
+
+        // ObjectName.vmd-specific [0] or aa-specific [2].
+        if (node.Class == BerClass.ContextSpecific && node.TagNumber is 0 or 2 && children.Count == 0)
+        {
+            var value = System.Text.Encoding.ASCII.GetString(node.Value.Span);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                reference = value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string TryReadIdentifier(BerTlv node)
+    {
+        if (!node.Constructed)
+            return System.Text.Encoding.ASCII.GetString(node.Value.Span);
+
+        var child = BerReader.ReadChildren(node.Value).FirstOrDefault();
+        return child.EncodedTag == 0 ? string.Empty : TryReadIdentifier(child);
     }
 
     private static IEnumerable<MmsInformationReportItem> DecodeInformationReportAccessResults(BerTlv informationReport)

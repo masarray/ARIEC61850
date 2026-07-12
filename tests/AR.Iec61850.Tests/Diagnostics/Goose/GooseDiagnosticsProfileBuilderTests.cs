@@ -26,7 +26,7 @@ public sealed class GooseDiagnosticsProfileBuilderTests
         Assert.Equal(1, diagnostics.BoundStreamCount);
         Assert.Equal(1, diagnostics.HealthyStreamCount);
         Assert.Equal(GooseDiagnosticsStreamStatus.Healthy, diagnostics.Streams[0].Status);
-        Assert.Empty(diagnostics.Findings.Where(f => f.Severity == "High"));
+        Assert.DoesNotContain(diagnostics.Findings, f => f.Severity == "High");
     }
 
     [Fact]

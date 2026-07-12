@@ -1,5 +1,7 @@
 # Validation
 
+The public live-control evidence boundary is recorded in [Live IED Control Validation](LIVE_IED_CONTROL_VALIDATION.md).
+
 ## Automated checks
 
 Run these before every public push:
@@ -18,6 +20,14 @@ dotnet build .\src\AR.Iec61850\AR.Iec61850.csproj -c Release
 dotnet build .\src\AR.Iec61850.Simulation\AR.Iec61850.Simulation.csproj -c Release
 dotnet build .\apps\AR.Iec61850.Cli\AR.Iec61850.Cli.csproj -c Release
 dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release
+```
+
+Focused smart-control validation:
+
+```powershell
+dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj `
+  -c Release `
+  --filter "FullyQualifiedName~SmartControlStackTests|FullyQualifiedName~MmsReceiveRouterTests"
 ```
 
 ## Desktop app checks
@@ -53,6 +63,8 @@ Recommended protocol checks before a release:
 - run IEDScout against the simulator on `127.0.0.1:102` and confirm the activity
   sequence reaches `GetNameList` after `COTP CR/CC` and `ACSE AARQ/AARE`;
 - run report planning before enabling any RCB;
+- discover a control Data Object, verify `ctlModel` and exact Oper/SBOw/Cancel signatures, then exercise Direct/SBO normal/enhanced only in an isolated lab;
+- capture positive and negative CommandTermination, LastApplError/AddCause, SBO timeout/Cancel, association loss, competing-client ownership, and process feedback;
 - export report evidence into ignored local output folders only.
 
 ## Current claim boundary

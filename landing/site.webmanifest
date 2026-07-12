@@ -1,8 +1,11 @@
 {
-  "name": "ARIEC61850",
+  "name": "ARIEC61850 IEC 61850 Engineering Toolkit",
   "short_name": "ARIEC61850",
-  "start_url": ".",
+  "description": "Native IEC 61850 client control, reporting, GOOSE, Sampled Values, SCL and PCAP engineering tools for .NET 8.",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#f7faf9",
-  "theme_color": "#0f766e"
+  "background_color": "#f6f9f8",
+  "theme_color": "#0f766e",
+  "categories": ["developer", "utilities", "education"]
 }

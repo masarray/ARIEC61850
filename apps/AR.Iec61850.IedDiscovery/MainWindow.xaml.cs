@@ -725,13 +725,34 @@ public partial class MainWindow : Window
 
     private void Control_Click(object sender, RoutedEventArgs e)
     {
-        var reference = _viewModel.SelectedNode?.Reference ?? "-";
-        MessageBox.Show(this,
-            $"Control object: {reference}\n\nThe shell correctly enables Control only for controllable candidates. Live operate remains disabled until the safe control-model engine milestone.",
-            "Control dry-run preview",
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-        _viewModel.AddStatus("Warning", "CONTROL_DRY_RUN", $"Control dry-run preview opened for {reference}.");
+        if (_activeSession == null || !_viewModel.IsConnected || !_viewModel.IsOnline)
+        {
+            _viewModel.AddStatus("Warning", "CONTROL_NOT_ONLINE", "Control requires an active online MMS session.");
+            return;
+        }
+
+        var selected = _viewModel.SelectedNode;
+        if (selected?.Kind != ExplorerNodeKind.DataObject || string.IsNullOrWhiteSpace(selected.Reference))
+        {
+            _viewModel.AddStatus("Warning", "CONTROL_NO_OBJECT", "Select a controllable Data Object such as CSWI.Pos before opening Control Tester.");
+            return;
+        }
+
+        try
+        {
+            var window = new ControlWindow(_activeSession, selected.Reference)
+            {
+                Owner = this
+            };
+            _viewModel.AddStatus("Info", "CONTROL_TESTER_OPENED", $"Smart Control Tester opened for {selected.Reference}.");
+            window.ShowDialog();
+            _viewModel.AddStatus("Info", "CONTROL_TESTER_CLOSED", $"Smart Control Tester closed for {selected.Reference}.");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            _viewModel.AddStatus("Error", "CONTROL_TESTER_FAILED", $"{ex.GetType().Name}: {ex.Message}");
+            MessageBox.Show(this, ex.Message, "Control Tester", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void Pin_Click(object sender, RoutedEventArgs e)

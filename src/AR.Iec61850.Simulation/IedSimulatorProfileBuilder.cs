@@ -385,6 +385,23 @@ public sealed class IedSimulatorProfileBuilder
 
     private static string ResolveStatusInitialValue(SclDataSetEntry entry)
     {
+        var bType = NormalizeBType(entry.BType);
+        if (bType is "DBPOS" or "TCMD")
+            return "closed";
+
+        if (bType == "ENUM" || bType.StartsWith("INT", StringComparison.Ordinal) || bType.StartsWith("FLOAT", StringComparison.Ordinal))
+            return "0";
+
+        if (bType is "BOOLEAN" or "BOOL")
+            return entry.DoName.Equals("Pos", StringComparison.OrdinalIgnoreCase) &&
+                   entry.DaName.EndsWith("stVal", StringComparison.OrdinalIgnoreCase)
+                ? "true"
+                : "false";
+
+        if (bType.StartsWith("VISSTRING", StringComparison.Ordinal) || bType.StartsWith("UNICODE", StringComparison.Ordinal) ||
+            bType.StartsWith("MMSSTRING", StringComparison.Ordinal) || bType.StartsWith("OCTET", StringComparison.Ordinal) || bType == "OBJREF")
+            return string.Empty;
+
         var cdc = entry.Cdc;
         if (cdc.Equals("DPS", StringComparison.OrdinalIgnoreCase) || cdc.Equals("DPC", StringComparison.OrdinalIgnoreCase) ||
             entry.DoName.Equals("Pos", StringComparison.OrdinalIgnoreCase))
@@ -392,10 +409,6 @@ public sealed class IedSimulatorProfileBuilder
 
         if (cdc.Equals("SPS", StringComparison.OrdinalIgnoreCase) || cdc.Equals("SPC", StringComparison.OrdinalIgnoreCase) ||
             cdc.Equals("ACT", StringComparison.OrdinalIgnoreCase) || cdc.Equals("ACD", StringComparison.OrdinalIgnoreCase))
-            return "false";
-
-        var bType = NormalizeBType(entry.BType);
-        if (bType is "BOOLEAN" or "BOOL")
             return "false";
 
         return "0";

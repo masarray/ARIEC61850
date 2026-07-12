@@ -41,7 +41,7 @@ public sealed class IedSimulatorProfileBuilderTests
 
         var breaker = points.Single(p => p.Reference == "XCBR1.Pos.stVal");
         Assert.Equal("status", breaker.Kind);
-        Assert.Equal("closed", breaker.InitialValue);
+        Assert.Equal("true", breaker.InitialValue);
         Assert.Equal("BOOLEAN", breaker.SclBType);
 
         Assert.Contains(points, p => p.Reference == "XCBR1.Pos.q" && p.Kind == "quality" && p.InitialValue == "valid");
@@ -184,6 +184,26 @@ public sealed class IedSimulatorProfileBuilderTests
                                             AttributePath = "stVal",
                                             FunctionalConstraint = "ST",
                                             SclBType = "Dbpos"
+                                        },
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            AttributePath = "ctlModel",
+                                            FunctionalConstraint = "CF",
+                                            SclBType = "Enum"
+                                        }
+                                    ]
+                                },
+                                new LiveIedDataObjectModel
+                                {
+                                    Name = "Str",
+                                    InferredCdc = "ACD",
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            AttributePath = "dirGeneral",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = "Enum"
                                         }
                                     ]
                                 }
@@ -200,7 +220,7 @@ public sealed class IedSimulatorProfileBuilderTests
         Assert.Equal("TEMPLATE", result.SourceIedName);
         Assert.Equal("SIE7SR5", result.SelectedIedName);
         Assert.Equal("SIE7SR5", profile.Name);
-        Assert.Equal(2, result.StructuralDataAttributeCount);
+        Assert.Equal(4, result.StructuralDataAttributeCount);
         Assert.Equal(2, profile.LogicalDevices.Count);
         Assert.Contains(profile.LogicalDevices, device => device.Name == "SIE7SR5PROT");
         Assert.Contains(profile.LogicalDevices, device => device.Name == "SIE7SR5CTRL");
@@ -209,6 +229,12 @@ public sealed class IedSimulatorProfileBuilderTests
         Assert.Contains(protection.LogicalNodes, node => node.Name == "CSWI1");
         Assert.Contains(profile.LogicalDevices.SelectMany(device => device.LogicalNodes).SelectMany(node => node.Points),
             point => point.Reference == "LLN0.Mod.stVal" && point.FunctionalConstraint == "ST");
+        Assert.Contains(profile.LogicalDevices.SelectMany(device => device.LogicalNodes).SelectMany(node => node.Points),
+            point => point.Reference == "XCBR1.Pos.stVal" && point.InitialValue == "closed");
+        Assert.Contains(profile.LogicalDevices.SelectMany(device => device.LogicalNodes).SelectMany(node => node.Points),
+            point => point.Reference == "XCBR1.Pos.ctlModel" && point.InitialValue == "0");
+        Assert.Contains(profile.LogicalDevices.SelectMany(device => device.LogicalNodes).SelectMany(node => node.Points),
+            point => point.Reference == "XCBR1.Str.dirGeneral" && point.InitialValue == "0");
         Assert.Contains(profile.ReportControlBlocks,
             rcb => rcb.Reference == "SIE7SR5PROT/CSWI1.RP.urcbA" && rcb.ConfRev == 7);
     }

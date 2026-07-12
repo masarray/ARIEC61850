@@ -1761,18 +1761,17 @@ public static class MmsConfirmedRequestBerDispatcher
         if (bType is "BOOLEAN" or "BOOL")
             return MmsDataValue.Boolean(bool.TryParse(point.Value, out var boolean) && boolean);
 
-        if (bType is "DBPOS" or "TCMD" && TryMapStatusToInteger(point.Value, out var mappedStatus))
-            return MmsDataValue.Integer(mappedStatus);
+        if (bType is "DBPOS" or "TCMD")
+            return MmsDataValue.Integer(TryMapStatusToInteger(point.Value, out var mappedStatus) ? mappedStatus : 0);
 
-        if (IsSignedSclInteger(bType) && long.TryParse(point.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var signed))
-            return MmsDataValue.Integer(signed);
+        if (IsSignedSclInteger(bType))
+            return MmsDataValue.Integer(long.TryParse(point.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var signed) ? signed : 0);
 
-        if (IsUnsignedSclInteger(bType) && ulong.TryParse(point.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unsigned))
-            return MmsDataValue.Unsigned(unsigned);
+        if (IsUnsignedSclInteger(bType))
+            return MmsDataValue.Unsigned(ulong.TryParse(point.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unsigned) ? unsigned : 0);
 
-        if (bType.StartsWith("FLOAT", StringComparison.Ordinal) &&
-            double.TryParse(point.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var floating))
-            return MmsDataValue.FloatingPoint(floating);
+        if (bType.StartsWith("FLOAT", StringComparison.Ordinal))
+            return MmsDataValue.FloatingPoint(double.TryParse(point.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var floating) ? floating : 0d);
 
         if (bType.StartsWith("OCTET", StringComparison.Ordinal))
             return MmsDataValue.OctetString(Encoding.ASCII.GetBytes(point.Value));

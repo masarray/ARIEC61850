@@ -263,7 +263,7 @@ public sealed class MmsConfirmedRequestBerProfileTests
                                     FunctionalConstraint = "SG",
                                     Kind = "status",
                                     SclBType = "Enum",
-                                    InitialValue = "0"
+                                    InitialValue = "closed"
                                 },
                                 new IedSimulatorPoint
                                 {

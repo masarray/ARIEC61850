@@ -311,6 +311,7 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.True(stringAttributes.IsSuccess, stringAttributes.Message);
         Assert.Equal("visible-string", stringAttributes.MmsType);
         Assert.Equal(255, stringAttributes.TypeSpecification!.Size);
+        Assert.Contains("8A0200FF", Convert.ToHexString(stringAttributesDispatch.ResponsePresentationPayload));
 
         var nodeReference = new MmsObjectReference("IED1LD0", "MMXU1", string.Empty);
         var nodeDispatch = MmsConfirmedRequestBerDispatcher.Dispatch(

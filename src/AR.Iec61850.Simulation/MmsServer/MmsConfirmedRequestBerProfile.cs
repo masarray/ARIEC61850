@@ -1643,7 +1643,7 @@ public static class MmsConfirmedRequestBerDispatcher
         var deletable = BerWriter.EncodeTlv(0x80, new byte[] { 0x00 });
         var typeDescription = response.IsSuccess && response.Values.Count > 0
             ? EncodeTypeSpecification(response.Values[0])
-            : BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger(255));
+            : BerWriter.EncodeTlv(0x8A, BerWriter.EncodeSignedInteger(255));
 
         // The response contains typeDescription [2] TypeDescription. The [2]
         // field is explicit, so the actual TypeDescription is nested inside it.
@@ -1731,7 +1731,7 @@ public static class MmsConfirmedRequestBerDispatcher
         if (bool.TryParse(point.Value, out _))
             return BerWriter.EncodeTlv(0x83, ReadOnlySpan<byte>.Empty);
 
-        return BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger(255));
+        return BerWriter.EncodeTlv(0x8A, BerWriter.EncodeSignedInteger(255));
     }
 
     private static MmsDataValue? TryEncodeSclPointValue(MmsReadOnlyPoint point)
@@ -1807,7 +1807,7 @@ public static class MmsConfirmedRequestBerDispatcher
             return BerWriter.EncodeTlv(0x84, new byte[] { 6 });
 
         if (bType == "ENTRYID")
-            return BerWriter.EncodeTlv(0x89, BerWriter.EncodeUnsignedInteger(8));
+            return BerWriter.EncodeTlv(0x89, BerWriter.EncodeSignedInteger(8));
 
         if (bType == "ENTRYTIME")
             return BerWriter.EncodeTlv(0x8C, new byte[] { 0xFF }); // binary-time [12], time-of-day = 6 bytes
@@ -1825,13 +1825,13 @@ public static class MmsConfirmedRequestBerDispatcher
             return EncodeFloatingPointTypeSpecification(formatWidth: 64, exponentWidth: 11);
 
         if (bType.StartsWith("OCTET", StringComparison.Ordinal))
-            return BerWriter.EncodeTlv(0x89, BerWriter.EncodeUnsignedInteger((ulong)SclStringLength(bType, 64)));
+            return BerWriter.EncodeTlv(0x89, BerWriter.EncodeSignedInteger(SclStringLength(bType, 64)));
 
         if (bType.StartsWith("VISSTRING", StringComparison.Ordinal) || bType == "OBJREF")
-            return BerWriter.EncodeTlv(0x8A, BerWriter.EncodeUnsignedInteger((ulong)SclStringLength(bType, 255)));
+            return BerWriter.EncodeTlv(0x8A, BerWriter.EncodeSignedInteger(SclStringLength(bType, 255)));
 
         if (bType.StartsWith("UNICODE", StringComparison.Ordinal) || bType.StartsWith("MMSSTRING", StringComparison.Ordinal))
-            return BerWriter.EncodeTlv(0x90, BerWriter.EncodeUnsignedInteger((ulong)SclStringLength(bType, 255)));
+            return BerWriter.EncodeTlv(0x90, BerWriter.EncodeSignedInteger(SclStringLength(bType, 255)));
 
         if (bType == "TIMESTAMP")
             return BerWriter.EncodeTlv(0x91, ReadOnlySpan<byte>.Empty);

@@ -73,7 +73,7 @@ public sealed class Iec61850ValueBindingEngineTests
 
         var result = Iec61850ValueBindingEngine.Bind(oper, operation);
 
-        Assert.Empty(result.Diagnostics.Where(x => x.StartsWith("LOW_CONFIDENCE_RAW_STRUCTURE", StringComparison.OrdinalIgnoreCase)));
+        Assert.DoesNotContain(result.Diagnostics, x => x.StartsWith("LOW_CONFIDENCE_RAW_STRUCTURE", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(new[] { "ctlVal", "origin", "ctlNum", "T", "Test", "Check" }, result.Root.Children.Select(x => x.Name).ToArray());
         Assert.Equal("on", result.Root.Children[0].Value);
         Assert.Equal("process", result.Root.Children[1].Children[0].Value);

@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -99,7 +99,7 @@ jobs:
           ./scripts/verify-release-package.ps1 -PackagePath ".artifacts/release/$packageName-v${{ steps.release.outputs.version }}-win-x64-single-exe.zip" -Version '${{ steps.release.outputs.version }}' -App $app
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARIEC61850-${{ steps.release.outputs.app }}-v${{ steps.release.outputs.version }}-win-x64-single-exe
           path: |

@@ -306,10 +306,10 @@ public sealed class MmsConfirmedRequestBerProfileTests
 
         Assert.True(nodeAttributes.IsSuccess, nodeAttributes.Message);
         Assert.Equal("structure", nodeAttributes.MmsType);
-        var settingGroup = Assert.Single(nodeAttributes.TypeSpecification!.Children.Where(child => child.Name == "SG"));
-        var calculationMethod = Assert.Single(settingGroup.Children.Where(child => child.Name == "ClcMth"));
+        var settingGroup = Assert.Single(nodeAttributes.TypeSpecification!.Children, child => child.Name == "SG");
+        var calculationMethod = Assert.Single(settingGroup.Children, child => child.Name == "ClcMth");
         Assert.Contains(calculationMethod.Children, child => child.Name == "setVal" && child.MmsType == "integer");
-        var external = Assert.Single(nodeAttributes.TypeSpecification.Children.Where(child => child.Name == "EX"));
+        var external = Assert.Single(nodeAttributes.TypeSpecification.Children, child => child.Name == "EX");
         Assert.Contains(external.Children.Single(child => child.Name == "ClcMth").Children,
             child => child.Name == "dataNs" && child.MmsType == "visible-string");
     }
@@ -500,12 +500,12 @@ public sealed class MmsConfirmedRequestBerProfileTests
         var offset = 0;
         Assert.True(BerReader.TryReadTlv(mms, ref offset, out var response));
         var responseChildren = BerReader.ReadChildren(response.Value);
-        var responseService = Assert.Single(responseChildren.Where(x => x.EncodedTag == 0xAC));
-        var listOfVariable = Assert.Single(BerReader.ReadChildren(responseService.Value).Where(x => x.EncodedTag == 0xA1));
+        var responseService = Assert.Single(responseChildren, x => x.EncodedTag == 0xAC);
+        var listOfVariable = Assert.Single(BerReader.ReadChildren(responseService.Value), x => x.EncodedTag == 0xA1);
         var variableDefinitions = BerReader.ReadChildren(listOfVariable.Value).Where(x => x.EncodedTag == 0x30).ToArray();
         Assert.NotEmpty(variableDefinitions);
         var variableDefinition = variableDefinitions[0];
-        var variableSpecification = Assert.Single(BerReader.ReadChildren(variableDefinition.Value).Where(x => x.EncodedTag == 0xA0));
+        var variableSpecification = Assert.Single(BerReader.ReadChildren(variableDefinition.Value), x => x.EncodedTag == 0xA0);
         Assert.Contains(BerReader.ReadChildren(variableSpecification.Value), x => x.EncodedTag == 0xA1);
     }
 

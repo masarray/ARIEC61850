@@ -183,6 +183,7 @@ public sealed class MmsReceivePump
         {
             LastFaultMessage = $"MMS receive pump fault: {ex.GetType().Name}: {ex.Message}";
             FaultPendingOperations(ex);
+            _router.FaultInformationReportSubscriptions(ex);
         }
     }
 

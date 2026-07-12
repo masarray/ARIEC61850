@@ -15,7 +15,7 @@ This repository is intentionally source-first and public-release safe: generated
 
 | Area | Project / folder | Purpose |
 |---|---|---|
-| Core library | `src/AR.Iec61850` | BER, MMS, SCL, GOOSE, SV, PCAP, reporting, diagnostics, engineering/report-readiness facades |
+| Core library | `src/AR.Iec61850` | BER, MMS, native control objects, SCL, GOOSE, SV, PCAP, reporting, diagnostics, engineering/report-readiness facades |
 | Live Ethernet transport | `src/AR.Iec61850.Transports.Npcap` | Npcap-backed raw process-bus transport for Windows lab use |
 | CLI toolkit | `apps/AR.Iec61850.Cli` | SCL inspection, PCAP generation/inspection, MMS discovery/read/reporting commands |
 | WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher / injector workspace |
@@ -38,6 +38,7 @@ Implemented areas include:
 - MMS data value codec and common client services.
 - TCP/TPKT/COTP/ACSE/MMS association foundation.
 - MMS model discovery, FC-aware path resolution, smart read, dataset directory inspection.
+- Native IEC 61850 client control-object service with live `ctlModel` and exact MMS type discovery, Direct/SBO normal/enhanced sequencing, immutable `ctlNum`/`T`/origin context, Cancel/timeout ownership, and CommandTermination/LastApplError decoding.
 - RCB discovery, report planning, guarded report enable, GI trigger, receive loop, diagnostics, and evidence export.
 - GOOSE frame builder/parser, SCL-backed publisher profiles, publisher session, PCAP sniffer diagnostics, live subscriber command, `stNum`/`sqNum`/TAL supervision, and changed-value summaries.
 - Sampled Values frame builder/parser, payload generation, payload decode, and WPF publisher/injector workspace.
@@ -54,7 +55,7 @@ Experimental or future areas:
 
 - multi-vendor long-duration MMS reporting soak evidence;
 - full buffered report recovery and replay workflows;
-- MMS file/log/setting-group/control model services;
+- MMS file/log/setting-group services and broader vendor-specific control-type coverage;
 - multi-client and third-party MMS interoperability evidence for the IED simulator server;
 - live raw SV subscriber CLI loop on top of the Npcap receive path;
 - IEC 62351 security profile;
@@ -75,6 +76,27 @@ dotnet restore .\ARIEC61850.sln
 dotnet build .\ARIEC61850.sln -c Release
 dotnet test .\ARIEC61850.sln -c Release --no-build
 ```
+
+### Smart control API
+
+Applications should open a control-object session by Data Object reference and let the engine execute the discovered Direct/SBO normal/enhanced sequence:
+
+```csharp
+var service = new Iec61850ControlService();
+await using var control = await service.OpenAsync(session, "LD0/CSWI1.Pos", cancellationToken);
+
+var result = await control.OperateAsync(new Iec61850ControlRequest
+{
+    ControlValue = Iec61850ControlValue.Close(),
+    Origin = Iec61850Origin.FromText("ARIED", Iec61850OriginCategory.Maintenance),
+    InterlockCheck = true,
+    SynchroCheck = true
+}, cancellationToken);
+```
+
+See [`docs/SMART_CONTROL_STACK.md`](docs/SMART_CONTROL_STACK.md) for the architecture, result semantics, safety boundary, and live validation matrix.
+
+The WPF IED Discovery app also includes a guarded Smart Control Tester for a selected control Data Object. It presents simple OPEN/CLOSE intent, automatically detects Direct Operate or SBO, reads process status, exposes advanced checks/origin only when needed, and keeps command evidence. See [`docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md`](docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md).
 
 Build the WPF apps directly:
 

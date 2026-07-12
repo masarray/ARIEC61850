@@ -477,10 +477,36 @@ public sealed partial class MmsClientSession : IAsyncDisposable
         }
     }
 
-    public async Task<MmsWriteResult> WriteSingleVariableAsync(
+    public Task<MmsWriteResult> WriteSingleVariableAsync(
         MmsObjectReference reference,
         MmsDataValue value,
         CancellationToken cancellationToken = default)
+    {
+        if (IsControlServiceReference(reference))
+        {
+            return Task.FromResult(new MmsWriteResult
+            {
+                IsSuccess = false,
+                Message = "Generic MMS write is blocked for IEC 61850 control-service members. Use IIec61850ControlService instead."
+            });
+        }
+
+        return WriteSingleVariableCoreAsync(reference, value, cancellationToken);
+    }
+
+    internal Task<MmsWriteResult> WriteControlVariableAsync(
+        MmsObjectReference reference,
+        MmsDataValue value,
+        CancellationToken cancellationToken = default)
+        => WriteSingleVariableCoreAsync(reference, value, cancellationToken);
+
+    internal MmsInformationReportSubscription SubscribeInformationReports(int capacity = 32)
+        => _receiveRouter.SubscribeInformationReports(capacity);
+
+    private async Task<MmsWriteResult> WriteSingleVariableCoreAsync(
+        MmsObjectReference reference,
+        MmsDataValue value,
+        CancellationToken cancellationToken)
     {
         EnsureMmsReady();
         if (string.IsNullOrWhiteSpace(reference.Domain))
@@ -1047,6 +1073,18 @@ public sealed partial class MmsClientSession : IAsyncDisposable
                message.Contains("Abort", StringComparison.OrdinalIgnoreCase) ||
                message.Contains("decode failed", StringComparison.OrdinalIgnoreCase) ||
                message.Contains("no decodable MMS Data", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsControlServiceReference(MmsObjectReference reference)
+    {
+        if (!string.Equals(reference.FunctionalConstraint, "CO", StringComparison.OrdinalIgnoreCase) &&
+            !reference.Item.Contains("$CO$", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var leaf = reference.Item.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? string.Empty;
+        return leaf.Equals("Oper", StringComparison.OrdinalIgnoreCase) ||
+               leaf.Equals("SBOw", StringComparison.OrdinalIgnoreCase) ||
+               leaf.Equals("Cancel", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeReportAttributeText(MmsDataValue? value)

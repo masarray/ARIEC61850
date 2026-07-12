@@ -49,8 +49,8 @@ public sealed class ProcessBusStreamMonitorTests
         Assert.Equal(2U, gooseEvent.StateNumber);
 
         var summaries = monitor.Summaries.ToArray();
-        var svSummary = Assert.Single(summaries.Where(s => s.Kind == ProcessBusEventKind.SampledValues));
-        var gooseSummary = Assert.Single(summaries.Where(s => s.Kind == ProcessBusEventKind.Goose));
+        var svSummary = Assert.Single(summaries, s => s.Kind == ProcessBusEventKind.SampledValues);
+        var gooseSummary = Assert.Single(summaries, s => s.Kind == ProcessBusEventKind.Goose);
 
         Assert.Equal(2, svSummary.PacketCount);
         Assert.Equal((ushort)0, svSummary.FirstSampleCount);
@@ -83,7 +83,7 @@ public sealed class ProcessBusStreamMonitorTests
         Assert.Equal(ProcessBusSequenceStatus.InSequence, second.SequenceStatus);
         Assert.Equal(ProcessBusSequenceStatus.Wrapped, third.SequenceStatus);
 
-        var summary = Assert.Single(monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.SampledValues));
+        var summary = Assert.Single(monitor.Summaries, s => s.Kind == ProcessBusEventKind.SampledValues);
         Assert.Equal((ushort)4000, summary.SampleCounterWrap);
         Assert.Equal(1, summary.WrapCount);
         Assert.Equal(0, summary.SequenceGapCount);
@@ -111,7 +111,7 @@ public sealed class ProcessBusStreamMonitorTests
         Assert.Equal(ProcessBusSequenceStatus.Duplicate, duplicate.SequenceStatus);
         Assert.Equal(ProcessBusSequenceStatus.OutOfOrder, outOfOrder.SequenceStatus);
 
-        var summary = Assert.Single(monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.SampledValues));
+        var summary = Assert.Single(monitor.Summaries, s => s.Kind == ProcessBusEventKind.SampledValues);
         Assert.Equal(1, summary.SequenceGapCount);
         Assert.Equal(1, summary.MissedSampleCount);
         Assert.Equal(1, summary.DuplicateSampleCount);
@@ -138,7 +138,7 @@ public sealed class ProcessBusStreamMonitorTests
         Assert.Equal(GooseSequenceStatus.Retransmission, retransmission.GooseSequenceStatus);
         Assert.Equal(0, retransmission.ChangedValueCount);
 
-        var summary = Assert.Single(monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.Goose));
+        var summary = Assert.Single(monitor.Summaries, s => s.Kind == ProcessBusEventKind.Goose);
         Assert.Equal(2, summary.PacketCount);
         Assert.Equal(1, summary.GooseRetransmissionCount);
         Assert.Equal(0, summary.GooseSequenceGapCount);
@@ -162,7 +162,7 @@ public sealed class ProcessBusStreamMonitorTests
         Assert.Contains("[0]", stateChange.ChangedSummary);
         Assert.DoesNotContain(stateChange.Diagnostics, x => x.Contains("without a state-number", StringComparison.OrdinalIgnoreCase));
 
-        var summary = Assert.Single(monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.Goose));
+        var summary = Assert.Single(monitor.Summaries, s => s.Kind == ProcessBusEventKind.Goose);
         Assert.Equal(1, summary.GooseStateChangeCount);
         Assert.Equal(1, summary.GooseValueChangeCount);
     }
@@ -199,7 +199,7 @@ public sealed class ProcessBusStreamMonitorTests
 
         Assert.Contains(late.Diagnostics, x => x.Contains("supervision expired", StringComparison.OrdinalIgnoreCase));
 
-        var summary = Assert.Single(monitor.Summaries.Where(s => s.Kind == ProcessBusEventKind.Goose));
+        var summary = Assert.Single(monitor.Summaries, s => s.Kind == ProcessBusEventKind.Goose);
         Assert.Equal(1, summary.GooseTimeoutCount);
         Assert.True(summary.MaxArrivalGapMilliseconds >= 1500);
     }

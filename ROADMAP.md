@@ -4,6 +4,21 @@ ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The pr
 
 ## Current source milestone
 
+### N5.47 - Native smart control stack foundation
+
+- Added `AR.Iec61850.Control`, a typed client-side service for controllable Data Object roots rather than raw control leaves.
+- Added live `ctlModel`, Oper/SBOw/Cancel type discovery and exact named `ctlVal` binding for SPC, DPC, INC/ISC, BSC, APC, and explicit vendor-specific raw values.
+- Added Direct/SBO normal/enhanced sequence execution with immutable origin/`ctlNum`/`T`/Test/Check context, time-activated timeout handling, association-scoped concurrency, per-session serialization, automatic SBO lease expiry, and best-effort Cancel cleanup.
+- Added InformationReport fan-out, CommandTermination and LastApplError/AddCause decoding, and a hard guard against generic MMS writes to `Oper`, `SBOw`, and `Cancel`.
+- Added deterministic source tests for sequence paths, positive/negative enhanced completion, async SBOw rejection, exact value binding, timeout, association loss, concurrency, and report routing.
+- Live multi-vendor and formal conformance evidence remain explicit release gates.
+
+Focused validation command:
+
+```powershell
+dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --filter "FullyQualifiedName~SmartControlStackTests|FullyQualifiedName~MmsReceiveRouterTests"
+```
+
 ### N5.39 - Workbench evidence pack foundation
 
 - Added `EngineeringWorkbenchEvidencePackBuilder`, a shared engine builder that generates a structured review folder from SCL, optional PCAP, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and optional public-alpha readiness.

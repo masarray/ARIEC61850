@@ -1,3 +1,5 @@
+using System.Threading.Channels;
+
 namespace AR.Iec61850.Mms;
 
 public enum MmsReceiveRouteAction
@@ -22,6 +24,7 @@ public sealed class MmsReceiveRouter
     private readonly Queue<MmsPduEnvelope> _informationReports = new();
     private readonly Queue<MmsPduEnvelope> _unconfirmed = new();
     private readonly Queue<MmsPduEnvelope> _unmatched = new();
+    private readonly Dictionary<Guid, Channel<MmsPduEnvelope>> _informationReportSubscriptions = new();
 
     public int QueuedConfirmedResultCount
     {
@@ -85,11 +88,14 @@ public sealed class MmsReceiveRouter
             if (envelope.IsInformationReport)
             {
                 _informationReports.Enqueue(envelope);
+                foreach (var subscription in _informationReportSubscriptions.Values)
+                    subscription.Writer.TryWrite(envelope);
+
                 return new MmsReceiveRouteResult
                 {
                     Action = MmsReceiveRouteAction.QueuedInformationReport,
                     Envelope = envelope,
-                    Message = "Queued MMS InformationReport."
+                    Message = $"Queued MMS InformationReport for {_informationReportSubscriptions.Count} subscriber(s)."
                 };
             }
 
@@ -146,14 +152,65 @@ public sealed class MmsReceiveRouter
         return false;
     }
 
+    internal MmsInformationReportSubscription SubscribeInformationReports(int capacity = 32)
+    {
+        var boundedCapacity = Math.Clamp(capacity, 1, 1024);
+        var channel = Channel.CreateBounded<MmsPduEnvelope>(new BoundedChannelOptions(boundedCapacity)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = true,
+            SingleWriter = false,
+            AllowSynchronousContinuations = false
+        });
+
+        var id = Guid.NewGuid();
+        lock (_sync)
+            _informationReportSubscriptions.Add(id, channel);
+
+        return new MmsInformationReportSubscription(this, id, channel.Reader);
+    }
+
+    internal void RemoveInformationReportSubscription(Guid id)
+    {
+        Channel<MmsPduEnvelope>? channel = null;
+        lock (_sync)
+        {
+            if (_informationReportSubscriptions.Remove(id, out var removed))
+                channel = removed;
+        }
+
+        channel?.Writer.TryComplete();
+    }
+
+    internal void FaultInformationReportSubscriptions(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        Channel<MmsPduEnvelope>[] subscriptions;
+        lock (_sync)
+        {
+            subscriptions = _informationReportSubscriptions.Values.ToArray();
+            _informationReportSubscriptions.Clear();
+        }
+
+        foreach (var subscription in subscriptions)
+            subscription.Writer.TryComplete(exception);
+    }
+
     public void Clear()
     {
+        Channel<MmsPduEnvelope>[] subscriptions;
         lock (_sync)
         {
             _confirmedByInvoke.Clear();
             _informationReports.Clear();
             _unconfirmed.Clear();
             _unmatched.Clear();
+            subscriptions = _informationReportSubscriptions.Values.ToArray();
+            _informationReportSubscriptions.Clear();
         }
+
+        foreach (var subscription in subscriptions)
+            subscription.Writer.TryComplete(new IOException("MMS association receive routing was reset."));
     }
 }

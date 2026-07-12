@@ -81,6 +81,37 @@ public sealed class MmsReceiveRouterTests
         Assert.Equal(22, response.InvokeId);
     }
 
+    [Fact]
+    public async Task Route_FansOutInformationReportWithoutStealingLegacyQueue()
+    {
+        var router = new MmsReceiveRouter();
+        await using var first = router.SubscribeInformationReports();
+        await using var second = router.SubscribeInformationReports();
+
+        router.Route(BuildInformationReport());
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        var firstEnvelope = await first.Reader.ReadAsync(timeout.Token);
+        var secondEnvelope = await second.Reader.ReadAsync(timeout.Token);
+        Assert.True(firstEnvelope.IsInformationReport);
+        Assert.True(secondEnvelope.IsInformationReport);
+        Assert.True(router.TryDequeueInformationReport(out var queued));
+        Assert.True(queued.IsInformationReport);
+    }
+
+    [Fact]
+    public async Task Clear_FaultsActiveInformationReportSubscribers()
+    {
+        var router = new MmsReceiveRouter();
+        await using var subscription = router.SubscribeInformationReports();
+
+        router.Clear();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        await Assert.ThrowsAsync<IOException>(async () =>
+            await subscription.Reader.Completion.WaitAsync(timeout.Token));
+    }
+
     private static byte[] BuildConfirmedReadResponse(int invokeId)
     {
         var data = MmsDataCodec.Encode(MmsDataValue.Boolean(true));

@@ -1,5 +1,7 @@
 # Validation
 
+The public live-control evidence boundary is recorded in [Live IED Control Validation](LIVE_IED_CONTROL_VALIDATION.md).
+
 ## Automated checks
 
 Run these before every public push:

@@ -1,386 +1,181 @@
 # ARIEC61850
 
-Clean-room IEC 61850 toolkit for .NET 8: MMS, reporting, GOOSE, Sampled Values, SCL, PCAP, diagnostics, and lab-grade engineering workflows.
+**Native IEC 61850 client, smart IED control, reporting, GOOSE, Sampled Values, SCL, and PCAP engineering toolkit for .NET 8.**
 
 [![.NET CI](https://github.com/masarray/ARIEC61850/actions/workflows/dotnet-ci.yml/badge.svg)](https://github.com/masarray/ARIEC61850/actions/workflows/dotnet-ci.yml)
-[![Pages](https://github.com/masarray/ARIEC61850/actions/workflows/pages.yml/badge.svg)](https://github.com/masarray/ARIEC61850/actions/workflows/pages.yml)
+[![GitHub Pages](https://github.com/masarray/ARIEC61850/actions/workflows/pages.yml/badge.svg)](https://masarray.github.io/ARIEC61850/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)](#build)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/core-cross--platform-0f766e)](#platform-support)
 
-**ARIEC61850** is a native C#/.NET engineering stack for IEC 61850 lab tools, protocol education, FAT/SAT assistance, process-bus diagnostics, and repeatable evidence generation.
+ARIEC61850 is a clean-room C# implementation for substation automation laboratories, IEC 61850 commissioning support, FAT/SAT preparation, protocol research, and repeatable engineering evidence. The repository combines a reusable protocol stack with focused CLI and Windows desktop tools.
 
-This repository is intentionally source-first and public-release safe: generated build output, evidence folders, local Visual Studio state, captures, and release artifacts are excluded from source control.
+> **Current validation boundary:** the Smart Control Tester has completed a live command path to a laboratory IED. This is engineering evidence, not an IEC 61850 conformance certification or permission to operate primary equipment.
 
-## What is included
+[Website](https://masarray.github.io/ARIEC61850/) · [Quick start](docs/QUICK_START.md) · [Smart Control](docs/SMART_CONTROL_STACK.md) · [Control Tester](docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md) · [Roadmap](docs/FULL_STACK_ROADMAP.md)
 
-| Area | Project / folder | Purpose |
+## Engineering highlights
+
+- **Smart IEC 61850 control:** select a control Data Object such as `CSWI.Pos`; the engine discovers `ctlModel`, exact live MMS types, and automatically executes Direct Operate or Select-Before-Operate.
+- **Operator-friendly OPEN/CLOSE workflow:** guarded WPF control tester with live status, interlock check, synchrocheck, test mode, originator, Orig ID, timeout, cancellation, and evidence.
+- **MMS client and reporting:** association, model discovery, FC-aware reads, DataSet/RCB inventory, guarded report planning, GI, monitoring, and diagnostics.
+- **GOOSE and Sampled Values:** frame codecs, SCL-backed profiles, PCAP inspection, publishing, subscription, sequence supervision, and diagnostics.
+- **SCL and engineering evidence:** expected-vs-observed analysis, capability/readiness profiles, Markdown/JSON evidence, and deterministic simulation foundations.
+- **Clean public source:** Apache-2.0 license, warnings-as-errors, automated tests, source hygiene scripts, CI, and GitHub Pages.
+
+## Smart IED Control Tester
+
+The IED Discovery desktop app keeps the normal operator workflow intentionally simple:
+
+```text
+Select CSWI.Pos → open Control Tester → verify status → press OPEN or CLOSE
+```
+
+The application automatically handles the protocol sequence:
+
+| Discovered control model | Native sequence | Completion boundary |
 |---|---|---|
-| Core library | `src/AR.Iec61850` | BER, MMS, native control objects, SCL, GOOSE, SV, PCAP, reporting, diagnostics, engineering/report-readiness facades |
-| Live Ethernet transport | `src/AR.Iec61850.Transports.Npcap` | Npcap-backed raw process-bus transport for Windows lab use |
-| CLI toolkit | `apps/AR.Iec61850.Cli` | SCL inspection, PCAP generation/inspection, MMS discovery/read/reporting commands |
-| WPF app | `apps/AR.Iec61850.SvPublisher` | Desktop Sampled Values publisher / injector workspace |
-| WPF app | `apps/AR.Iec61850.IedDiscovery` | Live IED discovery workspace for MMS model, DataSet, and RCB inventory |
-| WPF app | `apps/AR.Iec61850.IedSimulator` | SCL-backed IED simulator with deterministic values, DataSets, RCBs, and a read-only loopback MMS server |
-| WPF app | `apps/AR.Iec61850.EngineeringWorkbench` | Read-only engineering workbench for SCL, PCAP diagnostics, MMS loopback, and evidence-pack export |
-| Simulation library | `src/AR.Iec61850.Simulation` | In-memory IED profile and deterministic point/event simulation foundation |
-| Tests | `tests/AR.Iec61850.Tests` | Automated unit and protocol-shape tests |
-| Samples | `samples/scl` | Small SCL files for local validation and examples |
-| Docs | `docs` | Quick start, architecture, roadmap, engine maturity matrix, reporting workflow, validation, release packaging |
-| Landing page | `landing` | Static GitHub Pages website |
+| Direct, normal security | `Oper` | Confirmed MMS result |
+| SBO, normal security | `SBO` → `Oper` | Confirmed MMS result |
+| Direct, enhanced security | `Oper` → CommandTermination | Positive/negative termination |
+| SBO, enhanced security | `SBOw` → `Oper` → CommandTermination | Positive/negative termination |
 
-## Status
+The native control stack also manages:
 
-This is a lab-oriented engineering toolkit, not a formal conformance-certified IEC 61850 product.
+- exact live `ctlVal` binding for DPC, SPC, INC/ISC, BSC, and APC variants;
+- immutable `ctlNum`, timestamp `T`, origin, Test, and Check values across a sequence;
+- interlock and synchrocheck request bits;
+- SBO ownership, expiry, best-effort `Cancel`, and association-loss cleanup;
+- `LastApplError`, `ControlError`, `AddCause`, and request/response evidence;
+- process feedback readback through the discovered status reference.
 
-Implemented areas include:
+See [IEC 61850 Smart Control Stack](docs/SMART_CONTROL_STACK.md), [IED Discovery Smart Control Tester](docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md), and [Live IED control validation](docs/LIVE_IED_CONTROL_VALIDATION.md).
 
-- ASN.1 BER reader/writer.
-- MMS data value codec and common client services.
-- TCP/TPKT/COTP/ACSE/MMS association foundation.
-- MMS model discovery, FC-aware path resolution, smart read, dataset directory inspection.
-- Native IEC 61850 client control-object service with live `ctlModel` and exact MMS type discovery, Direct/SBO normal/enhanced sequencing, immutable `ctlNum`/`T`/origin context, Cancel/timeout ownership, and CommandTermination/LastApplError decoding.
-- RCB discovery, report planning, guarded report enable, GI trigger, receive loop, diagnostics, and evidence export.
-- GOOSE frame builder/parser, SCL-backed publisher profiles, publisher session, PCAP sniffer diagnostics, live subscriber command, `stNum`/`sqNum`/TAL supervision, and changed-value summaries.
-- Sampled Values frame builder/parser, payload generation, payload decode, and WPF publisher/injector workspace.
-- PCAP writer/reader/inspector and stream playback helpers.
-- Npcap-backed raw Ethernet transport for isolated Windows lab adapters.
-- WPF IED Discovery workspace for live MMS model/DataSet/RCB snapshot export.
-- IED Discovery data browser with expandable MMS structure rows and guarded Enable RCB dialog.
-- IED Simulator with deterministic/SCL-derived profiles, read-only loopback MMS server, directory/read service probes, and write rejection.
-- WPF Engineering Workbench Alpha that orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and evidence-pack export.
-- Engineering-profile facade that converts live discovery into capability assessment, report-lab readiness, diagnostics, and Markdown evidence.
-- Report-readiness profile engine that produces acceptance gates, RCB candidate ranking, selected static report plan, and guarded session-profile JSON before any RCB write.
+## Applications and libraries
 
-Experimental or future areas:
+| Component | Path | Role |
+|---|---|---|
+| Core protocol library | `src/AR.Iec61850` | BER, MMS, reporting, native control, SCL, GOOSE, SV, PCAP, diagnostics |
+| Npcap transport | `src/AR.Iec61850.Transports.Npcap` | Raw Ethernet process-bus transport for Windows labs |
+| Simulation library | `src/AR.Iec61850.Simulation` | Deterministic IED profiles, points, and events |
+| IED Discovery | `apps/AR.Iec61850.IedDiscovery` | Live model browser, reporting workspace, and Smart Control Tester |
+| Engineering Workbench | `apps/AR.Iec61850.EngineeringWorkbench` | SCL/PCAP diagnostics and evidence-pack workflow |
+| IED Simulator | `apps/AR.Iec61850.IedSimulator` | SCL-backed deterministic laboratory server foundation |
+| SV Publisher | `apps/AR.Iec61850.SvPublisher` | Sampled Values injection and waveform workspace |
+| CLI | `apps/AR.Iec61850.Cli` | Automation, discovery, diagnostics, simulation, and PCAP commands |
+| Automated tests | `tests/AR.Iec61850.Tests` | Protocol-shape, state-machine, binding, diagnostics, and regression tests |
 
-- multi-vendor long-duration MMS reporting soak evidence;
-- full buffered report recovery and replay workflows;
-- MMS file/log/setting-group services and broader vendor-specific control-type coverage;
-- multi-client and third-party MMS interoperability evidence for the IED simulator server;
-- live raw SV subscriber CLI loop on top of the Npcap receive path;
-- IEC 62351 security profile;
-- formal third-party conformance testing.
+## Quick start
 
-## Requirements
+### Requirements
 
-- .NET 8 SDK for build/test.
-- Windows for the current WPF desktop app and Npcap live transport.
-- Npcap when sending or receiving raw Ethernet process-bus traffic.
-- Isolated test NIC, TAP, or lab switch for active GOOSE/SV publishing.
-- Test IED or simulator for live MMS commands.
+- .NET 8 SDK.
+- Windows for WPF applications and the current Npcap live transport.
+- Npcap for raw GOOSE/SV traffic.
+- An isolated laboratory network for active publishing or control.
 
-## Build
+### Build and test
 
 ```powershell
+git clone https://github.com/masarray/ARIEC61850.git
+cd ARIEC61850
+
 dotnet restore .\ARIEC61850.sln
 dotnet build .\ARIEC61850.sln -c Release
 dotnet test .\ARIEC61850.sln -c Release --no-build
 ```
 
-### Smart control API
-
-Applications should open a control-object session by Data Object reference and let the engine execute the discovered Direct/SBO normal/enhanced sequence:
-
-```csharp
-var service = new Iec61850ControlService();
-await using var control = await service.OpenAsync(session, "LD0/CSWI1.Pos", cancellationToken);
-
-var result = await control.OperateAsync(new Iec61850ControlRequest
-{
-    ControlValue = Iec61850ControlValue.Close(),
-    Origin = Iec61850Origin.FromText("ARIED", Iec61850OriginCategory.Maintenance),
-    InterlockCheck = true,
-    SynchroCheck = true
-}, cancellationToken);
-```
-
-See [`docs/SMART_CONTROL_STACK.md`](docs/SMART_CONTROL_STACK.md) for the architecture, result semantics, safety boundary, and live validation matrix.
-
-The WPF IED Discovery app also includes a guarded Smart Control Tester for a selected control Data Object. It presents simple OPEN/CLOSE intent, automatically detects Direct Operate or SBO, reads process status, exposes advanced checks/origin only when needed, and keeps command evidence. See [`docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md`](docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md).
-
-Build the WPF apps directly:
+### Run IED Discovery and Smart Control Tester
 
 ```powershell
-dotnet build .\apps\AR.Iec61850.SvPublisher\AR.Iec61850.SvPublisher.csproj -c Release
-dotnet build .\apps\AR.Iec61850.IedDiscovery\AR.Iec61850.IedDiscovery.csproj -c Release
-dotnet build .\apps\AR.Iec61850.IedSimulator\AR.Iec61850.IedSimulator.csproj -c Release
-dotnet build .\apps\AR.Iec61850.EngineeringWorkbench\AR.Iec61850.EngineeringWorkbench.csproj -c Release
+dotnet run `
+  --project .\apps\AR.Iec61850.IedDiscovery\AR.Iec61850.IedDiscovery.csproj `
+  -c Release
 ```
 
-## Quick examples
+1. Connect to the test IED.
+2. Select a controllable Data Object such as `LD0/CSWI1.Pos`.
+3. Open **Control** and verify the detected control model and current status.
+4. Use Test/interlock/synchrocheck/origin settings as required by the IED.
+5. Arm live control only after the test circuit is confirmed safe.
+6. Press **OPEN** or **CLOSE** and review termination, AddCause, and process feedback.
 
-Inspect an SCL file:
+### Focused Smart Control tests
 
 ```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-scl .\samples\scl\minimal-station.scd
+dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj `
+  -c Release `
+  --filter "FullyQualifiedName~SmartControlStackTests|FullyQualifiedName~MmsReceiveRouterTests"
 ```
 
-Generate and inspect a demo PCAP:
+### Discover a live MMS server
 
 ```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
-dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd
-dotnet run --project .\apps\AR.Iec61850.Cli -- stream-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd --delay-ms 0 --limit 20
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  mms-discover 192.0.2.10 --port 102 --timeout-ms 30000
 ```
 
-Discover a live MMS server or IED:
+### Inspect SCL and PCAP
 
 ```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.0.2.10 --port 102 --timeout-ms 30000 --max-report-probes 16
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  inspect-scl .\samples\scl\minimal-station.scd
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  inspect-pcap .\.artifacts\out\processbus-demo.pcap `
+  --scl .\samples\scl\minimal-station.scd
 ```
 
-Plan report usage before writing to any RCB:
+## Capability status
 
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-plan 192.0.2.10 --port 102 --timeout-ms 60000 --max-report-probes 64 --only-safe
-```
+| Area | Current scope |
+|---|---|
+| MMS client | Association, discovery, FC-aware read/write services, type inspection |
+| IEC 61850 control | Native Direct/SBO normal/enhanced client sequence, typed values, termination/error handling |
+| Reporting | DataSet/RCB discovery, safe planning, guarded enable/GI/monitoring, evidence |
+| GOOSE | Encode/decode, SCL profiles, publish/subscribe, sequence and timing diagnostics |
+| Sampled Values | Encode/decode, waveform/payload generation, publishing, diagnostics, PCAP workflows |
+| SCL | Station/model parsing, expected communication profiles, engineering analysis |
+| PCAP | Read/write/inspect, stream analysis, expected-vs-observed binding |
+| Simulator | Deterministic laboratory services; broader third-party interoperability remains in progress |
+| Security | IEC 62351 profiles are not yet implemented |
+| Certification | No formal third-party conformance claim |
 
-Generate read-only report readiness evidence and a guarded session profile:
+Detailed status is maintained in the [engine maturity matrix](docs/ENGINE_MATURITY_MATRIX.md) and [full-stack roadmap](docs/FULL_STACK_ROADMAP.md).
 
-  ```powershell
-  dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --port 102 --timeout-ms 120000 --output .\.artifacts\out\report-readiness.md --json .\.artifacts\out\report-readiness.json --session-json .\.artifacts\out\report-session-profile.json
-  ```
+## Platform support
 
-Run a local, read-only virtual IED from the demo profile or an SCL file:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- simulate-ied --scl .\samples\scl\minimal-station.scd --port 102 --duration-sec 60
-```
-
-The virtual IED is a lab-only server: it serves the implemented directory/read paths and rejects writes. It is not a formal conformance claim.
-
-  Run a guarded report monitor:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.0.2.10 --port 102 --timeout-ms 120000 --rcb IED1LD0/LLN0.RP.rpt01 --duration-sec 60 --evidence .\.artifacts\out\report-session01 --yes
-```
-
-Run a bounded GOOSE publisher dry run from SCL:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 1 --stream-index 1 --frames 4 --dry-run
-```
-
-Live GOOSE publishing requires `--yes` and must only be used on an isolated lab adapter.
-
-Run a read-only live GOOSE subscriber on a lab adapter:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl .\samples\scl\minimal-station.scd --duration-sec 30
-```
-
-Without `--scl`, the subscriber still decodes traffic but reports values as semantically anonymous.
-
-## Windows single-file WPF package
-
-Local packaging:
-
-```powershell
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App SvPublisher
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App EngineeringWorkbench
-```
-
-The script builds and tests the solution, publishes the selected WPF app as a self-contained Windows x64 single EXE, and creates release assets under `.artifacts/release`.
-
-The same packaging flow is available in GitHub Actions through `.github/workflows/release-package.yml`.
-
-## Keeping the repository clean
-
-Compiled binaries are redirected to `.artifacts/` by `Directory.Build.props`. SDK intermediate folders may still be created locally for WPF markup compilation and are ignored by source control. To reset the working tree after local builds, run:
-
-```powershell
-.\scripts\clean-local-artifacts.cmd
-.\scripts\verify-source-clean.cmd
-```
-
-Do not commit `.artifacts/`, `out/`, `evidence/`, captures, DLL/EXE/PDB files, or Visual Studio local state.
+The reusable core targets `.NET 8` and is designed to remain cross-platform where the underlying transport permits it. Current desktop applications use WPF and therefore require Windows. Raw process-bus Ethernet uses the Windows Npcap transport in the current public implementation.
 
 ## Documentation
 
-- [Quick Start](docs/QUICK_START.md)
+- [Documentation index](docs/README.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Quick Start](docs/QUICK_START.md)
+- [Smart Control Stack](docs/SMART_CONTROL_STACK.md)
+- [Smart Control Tester](docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md)
+- [Live IED Control Validation](docs/LIVE_IED_CONTROL_VALIDATION.md)
 - [MMS Reporting Workflow](docs/REPORTING_WORKFLOW.md)
-- [Process-Bus Binding Profile](docs/PROCESS_BUS_BINDING_PROFILE.md)
-- [Sampled Values Diagnostics Profile](docs/SV_DIAGNOSTICS_PROFILE.md)
-- [Full Stack Roadmap](docs/FULL_STACK_ROADMAP.md)
-- [GOOSE Engine Audit](docs/GOOSE_ENGINE_AUDIT.md)
-- [Release Packaging](docs/RELEASE_PACKAGING.md)
+- [GOOSE Diagnostics](docs/GOOSE_DIAGNOSTICS_PROFILE.md)
+- [Sampled Values Diagnostics](docs/SV_DIAGNOSTICS_PROFILE.md)
 - [Validation](docs/VALIDATION.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Clean-room Policy](docs/CLEAN_ROOM_POLICY.md)
+- [Security Policy](SECURITY.md)
 - [Public Release Checklist](docs/PUBLIC_RELEASE_CHECKLIST.md)
+- [Changelog](CHANGELOG.md)
+
+## Safety and claim boundary
+
+ARIEC61850 is intended for isolated laboratories, approved commissioning environments, education, and engineering research. Active MMS control, RCB writes, GOOSE publishing, and Sampled Values publishing can change equipment state or network behavior.
+
+Do not connect active functions to an operational substation network without an approved test plan, switching authority, isolation boundary, and independent verification. A successful laboratory command does not establish multi-vendor interoperability or formal IEC 61850 conformance.
+
+## Contributing
+
+Issues, reproducible protocol captures, sanitized SCL samples, tests, and focused pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [clean-room policy](docs/CLEAN_ROOM_POLICY.md) before submitting implementation work.
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
-
-## Safety note
-
-Active MMS writes, report enable operations, GOOSE publishing, and Sampled Values publishing must be used only in isolated labs or approved test networks. Do not publish process-bus traffic into an operational substation network without an approved test plan and isolation boundary.
-
-
-## N5.25 — SCL Deep Engineering Profile
-
-This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.
-
-## N5.26 — Expected-vs-Observed Process-Bus Binding
-
-This milestone adds a read-only process-bus binding engine. It compares expected GOOSE/SV streams from SCL against observed PCAP traffic and produces typed Markdown/JSON evidence for missing streams, unexpected streams, APPID/MAC/VLAN/confRev mismatch, and sequence/timing anomalies.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
-dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
-```
-
-## N5.26 — Expected-vs-Observed Process-Bus Binding
-
-This milestone adds a read-only process-bus binding engine. It compares expected GOOSE/SV streams from SCL against observed PCAP traffic and produces typed Markdown/JSON evidence for missing streams, unexpected streams, APPID/MAC/VLAN/confRev mismatch, and sequence/timing anomalies.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
-dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
-```
-
-## N5.27 — GOOSE Diagnostics Profile
-
-This milestone adds a read-only GOOSE diagnostic engine. It turns SCL expected GOOSE streams and PCAP/live observed summaries into typed findings for missing/extra publishers, APPID/MAC/VLAN/confRev mismatch, DataSet value-count mismatch, `stNum`/`sqNum` anomalies, supervision timeout, test/needs-commissioning flags, and suspicious value changes without state-number increment.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic
-dotnet run --project .\apps\AR.Iec61850.Cli -- goose-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --output .\.artifacts\out\goose-diagnostics.md --json .\.artifacts\out\goose-diagnostics.json
-```
-
-
-## N5.28 — Sampled Values Diagnostics Profile
-
-This milestone adds a read-only SV diagnostic engine. It turns SCL expected SV streams and PCAP/live observed summaries into typed findings for missing/extra streams, APPID/MAC/VLAN/confRev mismatch, `nofASDU` mismatch, sample-rate/sample-mode mismatch, payload decode issues, `smpCnt` gaps/duplicates/out-of-order samples, wraps, and `smpSynch` issues.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --goose-frames 0 --sv-scenario diagnostic
-dotnet run --project .\apps\AR.Iec61850.Cli -- sv-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --output .\.artifacts\out\sv-diagnostics.md --json .\.artifacts\out\sv-diagnostics.json
-```
-
-### MMS read-only virtual server profile
-
-Generate the first server-side virtual IED evidence profile:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-server-readonly-profile --steps 5 --output .\.artifacts\out\mms-server-readonly.md --json .\.artifacts\out\mms-server-readonly.json
-```
-
-MMS listener skeleton self-probe:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .\.artifacts\out\mms-listener-skeleton.md --json .\.artifacts\out\mms-listener-skeleton.json
-```
-
-This is the model/self-test profile behind the live server. It validates logical-device directory, logical-node directory, point reads, DataSet reads, RCB exposure, and read-only write rejection without opening a network listener.
-
-### N5.31 MMS handshake codec profile
-
-N5.31 adds an offline handshake codec evidence path for the server-side roadmap. It validates TPKT framing, COTP CR/CC/Data TPDU handling, and ISO Session / ACSE / MMS association payload inspection before the listener skeleton is upgraded to real MMS PDU handling.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
-```
-
-### N5.32 MMS handshake listener profile
-
-N5.32 moves the handshake foundation from offline codec proof into a loopback listener proof. It accepts a TCP client, receives TPKT/COTP CR, sends COTP CC, receives COTP Data TPDU, and inspects the ACSE/MMS association payload. It still does not claim a full MMS server response.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-listener-profile --port 0 --output .\.artifacts\out\mms-handshake-listener.md --json .\.artifacts\out\mms-handshake-listener.json
-```
-
-### MMS association response profile
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
-```
-
-This loopback probe verifies TPKT/COTP transport, ACSE AARE response generation, and MMS InitiateResponse marker inspection before live confirmed MMS request dispatch.
-
-
-### MMS confirmed-request and read-only loopback profiles
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-confirmed-request-skeleton-profile --port 0 --output .\.artifacts\out\mms-confirmed-request-skeleton.md --json .\.artifacts\out\mms-confirmed-request-skeleton.json
-
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-confirmed-request-ber-profile --port 0 --output .\.artifacts\out\mms-confirmed-request-ber.md --json .\.artifacts\out\mms-confirmed-request-ber.json
-
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-readonly-loopback-profile --port 0 --output .\.artifacts\out\mms-readonly-loopback.md --json .\.artifacts\out\mms-readonly-loopback.json
-```
-
-The skeleton profile validates the request lifecycle with deterministic internal envelopes. The BER profile upgrades that path to native MMS BER confirmed-request payloads. The read-only loopback alpha profile unifies virtual model readiness, association response, native BER dispatch, and write guard evidence into one server-side readiness gate.
-
-
-### Public alpha readiness gate
-
-Run the aggregate engine readiness profile before tagging a developer-preview release:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- public-alpha-readiness-profile --output .\.artifacts\out\public-alpha-readiness.md --json .\.artifacts\out\public-alpha-readiness.json
-```
-
-This gate combines SCL engineering, expected-vs-observed process-bus diagnostics, GOOSE/SV healthy baselines, and the read-only MMS loopback alpha. It is an alpha readiness evidence artifact, not a conformance claim.
-
-### WPF Engineering Workbench Alpha
-
-The repository now includes a read-only WPF harness for exercising the engine profiles from one workflow:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench
-```
-
-It opens an SCL file, optionally observes a PCAP, runs SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and exports a structured evidence pack. See `docs/ENGINEERING_WORKBENCH_ALPHA.md` and `docs/WORKBENCH_EVIDENCE_PACK.md`.
-
-### Workbench evidence pack CLI
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- workbench-evidence-pack --scl .\samples\scl\minimal-station.scd --output .\.artifacts\workbench-pack
-```
-
-This command generates `README.md`, `manifest.json`, and per-profile Markdown/JSON artifacts for SCL engineering, process-bus binding, GOOSE diagnostics, SV diagnostics, MMS read-only loopback, and public-alpha readiness.
-
-
-### N5.41.2 — IEC 61850 Value Binding Engine
-
-Adds schema-driven DA value binding for the IED Discovery Workbench. Structured MMS values are now bound through IEC 61850 metadata, CDC templates, quality/timestamp decoders, and control-operation templates instead of positional index guesses.
-
-## N5.41.3 display refinement
-
-- IED Discovery detail view now follows a semantic child-row display policy: Quality and timestamp are rendered as IEC 61850 child rows, not noisy flat columns; common SAS logical nodes are prioritized in the explorer.
-
-
-
-### Smart Value Reading Engine
-
-The IED Discovery Workbench now uses an engine-owned value presentation layer for IED identity resolution, logical-device aliases, FC-aware read targets, collapsed DO summaries, and recursive semantic decoding of `q`, `t`, vector/analogue, and control structures. IED identity is derived from all live MMS domains with known logical-device suffixes, source, confidence, and candidate evidence; numerical parts such as `OLSF501` are preserved. The WPF app renders the engine output and does not guess MMS structure positions.
-
-- N5.41.5: IED Discovery smart monitoring/report readiness adds Online state gating, live polling Activity Monitor, report-driven monitor updates, and static/dynamic/occupied RCB presentation.
-
-
-## N5.41.6 IED Discovery session workflow fixes
-
-- Smart RCB fallback in WPF report enable flow.
-- Close IED clears explorer and panels.
-- Save discovered model defaults to IID-oriented engine export.
-- Open SCL projects offline SCL into the same explorer/detail visual shape as live discovery.
-
-
-## N5.41.7 IED Discovery Reporting Repair
-
-- Live RCB runtime refresh before detail display and enable planning.
-- Static/dynamic report planning now uses refreshed RCB state.
-- Explicit Pin and Unpin activity monitor workflow.
-- Report group summaries expose locked/static/dynamic state.
-
-
-## N5.42 Persistent Report Monitor
-
-The IED Discovery Workbench now starts an interactive report monitor that keeps `RptEna=true` until Stop RCB or Close IED. Report-list rows can be opened by double-click, RCB state is refreshed after enable/stop, and received report values update the Activity Monitor.
-
-
-## N5.42.1 Report Value Projector
-
-The IED Discovery Workbench now projects report payload values through a report DataSet binding layer before updating the Activity Monitor. Static and dynamic reports can update readable engineering signals with value, quality, timestamp, reason, and source instead of showing raw `Struct(...)` values.
+Licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -713,17 +713,69 @@ public sealed class MmsConfirmedBerDispatchResult
 
 public static class MmsConfirmedRequestBerDispatcher
 {
+    private const int DataAccessErrorObjectAccessDenied = 3;
+    private const int DataAccessErrorTypeInconsistent = 7;
+    private const int DataAccessErrorObjectNonExistent = 10;
+
     public static MmsConfirmedBerDispatchResult Dispatch(
         ReadOnlyMemory<byte> presentationPayload,
         MmsReadOnlyServerSession serverSession,
-        int presentationContextId = 3)
+        int presentationContextId = 3,
+        IMmsAssociationRuntime? runtime = null)
     {
         ArgumentNullException.ThrowIfNull(serverSession);
         if (presentationContextId <= 0)
             throw new ArgumentOutOfRangeException(nameof(presentationContextId));
 
+        var mms = MmsPresentation.StripPresentationPrefix(presentationPayload);
+        var pduOffset = 0;
+        if (mms.Length > 0 && BerReader.TryReadTlv(mms, ref pduOffset, out var pdu))
+        {
+            // Conclude-RequestPDU ::= [11] IMPLICIT NULL -> acknowledge with Conclude-ResponsePDU [12]
+            // instead of dropping the socket, so clients can close the association gracefully.
+            if (pdu.Class == BerClass.ContextSpecific && pdu.TagNumber == 11)
+            {
+                var concludeResponse = MmsPresentation.WrapIsoPresentationPData(
+                    BerWriter.EncodeTlv(0x8C, ReadOnlySpan<byte>.Empty),
+                    presentationContextId);
+                return new MmsConfirmedBerDispatchResult
+                {
+                    IsRequestDecoded = true,
+                    Request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Conclude },
+                    Response = new MmsReadOnlyServerResponse
+                    {
+                        IsSuccess = true,
+                        Operation = nameof(MmsReadOnlyOperation.Conclude),
+                        Message = "Conclude acknowledged."
+                    },
+                    ResponsePresentationPayload = concludeResponse,
+                    Message = "Acknowledged MMS Conclude-Request."
+                };
+            }
+
+            // Identify and native multi-variable Read/Write are dispatched here because they need
+            // richer semantics than the single-target MmsReadOnlyServerRequest contract.
+            if (pdu.EncodedTag == 0xA0 && TryReadInvokeAndService(pdu, out var invoke, out var servicePdu))
+            {
+                if (servicePdu.Class == BerClass.ContextSpecific && servicePdu.TagNumber == 2 && !servicePdu.Constructed)
+                    return DispatchIdentify(invoke, presentationContextId);
+
+                if (servicePdu.EncodedTag == 0xA4)
+                    return DispatchRead(invoke, servicePdu, serverSession, presentationContextId, runtime);
+
+                if (servicePdu.EncodedTag == 0xA5)
+                    return DispatchWrite(invoke, servicePdu, serverSession, presentationContextId, runtime);
+            }
+        }
+
         if (!TryDecodeRequest(presentationPayload, out var invokeId, out var request, out var serviceKind, out var decodeMessage))
         {
+            // Keep the association alive: an undecodable or unsupported confirmed request must be
+            // answered with a Confirmed-ErrorPDU, not a dropped TCP connection. External IEC 61850
+            // engineering clients may probe optional services during discovery and expect a negative response.
+            var errorPayload = TryReadInvokeId(presentationPayload, out var errorInvokeId)
+                ? EncodeConfirmedError(errorInvokeId, errorClassTag: 12, errorValue: 0, presentationContextId)
+                : Array.Empty<byte>();
             var failure = new MmsReadOnlyServerResponse
             {
                 IsSuccess = false,
@@ -735,7 +787,10 @@ public static class MmsConfirmedRequestBerDispatcher
                 IsRequestDecoded = false,
                 Request = request,
                 Response = failure,
-                Message = decodeMessage
+                ResponsePresentationPayload = errorPayload,
+                Message = errorPayload.Length > 0
+                    ? $"{decodeMessage} Answered with Confirmed-Error invokeID={errorInvokeId}; association kept alive."
+                    : decodeMessage
             };
         }
 
@@ -749,6 +804,473 @@ public static class MmsConfirmedRequestBerDispatcher
             ResponsePresentationPayload = encoded,
             Message = $"Decoded MMS BER {serviceKind} invokeID={invokeId} and dispatched {request.Operation} target={request.Target}."
         };
+    }
+
+    private static bool TryReadInvokeAndService(BerTlv confirmedRequest, out int invokeId, out BerTlv service)
+    {
+        invokeId = 0;
+        service = default;
+        var children = BerReader.ReadChildren(confirmedRequest.Value);
+        if (children.Count < 2 || children[0].EncodedTag != 0x02)
+            return false;
+
+        var invoke = BerReader.ReadUnsignedInteger(children[0]);
+        if (!invoke.HasValue || invoke.Value > int.MaxValue)
+            return false;
+
+        invokeId = (int)invoke.Value;
+        service = children[1];
+        return true;
+    }
+
+    private static bool TryReadInvokeId(ReadOnlyMemory<byte> presentationPayload, out int invokeId)
+    {
+        invokeId = 0;
+        try
+        {
+            var mms = MmsPresentation.StripPresentationPrefix(presentationPayload);
+            var offset = 0;
+            if (!BerReader.TryReadTlv(mms, ref offset, out var outer) || outer.EncodedTag != 0xA0)
+                return false;
+
+            return TryReadInvokeAndService(outer, out invokeId, out _);
+        }
+        catch (Exception ex) when (ex is BerFormatException or ArgumentException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static MmsConfirmedBerDispatchResult DispatchIdentify(int invokeId, int presentationContextId)
+    {
+        // Identify-Response ::= SEQUENCE { vendorName [0], modelName [1], revision [2] }
+        var service = BerWriter.EncodeTlv(0xA2, Concat(
+            BerWriter.EncodeTlv(0x80, BerWriter.EncodeAscii("ARIEC61850")),
+            BerWriter.EncodeTlv(0x81, BerWriter.EncodeAscii("Virtual IED Simulator")),
+            BerWriter.EncodeTlv(0x82, BerWriter.EncodeAscii("1.0"))));
+        var confirmedResponse = BerWriter.EncodeTlv(0xA1, Concat(Integer(invokeId), service));
+        return new MmsConfirmedBerDispatchResult
+        {
+            IsRequestDecoded = true,
+            Request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Identify },
+            Response = new MmsReadOnlyServerResponse
+            {
+                IsSuccess = true,
+                Operation = nameof(MmsReadOnlyOperation.Identify),
+                Message = "Returned vendor/model/revision identification."
+            },
+            ResponsePresentationPayload = MmsPresentation.WrapIsoPresentationPData(confirmedResponse, presentationContextId),
+            Message = $"Decoded MMS BER Identify invokeID={invokeId}."
+        };
+    }
+
+    private static MmsConfirmedBerDispatchResult DispatchRead(
+        int invokeId,
+        BerTlv service,
+        MmsReadOnlyServerSession serverSession,
+        int presentationContextId,
+        IMmsAssociationRuntime? runtime)
+    {
+        if (!TryDecodeReadService(service, out var isVariableList, out var listName, out var targets, out var decodeMessage))
+        {
+            var errorPayload = EncodeConfirmedError(invokeId, errorClassTag: 7, errorValue: DataAccessErrorObjectNonExistent, presentationContextId);
+            return new MmsConfirmedBerDispatchResult
+            {
+                IsRequestDecoded = false,
+                Request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Read },
+                Response = new MmsReadOnlyServerResponse { IsSuccess = false, Operation = nameof(MmsReadOnlyOperation.Read), Message = decodeMessage },
+                ResponsePresentationPayload = errorPayload,
+                Message = $"{decodeMessage} Answered with Confirmed-Error invokeID={invokeId}."
+            };
+        }
+
+        if (isVariableList)
+        {
+            // Read by variableListName: return one AccessResult per DataSet member.
+            var dataSetRequest = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.ReadDataSet, Target = listName };
+            var dataSetResponse = serverSession.Handle(dataSetRequest);
+            if (!dataSetResponse.IsSuccess)
+            {
+                var accessErrorPayload = WrapReadResponse(
+                    invokeId,
+                    EncodeDataAccessError(DataAccessErrorObjectNonExistent),
+                    presentationContextId);
+                return new MmsConfirmedBerDispatchResult
+                {
+                    IsRequestDecoded = true,
+                    Request = dataSetRequest,
+                    Response = dataSetResponse,
+                    ResponsePresentationPayload = accessErrorPayload,
+                    Message = $"Decoded MMS BER Read(variableListName) invokeID={invokeId}; DataSet '{listName}' returned object-non-existent."
+                };
+            }
+
+            var memberResults = dataSetResponse.Values.Select(EncodePointValue).ToArray();
+            var listPayload = WrapReadResponse(invokeId, Concat(memberResults), presentationContextId);
+            return new MmsConfirmedBerDispatchResult
+            {
+                IsRequestDecoded = true,
+                Request = dataSetRequest,
+                Response = dataSetResponse,
+                ResponsePresentationPayload = listPayload,
+                Message = $"Decoded MMS BER Read(variableListName) invokeID={invokeId} and returned {memberResults.Length} DataSet member value(s)."
+            };
+        }
+
+        // listOfVariable: MMS requires exactly one AccessResult per requested variable, in request
+        // order. Collapsing a batch read to a single result desynchronizes the client's decoder and
+        // is the classic cause of "unknown error, retry" loops in IED browsers.
+        var accessResults = new List<byte[]>(targets.Count);
+        var successCount = 0;
+        var firstFailureMessage = string.Empty;
+        MmsReadOnlyPoint? firstPoint = null;
+        foreach (var target in targets)
+        {
+            if (runtime is not null && runtime.TryReadRcbAttribute(target, out var rcbValue))
+            {
+                accessResults.Add(MmsDataCodec.Encode(rcbValue));
+                successCount++;
+                continue;
+            }
+
+            var response = serverSession.Handle(new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Read, Target = target });
+            if (response.IsSuccess && response.Values.Count > 0)
+            {
+                accessResults.Add(EncodePointValue(response.Values[0]));
+                firstPoint ??= response.Values[0];
+                successCount++;
+            }
+            else
+            {
+                accessResults.Add(EncodeDataAccessError(DataAccessErrorObjectNonExistent));
+                if (firstFailureMessage.Length == 0)
+                    firstFailureMessage = $"{target}: {response.Message}";
+            }
+        }
+
+        var payload = WrapReadResponse(invokeId, Concat(accessResults.ToArray()), presentationContextId);
+        var summaryTarget = targets.Count == 0
+            ? string.Empty
+            : targets.Count == 1 ? targets[0] : $"{targets[0]} (+{targets.Count - 1} more)";
+        var isSuccess = successCount == targets.Count && targets.Count > 0;
+        var message = targets.Count == 1 && firstPoint is not null
+            ? $"Returned value {firstPoint.Value} quality={firstPoint.Quality}."
+            : isSuccess
+                ? $"Returned {successCount.ToString(System.Globalization.CultureInfo.InvariantCulture)} access result(s)."
+                : $"Returned {successCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}/{targets.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} access result(s); first failure: {firstFailureMessage}";
+        return new MmsConfirmedBerDispatchResult
+        {
+            IsRequestDecoded = true,
+            Request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Read, Target = summaryTarget },
+            Response = new MmsReadOnlyServerResponse
+            {
+                IsSuccess = isSuccess,
+                Operation = nameof(MmsReadOnlyOperation.Read),
+                Target = summaryTarget,
+                Message = message
+            },
+            ResponsePresentationPayload = payload,
+            Message = $"Decoded MMS BER Read invokeID={invokeId} with {targets.Count} variable(s)."
+        };
+    }
+
+    private static MmsConfirmedBerDispatchResult DispatchWrite(
+        int invokeId,
+        BerTlv service,
+        MmsReadOnlyServerSession serverSession,
+        int presentationContextId,
+        IMmsAssociationRuntime? runtime)
+    {
+        if (!TryDecodeWriteService(service, out var targets, out var values, out var decodeMessage))
+        {
+            var errorPayload = EncodeConfirmedError(invokeId, errorClassTag: 7, errorValue: DataAccessErrorObjectNonExistent, presentationContextId);
+            return new MmsConfirmedBerDispatchResult
+            {
+                IsRequestDecoded = false,
+                Request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Write },
+                Response = new MmsReadOnlyServerResponse { IsSuccess = false, Operation = nameof(MmsReadOnlyOperation.Write), Message = decodeMessage },
+                ResponsePresentationPayload = errorPayload,
+                Message = $"{decodeMessage} Answered with Confirmed-Error invokeID={invokeId}."
+            };
+        }
+
+        // Write-Response ::= [5] IMPLICIT SEQUENCE OF CHOICE { failure [0] DataAccessError, success [1] NULL }
+        // - one entry per written variable, in request order.
+        var writeResults = new List<byte[]>(targets.Count);
+        var acceptedCount = 0;
+        var firstFailure = string.Empty;
+        for (var index = 0; index < targets.Count; index++)
+        {
+            var target = targets[index];
+            var value = index < values.Count ? values[index] : null;
+            if (value is null)
+            {
+                writeResults.Add(BerWriter.EncodeTlv(0x80, BerWriter.EncodeUnsignedInteger(DataAccessErrorTypeInconsistent)));
+                if (firstFailure.Length == 0)
+                    firstFailure = $"{target}: missing Data element";
+                continue;
+            }
+
+            if (runtime is not null && runtime.TryWriteRcbAttribute(target, value, out var rcbError))
+            {
+                if (rcbError == 0)
+                {
+                    writeResults.Add(BerWriter.EncodeTlv(0x81, ReadOnlySpan<byte>.Empty));
+                    acceptedCount++;
+                }
+                else
+                {
+                    writeResults.Add(BerWriter.EncodeTlv(0x80, BerWriter.EncodeUnsignedInteger((ulong)rcbError)));
+                    if (firstFailure.Length == 0)
+                        firstFailure = $"{target}: DataAccessError {rcbError}";
+                }
+
+                continue;
+            }
+
+            writeResults.Add(BerWriter.EncodeTlv(0x80, BerWriter.EncodeUnsignedInteger(DataAccessErrorObjectAccessDenied)));
+            if (firstFailure.Length == 0)
+                firstFailure = $"{target}: write rejected (read-only data model)";
+        }
+
+        var responseService = BerWriter.EncodeTlv(0xA5, Concat(writeResults.ToArray()));
+        var confirmedResponse = BerWriter.EncodeTlv(0xA1, Concat(Integer(invokeId), responseService));
+        var payload = MmsPresentation.WrapIsoPresentationPData(confirmedResponse, presentationContextId);
+
+        var summaryTarget = targets.Count == 0
+            ? string.Empty
+            : targets.Count == 1 ? targets[0] : $"{targets[0]} (+{targets.Count - 1} more)";
+        var isSuccess = acceptedCount == targets.Count && targets.Count > 0;
+        return new MmsConfirmedBerDispatchResult
+        {
+            IsRequestDecoded = true,
+            Request = new MmsReadOnlyServerRequest { Operation = MmsReadOnlyOperation.Write, Target = summaryTarget, Value = "<mms-data>" },
+            Response = new MmsReadOnlyServerResponse
+            {
+                IsSuccess = isSuccess,
+                Operation = nameof(MmsReadOnlyOperation.Write),
+                Target = summaryTarget,
+                Message = isSuccess
+                    ? $"Accepted {acceptedCount.ToString(System.Globalization.CultureInfo.InvariantCulture)} write(s)."
+                    : $"Accepted {acceptedCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}/{targets.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} write(s); {firstFailure}"
+            },
+            ResponsePresentationPayload = payload,
+            Message = $"Decoded MMS BER Write invokeID={invokeId} with {targets.Count} variable(s)."
+        };
+    }
+
+    /// <summary>Encodes the AccessResult for a resolved point (Data on success). Public for the reporting runtime.</summary>
+    public static byte[] EncodePointAccessResult(MmsReadOnlyPoint point) => EncodePointValue(point);
+
+    private static byte[] EncodeDataAccessError(int code)
+        => BerWriter.EncodeTlv(0x80, BerWriter.EncodeUnsignedInteger((ulong)code));
+
+    private static byte[] WrapReadResponse(int invokeId, byte[] accessResults, int presentationContextId)
+    {
+        var listOfAccessResult = BerWriter.EncodeTlv(0xA1, accessResults);
+        var responseService = BerWriter.EncodeTlv(0xA4, listOfAccessResult);
+        var confirmedResponse = BerWriter.EncodeTlv(0xA1, Concat(Integer(invokeId), responseService));
+        return MmsPresentation.WrapIsoPresentationPData(confirmedResponse, presentationContextId);
+    }
+
+    private static byte[] EncodeConfirmedError(int invokeId, int errorClassTag, int errorValue, int presentationContextId)
+    {
+        // Confirmed-ErrorPDU ::= [2] IMPLICIT SEQUENCE {
+        //   invokeID [0] IMPLICIT Unsigned32,
+        //   serviceError [2] IMPLICIT ServiceError { errorClass [0] CHOICE { ... [n] IMPLICIT INTEGER } } }
+        var invoke = BerWriter.EncodeTlv(0x80, EncodeIntegerContent(invokeId));
+        var classChoice = BerWriter.EncodeTlv(BerClass.ContextSpecific, false, errorClassTag, BerWriter.EncodeUnsignedInteger((ulong)errorValue));
+        var errorClass = BerWriter.EncodeTlv(0xA0, classChoice);
+        var serviceError = BerWriter.EncodeTlv(0xA2, errorClass);
+        var pdu = BerWriter.EncodeTlv(0xA2, Concat(invoke, serviceError));
+        return MmsPresentation.WrapIsoPresentationPData(pdu, presentationContextId);
+    }
+
+    private static bool TryDecodeReadService(
+        BerTlv service,
+        out bool isVariableList,
+        out string listName,
+        out List<string> targets,
+        out string message)
+    {
+        isVariableList = false;
+        listName = string.Empty;
+        targets = new List<string>();
+        message = string.Empty;
+
+        try
+        {
+            BerTlv specification = default;
+            foreach (var child in BerReader.ReadChildren(service.Value))
+            {
+                if (child.Class == BerClass.ContextSpecific && child.TagNumber == 0 && !child.Constructed)
+                    continue; // specificationWithResult [0] BOOLEAN
+
+                if (child.Class == BerClass.ContextSpecific && child.TagNumber == 1 && child.Constructed)
+                {
+                    // variableAccessSpecification [1] explicit wrapper.
+                    var inner = BerReader.ReadChildren(child.Value);
+                    if (inner.Count > 0)
+                        specification = inner[0];
+                    break;
+                }
+
+                if (child.EncodedTag is 0xA0 && specification.EncodedTag == 0)
+                    specification = child; // compatibility: unwrapped VariableAccessSpecification.
+            }
+
+            if (specification.EncodedTag == 0)
+            {
+                message = "MMS Read request carries no VariableAccessSpecification.";
+                return false;
+            }
+
+            if (specification.Class == BerClass.ContextSpecific && specification.TagNumber == 1)
+            {
+                // variableListName [1] ObjectName.
+                if (!TryDecodeObjectName(specification.Value, out var listDomain, out var listItem))
+                {
+                    message = "MMS Read variableListName has no decodable ObjectName.";
+                    return false;
+                }
+
+                isVariableList = true;
+                listName = ToIecDataSetReference(listDomain, listItem);
+                message = $"Decoded Read variableListName={listName}.";
+                return true;
+            }
+
+            if (specification.Class == BerClass.ContextSpecific && specification.TagNumber == 0)
+            {
+                // listOfVariable [0] IMPLICIT SEQUENCE OF SEQUENCE { variableSpecification, alternateAccess? }
+                foreach (var entry in BerReader.ReadChildren(specification.Value))
+                {
+                    if (entry.EncodedTag != 0x30)
+                        continue;
+
+                    string domain = string.Empty, item = string.Empty;
+                    var resolved = false;
+                    foreach (var field in BerReader.ReadChildren(entry.Value))
+                    {
+                        // VariableSpecification.name [0] ObjectName (explicit).
+                        if (field.Class == BerClass.ContextSpecific && field.TagNumber == 0 && field.Constructed)
+                        {
+                            var nameOffset = 0;
+                            if (BerReader.TryReadTlv(field.Value, ref nameOffset, out var objectName) &&
+                                TryDecodeObjectName(objectName, out domain, out item))
+                            {
+                                resolved = true;
+                            }
+
+                            break;
+                        }
+                    }
+
+                    targets.Add(resolved ? ToIecReference(domain, item) : string.Empty);
+                }
+
+                // Unresolvable entries stay in the list as empty targets so the response keeps
+                // one AccessResult per requested variable (they yield object-non-existent).
+                if (targets.Count == 0)
+                {
+                    message = "MMS Read listOfVariable contains no variable specification.";
+                    return false;
+                }
+
+                message = $"Decoded Read listOfVariable with {targets.Count} variable(s).";
+                return true;
+            }
+
+            message = $"Unsupported VariableAccessSpecification tag 0x{specification.EncodedTag:X2} in Read request.";
+            return false;
+        }
+        catch (Exception ex) when (ex is BerFormatException or ArgumentException or InvalidOperationException)
+        {
+            message = $"MMS Read decode failed: {ex.GetType().Name}: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static bool TryDecodeWriteService(
+        BerTlv service,
+        out List<string> targets,
+        out List<MmsDataValue?> values,
+        out string message)
+    {
+        targets = new List<string>();
+        values = new List<MmsDataValue?>();
+        message = string.Empty;
+
+        try
+        {
+            // Write-Request ::= SEQUENCE { variableAccessSpecification VariableAccessSpecification,
+            //                              listOfData [0] IMPLICIT SEQUENCE OF Data }
+            // Both listOfVariable and listOfData use context tag [0]; the SEQUENCE order disambiguates.
+            var children = BerReader.ReadChildren(service.Value);
+            if (children.Count < 2)
+            {
+                message = "MMS Write request does not contain a variable specification and listOfData.";
+                return false;
+            }
+
+            var specification = children[0];
+            var listOfData = children[^1];
+
+            foreach (var data in BerReader.ReadChildren(listOfData.Value))
+                values.Add(MmsDataCodec.Decode(data));
+
+            if (specification.Class == BerClass.ContextSpecific && specification.TagNumber == 1)
+            {
+                if (!TryDecodeObjectName(specification.Value, out var listDomain, out var listItem))
+                {
+                    message = "MMS Write variableListName has no decodable ObjectName.";
+                    return false;
+                }
+
+                targets.Add(ToIecDataSetReference(listDomain, listItem));
+                message = $"Decoded Write variableListName={targets[0]}.";
+                return true;
+            }
+
+            foreach (var entry in BerReader.ReadChildren(specification.Value))
+            {
+                if (entry.EncodedTag != 0x30)
+                    continue;
+
+                string domain = string.Empty, item = string.Empty;
+                var resolved = false;
+                foreach (var field in BerReader.ReadChildren(entry.Value))
+                {
+                    if (field.Class == BerClass.ContextSpecific && field.TagNumber == 0 && field.Constructed)
+                    {
+                        var nameOffset = 0;
+                        if (BerReader.TryReadTlv(field.Value, ref nameOffset, out var objectName) &&
+                            TryDecodeObjectName(objectName, out domain, out item))
+                        {
+                            resolved = true;
+                        }
+
+                        break;
+                    }
+                }
+
+                targets.Add(resolved ? ToIecReference(domain, item) : string.Empty);
+            }
+
+            if (targets.Count == 0)
+            {
+                message = "MMS Write request contains no variable specification.";
+                return false;
+            }
+
+            message = $"Decoded Write with {targets.Count} variable(s) and {values.Count} data element(s).";
+            return true;
+        }
+        catch (Exception ex) when (ex is BerFormatException or ArgumentException or InvalidOperationException)
+        {
+            message = $"MMS Write decode failed: {ex.GetType().Name}: {ex.Message}";
+            return false;
+        }
     }
 
     public static bool TryDecodeRequest(
@@ -1080,7 +1602,7 @@ public static class MmsConfirmedRequestBerDispatcher
     {
         var access = response.IsSuccess && response.Values.Count > 0
             ? EncodePointValue(response.Values[0])
-            : BerWriter.EncodeTlv(0x80, BerWriter.EncodeUnsignedInteger(4));
+            : BerWriter.EncodeTlv(0x80, BerWriter.EncodeUnsignedInteger(10)); // object-non-existent
         var listOfAccessResult = BerWriter.EncodeTlv(0xA1, access);
         return BerWriter.EncodeTlv(0xA4, listOfAccessResult);
     }
@@ -1133,7 +1655,7 @@ public static class MmsConfirmedRequestBerDispatcher
     private static byte[] EncodeWriteResponse(MmsReadOnlyServerResponse response)
     {
         if (response.IsSuccess)
-            return BerWriter.EncodeTlv(0xA5, ReadOnlySpan<byte>.Empty);
+            return BerWriter.EncodeTlv(0xA5, BerWriter.EncodeTlv(0x81, ReadOnlySpan<byte>.Empty));
 
         var failure = BerWriter.EncodeTlv(0x80, BerWriter.EncodeUnsignedInteger(3));
         return BerWriter.EncodeTlv(0xA5, failure);
@@ -1221,7 +1743,19 @@ public static class MmsConfirmedRequestBerDispatcher
         if (bType is "QUALITY" or "CHECK")
             return MmsDataValue.BitString(bType == "QUALITY" ? (byte)3 : (byte)6, [0x00, 0x00]);
 
-        if (bType is "TIMESTAMP" or "ENTRYTIME")
+        if (bType == "OPTFLDS")
+            return MmsDataValue.BitString(6, MmsReportControlBlockLayout.ParseOptionalFields(point.Value));
+
+        if (bType == "TRGOPS")
+            return MmsDataValue.BitString(2, [MmsReportControlBlockLayout.ParseTriggerOptions(point.Value)]);
+
+        if (bType == "ENTRYID")
+            return MmsDataValue.OctetString(new byte[8]);
+
+        if (bType == "ENTRYTIME")
+            return MmsDataValue.BinaryTime(MmsReportControlBlockLayout.ToBinaryTime6(point.TimestampUtc));
+
+        if (bType == "TIMESTAMP")
             return MmsDataValue.UtcTime(new Iec61850UtcTime(point.TimestampUtc, Quality: 0));
 
         if (bType is "BOOLEAN" or "BOOL")
@@ -1267,6 +1801,18 @@ public static class MmsConfirmedRequestBerDispatcher
         if (bType == "CHECK")
             return BerWriter.EncodeTlv(0x84, new byte[] { 2 });
 
+        if (bType == "OPTFLDS")
+            return BerWriter.EncodeTlv(0x84, new byte[] { 10 });
+
+        if (bType == "TRGOPS")
+            return BerWriter.EncodeTlv(0x84, new byte[] { 6 });
+
+        if (bType == "ENTRYID")
+            return BerWriter.EncodeTlv(0x89, BerWriter.EncodeUnsignedInteger(8));
+
+        if (bType == "ENTRYTIME")
+            return BerWriter.EncodeTlv(0x8C, new byte[] { 0xFF }); // binary-time [12], time-of-day = 6 bytes
+
         if (IsSignedSclInteger(bType) || bType is "DBPOS" or "TCMD")
             return BerWriter.EncodeTlv(0x85, BerWriter.EncodeUnsignedInteger((ulong)SclIntegerWidth(bType, 32)));
 
@@ -1288,7 +1834,7 @@ public static class MmsConfirmedRequestBerDispatcher
         if (bType.StartsWith("UNICODE", StringComparison.Ordinal) || bType.StartsWith("MMSSTRING", StringComparison.Ordinal))
             return BerWriter.EncodeTlv(0x90, BerWriter.EncodeUnsignedInteger((ulong)SclStringLength(bType, 255)));
 
-        if (bType is "TIMESTAMP" or "ENTRYTIME")
+        if (bType == "TIMESTAMP")
             return BerWriter.EncodeTlv(0x91, ReadOnlySpan<byte>.Empty);
 
         return null;

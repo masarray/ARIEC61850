@@ -13,7 +13,9 @@ public enum MmsReadOnlyOperation
     GetVariableAccessAttributes,
     Read,
     ReadDataSet,
-    Write
+    Write,
+    Identify,
+    Conclude
 }
 
 public sealed record MmsReadOnlyServerRequest
@@ -372,25 +374,46 @@ public sealed class MmsReadOnlyServerSession
             Kind = "structure",
             Value = "structure",
             Quality = "valid",
-            Children =
-            [
-                ReportAttribute(reference, "RptID", rcb.ReportId),
-                ReportAttribute(reference, "RptEna", "false"),
-                ReportAttribute(reference, "DatSet", rcb.DataSetReference),
-                ReportAttribute(reference, "ConfRev", rcb.ConfRev.ToString(CultureInfo.InvariantCulture)),
-                ReportAttribute(reference, "BufTm", rcb.BufferTimeMs.ToString(CultureInfo.InvariantCulture)),
-                ReportAttribute(reference, "IntgPd", rcb.IntegrityPeriodMs.ToString(CultureInfo.InvariantCulture)),
-                ReportAttribute(reference, "GI", "false")
-            ]
+            Children = MmsReportControlBlockLayout.AttributesFor(rcb.Buffered)
+                .Select(attribute => ReportAttribute(reference, attribute.Name, ReportAttributeDefault(rcb, attribute.Name), attribute.BType))
+                .ToArray()
         };
     }
 
-    private static MmsReadOnlyPoint ReportAttribute(string parentReference, string name, string value)
+    private static string ReportAttributeDefault(MmsReadOnlyReportControlBlock rcb, string attribute)
+        => attribute switch
+        {
+            "RptID" => rcb.ReportId,
+            "DatSet" => ToMmsDataSetValue(rcb.DataSetReference),
+            "ConfRev" => rcb.ConfRev.ToString(CultureInfo.InvariantCulture),
+            "OptFlds" => rcb.OptionalFields,
+            "BufTm" => rcb.BufferTimeMs.ToString(CultureInfo.InvariantCulture),
+            "TrgOps" => rcb.TriggerOptions,
+            "IntgPd" => rcb.IntegrityPeriodMs.ToString(CultureInfo.InvariantCulture),
+            "RptEna" or "Resv" or "GI" or "PurgeBuf" => "false",
+            "SqNum" or "ResvTms" => "0",
+            "EntryID" => "0000000000000000",
+            "TimeOfEntry" => string.Empty,
+            _ => string.Empty
+        };
+
+    private static string ToMmsDataSetValue(string reference)
+    {
+        var normalized = (reference ?? string.Empty).Trim();
+        var slash = normalized.IndexOf('/');
+        if (slash < 0)
+            return normalized.Replace('.', '$');
+
+        return normalized[..slash] + "/" + normalized[(slash + 1)..].Replace('.', '$');
+    }
+
+    private static MmsReadOnlyPoint ReportAttribute(string parentReference, string name, string value, string sclBType = "")
         => new()
         {
             Name = name,
             Reference = $"{parentReference}${name}",
             Kind = "report-attribute",
+            SclBType = sclBType,
             Value = value ?? string.Empty,
             Quality = "valid"
         };

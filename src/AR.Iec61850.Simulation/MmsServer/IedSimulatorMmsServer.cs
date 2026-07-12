@@ -34,6 +34,7 @@ public enum IedSimulatorServerActivityKind
     HandshakeSent,
     ClientClosed,
     RequestServed,
+    ReportSent,
     AssociationRejected,
     Error
 }
@@ -243,6 +244,9 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
             Message = "Client connected."
         });
 
+        // Serializes MMS confirmed responses and unsolicited InformationReports onto one stream.
+        using var writeLock = new SemaphoreSlim(1, 1);
+        MmsAssociationReportingRuntime? reportingRuntime = null;
         try
         {
             await using var stream = client.GetStream();
@@ -250,6 +254,31 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
             var association = await NegotiateAssociationAsync(stream, remote, cancellationToken).ConfigureAwait(false);
             if (association is null)
                 return;
+
+            reportingRuntime = new MmsAssociationReportingRuntime(
+                _sessionFactory,
+                async (payload, ct) =>
+                {
+                    await writeLock.WaitAsync(ct).ConfigureAwait(false);
+                    try
+                    {
+                        await WriteCotpDataPayloadAsync(stream, payload, association.TpduSizeCode, ct).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        writeLock.Release();
+                    }
+                },
+                association.PresentationContextId,
+                (rcbReference, success, message) => Record(new IedSimulatorServerActivity
+                {
+                    Kind = IedSimulatorServerActivityKind.ReportSent,
+                    RemoteEndPoint = remote,
+                    Operation = "InformationReport",
+                    Target = rcbReference,
+                    Success = success,
+                    Message = message
+                }));
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -264,9 +293,26 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                 activeResponseCotpSegmentCount = 0;
 
                 var session = _sessionFactory();
-                var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestPayload, session, association.PresentationContextId);
+                var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestPayload, session, association.PresentationContextId, reportingRuntime);
                 if (!dispatch.IsRequestDecoded)
                 {
+                    var hasErrorResponse = dispatch.ResponsePresentationPayload.Length > 0;
+                    if (hasErrorResponse)
+                    {
+                        // Answer with the Confirmed-ErrorPDU and keep the association alive:
+                        // clients probe optional services during discovery and expect negative
+                        // responses, not a dropped TCP connection.
+                        await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        try
+                        {
+                            await WriteCotpDataPayloadAsync(stream, dispatch.ResponsePresentationPayload, association.TpduSizeCode, cancellationToken).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            writeLock.Release();
+                        }
+                    }
+
                     Record(new IedSimulatorServerActivity
                     {
                         Kind = IedSimulatorServerActivityKind.RequestServed,
@@ -275,8 +321,14 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                         Success = false,
                         Message = $"{dispatch.Message} MMS={FormatMmsPayload(requestPayload)}",
                         RequestMmsPayloadHex = FormatMmsPayload(requestPayload),
-                        RequestMmsPayloadBytes = requestPayload.Length
+                        ResponseMmsPayloadHex = FormatMmsPayload(dispatch.ResponsePresentationPayload),
+                        RequestMmsPayloadBytes = requestPayload.Length,
+                        ResponseMmsPayloadBytes = dispatch.ResponsePresentationPayload.Length
                     });
+
+                    if (hasErrorResponse)
+                        continue;
+
                     break;
                 }
 
@@ -284,11 +336,20 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                 activeTarget = dispatch.Request.Target;
                 activeResponsePayload = dispatch.ResponsePresentationPayload;
                 activeResponseCotpSegmentCount = CountCotpDataSegments(activeResponsePayload.Length, association.TpduSizeCode);
-                var responseSegments = await WriteCotpDataPayloadAsync(
-                    stream,
-                    activeResponsePayload,
-                    association.TpduSizeCode,
-                    cancellationToken).ConfigureAwait(false);
+                await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                int responseSegments;
+                try
+                {
+                    responseSegments = await WriteCotpDataPayloadAsync(
+                        stream,
+                        activeResponsePayload,
+                        association.TpduSizeCode,
+                        cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    writeLock.Release();
+                }
 
                 Interlocked.Increment(ref _servedRequests);
                 if (dispatch.Request.Operation == MmsReadOnlyOperation.Write && !dispatch.Response.IsSuccess)
@@ -310,6 +371,9 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                     ResponseMmsPayloadBytes = activeResponsePayload.Length,
                     ResponseCotpSegmentCount = responseSegments
                 });
+
+                if (dispatch.Request.Operation == MmsReadOnlyOperation.Conclude)
+                    break;
             }
         }
         catch (OperationCanceledException)
@@ -335,6 +399,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         }
         finally
         {
+            reportingRuntime?.Dispose();
             _clients.TryRemove(connectionId, out _);
             try { client.Close(); }
             catch (Exception ex) when (ex is SocketException or ObjectDisposedException) { }

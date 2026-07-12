@@ -316,6 +316,6 @@ Status: implemented for the read-only discovery/read alpha path.
 - The negotiated MMS presentation context id is retained per connection and used for all confirmed responses.
 - SCL-derived and built-in simulator models expose logical devices, logical nodes, DataSets, RCB metadata, functional-constraint hierarchy, and readable values.
 - Native MMS BER `GetNameList`, `Read`, `GetNamedVariableListAttributes`, variable-attribute probes, and read-only Write rejection are served through the reusable stack.
-- Internal discovery/read smoke passed; IEDScout remains a manual interoperability gate because it is a commercial external client.
+- Internal discovery/read smoke passed; an independent third-party IEC 61850 client remains a manual interoperability gate.
 
 Next server milestones: complete third-party discovery evidence, negotiated MMS PDU-size/fragmentation handling, then reporting state machines. Write/control remain disabled.

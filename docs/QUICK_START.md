@@ -124,7 +124,7 @@ dotnet run --project .\apps\AR.Iec61850.Cli -c Release -- simulate-ied --port 10
 dotnet run --project .\apps\AR.Iec61850.Cli -c Release -- mms-discover 127.0.0.1 --port 102 --timeout-ms 30000 --no-report-probe
 ```
 
-IEDScout should be pointed at `127.0.0.1:102`. The simulator activity monitor must progress from `COTP CR/CC` and `ACSE AARQ/AARE` to `GetNameList` requests.
+Point an independent IEC 61850 client at `127.0.0.1:102`. The simulator activity monitor must progress from `COTP CR/CC` and `ACSE AARQ/AARE` to `GetNameList` requests.
 
 ## 6. Build a WPF app as a single EXE
 

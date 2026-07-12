@@ -29,11 +29,11 @@ public static class Iec61850StandardEnumRegistry
         "ARIEC61850_BehaviourKind",
         "IEC 61850 behaviour/mode style enumeration.",
         [
-            new(1, "off"),
+            new(1, "on"),
             new(2, "blocked"),
             new(3, "test"),
             new(4, "testBlocked"),
-            new(5, "on")
+            new(5, "off")
         ]);
 
     private static readonly Iec61850StandardEnumDefinition Health = new(

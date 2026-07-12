@@ -389,7 +389,29 @@ public sealed class IedSimulatorProfileBuilder
         if (bType is "DBPOS" or "TCMD")
             return "closed";
 
-        if (bType == "ENUM" || bType.StartsWith("INT", StringComparison.Ordinal) || bType.StartsWith("FLOAT", StringComparison.Ordinal))
+        if (bType == "ENUM")
+        {
+            // IEC 61850 BehKind and ModKind reserve ordinal 1 for normal on.
+            // A generic zero is not a valid Siemens Beh value and can be rendered
+            // by clients as an abnormal or test state.
+            if (entry.DaName.EndsWith("stVal", StringComparison.OrdinalIgnoreCase) &&
+                (entry.DoName.Equals("Beh", StringComparison.OrdinalIgnoreCase) ||
+                 entry.DoName.Equals("Mod", StringComparison.OrdinalIgnoreCase)))
+            {
+                return "1";
+            }
+
+            if (entry.DaName.EndsWith("stVal", StringComparison.OrdinalIgnoreCase) &&
+                (entry.DoName.Equals("Health", StringComparison.OrdinalIgnoreCase) ||
+                 entry.DoName.Equals("PhyHealth", StringComparison.OrdinalIgnoreCase)))
+            {
+                return "1";
+            }
+
+            return "0";
+        }
+
+        if (bType.StartsWith("INT", StringComparison.Ordinal) || bType.StartsWith("FLOAT", StringComparison.Ordinal))
             return "0";
 
         if (bType is "BOOLEAN" or "BOOL")

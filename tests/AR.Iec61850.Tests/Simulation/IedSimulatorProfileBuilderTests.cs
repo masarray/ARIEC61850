@@ -195,6 +195,20 @@ public sealed class IedSimulatorProfileBuilderTests
                                 },
                                 new LiveIedDataObjectModel
                                 {
+                                    Name = "Beh",
+                                    InferredCdc = "INS",
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            AttributePath = "stVal",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = "Enum"
+                                        }
+                                    ]
+                                },
+                                new LiveIedDataObjectModel
+                                {
                                     Name = "Str",
                                     InferredCdc = "ACD",
                                     Attributes =
@@ -220,7 +234,7 @@ public sealed class IedSimulatorProfileBuilderTests
         Assert.Equal("TEMPLATE", result.SourceIedName);
         Assert.Equal("SIE7SR5", result.SelectedIedName);
         Assert.Equal("SIE7SR5", profile.Name);
-        Assert.Equal(4, result.StructuralDataAttributeCount);
+        Assert.Equal(5, result.StructuralDataAttributeCount);
         Assert.Equal(2, profile.LogicalDevices.Count);
         Assert.Contains(profile.LogicalDevices, device => device.Name == "SIE7SR5PROT");
         Assert.Contains(profile.LogicalDevices, device => device.Name == "SIE7SR5CTRL");
@@ -235,6 +249,8 @@ public sealed class IedSimulatorProfileBuilderTests
             point => point.Reference == "XCBR1.Pos.ctlModel" && point.InitialValue == "0");
         Assert.Contains(profile.LogicalDevices.SelectMany(device => device.LogicalNodes).SelectMany(node => node.Points),
             point => point.Reference == "XCBR1.Str.dirGeneral" && point.InitialValue == "0");
+        Assert.Contains(profile.LogicalDevices.SelectMany(device => device.LogicalNodes).SelectMany(node => node.Points),
+            point => point.Reference == "XCBR1.Beh.stVal" && point.InitialValue == "1");
         Assert.Contains(profile.ReportControlBlocks,
             rcb => rcb.Reference == "SIE7SR5PROT/CSWI1.RP.urcbA" && rcb.ConfRev == 7);
     }

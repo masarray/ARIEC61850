@@ -73,6 +73,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92" />
@@ -90,6 +91,7 @@
                             <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding TSelector}" Margin="0,7,0,0" />
                             <CheckBox Grid.Row="5" Grid.ColumnSpan="2" Content="Read DataSet directories" IsChecked="{Binding ReadDataSetDirectories}" Margin="0,12,0,0" />
                             <CheckBox Grid.Row="6" Grid.ColumnSpan="2" Content="Probe RCB attributes" IsChecked="{Binding ProbeReportAttributes}" Margin="0,6,0,0" />
+                            <CheckBox Grid.Row="7" Grid.ColumnSpan="2" Content="Read file directory" IsChecked="{Binding ReadFileDirectory}" Margin="0,6,0,0" />
                         </Grid>
                     </Expander>
                 </Grid>

@@ -17,7 +17,8 @@ public static class LiveIedModelDiscoveryBuilder
         MmsDiscoveryResult discovery,
         LiveIedModelDiscoveryBuildOptions options,
         IReadOnlyList<MmsDataSetDirectoryResult>? dataSetDirectories = null,
-        IReadOnlyList<MmsVariableAccessAttributesResult>? variableTypeAttributes = null)
+        IReadOnlyList<MmsVariableAccessAttributesResult>? variableTypeAttributes = null,
+        IReadOnlyList<MmsFileDirectoryResult>? fileDirectoryPages = null)
     {
         ArgumentNullException.ThrowIfNull(discovery);
         ArgumentNullException.ThrowIfNull(options);
@@ -28,19 +29,17 @@ public static class LiveIedModelDiscoveryBuilder
             .GroupBy(x => x.DataSetReference, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
         var variableTypeList = variableTypeAttributes ?? Array.Empty<MmsVariableAccessAttributesResult>();
-        var variableTypeMap = variableTypeList
-            .Where(x => !string.IsNullOrWhiteSpace(x.Reference.Domain) && !string.IsNullOrWhiteSpace(x.Reference.Item))
-            .GroupBy(x => $"{x.Reference.Domain}/{x.Reference.Item}", StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+        var fileDirectory = BuildFileDirectory(fileDirectoryPages ?? Array.Empty<MmsFileDirectoryResult>());
+        var variableTypeIndex = LiveIedVariableTypeHierarchyIndex.Build(directory, variableTypeList);
 
-        var logicalDevices = BuildLogicalDevices(directory, variableTypeMap).ToArray();
+        var logicalDevices = BuildLogicalDevices(directory, variableTypeIndex).ToArray();
         var reportControls = BuildReportControls(discovery.ReportInventory).ToArray();
         var controlBlocks = BuildControlBlockInventory(directory).ToArray();
         var dataSets = BuildDataSets(discovery.ReportInventory, dataSetDirectoryMap, reportControls, controlBlocks).ToArray();
         var typeTemplates = BuildTypeTemplates(logicalDevices, options.IncludeLowConfidenceTemplates).ToArray();
         var variableTypes = BuildVariableTypeDiscoveries(variableTypeList).ToArray();
-        var warnings = BuildWarnings(directory, dataSets, controlBlocks, variableTypeList).ToArray();
-        var coverage = BuildCoverage(logicalDevices, dataSets, reportControls, controlBlocks, variableTypes);
+        var warnings = BuildWarnings(directory, dataSets, controlBlocks, variableTypeList, variableTypeIndex, fileDirectory).ToArray();
+        var coverage = BuildCoverage(logicalDevices, dataSets, reportControls, controlBlocks, variableTypes, fileDirectory);
         var identity = LiveIedIdentityResolver.Resolve(
             directory.LogicalDevices.Keys,
             options.Host,
@@ -55,6 +54,7 @@ public static class LiveIedModelDiscoveryBuilder
             IedIdentity = identity,
             AccessPointName = string.IsNullOrWhiteSpace(options.AccessPointName) ? "AP1" : options.AccessPointName.Trim(),
             LogicalDevices = logicalDevices,
+            FileDirectory = fileDirectory,
             DataSets = dataSets,
             ReportControls = reportControls,
             GooseControlBlocks = controlBlocks.Where(x => string.Equals(x.Kind, "GSEControl", StringComparison.OrdinalIgnoreCase)).ToArray(),
@@ -71,7 +71,7 @@ public static class LiveIedModelDiscoveryBuilder
 
     private static IEnumerable<LiveIedLogicalDeviceModel> BuildLogicalDevices(
         MmsIedModelDirectory directory,
-        IReadOnlyDictionary<string, MmsVariableAccessAttributesResult> variableTypeMap)
+        LiveIedVariableTypeHierarchyIndex variableTypeIndex)
     {
         foreach (var ld in directory.LogicalDevices.Values.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
         {
@@ -79,19 +79,19 @@ public static class LiveIedModelDiscoveryBuilder
             {
                 MmsDomain = ld.Name,
                 Inst = ld.Name,
-                LogicalNodes = BuildLogicalNodes(ld, variableTypeMap).ToArray()
+                LogicalNodes = BuildLogicalNodes(ld, variableTypeIndex).ToArray()
             };
         }
     }
 
     private static IEnumerable<LiveIedLogicalNodeModel> BuildLogicalNodes(
         MmsLogicalDeviceDirectory ld,
-        IReadOnlyDictionary<string, MmsVariableAccessAttributesResult> variableTypeMap)
+        LiveIedVariableTypeHierarchyIndex variableTypeIndex)
     {
         foreach (var ln in ld.LogicalNodes.Values.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
         {
             var parsed = Iec61850ReferenceParts.ParseLogicalNodeName(ln.Name);
-            var dataObjects = BuildDataObjects(ln, parsed, variableTypeMap).ToArray();
+            var dataObjects = BuildDataObjects(ln, parsed, variableTypeIndex).ToArray();
             yield return new LiveIedLogicalNodeModel
             {
                 Name = ln.Name,
@@ -108,7 +108,7 @@ public static class LiveIedModelDiscoveryBuilder
     private static IEnumerable<LiveIedDataObjectModel> BuildDataObjects(
         MmsLogicalNodeDirectory ln,
         Iec61850LogicalNodeName parsedLn,
-        IReadOnlyDictionary<string, MmsVariableAccessAttributesResult> variableTypeMap)
+        LiveIedVariableTypeHierarchyIndex variableTypeIndex)
     {
         var groups = ln.Points
             .GroupBy(x => Iec61850ReferenceParts.TopDataObjectName(x.DataObjectPath), StringComparer.OrdinalIgnoreCase)
@@ -118,7 +118,7 @@ public static class LiveIedModelDiscoveryBuilder
         foreach (var group in groups)
         {
             var attributes = group
-                .Select(point => BuildAttribute(point, group.Key, variableTypeMap))
+                .Select(point => BuildAttribute(point, group.Key, variableTypeIndex))
                 .OrderBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => x.AttributePath, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -143,17 +143,16 @@ public static class LiveIedModelDiscoveryBuilder
     private static LiveIedDataAttributeModel BuildAttribute(
         MmsFcResolvedPoint point,
         string dataObjectName,
-        IReadOnlyDictionary<string, MmsVariableAccessAttributesResult> variableTypeMap)
+        LiveIedVariableTypeHierarchyIndex variableTypeIndex)
     {
         var attrPath = Iec61850ReferenceParts.DataAttributePath(point.DataObjectPath);
         if (string.IsNullOrWhiteSpace(attrPath) && !string.Equals(point.DataObjectPath, dataObjectName, StringComparison.OrdinalIgnoreCase))
             attrPath = point.DataObjectPath;
 
-        variableTypeMap.TryGetValue(point.MmsReference, out var typeResult);
-        var hasExactType = typeResult?.IsSuccess == true && typeResult.TypeSpecification != null;
-        var sclBType = hasExactType ? typeResult!.SclBType : GuessSclBType(attrPath, point.FunctionalConstraint);
-        var mmsType = hasExactType ? typeResult!.MmsType : string.Empty;
-        var signature = hasExactType ? typeResult!.TypeSignature : string.Empty;
+        var hasExactType = variableTypeIndex.TryResolve(point, out var typeResult);
+        var sclBType = hasExactType ? typeResult.TypeSpecification.SclBType : GuessSclBType(attrPath, point.FunctionalConstraint);
+        var mmsType = hasExactType ? typeResult.TypeSpecification.MmsType : string.Empty;
+        var signature = hasExactType ? typeResult.TypeSpecification.Signature : string.Empty;
 
         return new LiveIedDataAttributeModel
         {
@@ -166,11 +165,42 @@ public static class LiveIedModelDiscoveryBuilder
             SclBType = sclBType,
             MmsType = mmsType,
             MmsTypeSignature = signature,
-            TypeDiscoveryStatus = typeResult == null ? "NotRead" : typeResult.IsSuccess ? "Exact" : "Failed",
-            TypeDiscoveryMessage = typeResult?.Message ?? string.Empty,
-            TypeSource = hasExactType ? "GetVariableAccessAttributes" : "NameListHeuristic",
+            TypeDiscoveryStatus = hasExactType ? "Exact" : "NotRead",
+            TypeDiscoveryMessage = hasExactType ? typeResult.Message : string.Empty,
+            TypeSource = hasExactType ? typeResult.Source : "NameListHeuristic",
             TypeConfidence = hasExactType ? LiveIedDiscoveryConfidenceLevel.Exact : LiveIedDiscoveryConfidenceLevel.Low,
             FunctionalConstraintConfidence = LiveIedDiscoveryConfidenceLevel.Exact
+        };
+    }
+
+    private static LiveIedFileDirectoryModel BuildFileDirectory(IReadOnlyList<MmsFileDirectoryResult> pages)
+    {
+        if (pages.Count == 0)
+            return new LiveIedFileDirectoryModel();
+
+        var successfulPages = pages.Where(page => page.IsSuccess).ToArray();
+        var last = pages.Last();
+        return new LiveIedFileDirectoryModel
+        {
+            Attempted = true,
+            IsSuccess = successfulPages.Length > 0,
+            DirectoryName = pages.FirstOrDefault(page => !string.IsNullOrWhiteSpace(page.DirectoryName))?.DirectoryName ?? string.Empty,
+            PageCount = pages.Count,
+            Message = last.Message,
+            Entries = successfulPages
+                .SelectMany(page => page.Entries)
+                .GroupBy(entry => entry.Path, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(entry => entry.Path, StringComparer.OrdinalIgnoreCase)
+                .Select(entry => new LiveIedFileModel
+                {
+                    Name = entry.Name,
+                    Path = entry.Path,
+                    SizeBytes = entry.SizeBytes,
+                    LastModified = entry.LastModifiedDisplay,
+                    IsLikelyDirectory = entry.IsLikelyDirectory
+                })
+                .ToArray()
         };
     }
 
@@ -399,7 +429,9 @@ public static class LiveIedModelDiscoveryBuilder
         MmsIedModelDirectory directory,
         IReadOnlyList<LiveIedDataSetModel> dataSets,
         IReadOnlyList<LiveIedControlBlockModel> controlBlocks,
-        IReadOnlyList<MmsVariableAccessAttributesResult> variableTypeAttributes)
+        IReadOnlyList<MmsVariableAccessAttributesResult> variableTypeAttributes,
+        LiveIedVariableTypeHierarchyIndex variableTypeIndex,
+        LiveIedFileDirectoryModel fileDirectory)
     {
         if (directory.PointCount == 0)
         {
@@ -437,6 +469,27 @@ public static class LiveIedModelDiscoveryBuilder
                 Message = "GetVariableAccessAttributes was attempted but no variable type specification was decoded. The model remains usable with FC/name-based type inference, but SCL DataTypeTemplates will be less accurate."
             };
         }
+
+        if (variableTypeAttributes.Any(x => x.IsSuccess && x.TypeSpecification is not null) &&
+            variableTypeIndex.ResolvedAttributeCount == 0)
+        {
+            yield return new LiveIedDiscoveryWarning
+            {
+                Code = "VARIABLE_TYPE_HIERARCHY_UNMAPPED",
+                Message = "GetVariableAccessAttributes returned type specifications, but none could be mapped to live FC/DA paths. The export preserves the directory model and marks unresolved types as heuristic."
+            };
+        }
+
+        if (fileDirectory.Attempted && !fileDirectory.IsSuccess)
+        {
+            yield return new LiveIedDiscoveryWarning
+            {
+                Code = "FILE_DIRECTORY_UNAVAILABLE",
+                Message = string.IsNullOrWhiteSpace(fileDirectory.Message)
+                    ? "MMS FileDirectory was attempted but the IED did not return a usable directory listing."
+                    : $"MMS FileDirectory was attempted but did not complete: {fileDirectory.Message}"
+            };
+        }
     }
 
     private static LiveIedModelDiscoveryCoverage BuildCoverage(
@@ -444,7 +497,8 @@ public static class LiveIedModelDiscoveryBuilder
         IReadOnlyList<LiveIedDataSetModel> dataSets,
         IReadOnlyList<LiveIedReportControlModel> reportControls,
         IReadOnlyList<LiveIedControlBlockModel> controlBlocks,
-        IReadOnlyList<LiveIedVariableTypeDiscoveryModel> variableTypes)
+        IReadOnlyList<LiveIedVariableTypeDiscoveryModel> variableTypes,
+        LiveIedFileDirectoryModel fileDirectory)
     {
         var logicalNodes = logicalDevices.SelectMany(x => x.LogicalNodes).ToArray();
         var dataObjects = logicalNodes.SelectMany(x => x.DataObjects).ToArray();
@@ -461,6 +515,7 @@ public static class LiveIedModelDiscoveryBuilder
             LowConfidenceCdcCount = dataObjects.Count(x => x.ConfidenceLevel == LiveIedDiscoveryConfidenceLevel.Low),
             UnknownCdcCount = dataObjects.Count(x => x.ConfidenceLevel == LiveIedDiscoveryConfidenceLevel.Unknown),
             DataSetCount = dataSets.Count,
+            FileCount = fileDirectory.Entries.Count,
             VariableTypeReadAttemptCount = variableTypes.Count,
             VariableTypeReadSuccessCount = variableTypes.Count(x => x.IsSuccess),
             VariableTypeReadFailureCount = variableTypes.Count(x => !x.IsSuccess),

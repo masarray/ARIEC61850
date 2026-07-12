@@ -163,7 +163,7 @@ public static class LiveIedServiceDiscoveryReportBuilder
             return "Use golden SCL/type registry learning for this IED; keep GetVariableAccessAttributes disabled or isolated.";
 
         if (!probe.Attempted)
-            return "Use safe, leaf-only, dataset-first type reads to avoid IED peer-close behavior.";
+            return "Probe logical-node type trees first, then retain an isolated leaf fallback for IEDs that reject hierarchical variable specifications.";
 
         if (probe.ProtocolFaultSuspected)
             return "Reduce max type reads, keep dataset-first leaf-only probing, and avoid the last failed reference class.";

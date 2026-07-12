@@ -93,6 +93,8 @@ dotnet run `
   -c Release
 ```
 
+Live discovery is read-only. It builds the model from MMS domain and named-variable directories, preserves DataSet member order, inventories RCBs, queries `GetVariableAccessAttributes` from each logical-node root to recover the FC/DO/DA type hierarchy, and can list the MMS file directory. File service unavailability is reported as evidence and does not discard an otherwise valid model snapshot.
+
 1. Connect to the test IED.
 2. Select a controllable Data Object such as `LD0/CSWI1.Pos`.
 3. Open **Control** and verify the detected control model and current status.

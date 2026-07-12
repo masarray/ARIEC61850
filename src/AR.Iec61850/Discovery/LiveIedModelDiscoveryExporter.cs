@@ -23,6 +23,7 @@ public static class LiveIedModelDiscoveryExporter
         var typeReportJson = Path.Combine(outputDirectory, "type-confidence-report.json");
         var datasetsJson = Path.Combine(outputDirectory, "datasets.json");
         var rcbJson = Path.Combine(outputDirectory, "rcb-inventory.json");
+        var filesJson = Path.Combine(outputDirectory, "file-directory.json");
         var controlBlocksJson = Path.Combine(outputDirectory, "control-block-inventory.json");
         var legacyControlBlocksJson = Path.Combine(outputDirectory, "control-block-placeholders.json");
         var variableTypesJson = Path.Combine(outputDirectory, "variable-access-attributes.json");
@@ -32,6 +33,7 @@ public static class LiveIedModelDiscoveryExporter
         File.WriteAllText(typeReportJson, JsonSerializer.Serialize(BuildTypeConfidenceReport(document), JsonOptions), Encoding.UTF8);
         File.WriteAllText(datasetsJson, JsonSerializer.Serialize(document.DataSets, JsonOptions), Encoding.UTF8);
         File.WriteAllText(rcbJson, JsonSerializer.Serialize(document.ReportControls, JsonOptions), Encoding.UTF8);
+        File.WriteAllText(filesJson, JsonSerializer.Serialize(document.FileDirectory, JsonOptions), Encoding.UTF8);
         var controlBlockInventory = new
         {
             document.GooseControlBlocks,
@@ -48,6 +50,7 @@ public static class LiveIedModelDiscoveryExporter
         files.Add(typeReportJson);
         files.Add(datasetsJson);
         files.Add(rcbJson);
+        files.Add(filesJson);
         files.Add(controlBlocksJson);
         files.Add(legacyControlBlocksJson);
         files.Add(variableTypesJson);
@@ -84,6 +87,7 @@ public static class LiveIedModelDiscoveryExporter
         AppendMetric(sb, "Variable type reads failed", document.Coverage.VariableTypeReadFailureCount);
         AppendMetric(sb, "Exact MMS type attributes", document.Coverage.ExactMmsTypeCount);
         AppendMetric(sb, "DataSets", document.Coverage.DataSetCount);
+        AppendMetric(sb, "Files", document.Coverage.FileCount);
         AppendMetric(sb, "RCB", document.Coverage.ReportControlCount);
         AppendMetric(sb, "BRCB", document.Coverage.BufferedReportControlCount);
         AppendMetric(sb, "URCB", document.Coverage.UnbufferedReportControlCount);
@@ -126,6 +130,27 @@ public static class LiveIedModelDiscoveryExporter
         }
         if (document.ReportControls.Count > 64)
             sb.AppendLine($"| ... | ... | ... | ... | ... | {document.ReportControls.Count - 64} more RCB(s) in rcb-inventory.json | ");
+        sb.AppendLine();
+
+        sb.AppendLine("## File Directory");
+        sb.AppendLine();
+        if (!document.FileDirectory.Attempted)
+        {
+            sb.AppendLine("FileDirectory was not queried in this discovery run.");
+        }
+        else if (!document.FileDirectory.IsSuccess)
+        {
+            sb.AppendLine($"FileDirectory did not complete: {Escape(document.FileDirectory.Message)}");
+        }
+        else
+        {
+            sb.AppendLine("| Path | Size | Modified | Kind |");
+            sb.AppendLine("| --- | ---: | --- | --- |");
+            foreach (var file in document.FileDirectory.Entries.Take(80))
+                sb.AppendLine($"| {Escape(file.Path)} | {file.SizeBytes?.ToString() ?? "-"} | {Escape(file.LastModified)} | {(file.IsLikelyDirectory ? "directory" : "file")} |");
+            if (document.FileDirectory.Entries.Count > 80)
+                sb.AppendLine($"| ... | ... | ... | {document.FileDirectory.Entries.Count - 80} more entries in file-directory.json |");
+        }
         sb.AppendLine();
 
         sb.AppendLine("## MMS Type Discovery Snapshot");

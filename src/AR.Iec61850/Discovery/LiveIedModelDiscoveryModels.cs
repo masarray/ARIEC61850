@@ -22,6 +22,7 @@ public sealed class LiveIedModelDiscoveryDocument
     public string Summary { get; init; } = string.Empty;
     public LiveIedModelDiscoveryCoverage Coverage { get; init; } = new();
     public IReadOnlyList<LiveIedLogicalDeviceModel> LogicalDevices { get; init; } = Array.Empty<LiveIedLogicalDeviceModel>();
+    public LiveIedFileDirectoryModel FileDirectory { get; init; } = new();
     public IReadOnlyList<LiveIedDataSetModel> DataSets { get; init; } = Array.Empty<LiveIedDataSetModel>();
     public IReadOnlyList<LiveIedReportControlModel> ReportControls { get; init; } = Array.Empty<LiveIedReportControlModel>();
     public IReadOnlyList<LiveIedControlBlockModel> GooseControlBlocks { get; init; } = Array.Empty<LiveIedControlBlockModel>();
@@ -45,6 +46,7 @@ public sealed class LiveIedModelDiscoveryCoverage
     public int LowConfidenceCdcCount { get; init; }
     public int UnknownCdcCount { get; init; }
     public int DataSetCount { get; init; }
+    public int FileCount { get; init; }
     public int VariableTypeReadAttemptCount { get; init; }
     public int VariableTypeReadSuccessCount { get; init; }
     public int VariableTypeReadFailureCount { get; init; }
@@ -56,6 +58,26 @@ public sealed class LiveIedModelDiscoveryCoverage
     public int SampledValueControlBlockCount { get; init; }
     public int SettingGroupControlCount { get; init; }
     public int LogControlCount { get; init; }
+}
+
+public sealed class LiveIedFileDirectoryModel
+{
+    public bool Attempted { get; init; }
+    public bool IsSuccess { get; init; }
+    public string DirectoryName { get; init; } = string.Empty;
+    public int PageCount { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public IReadOnlyList<LiveIedFileModel> Entries { get; init; } = Array.Empty<LiveIedFileModel>();
+}
+
+public sealed class LiveIedFileModel
+{
+    public string Name { get; init; } = string.Empty;
+    public string Path { get; init; } = string.Empty;
+    public uint? SizeBytes { get; init; }
+    public string LastModified { get; init; } = string.Empty;
+    public bool IsLikelyDirectory { get; init; }
+    public string Source { get; init; } = "MmsFileDirectory";
 }
 
 public sealed class LiveIedLogicalDeviceModel

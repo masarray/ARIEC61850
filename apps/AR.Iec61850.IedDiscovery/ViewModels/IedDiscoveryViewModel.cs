@@ -9,12 +9,13 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     private string _host = "192.168.1.10";
     private int _port = 102;
     private int _timeoutMs = 30000;
-    private int _maxReportProbes = 96;
+    private int _maxReportProbes = 512;
     private int _maxDataSetDirectoryReads = 64;
-    private int _maxTypeReads = 64;
+    private int _maxTypeReads = 512;
     private bool _probeReportAttributes = true;
     private bool _readDataSetDirectories = true;
-    private bool _readVariableTypes;
+    private bool _readFileDirectory = true;
+    private bool _readVariableTypes = true;
     private bool _isBusy;
     private bool _isConnected;
     private bool _isOnline;
@@ -38,6 +39,7 @@ public sealed class IedDiscoveryViewModel : ObservableObject
     public int MaxTypeReads { get => _maxTypeReads; set => SetProperty(ref _maxTypeReads, value); }
     public bool ProbeReportAttributes { get => _probeReportAttributes; set => SetProperty(ref _probeReportAttributes, value); }
     public bool ReadDataSetDirectories { get => _readDataSetDirectories; set => SetProperty(ref _readDataSetDirectories, value); }
+    public bool ReadFileDirectory { get => _readFileDirectory; set => SetProperty(ref _readFileDirectory, value); }
     public bool ReadVariableTypes { get => _readVariableTypes; set => SetProperty(ref _readVariableTypes, value); }
     public bool IsBusy { get => _isBusy; set { if (SetProperty(ref _isBusy, value)) RaiseCommandState(); } }
     public bool IsConnected { get => _isConnected; set { if (SetProperty(ref _isConnected, value)) RaiseCommandState(); } }

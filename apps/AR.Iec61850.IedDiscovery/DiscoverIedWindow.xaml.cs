@@ -16,6 +16,7 @@ public sealed class DiscoverIedDialogViewModel : ObservableObject
     private string _sSelector = "00 01";
     private string _tSelector = "00 01";
     private bool _readDataSetDirectories = true;
+    private bool _readFileDirectory = true;
     private bool _probeReportAttributes = true;
     private ConnectionProfileRow? _selectedPreviousConnection;
 
@@ -29,6 +30,7 @@ public sealed class DiscoverIedDialogViewModel : ObservableObject
     public string SSelector { get => _sSelector; set => SetProperty(ref _sSelector, value); }
     public string TSelector { get => _tSelector; set => SetProperty(ref _tSelector, value); }
     public bool ReadDataSetDirectories { get => _readDataSetDirectories; set => SetProperty(ref _readDataSetDirectories, value); }
+    public bool ReadFileDirectory { get => _readFileDirectory; set => SetProperty(ref _readFileDirectory, value); }
     public bool ProbeReportAttributes { get => _probeReportAttributes; set => SetProperty(ref _probeReportAttributes, value); }
     public ObservableCollection<ConnectionProfileRow> PreviousConnections { get; } = new();
 

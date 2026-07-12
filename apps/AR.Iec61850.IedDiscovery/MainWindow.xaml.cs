@@ -56,6 +56,7 @@ public partial class MainWindow : Window
             TimeoutMs = _viewModel.TimeoutMs,
             Name = _viewModel.LastDocument?.IedName ?? "IED",
             ReadDataSetDirectories = _viewModel.ReadDataSetDirectories,
+            ReadFileDirectory = _viewModel.ReadFileDirectory,
             ProbeReportAttributes = _viewModel.ProbeReportAttributes
         };
         foreach (var profile in ConnectionProfileStore.Load())
@@ -69,6 +70,7 @@ public partial class MainWindow : Window
         _viewModel.Port = dialogVm.Port <= 0 ? 102 : dialogVm.Port;
         _viewModel.TimeoutMs = Math.Max(1000, dialogVm.TimeoutMs);
         _viewModel.ReadDataSetDirectories = dialogVm.ReadDataSetDirectories;
+        _viewModel.ReadFileDirectory = dialogVm.ReadFileDirectory;
         _viewModel.ProbeReportAttributes = dialogVm.ProbeReportAttributes;
 
         await RunDiscoveryAsync(dialogVm.Name).ConfigureAwait(true);
@@ -119,11 +121,32 @@ public partial class MainWindow : Window
             IReadOnlyList<MmsVariableAccessAttributesResult> typeAttributes = Array.Empty<MmsVariableAccessAttributesResult>();
             if (_viewModel.ReadVariableTypes)
             {
-                _viewModel.AddStatus("Info", "TYPE_SIGNATURES", "Sampling variable type signatures...");
+                var typeCandidates = LiveIedVariableTypeProbePlanner.BuildLogicalNodeRootCandidates(_lastDiscovery.IedDirectory);
+                _viewModel.AddStatus("Info", "TYPE_HIERARCHIES", $"Reading logical-node type hierarchies: {typeCandidates.Count} candidate(s), cap={Math.Max(0, _viewModel.MaxTypeReads)}.");
                 typeAttributes = await _activeSession.GetVariableAccessAttributesBatchAsync(
-                    _lastDiscovery.IedDirectory.Points.Select(x => x.ToObjectReference()),
+                    typeCandidates,
                     Math.Max(0, _viewModel.MaxTypeReads),
                     _cancellation.Token).ConfigureAwait(true);
+
+                if (typeAttributes.Count < typeCandidates.Count)
+                {
+                    _viewModel.AddStatus("Warning", "TYPE_HIERARCHY_PARTIAL", $"Read {typeAttributes.Count} of {typeCandidates.Count} logical-node type hierarchies. Increase the type-read cap before exporting SCL for full type coverage.");
+                }
+            }
+
+            IReadOnlyList<MmsFileDirectoryResult> fileDirectoryPages = Array.Empty<MmsFileDirectoryResult>();
+            if (_viewModel.ReadFileDirectory && _activeSession.IsMmsInitiated)
+            {
+                _viewModel.AddStatus("Info", "FILE_DIRECTORY", "Reading MMS file directory after model and type discovery...");
+                fileDirectoryPages = await _activeSession.GetFileDirectoryPagedAsync(
+                    directoryName: null,
+                    maxPages: 8,
+                    cancellationToken: _cancellation.Token).ConfigureAwait(true);
+                if (!fileDirectoryPages.Any(page => page.IsSuccess))
+                {
+                    var message = fileDirectoryPages.LastOrDefault()?.Message ?? "No FileDirectory response was returned.";
+                    _viewModel.AddStatus("Warning", "FILE_DIRECTORY_UNAVAILABLE", message);
+                }
             }
 
             _lastDataSetDirectories = dataSetDirectories;
@@ -138,7 +161,8 @@ public partial class MainWindow : Window
                     AccessPointName = "AP1"
                 },
                 dataSetDirectories,
-                typeAttributes), _cancellation.Token).ConfigureAwait(true);
+                typeAttributes,
+                fileDirectoryPages), _cancellation.Token).ConfigureAwait(true);
 
             Populate(document);
             _identity = Iec61850IdentityResolver.Resolve(document);
@@ -1173,6 +1197,7 @@ public partial class MainWindow : Window
         _viewModel.Metrics.Add(new MetricRow("LN", document.Coverage.LogicalNodeCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         _viewModel.Metrics.Add(new MetricRow("DO", document.Coverage.DataObjectCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         _viewModel.Metrics.Add(new MetricRow("DA", document.Coverage.DataAttributeCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        _viewModel.Metrics.Add(new MetricRow("Files", document.Coverage.FileCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         _viewModel.Metrics.Add(new MetricRow("RCB", document.Coverage.ReportControlCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
     }
 
@@ -1216,7 +1241,27 @@ public partial class MainWindow : Window
             settingGroups.Children.Add(new IedExplorerNode(sg.Name, ExplorerNodeKind.SettingGroup, sg.Reference) { Model = sg });
         root.Children.Add(settingGroups);
 
-        root.Children.Add(new IedExplorerNode("Files", ExplorerNodeKind.Section, string.Empty, "File service browser milestone"));
+        var files = new IedExplorerNode(
+            "Files",
+            ExplorerNodeKind.Section,
+            string.Empty,
+            document.FileDirectory.Attempted
+                ? document.FileDirectory.IsSuccess
+                    ? $"{document.FileDirectory.Entries.Count} entr(y/ies)"
+                    : "FileDirectory unavailable"
+                : "not queried")
+        {
+            IsExpanded = document.FileDirectory.Entries.Count > 0,
+            Status = document.FileDirectory.IsSuccess ? string.Empty : document.FileDirectory.Attempted ? "!" : string.Empty
+        };
+        foreach (var file in document.FileDirectory.Entries)
+        {
+            var size = file.SizeBytes.HasValue
+                ? $"{file.SizeBytes.Value} bytes"
+                : file.IsLikelyDirectory ? "directory" : "size unknown";
+            files.Children.Add(new IedExplorerNode(file.Name, ExplorerNodeKind.File, file.Path, size) { Model = file });
+        }
+        root.Children.Add(files);
 
         var dataSets = new IedExplorerNode("DataSets", ExplorerNodeKind.Section) { IsExpanded = document.DataSets.Count > 0 };
         foreach (var byDomain in document.DataSets.GroupBy(x => x.Domain).OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
@@ -1365,6 +1410,11 @@ public partial class MainWindow : Window
                 AddDetail(rows, "APPID", "-", "Unsigned", cb.Reference, cb.AppId);
                 AddDetail(rows, "ConfRev", "-", "Unsigned", cb.Reference, cb.ConfRev);
                 AddDetail(rows, "Status", "-", "Status", cb.Reference, cb.Message);
+                break;
+            case LiveIedFileModel file:
+                AddDetail(rows, "Path", "-", file.IsLikelyDirectory ? "Directory" : "File", file.Path, file.Path);
+                AddDetail(rows, "Size", "-", "Unsigned", file.Path, file.SizeBytes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown");
+                AddDetail(rows, "Modified", "-", "Timestamp", file.Path, string.IsNullOrWhiteSpace(file.LastModified) ? "unknown" : file.LastModified);
                 break;
             default:
                 if (!string.IsNullOrWhiteSpace(node.Reference))

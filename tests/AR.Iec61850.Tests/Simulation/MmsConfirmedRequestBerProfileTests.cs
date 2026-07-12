@@ -298,6 +298,20 @@ public sealed class MmsConfirmedRequestBerProfileTests
         Assert.True(read.IsSuccess, read.Message);
         Assert.Equal(MmsDataKind.Integer, read.Value!.Kind);
 
+        var stringReference = new MmsObjectReference("IED1LD0", "MMXU1$EX$ClcMth$dataNs", "EX");
+        var stringAttributesDispatch = MmsConfirmedRequestBerDispatcher.Dispatch(
+            MmsVariableAccessAttributesRequest.Build(54, stringReference),
+            session);
+        var stringAttributes = MmsVariableAccessAttributesResponseDecoder.Decode(
+            stringAttributesDispatch.ResponsePresentationPayload,
+            54,
+            stringReference);
+
+        Assert.True(stringAttributesDispatch.Response.IsSuccess, stringAttributesDispatch.Response.Message);
+        Assert.True(stringAttributes.IsSuccess, stringAttributes.Message);
+        Assert.Equal("visible-string", stringAttributes.MmsType);
+        Assert.Equal(255, stringAttributes.TypeSpecification!.Size);
+
         var nodeReference = new MmsObjectReference("IED1LD0", "MMXU1", string.Empty);
         var nodeDispatch = MmsConfirmedRequestBerDispatcher.Dispatch(
             MmsVariableAccessAttributesRequest.Build(53, nodeReference),

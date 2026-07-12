@@ -60,7 +60,7 @@ Recommended protocol checks before a release:
 - publish bounded SV traffic on an isolated lab adapter;
 - publish bounded GOOSE traffic on an isolated lab adapter;
 - run MMS discovery against a simulator or lab IED;
-- run IEDScout against the simulator on `127.0.0.1:102` and confirm the activity
+- run an independent IEC 61850 client against the simulator on `127.0.0.1:102` and confirm the activity
   sequence reaches `GetNameList` after `COTP CR/CC` and `ACSE AARQ/AARE`;
 - run report planning before enabling any RCB;
 - discover a control Data Object, verify `ctlModel` and exact Oper/SBOw/Cancel signatures, then exercise Direct/SBO normal/enhanced only in an isolated lab;

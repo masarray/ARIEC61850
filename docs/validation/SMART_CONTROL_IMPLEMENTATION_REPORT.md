@@ -7,7 +7,7 @@ Scope: native IEC 61850 client-side control service in `AR.Iec61850`
 
 The repository now contains a native, stateful IEC 61850 control-object stack under `AR.Iec61850.Control`. Applications address a controllable Data Object such as `LD0/CSWI1.Pos` and submit intent such as Open or Close. The engine discovers the live control model and MMS type, builds the exact command value, owns the complete Direct/SBO sequence, and reports service acceptance separately from final command termination.
 
-This is a clean-room C# implementation informed by IEC 61850 control behavior, the high-level control pattern exposed by libiec61850, and IEDScout commissioning workflows. No libiec61850 source code is embedded or linked.
+This is a clean-room C# implementation informed by IEC 61850 control behavior and established commissioning workflows. No third-party protocol-stack source code is embedded or linked.
 
 ## Implemented architecture
 

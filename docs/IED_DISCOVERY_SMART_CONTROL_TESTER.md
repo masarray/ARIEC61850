@@ -99,7 +99,7 @@ Use an isolated test IED or test mode and start with:
 2. `Test=true`, Interlock enabled, Synchrocheck as required by the IED.
 3. OPEN or CLOSE toward the current state to validate encoding without requiring movement.
 4. Repeat with `Test=false` only after origin, checks, and status mapping are confirmed.
-5. Capture Wireshark or IEDScout evidence and compare the displayed sequence.
+5. Capture Wireshark or independent IEC 61850 client evidence and compare the displayed sequence.
 
 ## Build and focused tests
 

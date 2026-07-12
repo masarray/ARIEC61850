@@ -471,13 +471,13 @@ public sealed class MmsConfirmedRequestBerProfileTests
     }
 
     [Fact]
-    public void Dispatcher_Accepts_IedScout_VmdSpecific_DataSet_Request_And_Encodes_Standard_Response()
+    public void Dispatcher_Accepts_ExternalClient_VmdSpecific_DataSet_Request_And_Encodes_Standard_Response()
     {
         var serverProfile = new MmsReadOnlyServerModelBuilder().Build(IedSimulatorProfile.CreateDefaultFeederProfile());
         var session = new MmsReadOnlyServerSession(serverProfile);
         var dataSet = serverProfile.DataSets.First(x => x.Reference.EndsWith("dsMeas", StringComparison.OrdinalIgnoreCase));
 
-        // Captured IEDScout form: GetNamedVariableListAttributes [12] with a
+        // Captured external-client form: GetNamedVariableListAttributes [12] with a
         // VMD-specific ObjectName (0x80) carrying LLN0$dsMeas.
         var vmdSpecificName = BerWriter.EncodeTlv(0x80, BerWriter.EncodeAscii("LLN0$dsMeas"));
         var service = BerWriter.EncodeTlv(0xAC, vmdSpecificName);

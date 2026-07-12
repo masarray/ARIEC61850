@@ -34,4 +34,4 @@ The read-only MMS simulator accepts domain-specific and VMD/AA/ISO `ObjectName` 
 
 ## Remaining live validation
 
-The following still require a real target relay or IEDScout session: concurrent vendor RCB streams, segmented reports, sequence wrap, BRCB EntryID resume, dynamic DataSet cleanup, and confirmation of the actual `RptID` values emitted by each vendor.
+The following still require a real target relay or independent IEC 61850 client session: concurrent vendor RCB streams, segmented reports, sequence wrap, BRCB EntryID resume, dynamic DataSet cleanup, and confirmation of the actual `RptID` values emitted by each vendor.

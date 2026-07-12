@@ -73,8 +73,8 @@ dotnet test .\ARIEC61850.slnx -c Release
 - The association negotiation now mirrors the incoming Session Connect parameters,
   returns accepted presentation-context results, and carries the negotiated MMS
   context id into the confirmed-request response loop. This is validated against
-  the native client and custom context-id tests. Interoperability with IEDScout is
-  still a manual lab gate because the commercial client is not part of CI.
+  the native client and custom context-id tests. Interoperability with independent
+  third-party IEC 61850 clients remains a manual laboratory gate.
 - The current server is read-only and implements the browse/read/DataSet-directory
   subset required for the first discovery path. It does not yet claim full IEC
   61850 server conformance, reporting, GOOSE/SV publication, control, write,

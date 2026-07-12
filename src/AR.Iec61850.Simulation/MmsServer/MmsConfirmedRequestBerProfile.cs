@@ -912,8 +912,8 @@ public static class MmsConfirmedRequestBerDispatcher
         // GetVariableAccessAttributes-Request ::= CHOICE {
         //   name [0] ObjectName,
         //   address [1] Address }
-        // IEDScout uses the standard named-variable branch. Accept a direct
-        // ObjectName only as a compatibility fallback for earlier local probes.
+        // Standards-compliant clients use the named-variable branch. Accept a
+        // direct ObjectName only as a compatibility fallback for earlier probes.
         if (requestChoice.Class == BerClass.ContextSpecific && requestChoice.TagNumber == 0 && requestChoice.Constructed)
             return TryDecodeObjectName(requestChoice.Value, out domain, out item);
 
@@ -982,9 +982,9 @@ public static class MmsConfirmedRequestBerDispatcher
 
     private static bool TryDecodeGetNamedVariableListAttributes(BerTlv service, out MmsReadOnlyServerRequest request, out string message)
     {
-        // GetNamedVariableListAttributes-Request ::= ObjectName. IEDScout
-        // legitimately probes the VMD-specific form (0x80) for LLN0$DataSet
-        // names, while ordinary IEC 61850 DataSets use domain-specific (0xA1).
+        // GetNamedVariableListAttributes-Request ::= ObjectName. Some external
+        // clients legitimately probe the VMD-specific form (0x80) for
+        // LLN0$DataSet names, while ordinary IEC 61850 DataSets use domain-specific (0xA1).
         if (!TryDecodeObjectName(service.Value, out var domain, out var item))
         {
             request = new MmsReadOnlyServerRequest();

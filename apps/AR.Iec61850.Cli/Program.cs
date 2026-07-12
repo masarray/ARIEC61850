@@ -1320,7 +1320,7 @@ internal static class Cli
 
         Console.WriteLine(serverProfile.Summary);
         Console.WriteLine($"Virtual IED MMS server listening on {bindAddress}:{server.BoundPort} (read-only).");
-        Console.WriteLine("Point an IEC 61850 client (this toolkit's IED Discovery, IEDScout, or another MMS browser) at the address above.");
+        Console.WriteLine("Point an IEC 61850 client (this toolkit's IED Discovery or another MMS browser) at the address above.");
         Console.WriteLine(durationSec > 0 ? $"Running for {durationSec}s..." : "Press Ctrl+C to stop.");
 
         using var stopSource = new CancellationTokenSource();

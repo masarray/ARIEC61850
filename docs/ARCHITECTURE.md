@@ -69,7 +69,7 @@ The `Control` namespace sits above the generic MMS services. It discovers `ctlMo
 
 `apps/AR.Iec61850.IedDiscovery` is the WPF workspace for live MMS model discovery, DataSet directory inspection, RCB inventory, and JSON evidence export.
 
-`apps/AR.Iec61850.IedSimulator` is the WPF simulator workspace. It loads a default or SCL-derived model, runs the deterministic value engine, and exposes a read-only MMS server on TCP/102 for external clients such as IEDScout. The server remains a thin application boundary over the reusable transport, ACSE, MMS dispatcher, and simulator model layers.
+`apps/AR.Iec61850.IedSimulator` is the WPF simulator workspace. It loads a default or SCL-derived model, runs the deterministic value engine, and exposes a read-only MMS server on TCP/102 for independent IEC 61850 clients. The server remains a thin application boundary over the reusable transport, ACSE, MMS dispatcher, and simulator model layers.
 
 `apps/AR.Iec61850.EngineeringWorkbench` is a read-only WPF harness over the engine profiles. It orchestrates SCL engineering, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and structured evidence-pack export without embedding protocol logic in the UI.
 

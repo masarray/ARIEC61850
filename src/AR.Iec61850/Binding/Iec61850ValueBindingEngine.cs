@@ -576,6 +576,30 @@ public static class Iec61850EnumValueDecoder
         }
         if (value.Kind == MmsDataKind.Boolean)
             return value.Value is bool b ? b ? 1 : 0 : null;
+        if (value.Kind == MmsDataKind.BitString)
+        {
+            var encoded = value.RawValue.ToArray();
+            if (encoded.Length < 2 || encoded[0] > 7)
+                return null;
+
+            var bitCount = checked((encoded.Length - 1) * 8 - encoded[0]);
+            if (bitCount is <= 0 or > 63)
+                return null;
+
+            ulong numeric = 0;
+            for (var encodedBit = 0; encodedBit < bitCount; encodedBit++)
+            {
+                var byteIndex = 1 + encodedBit / 8;
+                var bitInByte = encodedBit % 8;
+                if ((encoded[byteIndex] & (0x80 >> bitInByte)) == 0)
+                    continue;
+
+                var numericBit = bitCount - 1 - encodedBit;
+                numeric |= 1UL << numericBit;
+            }
+
+            return numeric <= long.MaxValue ? (long)numeric : null;
+        }
         return null;
     }
 }

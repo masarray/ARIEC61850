@@ -182,6 +182,51 @@ public sealed partial class MmsClientSession
                 dataSetSnapshots.Add(dataSetBefore);
             }
 
+            if (isDynamic)
+            {
+                if (!rcb.Attributes.Contains("TrgOps", StringComparer.OrdinalIgnoreCase) ||
+                    !MmsReportControlFieldCodec.TryEncodeTriggerOptions(rcb.TriggerOptions, out var triggerOptions))
+                {
+                    return new MmsPersistentReportMonitorStartResult
+                    {
+                        IsSuccess = false,
+                        WriteSteps = writes,
+                        Warnings = warnings,
+                        RcbSnapshots = rcbSnapshots,
+                        DataSetSnapshots = dataSetSnapshots,
+                        Message = "Dynamic report monitor requires a writable TrgOps field with explicit dchg trigger configuration."
+                    };
+                }
+
+                var triggerWrite = await WriteReportAttributeAsync(rcb, "TrgOps", triggerOptions, cancellationToken).ConfigureAwait(false);
+                writes.Add(triggerWrite);
+                if (!triggerWrite.IsSuccess)
+                {
+                    return new MmsPersistentReportMonitorStartResult
+                    {
+                        IsSuccess = false,
+                        WriteSteps = writes,
+                        Warnings = warnings,
+                        RcbSnapshots = rcbSnapshots,
+                        DataSetSnapshots = dataSetSnapshots,
+                        Message = "RCB.TrgOps write failed; dynamic reporting was not armed because dchg could not be guaranteed."
+                    };
+                }
+
+                if (rcb.Attributes.Contains("OptFlds", StringComparer.OrdinalIgnoreCase) &&
+                    MmsReportControlFieldCodec.TryEncodeOptionalFields(rcb.OptionalFields, out var optionalFields))
+                {
+                    var optionalWrite = await WriteReportAttributeAsync(rcb, "OptFlds", optionalFields, cancellationToken).ConfigureAwait(false);
+                    writes.Add(optionalWrite);
+                    if (!optionalWrite.IsSuccess)
+                        warnings.Add("RCB.OptFlds write failed. Reporting can continue, but report timestamp/reason diagnostics may be incomplete.");
+                }
+                else
+                {
+                    warnings.Add("Dynamic RCB has no writable OptFlds mapping. Reporting can continue, but source timestamp/reason diagnostics may be incomplete.");
+                }
+            }
+
             if (rcb.Buffered && rcb.Attributes.Contains("ResvTms", StringComparer.OrdinalIgnoreCase))
             {
                 warnings.Add("BRCB ResvTms pre-reserve was skipped. This keeps the first monitor attach compatible with relays that accept ownership through RptEna=true.");

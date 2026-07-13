@@ -113,4 +113,37 @@ public sealed class MmsReportValueProjectorTests
         Assert.False(update.HasTimestamp);
         Assert.Equal("companion-only", update.ProjectionStatus);
     }
+
+    [Theory]
+    [InlineData(0x40, "off")]
+    [InlineData(0x80, "on")]
+    public void Project_Decodes_TwoBit_Dbpos_Report_For_Both_Directions(byte encoded, string expected)
+    {
+        var frame = new MmsReportFrame
+        {
+            ReceivedAt = DateTimeOffset.UtcNow,
+            Values =
+            [
+                new MmsReportValue
+                {
+                    Index = 0,
+                    Member = new MmsDataSetDirectoryMember
+                    {
+                        UserReference = "LD0/XCBR1.Pos.stVal",
+                        FunctionalConstraint = "ST"
+                    },
+                    Value = MmsDataValue.BitString(6, [encoded]),
+                    ReasonForInclusion = ["data-change"]
+                }
+            ]
+        };
+
+        var update = Assert.Single(MmsReportValueProjector.Project(frame).Updates);
+
+        Assert.Equal("LD0/XCBR1.Pos.stVal", update.Reference);
+        Assert.Equal(expected, update.Value);
+        Assert.True(update.HasValue);
+        Assert.Equal("data-change", update.Reason);
+    }
+
 }

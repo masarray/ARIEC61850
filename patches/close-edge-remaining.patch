@@ -1,0 +1,146 @@
+diff --git a/src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs b/src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs
+index 68df6ad..e7d283c 100644
+--- a/src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs
++++ b/src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs
+@@ -576,6 +576,30 @@ public static class Iec61850EnumValueDecoder
+         }
+         if (value.Kind == MmsDataKind.Boolean)
+             return value.Value is bool b ? b ? 1 : 0 : null;
++        if (value.Kind == MmsDataKind.BitString)
++        {
++            var encoded = value.RawValue.ToArray();
++            if (encoded.Length < 2 || encoded[0] > 7)
++                return null;
++
++            var bitCount = checked((encoded.Length - 1) * 8 - encoded[0]);
++            if (bitCount is <= 0 or > 63)
++                return null;
++
++            ulong numeric = 0;
++            for (var encodedBit = 0; encodedBit < bitCount; encodedBit++)
++            {
++                var byteIndex = 1 + encodedBit / 8;
++                var bitInByte = encodedBit % 8;
++                if ((encoded[byteIndex] & (0x80 >> bitInByte)) == 0)
++                    continue;
++
++                var numericBit = bitCount - 1 - encodedBit;
++                numeric |= 1UL << numericBit;
++            }
++
++            return numeric <= long.MaxValue ? (long)numeric : null;
++        }
+         return null;
+     }
+ }
+diff --git a/src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs b/src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs
+index c63a8ba..b09f7b4 100644
+--- a/src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs
++++ b/src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs
+@@ -182,6 +182,51 @@ public sealed partial class MmsClientSession
+                 dataSetSnapshots.Add(dataSetBefore);
+             }
+ 
++            if (isDynamic)
++            {
++                if (!rcb.Attributes.Contains("TrgOps", StringComparer.OrdinalIgnoreCase) ||
++                    !MmsReportControlFieldCodec.TryEncodeTriggerOptions(rcb.TriggerOptions, out var triggerOptions))
++                {
++                    return new MmsPersistentReportMonitorStartResult
++                    {
++                        IsSuccess = false,
++                        WriteSteps = writes,
++                        Warnings = warnings,
++                        RcbSnapshots = rcbSnapshots,
++                        DataSetSnapshots = dataSetSnapshots,
++                        Message = "Dynamic report monitor requires a writable TrgOps field with explicit dchg trigger configuration."
++                    };
++                }
++
++                var triggerWrite = await WriteReportAttributeAsync(rcb, "TrgOps", triggerOptions, cancellationToken).ConfigureAwait(false);
++                writes.Add(triggerWrite);
++                if (!triggerWrite.IsSuccess)
++                {
++                    return new MmsPersistentReportMonitorStartResult
++                    {
++                        IsSuccess = false,
++                        WriteSteps = writes,
++                        Warnings = warnings,
++                        RcbSnapshots = rcbSnapshots,
++                        DataSetSnapshots = dataSetSnapshots,
++                        Message = "RCB.TrgOps write failed; dynamic reporting was not armed because dchg could not be guaranteed."
++                    };
++                }
++
++                if (rcb.Attributes.Contains("OptFlds", StringComparer.OrdinalIgnoreCase) &&
++                    MmsReportControlFieldCodec.TryEncodeOptionalFields(rcb.OptionalFields, out var optionalFields))
++                {
++                    var optionalWrite = await WriteReportAttributeAsync(rcb, "OptFlds", optionalFields, cancellationToken).ConfigureAwait(false);
++                    writes.Add(optionalWrite);
++                    if (!optionalWrite.IsSuccess)
++                        warnings.Add("RCB.OptFlds write failed. Reporting can continue, but report timestamp/reason diagnostics may be incomplete.");
++                }
++                else
++                {
++                    warnings.Add("Dynamic RCB has no writable OptFlds mapping. Reporting can continue, but source timestamp/reason diagnostics may be incomplete.");
++                }
++            }
++
+             if (rcb.Buffered && rcb.Attributes.Contains("ResvTms", StringComparer.OrdinalIgnoreCase))
+             {
+                 warnings.Add("BRCB ResvTms pre-reserve was skipped. This keeps the first monitor attach compatible with relays that accept ownership through RptEna=true.");
+diff --git a/src/AR.Iec61850/Mms/MmsReportSubscriptionPlan.cs b/src/AR.Iec61850/Mms/MmsReportSubscriptionPlan.cs
+index c2ce21a..93c0af2 100644
+--- a/src/AR.Iec61850/Mms/MmsReportSubscriptionPlan.cs
++++ b/src/AR.Iec61850/Mms/MmsReportSubscriptionPlan.cs
+@@ -221,7 +221,7 @@ public static class MmsReportSubscriptionPlanner
+         [
+             $"Create dynamic DataSet {dataSetReference} with {points.Count} resolved member(s).",
+             $"Write RCB.DatSet={dataSetReference} on free RCB {rcb.Reference}.",
+-            "Keep current OptFlds/TrgOps for first dynamic test unless the IED requires explicit configuration.",
++            "Write explicit TrgOps with dchg enabled and request diagnostic OptFlds before RptEna=true.",
+             rcb.Buffered ? "Do not pre-write BRCB ResvTms for first live tests; enable RptEna after DatSet is configured." : "Reserve URCB with Resv=true when supported.",
+             "Install report receiver/dispatcher before enabling RptEna.",
+             "Write RptEna=true, then write GI=true for first full refresh.",
+diff --git a/tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs b/tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
+index 9aa51be..90819c9 100644
+--- a/tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
++++ b/tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
+@@ -113,4 +113,37 @@ public sealed class MmsReportValueProjectorTests
+         Assert.False(update.HasTimestamp);
+         Assert.Equal("companion-only", update.ProjectionStatus);
+     }
++
++    [Theory]
++    [InlineData(0x40, "off")]
++    [InlineData(0x80, "on")]
++    public void Project_Decodes_TwoBit_Dbpos_Report_For_Both_Directions(byte encoded, string expected)
++    {
++        var frame = new MmsReportFrame
++        {
++            ReceivedAt = DateTimeOffset.UtcNow,
++            Values =
++            [
++                new MmsReportValue
++                {
++                    Index = 0,
++                    Member = new MmsDataSetDirectoryMember
++                    {
++                        UserReference = "LD0/XCBR1.Pos.stVal",
++                        FunctionalConstraint = "ST"
++                    },
++                    Value = MmsDataValue.BitString(6, [encoded]),
++                    ReasonForInclusion = ["data-change"]
++                }
++            ]
++        };
++
++        var update = Assert.Single(MmsReportValueProjector.Project(frame).Updates);
++
++        Assert.Equal("LD0/XCBR1.Pos.stVal", update.Reference);
++        Assert.Equal(expected, update.Value);
++        Assert.True(update.HasValue);
++        Assert.Equal("data-change", update.Reason);
++    }
++
+ }

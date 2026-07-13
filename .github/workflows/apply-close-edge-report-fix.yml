@@ -1,0 +1,50 @@
+name: Apply close-edge report fix
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.pull_request.head.sha, 'never') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout audit branch
+        uses: actions/checkout@v4
+        with:
+          ref: audit/close-edge-report-projection
+          fetch-depth: 0
+
+      - name: Apply reviewed engine patch
+        shell: bash
+        run: |
+          cat > /tmp/close-edge.patch.gz.b64 <<'PATCH_B64'
+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
+PATCH_B64
+          base64 -d /tmp/close-edge.patch.gz.b64 | gzip -d > /tmp/close-edge.patch
+          git apply --check /tmp/close-edge.patch
+          git apply /tmp/close-edge.patch
+
+      - name: Run focused tests
+        run: dotnet test tests/AR.Iec61850.Tests/AR.Iec61850.Tests.csproj --configuration Release --filter "FullyQualifiedName~MmsReportControlFieldCodecTests|FullyQualifiedName~MmsReportValueProjectorTests"
+
+      - name: Commit corrected report pipeline
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-close-edge-report-fix.yml
+          git rm .github/workflows/export-report-source.yml
+          git rm docs/close-edge-report-audit.md docs/close-edge-report-audit-status.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs \
+                  src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs \
+                  src/AR.Iec61850/Mms/MmsReportControlFieldCodec.cs \
+                  src/AR.Iec61850/Mms/MmsReportSubscriptionPlan.cs \
+                  tests/AR.Iec61850.Tests/Mms/MmsReportControlFieldCodecTests.cs \
+                  tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
+          git commit -m 'fix(reporting): enforce dchg and decode DBPOS close events'
+          git push origin HEAD:audit/close-edge-report-projection

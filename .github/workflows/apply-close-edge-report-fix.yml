@@ -1,16 +1,15 @@
 name: Apply close-edge report fix
 
 on:
-  pull_request:
-    branches: [ main ]
+  push:
+    branches: [ audit/close-edge-report-projection ]
 
 permissions:
   contents: write
-  pull-requests: read
 
 jobs:
   apply:
-    if: ${{ !contains(github.event.pull_request.head.sha, 'never') }}
+    if: ${{ !contains(github.event.head_commit.message, '[close-edge-applied]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout audit branch
@@ -37,7 +36,7 @@ PATCH_B64
         run: |
           git rm .github/workflows/apply-close-edge-report-fix.yml
           git rm .github/workflows/export-report-source.yml
-          git rm docs/close-edge-report-audit.md docs/close-edge-report-audit-status.md
+          git rm docs/close-edge-report-audit.md docs/close-edge-report-audit-status.md docs/close-edge-report-fix-ready.md
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs \
@@ -46,5 +45,5 @@ PATCH_B64
                   src/AR.Iec61850/Mms/MmsReportSubscriptionPlan.cs \
                   tests/AR.Iec61850.Tests/Mms/MmsReportControlFieldCodecTests.cs \
                   tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
-          git commit -m 'fix(reporting): enforce dchg and decode DBPOS close events'
+          git commit -m 'fix(reporting): enforce dchg and decode DBPOS close events [close-edge-applied]'
           git push origin HEAD:audit/close-edge-report-projection

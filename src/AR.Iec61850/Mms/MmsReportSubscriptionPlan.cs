@@ -221,7 +221,7 @@ public static class MmsReportSubscriptionPlanner
         [
             $"Create dynamic DataSet {dataSetReference} with {points.Count} resolved member(s).",
             $"Write RCB.DatSet={dataSetReference} on free RCB {rcb.Reference}.",
-            "Keep current OptFlds/TrgOps for first dynamic test unless the IED requires explicit configuration.",
+            "Write explicit TrgOps with dchg enabled and request diagnostic OptFlds before RptEna=true.",
             rcb.Buffered ? "Do not pre-write BRCB ResvTms for first live tests; enable RptEna after DatSet is configured." : "Reserve URCB with Resv=true when supported.",
             "Install report receiver/dispatcher before enabling RptEna.",
             "Write RptEna=true, then write GI=true for first full refresh.",

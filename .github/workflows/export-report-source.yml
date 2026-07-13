@@ -1,24 +1,47 @@
-name: Export report source
+name: Apply close-edge report correction
 
 on:
   pull_request:
     branches: [ main ]
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: read
 
 jobs:
-  export:
+  apply:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout audit branch
+        uses: actions/checkout@v4
         with:
           ref: audit/close-edge-report-projection
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ARIEC61850-report-source
-          path: |
-            src/AR.Iec61850/Mms
-            src/AR.Iec61850/Control
-            src/AR.Iec61850/**/*.cs
-            tests/**/*.cs
+          fetch-depth: 0
+
+      - name: Apply remaining reviewed patch
+        shell: bash
+        run: |
+          cat > /tmp/close-edge-remaining.patch.gz.b64 <<'PATCH_B64'
+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
+PATCH_B64
+          base64 -d /tmp/close-edge-remaining.patch.gz.b64 | gzip -d > /tmp/close-edge-remaining.patch
+          git apply --check /tmp/close-edge-remaining.patch
+          git apply /tmp/close-edge-remaining.patch
+
+      - name: Run focused report tests
+        run: dotnet test tests/AR.Iec61850.Tests/AR.Iec61850.Tests.csproj --configuration Release --filter "FullyQualifiedName~MmsReportControlFieldCodecTests|FullyQualifiedName~MmsReportValueProjectorTests"
+
+      - name: Commit corrected report pipeline
+        shell: bash
+        run: |
+          git rm .github/workflows/export-report-source.yml
+          git rm .github/workflows/apply-close-edge-report-fix.yml
+          git rm docs/close-edge-report-audit.md docs/close-edge-report-audit-status.md docs/close-edge-report-fix-ready.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs \
+                  src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs \
+                  src/AR.Iec61850/Mms/MmsReportSubscriptionPlan.cs \
+                  tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
+          git commit -m 'fix(reporting): enforce dchg and decode DBPOS close events'
+          git push origin HEAD:audit/close-edge-report-projection

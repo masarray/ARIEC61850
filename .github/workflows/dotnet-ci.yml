@@ -34,15 +34,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          show-progress: false
+
+      - name: Verify source, provenance, wording and license boundaries
+        shell: pwsh
+        run: ./scripts/verify-source-clean.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
-
-      - name: Verify source, provenance, wording and license boundaries
-        shell: pwsh
-        run: ./scripts/verify-source-clean.ps1
 
       - name: Restore
         run: dotnet restore ARIEC61850.sln

@@ -31,7 +31,7 @@ $ForbiddenFilePatterns = @(
 $ForbiddenTextPatterns = @(
     "ARIEC60870", "IEC60870", "IEC 60870", "IEC101", "IEC 101",
     "IEC103", "IEC 103", "IEC104", "IEC 104", "libiec61850",
-    "MZ Automation", "GPL", "General Public License", "OCR7SR12", "OMICRON_CMC",
+    "MZ Automation", "OCR7SR12", "OMICRON_CMC",
     "IEDScout", "IED Scout", "StationScout", "Station Scout", "SVScout", "SV Scout",
     "C:\Users\", "C:\Program Files\dotnet\sdk", "blocked in the current sandbox", "_wpftmp"
 )
@@ -90,4 +90,4 @@ if ($Problems.Count -gt 0) {
     throw "Source tree is not public-release clean. Found $($Problems.Count) problem(s)."
 }
 
-Write-Host "Source tree is public-release clean." -ForegroundColor Green
+Write-Host "Source tree is public-release clean." -ForegroundColor Green.

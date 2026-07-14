@@ -33,6 +33,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set +e
+          sed -i '/apply-gpl-commercial-license.yml/d' scripts/apply-license-transition.py
           python scripts/apply-license-transition.py > /tmp/license-transition.log 2>&1
           status=$?
           cat /tmp/license-transition.log

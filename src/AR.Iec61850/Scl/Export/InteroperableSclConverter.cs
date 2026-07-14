@@ -15,7 +15,7 @@ public static class InteroperableSclConverter
     };
 
     // These standard-name elements occur in Edition 2.1 / vendor capability
-    // declarations but are deliberately omitted by the IEDScout 2007 B export
+    // declarations but are deliberately omitted by the selected 2007 B compatibility export
     // profile used as black-box interoperability evidence for this converter.
     private static readonly HashSet<string> CompatibilityExcludedElements = new(StringComparer.Ordinal)
     {

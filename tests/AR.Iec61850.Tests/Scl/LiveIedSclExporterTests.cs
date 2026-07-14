@@ -164,7 +164,7 @@ public sealed class LiveIedSclExporterTests
     [InlineData(SclSchemaProfile.Edition1V16, SclEdition.Edition1, false, ".icd")]
     [InlineData(SclSchemaProfile.Edition1V15, SclEdition.Edition1, false, ".icd")]
     [InlineData(SclSchemaProfile.Edition1V14, SclEdition.Edition1, false, ".icd")]
-    public void Exporter_Uses_Selected_IedScout_Compatible_Schema_Profile(
+    public void Exporter_Uses_Selected_Compatibility_Schema_Profile(
         SclSchemaProfile schemaProfile,
         SclEdition expectedEdition,
         bool expectsEdition2Fields,

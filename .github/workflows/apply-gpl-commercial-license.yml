@@ -32,33 +32,7 @@ jobs:
           set +e
           rm -f LICENSE_TRANSITION_FAILURE.txt
           sed -i '/apply-gpl-commercial-license.yml/d' scripts/apply-license-transition.py
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          path = Path('scripts/apply-license-transition.py')
-          text = path.read_text(encoding='utf-8')
-          replacement = '''def download_gpl() -> str:
-              local = Path("/usr/share/common-licenses/GPL-3")
-              data = local.read_text(encoding="utf-8")
-              required = [
-                  "GNU GENERAL PUBLIC LICENSE",
-                  "Version 3, 29 June 2007",
-                  "END OF TERMS AND CONDITIONS",
-                  "Everyone is permitted to copy and distribute verbatim copies",
-              ]
-              if any(marker not in data for marker in required) or len(data) < 30000:
-                  raise RuntimeError("Runner GPL text failed integrity/shape validation.")
-              return data
-
-
-def relabel_text_files'''
-          text, count = re.subn(r'def download_gpl\(\) -> str:.*?^def relabel_text_files', replacement, text, count=1, flags=re.S | re.M)
-          if count != 1:
-              raise SystemExit('Could not patch download_gpl() for offline runner use.')
-          path.write_text(text, encoding='utf-8')
-          PY
-          python scripts/apply-license-transition.py > /tmp/license-transition.log 2>&1
+          python -c "import runpy, urllib.request; urllib.request.urlopen=lambda *a, **k: open('/usr/share/common-licenses/GPL-3','rb'); runpy.run_path('scripts/apply-license-transition.py', run_name='__main__')" > /tmp/license-transition.log 2>&1
           status=$?
           cat /tmp/license-transition.log
           if [ "$status" -ne 0 ]; then

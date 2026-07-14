@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - legal/gpl3-commercial-licensing
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -11,7 +15,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.head_ref == 'legal/gpl3-commercial-licensing')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout full repository history

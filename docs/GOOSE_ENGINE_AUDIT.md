@@ -1,146 +1,113 @@
-# GOOSE Engine Audit
+# GOOSE Engine Review
 
-Status date: 2026-06-14
+**Status date:** 2026-06-14
 
-## Why this exists
+## Purpose
 
-GOOSE support must become more than a frame encoder/decoder. For a commissioning tool, the useful behavior is SCL-aware discovery, stream supervision, event evidence, and safe publishing with protocol state that can be inspected.
+This document records the implemented GOOSE capability, validation evidence, limitations, and next engineering steps. It is based on public IEC 61850 behavior, project-owned code, synthetic fixtures, and local validation.
 
-This audit is based on public IEC 61850 process-bus behavior, public tool capability descriptions, and local validation.
+No unrelated IEC 61850 implementation is included as a runtime dependency.
 
-No third-party IEC 61850 stack is vendored as a runtime dependency.
+## Current capability
 
-## Capability target
+### Model and binding
 
-The target is a smart GOOSE stack that can support professional commissioning, simulation, and process-bus troubleshooting tools:
+- SCL-derived publisher profiles are accepted by `ProcessBusStreamMonitor`.
+- Observed frames are matched by APPID, destination MAC, GoCB reference, DataSet reference, GoID, configuration revision, and other available evidence.
+- Match outcomes should be described as exact, high-confidence, partial, mismatch, or anonymous rather than “trusted”.
+- DataSet order is preserved when SCL evidence is available.
+- Traffic without SCL remains visible and is labeled semantically anonymous.
 
-- import SCL and build publish/subscribe profiles;
-- discover streams from passive traffic;
-- bind traffic to SCL by APPID, destination MAC, GoCB reference, DataSet reference, GoID, and ConfRev;
-- decode `allData` and preserve semantic order from the DataSet;
-- supervise `stNum`, `sqNum`, TimeAllowedToLive, `test`, `ndsCom`, ConfRev, VLAN, source, and destination;
-- explain why a frame is trusted, weakly matched, mismatched, or anonymous;
-- publish deterministic GOOSE frames with correct state/retransmission behavior;
-- keep active publishing guarded behind explicit lab confirmation.
+### Decode and supervision
 
-## N5.19 implemented
+- `allData` values are decoded into typed entries with index, signal reference when known, FC, CDC, type, display value, previous value, and change state.
+- Stream summaries track state changes, retransmissions, duplicates, sequence gaps, regressions, supervision timeout, arrival gaps, and decoded value changes.
+- Diagnostics identify Test, needs-commissioning, zero TimeAllowedToLive, configuration mismatch, destination mismatch, DataSet count mismatch, timeout, and state/value inconsistency.
 
-Core monitor:
+### Publisher
 
-- `ProcessBusStreamMonitor` now accepts SCL-derived GOOSE publisher profiles.
-- GOOSE frames are bound to SCL profiles by exact APPID, destination MAC, GoCB reference, and ConfRev, with weaker fallbacks by GoCB reference, DataSet reference, and GoID.
-- Decoded `allData` values are exposed as `GooseDecodedValue` entries with index, SCL signal reference, FC, CDC, bType, display value, previous value, and changed flag.
-- `ProcessBusStreamSummary` tracks GOOSE state changes, retransmissions, duplicates, jumps, regressions, TAL expiry, arrival gaps, and value changes.
-- Diagnostics now flag `test`, `ndsCom`, zero TAL, ConfRev mismatch, destination MAC mismatch, DataSet count mismatch, TAL expiry, value changes without `stNum` increment, and `stNum` changes without decoded value changes.
+- Retransmission frames retain stable payload values.
+- Payload changes are tied to state changes.
+- `stNum` and `sqNum` behavior is deterministic and testable.
+- Dry-run and bounded active publishing use the same state-machine path.
 
-Publisher:
+### Capture and CLI
 
-- Demo PCAP and live publisher payload generation now keep payload values stable during retransmission.
-- Payload values change only when a state change is requested, so `stNum` and changed values stay aligned.
-- `sqNum` can represent retransmission evidence instead of hiding publisher payload churn.
+- Receive-side process-bus traffic uses a typed frame-source abstraction.
+- The Windows raw-Ethernet frame source supports adapter selection, filter options, bounded delivery, cancellation, and cleanup.
+- CLI inspection and streaming show sequence state, supervision, model binding, decoded value count, changes, and diagnostics.
 
-CLI:
+## Evidence model
 
-- `inspect-pcap` GOOSE summary now shows TAL, state-change count, retransmission count, jumps, duplicates, regressions, timeouts, value-change count, and changed-value summary.
-- `stream-pcap` now shows per-frame GOOSE sequence status, TAL, SCL binding, value count, changed count, changed summary, and diagnostics.
-
-## N5.20 source patch
-
-- Added `IProcessBusFrameSource`, `ProcessBusCapturedFrame`, and `ProcessBusCaptureOptions` so receive-side process-bus traffic is a typed core contract instead of app-specific SharpPcap logic.
-- Added `NpcapProcessBusFrameSource` with bounded-channel delivery, adapter filter support, cancellation cleanup, and best-effort adapter shutdown.
-- Added `goose-subscribe-live --adapter <index|name>` CLI. It captures GOOSE traffic with the default BPF filter `ether proto 0x88b8`, feeds frames into `ProcessBusStreamMonitor`, and prints the same SCL-aware event and summary diagnostics used by `stream-pcap`.
-- Added deterministic in-memory frame-source tests for subscriber consumers.
-
-Tests:
-
-- SCL-bound GOOSE retransmission.
-- Valid GOOSE state change with changed values.
-- Invalid value change without state-number increment.
-- TAL expiry.
-- In-memory process-bus frame source ordering and cancellation.
-
-## Comparison with common low-level stacks
-
-Common low-level IEC 61850 stacks provide strong raw GOOSE receiver/subscriber APIs. A good baseline exposes filtering by destination MAC and APPID, validity and parse-error state, `stNum`, `sqNum`, `test`, `confRev`, `ndsCom`, TimeAllowedToLive, timestamp, VLAN, and DataSet values. The expected `stNum` and `sqNum` relationship is also fundamental: `sqNum` increases for consecutive messages without state change and resets when `stNum` increases.
-
-ARIEC61850 is still behind mature low-level stacks in these areas:
-
-- live GOOSE receiver loop is source-implemented but still needs compile validation in an unrestricted restore environment and live adapter soak evidence;
-- no R-GOOSE receiver/publisher;
-- no hardened multi-threaded live subscriber lifecycle;
-- no formal conformance evidence;
-- no broad multi-vendor traffic corpus.
-
-ARIEC61850 is moving beyond a raw subscriber API in these areas:
-
-- SCL-bound semantic diagnostics are part of the monitor result;
-- value-change summaries are compared against the GOOSE state machine;
-- ambiguous or anonymous traffic remains visible instead of being silently dropped;
-- the same monitor model supports PCAP replay and live adapter receive;
-- publisher dry-run and active publish share the same state-machine path.
-
-## Passive analyzer learning
-
-Receive-only raw-passive analyzers provide useful product lessons for ARIEC61850:
-
-- show adapter, APPID, stream ID, source MAC, sequence continuity, and timing confidence as evidence;
-- avoid claiming certification-grade timing from ordinary software timestamps;
-- make passive discovery useful even without SCL, but mark semantics as anonymous when SCL binding is missing;
-- keep active publishing and control behavior out of passive analyzer workflows.
-
-ARIEC61850 now adopts the same evidence-first posture for GOOSE, while remaining a full stack that can also publish in isolated labs.
-
-## Engineering tool learning
-
-Professional engineering tools emphasize workflows that visualize SCL, trace signals, compare configuration with live traffic, inspect activity, and simulate IEDs/GOOSE for testing. The stack direction should therefore prioritize:
-
-- SCL and live traffic comparison;
-- clear PASS/WARNING/FAIL/UNKNOWN diagnostics per stream;
-- signal tracing from GoCB/DataSet member to received `allData` value;
-- simulation/publishing that is deterministic and bounded;
-- evidence export for commissioning review.
-
-## Current validation
-
-Commands run for N5.19:
-
-```powershell
-dotnet build .\apps\AR.Iec61850.Cli\AR.Iec61850.Cli.csproj -c Release --no-restore --no-incremental
-dotnet build .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-restore --no-incremental
-dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build
-dotnet .\.artifacts\bin\AR.Iec61850.Cli\Release\net8.0\AR.Iec61850.Cli.dll generate-pcap .\samples\scl\minimal-station.scd .\out\n5-19-goose-demo.pcap
-dotnet .\.artifacts\bin\AR.Iec61850.Cli\Release\net8.0\AR.Iec61850.Cli.dll inspect-pcap .\out\n5-19-goose-demo.pcap --scl .\samples\scl\minimal-station.scd
-dotnet .\.artifacts\bin\AR.Iec61850.Cli\Release\net8.0\AR.Iec61850.Cli.dll stream-pcap .\out\n5-19-goose-demo.pcap --scl .\samples\scl\minimal-station.scd --delay-ms 0 --limit 20
+```text
+synthetic SCL
+→ project-generated GOOSE frames or approved capture
+→ decode and stream supervision
+→ SCL binding
+→ explicit findings
+→ Markdown/JSON evidence
 ```
 
-Observed PCAP evidence:
+## Current automated coverage
 
-- 20 decoded process-bus frames.
-- 1 GOOSE stream, 4 frames.
-- `TAL=1000ms`.
-- `stateChanges=1`.
-- `retrans=2`.
-- `timeouts=0`.
-- retransmission frames show `changed=0`.
-- final state-change frame shows `seq=StateChange` and changed Boolean/timestamp values.
+- SCL-bound retransmission.
+- State change with matching value change.
+- Value change without state-number increment.
+- State-number change without decoded value change.
+- Supervision timeout.
+- Sequence gaps, duplicates, and regressions.
+- Configuration and destination mismatch.
+- In-memory frame-source ordering and cancellation.
 
-## Remaining roadmap
+## Current limitations
 
-Next safe patches:
+- No formal IEC 61850 conformance evidence.
+- No broad multi-implementation traffic corpus.
+- No R-GOOSE support claim.
+- Sustained live-adapter lifecycle and soak evidence remain limited.
+- Ordinary software timestamps are laboratory evidence and are not presented as certification-grade timing.
+- Full station-level dataflow validation remains under development.
 
-1. Validate `goose-subscribe-live` compile and live adapter capture in an unrestricted restore environment.
-2. Add bounded capture evidence export: JSON summary, event log, and optional CSV values.
-3. Add live MMS GoCB discovery/readback for `GoEna`, `GoID`, `DatSet`, `ConfRev`, `NdsCom`, `MinTime`, `MaxTime`, and `DstAddress`.
-4. Add quality bit decoding for common GOOSE quality values.
-5. Add replay tests with malformed GOOSE frames, unknown tags, length mismatch, sequence jumps, duplicate frames, and ConfRev mismatch.
-6. Add anonymous stream registry for traffic without SCL and later bind it when SCL is loaded.
-7. Add live adapter soak tests with real relay or simulator captures.
-8. Add R-GOOSE only after normal Ethernet GOOSE receive/publish is stable.
+## Product guidance
+
+A useful engineering view should show:
+
+- adapter and capture source;
+- APPID and stream reference;
+- source and destination MAC;
+- expected-model match level;
+- `stNum`, `sqNum`, supervision, and timing evidence;
+- decoded value count and changes;
+- clear MATCHED, PARTIAL, MISSING, UNEXPECTED, and MISMATCH findings.
+
+Passive analysis should remain useful without SCL while clearly labeling unknown semantics. Active publishing must remain separate, visible, bounded, and guarded.
+
+## Validation commands
+
+```powershell
+dotnet build .\apps\AR.Iec61850.Cli\AR.Iec61850.Cli.csproj -c Release
+dotnet build .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release
+dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\goose-demo.pcap
+dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\.artifacts\out\goose-demo.pcap --scl .\samples\scl\minimal-station.scd
+dotnet run --project .\apps\AR.Iec61850.Cli -- stream-pcap .\.artifacts\out\goose-demo.pcap --scl .\samples\scl\minimal-station.scd --delay-ms 0 --limit 20
+```
+
+Generated evidence must stay under ignored local folders and use synthetic or contributor-owned input.
+
+## Next steps
+
+1. Add bounded live-capture evidence export.
+2. Add live MMS GoCB discovery and readback where supported.
+3. Expand quality decoding and malformed-frame coverage.
+4. Add sustained adapter soak tests and explicit resource limits.
+5. Add anonymous-stream rebinding after SCL is loaded.
+6. Add station-level publisher/DataSet/subscriber tracing.
+7. Consider R-GOOSE only after ordinary Ethernet GOOSE behavior is mature.
 
 ## Claim boundary
 
-Current validated claim: SCL-backed GOOSE frame generation, PCAP decode, passive stream monitoring, state/retransmission diagnostics, TAL supervision, and bounded lab publishing are implemented and unit tested.
+Current public claim: SCL-backed GOOSE encode/decode, project-generated PCAP workflows, passive stream monitoring, sequence and supervision diagnostics, and bounded laboratory publishing are implemented with automated coverage.
 
-Source-level and pending lab validation: live adapter GOOSE subscriber CLI and Npcap receive source.
-
-Do not claim yet: formal IEC 61850 conformance, production-grade timing proof, live adapter subscriber soak readiness, R-GOOSE support, or broad vendor interoperability.
+Do not claim formal conformance, production-grade timing, universal interoperability, unrestricted operational use, or R-GOOSE support.

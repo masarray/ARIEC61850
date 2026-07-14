@@ -39,10 +39,10 @@ jobs:
           cat /tmp/license-transition.log
           if [ "$status" -ne 0 ]; then
             git reset --hard HEAD
-            cp /tmp/license-transition.log LICENSE_TRANSITION_FAILURE.log
+            cp /tmp/license-transition.log LICENSE_TRANSITION_FAILURE.txt
             echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            rm -f LICENSE_TRANSITION_FAILURE.log
+            rm -f LICENSE_TRANSITION_FAILURE.txt
             echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
           exit 0

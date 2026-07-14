@@ -1,97 +1,177 @@
-# Full Stack Roadmap
+# Full Stack Development Plan
 
-ARIEC61850 is being built as a native C# IEC 61850 engineering stack. The target is not just packet encoding; the target is a practical lab suite that can discover IEDs, inspect SCL, publish/receive process-bus traffic, plan reports safely, simulate models, and export repeatable evidence.
+This document expands the future work described in the root [Roadmap](../ROADMAP.md). Completed work is summarized in [Changelog](../CHANGELOG.md), and current evidence is recorded in [Engine Maturity Matrix](ENGINE_MATURITY_MATRIX.md).
 
-## Capability matrix
+## Product direction
 
-| Capability | Current status | Next maturity step |
-|---|---|---|
-| BER / MMS presentation foundation | Implemented in core library | Expand negative/malformed PDU tests |
-| TCP / TPKT / COTP / ACSE association | Implemented for MMS client use | Add association profile diagnostics in Discovery UI |
-| MMS model discovery | Implemented in CLI and IED Discovery UI | Add live model tree drilldown and point search |
-| DataSet directory | Implemented in core / CLI / IED Discovery UI | Add member-to-point binding quality indicators |
-| RCB discovery and report planning | Implemented in core / CLI / IED Discovery UI | Add guided report setup wizard and saved profile |
-| Report monitor / receive pump | Implemented in core / CLI | Add WPF runtime monitor workspace |
-| BRCB recovery | Partial | Add resume/purge decision flow and EntryID evidence |
-| GOOSE publish / parse / monitor | Implemented | Add live GoCB readback and quality bit details |
-| SV publish / parse / injector UI | Implemented / in progress | Add live SV subscriber and timing evidence |
-| PCAP read/write/replay | Implemented | Add one-click evidence bundle export |
-| SCL parse and publisher profiles | Implemented | Add simulator import from SCL |
-| IED simulator | Offline model/runtime foundation | Add read-only MMS server, then reports, then controlled writes |
-| File/log/setting-group services | Future | Add read-only file/log browser first |
-| Security profile | Future | Keep as separate maturity track after base stack stabilizes |
-
-## Product workflow direction
-
-### 1. IED Discovery
-
-The discovery workspace should remain setup-oriented:
+ARIEC61850 is developed as a reusable IEC 61850 engine with thin engineering applications. Protocol codecs, state machines, binding, diagnostics, simulation, and evidence export remain in reusable libraries.
 
 ```text
-Connect → Discover model → Inspect DataSets/RCBs → Validate readiness → Export report profile
+Engine contracts
+→ CLI and laboratory harnesses
+→ stable product applications
 ```
 
-This is where RCB and DataSet selection belongs. Runtime should not force the operator to keep reselecting RCBs unless the session profile changes.
+## Current workflow baseline
 
-### 2. Report Runtime
-
-The runtime workspace should be evidence-oriented:
+### IED discovery
 
 ```text
-Load profile → Enable guarded report → Trigger GI → Monitor reports → Export evidence → Cleanup
+Connect
+→ discover live model
+→ inspect DataSets and RCBs
+→ read typed values
+→ build evidence
 ```
 
-Visible runtime indicators should include active RCB, bound DataSet, member count, GI state, report count, sequence / entry movement, buffer overflow, and reason-for-inclusion.
+### Reporting
 
-### 3. IED Simulator
+```text
+Read current RCB state
+→ classify readiness and ownership
+→ validate DataSet membership
+→ build a typed plan
+→ confirm writes
+→ enable and monitor
+→ stop and clean up
+```
 
-The simulator should mature in safe layers:
+### Guarded control
 
-1. offline profile and deterministic value engine;
-2. profile import/export;
-3. read-only MMS model server;
-4. DataSet directory and report control readback;
-5. unbuffered reports;
-6. buffered reports with EntryID and overflow evidence;
-7. optional write/control handling for lab training.
+```text
+Select control Data Object
+→ discover ctlModel and live MMS types
+→ verify approved test conditions
+→ stage operator intent
+→ confirm
+→ execute Direct or SBO sequence
+→ separate acceptance, termination, application error, and feedback
+```
 
-Do not implement control/write behavior before read-only discovery and reporting behavior are stable.
+### Process bus
 
-## Recommended next phases
+```text
+Load synthetic or approved SCL
+→ derive expected streams
+→ inspect PCAP or live capture
+→ bind expected and observed traffic
+→ diagnose sequence, timing, configuration, and payload findings
+→ export evidence
+```
 
-### Phase A — Discovery UI hardening
+### Simulator
 
-- Add model tree view: LD → LN → DO → DA.
-- Add search box for object references.
-- Add RCB readiness classification: safe, busy, missing DataSet, enabled, reservation conflict, unknown.
-- Expand report profile export so it can be consumed directly by the Report Runtime workspace.
+```text
+Load deterministic profile
+→ expose read-only MMS model
+→ exercise discovery and reads
+→ record activity and evidence
+```
 
-### Phase B — Report setup wizard
+## Development tracks
 
-- Step 1: connect and discover.
-- Step 2: choose DataSet.
-- Step 3: choose compatible RCB candidate.
-- Step 4: read back RCB state.
-- Step 5: create guarded session profile.
+### Track A — Reporting reliability
 
-### Phase C — Report runtime workspace
+- explicit URCB and BRCB lifecycle models;
+- ownership and reservation evidence;
+- reconnect, duplicate, loss, and stale-data handling;
+- `EntryID`, overflow, purge, and resume strategy;
+- long-duration monitor and cleanup tests.
 
-- Load saved session profile.
-- Enable RCB with guarded writes.
-- Trigger GI.
-- Decode incoming reports.
-- Show reason-for-inclusion per member.
-- Export JSON/CSV evidence.
+### Track B — Sampled Values receive and analysis
 
-### Phase D — Simulator network core
+- sustained live subscriber;
+- stream registry and SCL binding;
+- payload-layout validation;
+- continuity, duplicates, ordering, and wrap analysis;
+- RMS, phasor, frequency, jitter, dropout, and synchronization evidence;
+- bounded performance and soak tests.
 
-- Build read-only MMS server skeleton.
-- Expose domains, named variables, named variable lists, and access attributes.
-- Add report control readback.
-- Add unbuffered reports.
+### Track C — Simulator reporting
 
-### Phase E — Process-bus receive maturity
+- unbuffered report generation;
+- buffered report generation and recovery state;
+- deterministic scenario scheduling;
+- quality and timestamp changes;
+- GOOSE and Sampled Values scenario coordination;
+- write/control only after read and reporting behavior is mature and reviewed.
 
-- Add SV subscriber over the existing frame-source abstraction.
-- Add timing/jitter summary for SV streams.
-- Add GOOSE quality decoding and ConfRev mismatch evidence.
+### Track D — Station engineering
+
+- deeper SCL type-template resolution;
+- communication and access-point validation;
+- publisher/DataSet/subscriber graph;
+- SCL versus live MMS comparison;
+- SCL versus observed process-bus comparison;
+- explainable findings with source and confidence.
+
+### Track E — Robustness and security
+
+- malformed and oversized input testing;
+- resource and queue limits;
+- timeout, cancellation, reconnect, and fault cleanup;
+- fuzzing for codecs and parsers;
+- release dependency review;
+- security-profile work only when implementation and evidence exist.
+
+## Application boundaries
+
+### IED Discovery
+
+Primary role:
+
+- live model browsing;
+- typed reads;
+- report setup and monitoring;
+- guarded control;
+- evidence export.
+
+The application must not duplicate protocol parsing, FC resolution, report state, control sequencing, or value binding.
+
+### Engineering Workbench
+
+Primary role:
+
+- read-only SCL and PCAP analysis;
+- expected-vs-observed findings;
+- loopback readiness checks;
+- evidence-pack export.
+
+### IED Simulator
+
+Primary role:
+
+- deterministic laboratory model;
+- read-only MMS server;
+- scenario and activity evidence.
+
+It is not presented as a production IED or formal conformance reference.
+
+### Sampled Values Publisher
+
+Primary role:
+
+- bounded laboratory publishing;
+- waveform and phasor preparation;
+- dry-run and adapter verification;
+- visible active-output state.
+
+## Evidence priorities
+
+Every development track should add a deterministic path:
+
+```text
+synthetic input
+→ engine service
+→ typed result
+→ explicit finding or state
+→ Markdown/JSON evidence
+```
+
+Live equipment testing supplements deterministic tests; it must not be the only evidence.
+
+## Claim policy
+
+Use precise evidence wording. Do not describe a feature as safe, certified, compliant, production-ready, universally interoperable, or field-proven unless the exact claim is supported by documented evidence for the exact release.
+
+The phrase “laboratory exercised” means only that a controlled test path was completed under a recorded procedure. It does not imply operational-substation approval.

@@ -1,8 +1,9 @@
 ARIEC61850
-Copyright (C) 2026 Mas Ari / masarray
+Copyright (C) 2026 Ari Sulistiono
+GitHub account: masarray
 
 Current public license: GNU General Public License v3.0 or later only.
-Commercial licensing may be obtained separately from the copyright holder.
+Commercial licensing may be negotiated separately with the copyright holder.
 
 Current branch and current release packages:
 - License: GPL-3.0-or-later only
@@ -13,4 +14,4 @@ Historical revisions through d61a83f5b04e7bd2b847174eeac7f4f6e81ee8e1 remain ava
 
 Third-party components and their notices remain governed by their own licenses; see THIRD_PARTY_NOTICES.md.
 
-ARIEC61850 is a clean-room IEC 61850 engineering toolkit. The repository is maintained as source-first public project content and intentionally excludes generated build outputs, local IDE state, runtime evidence, captures, and release artifacts.
+ARIEC61850 is independently developed under a documented clean-room and provenance policy. The repository is maintained as source-first public project content and intentionally excludes generated build outputs, local IDE state, runtime evidence, captures, and release artifacts.

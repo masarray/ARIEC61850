@@ -1,0 +1,41 @@
+name: Apply GPL and commercial licensing
+
+on:
+  push:
+    branches:
+      - legal/gpl3-commercial-licensing
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: legal/gpl3-commercial-licensing
+
+      - name: Apply audited license transition
+        env:
+          REPO_KIND: engine
+          APACHE_BASE_SHA: d61a83f5b04e7bd2b847174eeac7f4f6e81ee8e1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/apply-license-transition.py
+
+      - name: Commit transition
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No licensing changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(legal): adopt GPL-3.0-or-later and commercial licensing"
+          git push origin HEAD:legal/gpl3-commercial-licensing

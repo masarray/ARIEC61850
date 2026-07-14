@@ -17,67 +17,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: read
+  contents: read
 
 jobs:
-  license-transition:
-    name: Apply GPL and commercial licensing
-    if: github.event_name == 'pull_request' && github.head_ref == 'legal/gpl3-commercial-licensing' && github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout full repository history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: legal/gpl3-commercial-licensing
-
-      - name: Apply audited license transition
-        shell: bash
-        env:
-          REPO_KIND: engine
-          APACHE_BASE_SHA: d61a83f5b04e7bd2b847174eeac7f4f6e81ee8e1
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          rm -f LICENSE_TRANSITION_FAILURE.txt
-          sed -i '/apply-gpl-commercial-license.yml/d' scripts/apply-license-transition.py
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          path = Path('scripts/apply-license-transition.py')
-          text = path.read_text(encoding='utf-8')
-          replacement = '''def download_gpl() -> str:
-              local = Path("/usr/share/common-licenses/GPL-3")
-              data = local.read_text(encoding="utf-8")
-              required = [
-                  "GNU GENERAL PUBLIC LICENSE",
-                  "Version 3, 29 June 2007",
-                  "END OF TERMS AND CONDITIONS",
-                  "Everyone is permitted to copy and distribute verbatim copies",
-              ]
-              if any(marker not in data for marker in required) or len(data) < 30000:
-                  raise RuntimeError("Runner GPL text failed integrity/shape validation.")
-              return data
-
-
-def relabel_text_files'''
-          text, count = re.subn(r'def download_gpl\(\) -> str:.*?^def relabel_text_files', replacement, text, count=1, flags=re.S | re.M)
-          if count != 1:
-              raise SystemExit('Could not patch download_gpl() for offline runner use.')
-          path.write_text(text, encoding='utf-8')
-          PY
-          python scripts/apply-license-transition.py
-
-      - name: Commit transition
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "chore(legal): adopt GPL-3.0-or-later and commercial licensing"
-          git push origin HEAD:legal/gpl3-commercial-licensing
-
   build-test:
     name: Build and test ARIEC61850
     runs-on: windows-latest

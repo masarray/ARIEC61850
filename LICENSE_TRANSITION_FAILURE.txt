@@ -1,0 +1,53 @@
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/urllib/request.py", line 1344, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "/usr/lib/python3.12/http/client.py", line 1356, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "/usr/lib/python3.12/http/client.py", line 1402, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "/usr/lib/python3.12/http/client.py", line 1351, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/usr/lib/python3.12/http/client.py", line 1111, in _send_output
+    self.send(msg)
+  File "/usr/lib/python3.12/http/client.py", line 1055, in send
+    self.connect()
+  File "/usr/lib/python3.12/http/client.py", line 1490, in connect
+    super().connect()
+  File "/usr/lib/python3.12/http/client.py", line 1021, in connect
+    self.sock = self._create_connection(
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 852, in create_connection
+    raise exceptions[0]
+  File "/usr/lib/python3.12/socket.py", line 837, in create_connection
+    sock.connect(sa)
+OSError: [Errno 101] Network is unreachable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/work/ARIEC61850/ARIEC61850/scripts/apply-license-transition.py", line 534, in <module>
+    main()
+  File "/home/runner/work/ARIEC61850/ARIEC61850/scripts/apply-license-transition.py", line 508, in main
+    gpl = download_gpl()
+          ^^^^^^^^^^^^^^
+  File "/home/runner/work/ARIEC61850/ARIEC61850/scripts/apply-license-transition.py", line 54, in download_gpl
+    with urllib.request.urlopen(request, timeout=30) as response:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 515, in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 532, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 1392, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 1347, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 101] Network is unreachable>

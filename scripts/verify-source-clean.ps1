@@ -3,12 +3,16 @@
 <#
 .SYNOPSIS
   Fails when tracked repository content contains prohibited public-release wording,
-  external-product identifiers, confidential evidence, or binary payloads.
+  external-product identifiers, confidential evidence, binary payloads, or an
+  ambiguous historical license file in the current branch.
 
 .DESCRIPTION
   The legal gate scans every Git-tracked path. Disallowed external identifiers are
   represented only by one-way fingerprints so the repository itself does not
   publish or repeat unrelated product and company names.
+
+  The current branch and current releases are GPL-3.0-or-later only. Historical
+  license text belongs only on the dedicated archive branch.
 #>
 [CmdletBinding()]
 param()
@@ -112,6 +116,10 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
         continue
     }
 
+    if ($relative -ieq "LICENSE-APACHE-2.0") {
+        $Problems.Add("Historical license file must not be present on the current GPL-only branch: $relative")
+    }
+
     foreach ($pattern in $ForbiddenFilePatterns) {
         if ($relative -like $pattern) {
             $Problems.Add("Forbidden tracked file: $relative")
@@ -145,4 +153,4 @@ if ($Problems.Count -gt 0) {
     throw "Source tree is not public-release clean. Found $($Problems.Count) problem(s)."
 }
 
-Write-Host "All Git-tracked content passed source-clean and external-IP checks." -ForegroundColor Green
+Write-Host "All Git-tracked content passed source-clean, external-IP, and current-license checks." -ForegroundColor Green

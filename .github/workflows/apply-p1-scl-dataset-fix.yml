@@ -1,0 +1,50 @@
+name: Apply P1 SCL DataSet binding fix
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.event.pull_request.head.ref == 'fix/scl-dataset-binding-resolution' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout P1 branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/scl-dataset-binding-resolution
+          fetch-depth: 0
+
+      - name: Apply reviewed patches
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d .p1 ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          for patch in \
+            .p1/SclModels.cs.patch \
+            .p1/SclParser.cs.patch \
+            .p1/SclEngineeringProfileBuilder.cs.patch
+          do
+            git apply --check "$patch"
+            git apply "$patch"
+          done
+          rm -rf .p1
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit typed resolver implementation
+        if: steps.apply.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: classify SCL ReportControl DataSet bindings [applied]"
+          git push origin HEAD:fix/scl-dataset-binding-resolution

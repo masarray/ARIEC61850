@@ -272,14 +272,42 @@ public sealed class SclEngineeringProfileBuilder
         }
 
         foreach (var report in document.ReportControls)
-        {
-            if (string.IsNullOrWhiteSpace(report.DataSetName))
-                findings.Add(Finding("High", "SCL_REPORT_DATASET_MISSING", $"Report {report.ControlBlockReference} has no datSet attribute.", report.ControlBlockReference));
-            if (report.Entries.Count == 0)
-                findings.Add(Finding("High", "SCL_REPORT_DATASET_EMPTY", $"Report {report.ControlBlockReference} has no resolved DataSet members.", report.ControlBlockReference));
-            if (report.ConfigurationRevision == 0)
-                findings.Add(Finding("Warning", "SCL_REPORT_CONFREV_ZERO", $"Report {report.ControlBlockReference} has confRev=0.", report.ControlBlockReference));
-        }
+{
+    switch (report.DataSetBindingStatus)
+    {
+        case SclDataSetBindingStatus.NotSpecified when report.Indexed:
+            findings.Add(Finding(
+                "Warning",
+                "SCL_REPORT_DATASET_UNASSIGNED",
+                $"Indexed report {report.ControlBlockReference} has no datSet assignment. The RCB may be preallocated and must be bound before use.",
+                report.ControlBlockReference));
+            break;
+        case SclDataSetBindingStatus.NotSpecified:
+            findings.Add(Finding(
+                "High",
+                "SCL_REPORT_DATASET_MISSING",
+                $"Report {report.ControlBlockReference} has no datSet attribute.",
+                report.ControlBlockReference));
+            break;
+        case SclDataSetBindingStatus.Unresolved:
+            findings.Add(Finding(
+                "Warning",
+                "SCL_REPORT_DATASET_UNRESOLVED",
+                $"Report {report.ControlBlockReference} references DataSet '{report.DataSetName}', but no unique matching DataSet was resolved in the same IED, logical device, and logical node scope.",
+                report.ControlBlockReference));
+            break;
+        case SclDataSetBindingStatus.ResolvedEmpty:
+            findings.Add(Finding(
+                "High",
+                "SCL_REPORT_DATASET_EMPTY",
+                $"Report {report.ControlBlockReference} resolves to DataSet {report.DataSetReference}, but that DataSet contains no FCDA members.",
+                report.ControlBlockReference));
+            break;
+    }
+
+    if (report.ConfigurationRevision == 0)
+        findings.Add(Finding("Warning", "SCL_REPORT_CONFREV_ZERO", $"Report {report.ControlBlockReference} has confRev=0.", report.ControlBlockReference));
+}
 
         foreach (var extRef in externalReferences)
         {

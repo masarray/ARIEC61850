@@ -38,6 +38,7 @@ internal static class Cli
             return args[0] switch
             {
                 "inspect-scl" => InspectScl(args[1..]),
+                "scl-save-as" => SclSaveAs(args[1..]),
                 "scl-diff" => SclDiff(args[1..]),
                 "scl-engineering-profile" => SclEngineeringProfile(args[1..]),
                 "process-bus-binding-profile" => ProcessBusBindingProfile(args[1..]),
@@ -138,6 +139,43 @@ internal static class Cli
         foreach (var conflict in document.Conflicts)
             Console.WriteLine($"  CONFLICT {conflict.Kind} {conflict.Key}: {conflict.Description}");
 
+        return 0;
+    }
+
+    private static int SclSaveAs(string[] args)
+    {
+        if (args.Length == 0)
+            throw new ArgumentException("scl-save-as requires an input SCL file path.");
+
+        var inputPath = args[0];
+        var options = CliOptions.Parse(args[1..]);
+        var defaultOutput = Path.Combine(
+            Path.GetDirectoryName(Path.GetFullPath(inputPath)) ?? Environment.CurrentDirectory,
+            $"{Path.GetFileNameWithoutExtension(inputPath)}.interoperable.iid");
+        var outputPath = options.Get("output", defaultOutput);
+        var result = InteroperableSclConverter.WriteFiles(
+            inputPath,
+            outputPath,
+            new InteroperableSclConversionOptions
+            {
+                IedName = options.Get("ied-name", string.Empty),
+                PreserveAllIeds = options.GetBool("preserve-all-ieds", false),
+                RemoveExternalInputs = !options.GetBool("keep-external-inputs", false),
+                RemoveUnusedTypeTemplates = !options.GetBool("keep-unused-types", false),
+                RemoveSubstationSection = !options.GetBool("keep-substation", false)
+            });
+
+        Console.WriteLine("Interoperable SCL saved.");
+        Console.WriteLine($"  Input: {result.InputPath}");
+        Console.WriteLine($"  Output: {result.OutputPath}");
+        Console.WriteLine($"  IED: {(string.IsNullOrWhiteSpace(result.SelectedIedName) ? string.Join(", ", result.OutputIedNames) : result.SelectedIedName)}");
+        Console.WriteLine($"  Model: LD={result.LogicalDeviceCount} LN={result.LogicalNodeCount} DataSet={result.DataSetCount} RCB={result.ReportControlCount} GOOSE={result.GooseControlBlockCount} SV={result.SampledValueControlBlockCount}");
+        Console.WriteLine($"  Templates: LN={result.LNodeTypeCount} DO={result.DoTypeCount} DA={result.DaTypeCount} Enum={result.EnumTypeCount}");
+        Console.WriteLine($"  Cleanup: Private={result.RemovedPrivateElementCount} vendor-elements={result.RemovedVendorElementCount} vendor-attributes={result.RemovedVendorAttributeCount} external-inputs={result.RemovedExternalInputCount} unused-types={result.RemovedUnusedTypeTemplateCount}");
+        Console.WriteLine($"  Report: {result.ReportPath}");
+        Console.WriteLine($"  Summary: {result.SummaryPath}");
+        foreach (var finding in result.Findings.Where(x => !string.Equals(x.Severity, "Info", StringComparison.OrdinalIgnoreCase)))
+            Console.WriteLine($"  {finding.Severity}: {finding.Code} {finding.Reference} {finding.Message}".TrimEnd());
         return 0;
     }
 
@@ -3558,7 +3596,9 @@ internal static class Cli
         var goldenProfileName = options.Get("golden-profile-name", string.IsNullOrWhiteSpace(iedName) ? "generic-safe-learned" : iedName);
         var apName = options.Get("ap-name", "AP1");
         var profile = options.Get("scl-export-profile", options.Get("profile", "safe-connection"));
-        var output = options.Get("output", Path.Combine("out", "scl", "live-ied.generated.iid"));
+        var sclSchema = SclSchemaProfiles.Parse(options.Get("scl-schema", options.Get("scl-version", "edition2-v3.1")));
+        var sclSchemaDescriptor = SclSchemaProfiles.Get(sclSchema);
+        var output = options.Get("output", Path.Combine("out", "scl", $"live-ied.generated{sclSchemaDescriptor.DefaultExtension}"));
         var subnet = options.Get("ip-subnet", "255.255.255.0");
         var gateway = options.Get("ip-gateway", "0.0.0.0");
         var osiApTitle = options.Get("osi-ap-title", string.Empty);
@@ -3575,7 +3615,7 @@ internal static class Cli
 
         await using var session = new MmsClientSession();
         Console.WriteLine($"MMS target: {host}:{port}");
-        Console.WriteLine("Mode: live-to-SCL generic IID/CID-style export (read-only discovery; no RCB writes). ");
+        Console.WriteLine($"Mode: live-to-SCL {sclSchemaDescriptor.DisplayName} export (read-only discovery; no RCB writes). ");
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
 
         await session.ConnectAsync(host, port, TimeSpan.FromMilliseconds(timeoutMs), cts.Token).ConfigureAwait(false);
@@ -3649,6 +3689,7 @@ internal static class Cli
                 OsiSsel = osiSsel,
                 OsiTsel = osiTsel,
                 IncludeDefaultOsiParameters = includeOsi,
+                SchemaProfile = sclSchema,
                 LogicalDeviceNameMode = ldNameMode
             };
 
@@ -6465,6 +6506,7 @@ internal static class Cli
         Console.WriteLine();
         Console.WriteLine("Usage:");
         Console.WriteLine("  inspect-scl <file.scd|file.cid|file.icd|file.iid>");
+        Console.WriteLine("  scl-save-as <input.scl|input.cid|input.icd|input.iid> [--ied-name NAME] [--output output.iid] [--preserve-all-ieds true] [--keep-external-inputs true] [--keep-unused-types true] [--keep-substation true]");
         Console.WriteLine("  scl-diff <golden.scl|golden.iid> <candidate.scl|candidate.iid> [--output .artifacts/out/scl-diff]");
         Console.WriteLine("  scl-engineering-profile <scl-file> [--output .artifacts/out/scl-profile.md] [--json .artifacts/out/scl-profile.json] [--raw-limit 20]");
         Console.WriteLine("  process-bus-binding-profile <scl-file> <pcap-file> [--output .artifacts/out/process-bus-binding.md] [--json .artifacts/out/process-bus-binding.json] [--nominal-hz 50] [--raw-limit 30]");
@@ -6493,7 +6535,7 @@ internal static class Cli
         Console.WriteLine("  workbench-evidence-pack [--scl samples/scl/minimal-station.scd] [--pcap file.pcap] [--output .artifacts/workbench-pack] [--no-public-alpha] [--nominal-hz 50] [--port 0] [--timeout-ms 5000] [--steps N]");
         Console.WriteLine("  mms-directory <host-or-ip> [--port 102] [--timeout-ms 30000] [--ln-limit N] [--raw-limit N] [--show-points]");
         Console.WriteLine("  mms-model-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true|false] [--read-types true|false] [--max-type-reads 256] [--type-read-source datasets|model|both] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/ied-model-discovery]");
-        Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-export-profile safe-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output .artifacts/out/scl/live-ied.safe-connection.iid] [--ld-name-mode auto|keep] [--output .artifacts/out/scl/live-ied.generated.iid] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
+        Console.WriteLine("  mms-scl-export <host-or-ip> [--port 102] [--ied-name NAME] [--ap-name AP1] [--scl-schema edition2-v3.1|edition1-v1.6|edition1-v1.5|edition1-v1.4] [--scl-export-profile safe-connection|standard-discovery|full-model|simulator-seed] [--write-connection-companion true] [--connection-output PATH] [--ld-name-mode auto|keep] [--output PATH] [--read-datasets true] [--read-types true] [--max-type-reads 512] [--include-osi true]");
         Console.WriteLine("  mms-service-discover <host-or-ip> [--port 102] [--timeout-ms 120000] [--max-report-probes 286] [--read-datasets true] [--read-files true] [--file-directory /] [--read-setting-groups true] [--read-setting-values false] [--max-setting-reads 256] [--read-types false] [--type-read-source datasets|model|both] [--type-read-strategy safe|dataset-leaf|all] [--type-read-isolated true] [--type-read-quarantine true] [--golden-scl samples/scl/minimal-station.scd] [--learn-types-from-golden true] [--golden-profile-name IED1] [--golden-learning-conflict-policy review-only|prefer-live|prefer-golden] [--max-type-reads 32] [--type-read-delay-ms 50] [--ied-name NAME] [--ap-name AP1] [--output .artifacts/out/service-discovery]");
         Console.WriteLine("  mms-find <host-or-ip> <query> [--port 102] [--timeout-ms 30000] [--fc ST|MX|CO|RP|BR] [--ld LD] [--ln LN] [--raw-limit N]");
         Console.WriteLine("  mms-resolve <host-or-ip> <LD/LN.DO.da> [--port 102] [--timeout-ms 30000] [--raw-limit N]");
@@ -6541,7 +6583,8 @@ internal static class Cli
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- workbench-evidence-pack --scl samples/scl/minimal-station.scd --output .artifacts/workbench-pack");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-directory 192.0.2.10 --show-points --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-model-discover 192.0.2.10 --max-report-probes 286 --read-types true --max-type-reads 256 --output .artifacts/out/ied-model-discovery");
-        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-export-profile safe-connection --ld-name-mode auto --output .artifacts/out/scl/demo-ied.generated.iid");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-schema edition2-v3.1 --scl-export-profile safe-connection --ld-name-mode auto --output .artifacts/out/scl/demo-ied.generated.iid");
+        Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-scl-export 192.0.2.10 --ied-name IED1 --scl-schema edition1-v1.6 --output .artifacts/out/scl/demo-ied.generated.icd");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-service-discover 192.0.2.10 --ied-name IED1 --read-files true --read-setting-groups true --read-setting-values false --read-types false --learn-types-from-golden true --output .artifacts/out/service-discovery/demo-ied");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-find 192.0.2.10 XCBR --fc ST --raw-limit 40");
         Console.WriteLine("  dotnet run --project apps/AR.Iec61850.Cli -- mms-resolve 192.0.2.10 IED1LD0/MMXU1.PhV.phsA.cVal.mag.f");

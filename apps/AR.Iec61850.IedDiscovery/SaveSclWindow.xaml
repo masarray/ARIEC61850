@@ -1,0 +1,66 @@
+<Window x:Class="AR.Iec61850.IedDiscovery.SaveSclWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Save SCL" Height="236" Width="470" MinHeight="236" MinWidth="470"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#F4F7FB" FontFamily="Segoe UI">
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#253247" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="BorderBrush" Value="#AEB9C7" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="MinWidth" Value="88" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="58" />
+        </Grid.RowDefinitions>
+
+        <Border Margin="14" Padding="14" Background="White" BorderBrush="#D5DDE8" BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="92" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="IED" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding IedName}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+
+                <TextBlock Grid.Row="1" Text="Version" Margin="0,14,0,0" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,14,0,0"
+                          ItemsSource="{Binding SchemaProfiles}"
+                          SelectedItem="{Binding SelectedSchemaProfile}"
+                          DisplayMemberPath="DisplayName" />
+
+                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="0,14,0,0" Foreground="#55657B" TextWrapping="Wrap"
+                           Text="The selected schema controls the XML contract and default file type. Edition 2 saves as IID; Edition 1 saves as ICD." />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Background="#E8EDF5" BorderBrush="#D5DDE8" BorderThickness="0,1,0,0" Padding="12">
+            <DockPanel LastChildFill="False">
+                <Button DockPanel.Dock="Right" Content="Cancel" IsCancel="True" />
+                <Button DockPanel.Dock="Right" Content="Save" IsDefault="True" Click="Save_Click"
+                        Background="#0B62A4" Foreground="White" BorderBrush="#0B62A4" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

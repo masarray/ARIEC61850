@@ -38,3 +38,16 @@ Any feature that sends traffic to a NIC must:
 - document safety limitations,
 - avoid hidden background publishing,
 - expose enough evidence for operator review.
+
+## Contribution licensing and provenance
+
+The public project is distributed under `GPL-3.0-or-later` and also maintains a separate commercial-licensing path.
+
+Before a code contribution can be merged, the contributor must:
+
+1. have the legal right to submit the contribution;
+2. agree to [CONTRIBUTOR-LICENSE-AGREEMENT.md](CONTRIBUTOR-LICENSE-AGREEMENT.md), which preserves the maintainer's ability to offer both GPL and commercial licensing;
+3. add a Developer Certificate of Origin sign-off (`Signed-off-by: Name <email>`) to every commit; and
+4. avoid confidential customer data, employer-owned material, vendor source code, restrictive-license code, and mechanically translated proprietary implementations.
+
+Organizational contributions must be submitted by a person authorized to bind the organization. A pull request without the CLA affirmation and DCO sign-off will not be merged.

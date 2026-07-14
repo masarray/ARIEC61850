@@ -4,7 +4,7 @@
 
 [![.NET CI](https://github.com/masarray/ARIEC61850/actions/workflows/dotnet-ci.yml/badge.svg)](https://github.com/masarray/ARIEC61850/actions/workflows/dotnet-ci.yml)
 [![GitHub Pages](https://github.com/masarray/ARIEC61850/actions/workflows/pages.yml/badge.svg)](https://masarray.github.io/ARIEC61850/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/core-cross--platform-0f766e)](#platform-support)
 
@@ -14,6 +14,8 @@ ARIEC61850 is a clean-room C# implementation for substation automation laborator
 
 [Website](https://masarray.github.io/ARIEC61850/) · [Quick start](docs/QUICK_START.md) · [Smart Control](docs/SMART_CONTROL_STACK.md) · [Control Tester](docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md) · [Roadmap](docs/FULL_STACK_ROADMAP.md)
 
+> **License:** GPL-3.0-or-later for the public community edition. A separate commercial license is available for proprietary integration, OEM/white-label distribution, and contractual support. See [Licensing](docs/LICENSING.md).
+
 ## Engineering highlights
 
 - **Smart IEC 61850 control:** select a control Data Object such as `CSWI.Pos`; the engine discovers `ctlModel`, exact live MMS types, and automatically executes Direct Operate or Select-Before-Operate.
@@ -21,7 +23,7 @@ ARIEC61850 is a clean-room C# implementation for substation automation laborator
 - **MMS client and reporting:** association, model discovery, FC-aware reads, DataSet/RCB inventory, guarded report planning, GI, monitoring, and diagnostics.
 - **GOOSE and Sampled Values:** frame codecs, SCL-backed profiles, PCAP inspection, publishing, subscription, sequence supervision, and diagnostics.
 - **SCL and engineering evidence:** expected-vs-observed analysis, capability/readiness profiles, Markdown/JSON evidence, and deterministic simulation foundations.
-- **Clean public source:** Apache-2.0 license, warnings-as-errors, automated tests, source hygiene scripts, CI, and GitHub Pages.
+- **Clean public source:** GPL-3.0-or-later license, warnings-as-errors, automated tests, source hygiene scripts, CI, and GitHub Pages.
 
 ## Smart IED Control Tester
 
@@ -180,4 +182,10 @@ Issues, reproducible protocol captures, sanitized SCL samples, tests, and focuse
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The public community edition is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). See [LICENSE](LICENSE).
+
+A separate negotiated commercial license is available from the copyright holder for proprietary integration, OEM or white-label distribution, closed-source redistribution, warranty, maintenance, and priority engineering support. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+
+The names, logos, icons, and official-release branding are not granted under the software license. See [TRADEMARK.md](TRADEMARK.md).
+
+Revisions through `d61a83f5b04e7bd2b847174eeac7f4f6e81ee8e1` remain available under Apache-2.0 on branch [`archive/apache-2.0-final`](../../tree/archive/apache-2.0-final). The former license is preserved in [LICENSE-APACHE-2.0](LICENSE-APACHE-2.0).

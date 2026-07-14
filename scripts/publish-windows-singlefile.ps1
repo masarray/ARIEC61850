@@ -1,5 +1,5 @@
 # Copyright 2026 Ari Sulistiono
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 <#
 .SYNOPSIS
   Builds a Windows x64 single-file portable release for an ARIEC61850 WPF app.
@@ -136,7 +136,16 @@ Notes:
 "@
     Set-Content -Path (Join-Path $PackageRoot "README-PORTABLE.txt") -Value $PortableReadme -Encoding UTF8
 
-    Compress-Archive -Path (Join-Path $PackageRoot "*") -DestinationPath $ZipPath -CompressionLevel Optimal
+    # ARIEC_LEGAL_FILES: include licensing and attribution documents in distributed packages.
+$legalFiles = @("LICENSE", "LICENSE-APACHE-2.0", "COMMERCIAL-LICENSE.md", "TRADEMARK.md", "COPYRIGHT.md", "THIRD_PARTY_NOTICES.md", "NOTICE")
+foreach ($legalFile in $legalFiles) {
+    $sourceLegalFile = Join-Path $root $legalFile
+    if (Test-Path $sourceLegalFile) {
+        Copy-Item $sourceLegalFile (Join-Path $publishDir $legalFile) -Force
+    }
+}
+
+Compress-Archive -Path (Join-Path $PackageRoot "*") -DestinationPath $ZipPath -CompressionLevel Optimal
 
     $HashLines = @()
     foreach ($Asset in @($DirectExePath, $ZipPath)) {

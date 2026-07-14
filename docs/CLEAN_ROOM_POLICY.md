@@ -24,7 +24,7 @@ Public documentation should describe ARIEC61850 as:
 - clean-room;
 - native C#/.NET;
 - lab-oriented;
-- Apache-2.0 licensed;
+- GPL-3.0-or-later licensed;
 - not formally conformance certified unless that becomes true for a specific release.
 
 Avoid internal audit language, competitor comparisons, or wording that creates unnecessary legal ambiguity.

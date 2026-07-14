@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\AR.Iec61850\AR.Iec61850.csproj" />
@@ -9,6 +9,8 @@
   </ItemGroup>
 
   <PropertyGroup>
+    <Copyright>Copyright (C) 2026 Mas Ari / masarray</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

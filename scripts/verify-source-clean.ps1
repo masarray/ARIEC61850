@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 <#
 .SYNOPSIS
-  Fails when prohibited public-release wording or source-tree payloads are present.
+  Fails when tracked repository content contains prohibited public-release wording,
+  third-party contamination, confidential evidence, or binary payloads.
 
 .DESCRIPTION
-  This check is safe to run before or after a local build. Generated build output
-  folders such as .artifacts, bin, obj, TestResults, publish, and release are ignored
-  because they are already excluded by .gitignore and can be removed by
-  scripts\clean-local-artifacts.cmd.
+  The legal gate scans every Git-tracked path rather than skipping directories by
+  name. This prevents proprietary material from being hidden below folders such as
+  captures, evidence, logs, or a product-named directory, while avoiding false
+  positives from untracked local build output.
 #>
 [CmdletBinding()]
 param()
@@ -16,16 +17,18 @@ param()
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
-$IgnoredDirectoryNames = @(
-    ".git", ".vs", "bin", "obj", "out", "artifacts", ".artifacts",
-    "evidence", "captures", "pcaps", "reports", "logs", ".idea", ".dotnet_home",
-    "TestResults", "coverage", "publish", "release"
-)
-
 $ForbiddenFilePatterns = @(
     "*.dll", "*.exe", "*.pdb", "*.deps.json", "*.runtimeconfig.json",
     "*.nupkg", "*.snupkg", "*.pcap", "*.pcapng", "*.etl", "*.binlog",
-    "*.log", "*.tmp", "*.cache", "*.suo", "*.user", "*.rsuser"
+    "*.log", "*.tmp", "*.cache", "*.suo", "*.user", "*.rsuser",
+    "*.pdf", "*.chm", "*.hlp"
+)
+
+# Match the complete repo-relative path, not only the leaf filename. This also
+# blocks assets hidden below a product-named folder.
+$ForbiddenThirdPartyPathPatterns = @(
+    "*libiec61850*", "*iedscout*", "*ied scout*", "*svscout*", "*sv scout*",
+    "*stationscout*", "*station scout*", "*omicron*", "*mz-automation*"
 )
 
 $ForbiddenTextPatterns = @(
@@ -36,58 +39,86 @@ $ForbiddenTextPatterns = @(
     "C:\Users\", "C:\Program Files\dotnet\sdk", "blocked in the current sandbox", "_wpftmp"
 )
 
+$TextExtensions = @(
+    ".md", ".cs", ".xml", ".xaml", ".ps1", ".cmd", ".yml", ".yaml",
+    ".html", ".css", ".js", ".json", ".props", ".targets", ".sln", ".slnx", ".txt"
+)
+
+# These files deliberately name third parties to document legal boundaries.
+# They are reviewed legal/provenance records, not implementation guidance.
+$AllowedLegalReferenceFiles = @(
+    "THIRD_PARTY_NOTICES.md",
+    "docs/CLEAN_ROOM_POLICY.md",
+    "docs/THIRD_PARTY_CLEAN_ROOM_AUDIT_2026-07-14.md"
+)
+
 $Problems = New-Object System.Collections.Generic.List[string]
 
-function Test-InRepoWorktree {
+function Normalize-RelativePath {
     param([Parameter(Mandatory=$true)][string]$Path)
+    return $Path.Replace('\', '/').TrimStart('/')
+}
 
-    $FullPath = (Resolve-Path -LiteralPath $Path).Path
-    if (-not $FullPath.StartsWith($RepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $false
+function Test-IsAllowedLegalReference {
+    param([Parameter(Mandatory=$true)][string]$RelativePath)
+    return $AllowedLegalReferenceFiles -contains (Normalize-RelativePath $RelativePath)
+}
+
+function Get-TrackedRelativePaths {
+    $paths = @(& git -C $RepoRoot ls-files)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to enumerate Git-tracked files for source-clean verification."
     }
 
-    $relative = $FullPath.Substring($RepoRoot.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-    return -not ($relative -eq ".git" -or $relative.StartsWith(".git\", [System.StringComparison]::OrdinalIgnoreCase) -or $relative.StartsWith(".git/", [System.StringComparison]::OrdinalIgnoreCase))
+    return @(
+        $paths |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { Normalize-RelativePath $_ }
+    )
 }
 
-function Test-IsIgnoredGeneratedPath {
-    param([Parameter(Mandatory=$true)][string]$Path)
+foreach ($relative in (Get-TrackedRelativePaths)) {
+    $platformRelative = $relative.Replace([char]'/', [IO.Path]::DirectorySeparatorChar)
+    $fullPath = Join-Path $RepoRoot $platformRelative
 
-    $FullPath = (Resolve-Path -LiteralPath $Path).Path
-    $relative = $FullPath.Substring($RepoRoot.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-    if ([string]::IsNullOrWhiteSpace($relative)) { return $false }
-
-    $parts = $relative -split '[\\/]+'
-    foreach ($part in $parts) {
-        if ($IgnoredDirectoryNames -contains $part) { return $true }
+    if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+        $Problems.Add("Tracked path is missing from the worktree: $relative")
+        continue
     }
-    return $false
-}
 
-foreach ($Pattern in $ForbiddenFilePatterns) {
-    Get-ChildItem -Path $RepoRoot -Recurse -Force -File -Filter $Pattern -ErrorAction SilentlyContinue |
-        Where-Object { (Test-InRepoWorktree $_.FullName) -and -not (Test-IsIgnoredGeneratedPath $_.FullName) } |
-        ForEach-Object { $Problems.Add("Forbidden file: $($_.FullName)") }
-}
+    foreach ($pattern in $ForbiddenFilePatterns) {
+        if ($relative -like $pattern) {
+            $Problems.Add("Forbidden tracked file: $relative")
+            break
+        }
+    }
 
-$TextFiles = Get-ChildItem -Path $RepoRoot -Recurse -Force -File -Include *.md,*.cs,*.xml,*.xaml,*.ps1,*.cmd,*.yml,*.yaml,*.html,*.css,*.js,*.json,*.props,*.sln,*.slnx,*.txt -ErrorAction SilentlyContinue |
-    Where-Object { (Test-InRepoWorktree $_.FullName) -and -not (Test-IsIgnoredGeneratedPath $_.FullName) }
+    if (-not (Test-IsAllowedLegalReference $relative)) {
+        foreach ($pattern in $ForbiddenThirdPartyPathPatterns) {
+            if ($relative -like $pattern) {
+                $Problems.Add("Forbidden third-party-named path: $relative")
+                break
+            }
+        }
+    }
 
-foreach ($File in $TextFiles) {
-    if ($File.FullName -like "*scripts\verify-source-clean.ps1") { continue }
-    $Content = Get-Content -Path $File.FullName -Raw -ErrorAction SilentlyContinue
-    foreach ($Pattern in $ForbiddenTextPatterns) {
-        if ($Content -match [regex]::Escape($Pattern)) {
-            $Problems.Add("Forbidden text '$Pattern': $($File.FullName)")
+    if ($relative -eq "scripts/verify-source-clean.ps1") { continue }
+    if (Test-IsAllowedLegalReference $relative) { continue }
+    if ($TextExtensions -notcontains [IO.Path]::GetExtension($relative).ToLowerInvariant()) { continue }
+
+    $content = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
+    foreach ($pattern in $ForbiddenTextPatterns) {
+        if ($content -match [regex]::Escape($pattern)) {
+            $Problems.Add("Forbidden text '$pattern': $relative")
         }
     }
 }
 
 if ($Problems.Count -gt 0) {
-    foreach ($Problem in $Problems) {
-        Write-Host "ERROR: $Problem" -ForegroundColor Red
+    foreach ($problem in ($Problems | Sort-Object -Unique)) {
+        Write-Host "ERROR: $problem" -ForegroundColor Red
     }
     throw "Source tree is not public-release clean. Found $($Problems.Count) problem(s)."
 }
 
-Write-Host "Source tree is public-release clean." -ForegroundColor Green
+Write-Host "All Git-tracked content passed source-clean and third-party clean-room checks." -ForegroundColor Green

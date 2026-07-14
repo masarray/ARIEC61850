@@ -14,7 +14,7 @@ ARIEC61850 is a clean-room C# implementation for substation automation laborator
 
 [Website](https://masarray.github.io/ARIEC61850/) · [Quick start](docs/QUICK_START.md) · [Smart Control](docs/SMART_CONTROL_STACK.md) · [Control Tester](docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md) · [Roadmap](docs/FULL_STACK_ROADMAP.md)
 
-> **License:** GPL-3.0-or-later for the public community edition. A separate commercial license is available for proprietary integration, OEM/white-label distribution, and contractual support. See [Licensing](docs/LICENSING.md).
+> **License:** the current `main` branch and current community release packages are licensed only under GPL-3.0-or-later. A separate commercial license is available for proprietary integration, OEM/white-label distribution, and contractual support. See [Licensing](docs/LICENSING.md).
 
 ## Engineering highlights
 
@@ -182,10 +182,10 @@ Issues, reproducible protocol captures, sanitized SCL samples, tests, and focuse
 
 ## License
 
-The public community edition is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). See [LICENSE](LICENSE).
+The current `main` branch and current public community release packages are licensed **only** under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). See [LICENSE](LICENSE).
 
 A separate negotiated commercial license is available from the copyright holder for proprietary integration, OEM or white-label distribution, closed-source redistribution, warranty, maintenance, and priority engineering support. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
 The names, logos, icons, and official-release branding are not granted under the software license. See [TRADEMARK.md](TRADEMARK.md).
 
-Revisions through `d61a83f5b04e7bd2b847174eeac7f4f6e81ee8e1` remain available under Apache-2.0 on branch [`archive/apache-2.0-final`](../../tree/archive/apache-2.0-final). The former license is preserved in [LICENSE-APACHE-2.0](LICENSE-APACHE-2.0).
+Historical revisions through `d61a83f5b04e7bd2b847174eeac7f4f6e81ee8e1` remain available under their original terms on branch [`archive/apache-2.0-final`](../../tree/archive/apache-2.0-final). The historical license text is retained on that archive branch and is intentionally not included in the current source tree or current release packages. See [Licensing](docs/LICENSING.md).

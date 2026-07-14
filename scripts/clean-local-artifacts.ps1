@@ -1,5 +1,5 @@
 # Copyright 2026 Ari Sulistiono
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 <#
 .SYNOPSIS
   Removes local build, publish, evidence, and IDE artifacts from the working tree.

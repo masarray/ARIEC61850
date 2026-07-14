@@ -1,5 +1,7 @@
 # Third-Party Notices
 
+The project license transition to GPL-3.0-or-later does **not** change the license of any third-party package, tool, sample, or asset. Each third-party component remains subject to its own license and attribution terms.
+
 This repository is licensed under the Apache License 2.0. The following third-party packages may be restored by .NET during build or test.
 
 | Dependency | Used by | Purpose | License |

@@ -1,5 +1,5 @@
 # Copyright 2026 Ari Sulistiono
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 <#
 .SYNOPSIS
   Fails when prohibited public-release wording or source-tree payloads are present.

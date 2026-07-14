@@ -9,8 +9,8 @@
   single EXE, creates a ZIP package, and writes SHA256 checksums. Generated
   output is written to .artifacts/release and must not be committed.
 
-.EXAMPLE
-  powershell.exe -ExecutionPolicy Bypass -File .\scripts\publish-windows-singlefile.ps1 -Version 0.1.0 -App SvPublisher
+  Current packages contain the GPL-3.0-or-later license only. Historical license
+  material remains on the dedicated archive branch and is not bundled here.
 #>
 [CmdletBinding()]
 param(
@@ -114,9 +114,35 @@ try {
     Copy-Item $PublishedExe $DirectExePath -Force
     Copy-Item $PublishedExe (Join-Path $PackageRoot $ExeName) -Force
 
-    Copy-Item LICENSE, NOTICE, THIRD_PARTY_NOTICES.md, README.md -Destination $PackageRoot -Force
-    New-Item -ItemType Directory -Force -Path (Join-Path $PackageRoot "docs") | Out-Null
-    Copy-Item docs\QUICK_START.md, docs\TROUBLESHOOTING.md, docs\RELEASE_PACKAGING.md, docs\CLEAN_ROOM_POLICY.md -Destination (Join-Path $PackageRoot "docs") -Force
+    $LegalFiles = @(
+        "LICENSE",
+        "COMMERCIAL-LICENSE.md",
+        "TRADEMARK.md",
+        "COPYRIGHT.md",
+        "THIRD_PARTY_NOTICES.md",
+        "NOTICE"
+    )
+
+    foreach ($LegalFile in $LegalFiles) {
+        $SourcePath = Join-Path $RepoRoot $LegalFile
+        if (-not (Test-Path $SourcePath -PathType Leaf)) {
+            throw "Required release legal file was not found: $LegalFile"
+        }
+        Copy-Item $SourcePath (Join-Path $PackageRoot $LegalFile) -Force
+    }
+
+    Copy-Item README.md -Destination $PackageRoot -Force
+
+    $PackageDocs = Join-Path $PackageRoot "docs"
+    New-Item -ItemType Directory -Force -Path $PackageDocs | Out-Null
+    Copy-Item `
+        docs\QUICK_START.md, `
+        docs\TROUBLESHOOTING.md, `
+        docs\RELEASE_PACKAGING.md, `
+        docs\CLEAN_ROOM_POLICY.md, `
+        docs\LICENSING.md `
+        -Destination $PackageDocs `
+        -Force
 
     $PortableReadme = @"
 $($Selected.DisplayName) v$Version
@@ -128,6 +154,10 @@ Run:
 Purpose:
   $($Selected.Note)
 
+License:
+  Current package: GPL-3.0-or-later only.
+  See LICENSE and docs/LICENSING.md.
+
 Notes:
   - The app is self-contained and does not require a separate .NET runtime.
   - Npcap is required only for workflows that use live raw Ethernet traffic.
@@ -136,16 +166,7 @@ Notes:
 "@
     Set-Content -Path (Join-Path $PackageRoot "README-PORTABLE.txt") -Value $PortableReadme -Encoding UTF8
 
-    # ARIEC_LEGAL_FILES: include licensing and attribution documents in distributed packages.
-$legalFiles = @("LICENSE", "LICENSE-APACHE-2.0", "COMMERCIAL-LICENSE.md", "TRADEMARK.md", "COPYRIGHT.md", "THIRD_PARTY_NOTICES.md", "NOTICE")
-foreach ($legalFile in $legalFiles) {
-    $sourceLegalFile = Join-Path $root $legalFile
-    if (Test-Path $sourceLegalFile) {
-        Copy-Item $sourceLegalFile (Join-Path $publishDir $legalFile) -Force
-    }
-}
-
-Compress-Archive -Path (Join-Path $PackageRoot "*") -DestinationPath $ZipPath -CompressionLevel Optimal
+    Compress-Archive -Path (Join-Path $PackageRoot "*") -DestinationPath $ZipPath -CompressionLevel Optimal
 
     $HashLines = @()
     foreach ($Asset in @($DirectExePath, $ZipPath)) {

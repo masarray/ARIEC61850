@@ -90,4 +90,4 @@ if ($Problems.Count -gt 0) {
     throw "Source tree is not public-release clean. Found $($Problems.Count) problem(s)."
 }
 
-Write-Host "Source tree is public-release clean." -ForegroundColor Green.
+Write-Host "Source tree is public-release clean." -ForegroundColor Green

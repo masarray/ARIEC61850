@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 <#
 .SYNOPSIS
-  Performs a lightweight structural check on an ARIEC61850 WPF single-file release ZIP.
+  Performs a structural and licensing check on an ARIEC61850 WPF single-file release ZIP.
 #>
 [CmdletBinding()]
 param(
@@ -34,11 +34,16 @@ try {
         "README-PORTABLE.txt",
         "LICENSE",
         "NOTICE",
+        "COMMERCIAL-LICENSE.md",
+        "COPYRIGHT.md",
+        "TRADEMARK.md",
         "THIRD_PARTY_NOTICES.md",
         "README.md",
+        "docs/LICENSING.md",
         "docs/QUICK_START.md",
         "docs/TROUBLESHOOTING.md",
-        "docs/RELEASE_PACKAGING.md"
+        "docs/RELEASE_PACKAGING.md",
+        "docs/CLEAN_ROOM_POLICY.md"
     )
 
     $Missing = @()
@@ -53,6 +58,10 @@ try {
         $_.Name -in @("bin", "obj", ".vs", "out", "artifacts", ".artifacts", "evidence", "captures", "pcaps")
     }
 
+    $HistoricalLicenseFiles = Get-ChildItem -Path $TempRoot -Recurse -File | Where-Object {
+        $_.Name -ieq "LICENSE-APACHE-2.0"
+    }
+
     if ($Missing.Count -gt 0) {
         throw ("Package is missing required files:`n" + ($Missing -join "`n"))
     }
@@ -61,7 +70,16 @@ try {
         throw ("Package contains forbidden generated folders:`n" + (($ForbiddenDirectories | ForEach-Object FullName) -join "`n"))
     }
 
-    Write-Host "Release package structure OK:" -ForegroundColor Green
+    if ($HistoricalLicenseFiles.Count -gt 0) {
+        throw ("Current package contains a historical alternative-license file and is therefore ambiguous:`n" + (($HistoricalLicenseFiles | ForEach-Object FullName) -join "`n"))
+    }
+
+    $LicenseText = Get-Content -LiteralPath (Join-Path $TempRoot "LICENSE") -Raw
+    if ($LicenseText -notmatch "GNU GENERAL PUBLIC LICENSE" -or $LicenseText -notmatch "Version 3") {
+        throw "Current package LICENSE is not the expected GNU GPL version 3 text."
+    }
+
+    Write-Host "Release package structure and GPL-only licensing are OK:" -ForegroundColor Green
     Write-Host "  $ResolvedPackage"
 }
 finally {

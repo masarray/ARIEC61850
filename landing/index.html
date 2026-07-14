@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ARIEC61850 — IEC 61850 Client, Smart IED Control & Process-Bus Toolkit for .NET</title>
-  <meta name="description" content="Open-source IEC 61850 engineering toolkit for .NET 8 with MMS client discovery, smart CSWI.Pos OPEN/CLOSE control, Direct/SBO automation, reporting, GOOSE, Sampled Values, SCL and PCAP diagnostics." />
+  <title>ARIEC61850 — IEC 61850 Client, Control and Process-Bus Toolkit for .NET</title>
+  <meta name="description" content="Independently developed IEC 61850 engineering toolkit for .NET 8 with MMS discovery, control-model-aware command sequencing, reporting, GOOSE, Sampled Values, SCL and PCAP diagnostics." />
   <meta name="keywords" content="IEC 61850, IEC 61850 client, IED control tester, CSWI.Pos, select before operate, SBO, MMS client, GOOSE, Sampled Values, SCL, substation automation, protection relay, commissioning, FAT SAT, C#, .NET" />
-  <meta name="author" content="ARIEC61850 contributors" />
+  <meta name="author" content="Ari Sulistiono" />
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
   <meta name="theme-color" content="#0f766e" />
 
@@ -16,22 +16,22 @@
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ARIEC61850" />
-  <meta property="og:title" content="ARIEC61850 — Native IEC 61850 Engineering Toolkit for .NET" />
-  <meta property="og:description" content="Smart IED OPEN/CLOSE control, MMS discovery and reporting, GOOSE, Sampled Values, SCL and PCAP diagnostics in a clean-room C#/.NET stack." />
+  <meta property="og:title" content="ARIEC61850 — IEC 61850 Engineering Toolkit for .NET" />
+  <meta property="og:description" content="MMS discovery and reporting, guarded IED control, GOOSE, Sampled Values, SCL and PCAP diagnostics in an independently developed C#/.NET stack." />
   <meta property="og:url" content="https://masarray.github.io/ARIEC61850/" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="ARIEC61850 — IEC 61850 Toolkit for .NET" />
-  <meta name="twitter:description" content="Native IEC 61850 client control, reporting, GOOSE, Sampled Values, SCL and PCAP engineering tools." />
+  <meta name="twitter:description" content="IEC 61850 client control, reporting, GOOSE, Sampled Values, SCL and PCAP engineering tools." />
 
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareSourceCode",
     "name": "ARIEC61850",
-    "description": "Clean-room IEC 61850 engineering toolkit for .NET 8 with MMS client discovery, native IED control, reporting, GOOSE, Sampled Values, SCL and PCAP diagnostics.",
+    "description": "Independently developed IEC 61850 engineering toolkit for .NET 8 with MMS client discovery, guarded IED control, reporting, GOOSE, Sampled Values, SCL and PCAP diagnostics.",
     "codeRepository": "https://github.com/masarray/ARIEC61850",
     "url": "https://masarray.github.io/ARIEC61850/",
-    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "license": "https://spdx.org/licenses/GPL-3.0-or-later.html",
     "programmingLanguage": ["C#", ".NET"],
     "runtimePlatform": ".NET 8",
     "applicationCategory": "DeveloperApplication",
@@ -47,7 +47,7 @@
       <span class="brand-text">ARIEC61850</span>
     </a>
     <nav class="nav" aria-label="Primary navigation">
-      <a href="#control">Smart Control</a>
+      <a href="#control">Guarded Control</a>
       <a href="#capabilities">Capabilities</a>
       <a href="#start">Quick start</a>
       <a href="https://github.com/masarray/ARIEC61850/tree/main/docs">Docs</a>
@@ -58,19 +58,19 @@
   <main id="top">
     <section class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">IEC 61850 · .NET 8 · Apache-2.0</p>
-        <h1>Native IEC 61850 engineering tools for people who need protocol evidence.</h1>
-        <p class="lead">ARIEC61850 combines an IEC 61850 MMS client, smart IED control, reporting, GOOSE, Sampled Values, SCL, PCAP diagnostics, simulation, CLI automation, and focused Windows engineering applications.</p>
+        <p class="eyebrow">IEC 61850 · .NET 8 · GPL-3.0-or-later</p>
+        <h1>IEC 61850 engineering tools for people who need protocol evidence.</h1>
+        <p class="lead">ARIEC61850 combines an MMS client, guarded IED control, reporting, GOOSE, Sampled Values, SCL, PCAP diagnostics, simulation, CLI automation, and focused Windows engineering applications.</p>
         <div class="actions">
           <a class="button primary" href="https://github.com/masarray/ARIEC61850">Explore source</a>
-          <a class="button secondary" href="smart-control.html">Smart Control details</a>
+          <a class="button secondary" href="smart-control.html">Control workflow details</a>
         </div>
-        <p class="proof"><strong>Live engineering milestone:</strong> the Smart Control Tester has completed an end-to-end command path with a laboratory IED. Formal conformance and multi-vendor validation remain ongoing.</p>
+        <p class="proof"><strong>Validation boundary:</strong> a guarded command path has been exercised with a laboratory IED. Formal conformance, broad interoperability, and operational-substation approval are not claimed.</p>
       </div>
       <div class="hero-panel" aria-label="ARIEC61850 command workflow">
-        <div class="panel-label">Smart IED control</div>
+        <div class="panel-label">Guarded IED control</div>
         <pre><code>Control object  LD0/CSWI1.Pos
-Model           Auto-detected
+Model           Discovered from the IED
 Status          OPEN / CLOSED
 Sequence        Direct or SBO
 Completion      MMS / CmdTerm
@@ -81,7 +81,7 @@ Operator action OPEN or CLOSE</code></pre>
 
     <section class="protocol-strip" aria-label="Supported IEC 61850 engineering areas">
       <span>MMS Client</span>
-      <span>Smart Control</span>
+      <span>Guarded Control</span>
       <span>Reporting</span>
       <span>GOOSE</span>
       <span>Sampled Values</span>
@@ -91,17 +91,17 @@ Operator action OPEN or CLOSE</code></pre>
 
     <section id="control" class="section feature-focus">
       <div class="section-copy">
-        <p class="eyebrow">Smart Control Tester</p>
-        <h2>OPEN and CLOSE for operators. Correct IEC 61850 sequencing underneath.</h2>
-        <p>Select a control Data Object such as <code>CSWI.Pos</code>. ARIEC61850 discovers the live control model and MMS type, then executes Direct Operate or Select-Before-Operate without asking the user to manually write <code>Oper</code>, <code>SBO</code>, or <code>SBOw</code>.</p>
-        <a class="text-link" href="smart-control.html">Read the Smart Control architecture →</a>
+        <p class="eyebrow">Control-model-aware workflow</p>
+        <h2>OPEN and CLOSE for operators. Typed IEC 61850 sequencing underneath.</h2>
+        <p>Select a control Data Object such as <code>CSWI.Pos</code>. ARIEC61850 discovers the live control model and MMS type, then applies Direct Operate or Select-Before-Operate sequencing without asking the user to manually write <code>Oper</code>, <code>SBO</code>, or <code>SBOw</code>.</p>
+        <a class="text-link" href="smart-control.html">Read the control architecture →</a>
       </div>
       <dl class="spec-list">
         <div><dt>Control models</dt><dd>Direct/SBO, normal/enhanced</dd></div>
         <div><dt>Checks</dt><dd>Interlock, synchrocheck, Test</dd></div>
         <div><dt>Origin</dt><dd>Originator category and Orig ID</dd></div>
         <div><dt>Evidence</dt><dd>CmdTerm, LastApplError, AddCause</dd></div>
-        <div><dt>Safety</dt><dd>Arming, confirmation, status feedback</dd></div>
+        <div><dt>Guardrails</dt><dd>Arming, confirmation, status feedback</dd></div>
       </dl>
     </section>
 
@@ -130,7 +130,7 @@ Operator action OPEN or CLOSE</code></pre>
       <div>
         <p class="eyebrow">Quick start</p>
         <h2>Build the complete solution with .NET 8.</h2>
-        <p>Core libraries are cross-platform where the transport permits it. WPF applications and the current Npcap process-bus transport require Windows.</p>
+        <p>Core libraries are cross-platform where the transport permits it. WPF applications and the current raw-Ethernet transport require Windows.</p>
       </div>
       <pre class="code-block"><code>git clone https://github.com/masarray/ARIEC61850.git
 cd ARIEC61850
@@ -143,7 +143,8 @@ dotnet test .\ARIEC61850.sln -c Release --no-build</code></pre>
     <section class="section assurance">
       <p class="eyebrow">Responsible engineering</p>
       <h2>Transparent capability boundaries.</h2>
-      <p>ARIEC61850 is designed for isolated laboratories, approved commissioning work, education, and protocol research. It does not claim formal third-party IEC 61850 conformance. Active control and process-bus publishing require an approved test plan and isolation boundary.</p>
+      <p>ARIEC61850 is intended for isolated laboratories, approved commissioning work, education, and protocol research. It does not claim formal third-party IEC 61850 conformance. Active control and process-bus publishing require an approved test plan, authority, isolation boundary, and independent verification.</p>
+      <p><strong>Terminology:</strong> “native C#/.NET” means a project-owned managed implementation rather than an application wrapper. “Smart Control” means automated protocol discovery and sequence selection; it does not mean autonomous decision-making or permission to operate equipment.</p>
       <div class="link-row">
         <a href="https://github.com/masarray/ARIEC61850/blob/main/docs/LIVE_IED_CONTROL_VALIDATION.md">Live validation record</a>
         <a href="https://github.com/masarray/ARIEC61850/blob/main/docs/ENGINE_MATURITY_MATRIX.md">Maturity matrix</a>
@@ -153,8 +154,8 @@ dotnet test .\ARIEC61850.sln -c Release --no-build</code></pre>
   </main>
 
   <footer class="footer">
-    <span>ARIEC61850 · Clean-room C#/.NET engineering stack</span>
-    <span>Apache-2.0</span>
+    <span>ARIEC61850 · Independently developed C#/.NET engineering stack</span>
+    <span>GPL-3.0-or-later</span>
     <a href="https://github.com/masarray/ARIEC61850">GitHub repository</a>
   </footer>
 

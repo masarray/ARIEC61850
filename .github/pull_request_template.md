@@ -1,16 +1,16 @@
 ## Summary
 
-- 
+Describe the change and its engineering purpose.
 
 ## Validation
 
-- [ ] `dotnet build .\ARIEC61850.sln -c Release`
-- [ ] `dotnet test .\ARIEC61850.sln -c Release --no-build`
-- [ ] `scripts\verify-source-clean.cmd`
+- [ ] Build completed
+- [ ] Relevant tests completed
+- [ ] No confidential SCL/PCAP/customer data included
+- [ ] No proprietary or restrictive-license code copied or mechanically translated
 
-## Safety / clean-room checklist
+## Contribution licensing
 
-- [ ] No generated build output, captures, evidence, or release artifacts committed.
-- [ ] No confidential SCL/PCAP/customer data committed.
-- [ ] No restrictive-license source code copied or mechanically ported.
-- [ ] Active network behavior is documented and guarded.
+- [ ] I have read and agree to `CONTRIBUTOR-LICENSE-AGREEMENT.md`.
+- [ ] I have the legal right and, where necessary, employer authorization to submit this contribution.
+- [ ] Every commit includes a DCO sign-off (`Signed-off-by: Name <email>`).

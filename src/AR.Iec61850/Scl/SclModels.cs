@@ -96,6 +96,14 @@ public sealed class SclSampledValuesStream : SclProcessBusStream
     public ushort NoAsdu { get; init; } = 1;
 }
 
+public enum SclDataSetBindingStatus
+{
+    NotSpecified,
+    Unresolved,
+    ResolvedEmpty,
+    Resolved
+}
+
 public sealed class SclReportControl
 {
     public string IedName { get; init; } = string.Empty;
@@ -105,6 +113,7 @@ public sealed class SclReportControl
     public string ReportId { get; init; } = string.Empty;
     public string DataSetName { get; init; } = string.Empty;
     public string DataSetReference { get; init; } = string.Empty;
+    public SclDataSetBindingStatus DataSetBindingStatus { get; init; }
     public string ControlBlockReference { get; init; } = string.Empty;
     public bool Buffered { get; init; }
     public bool Indexed { get; init; } = true;

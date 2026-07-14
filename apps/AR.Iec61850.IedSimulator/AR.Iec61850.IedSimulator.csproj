@@ -5,6 +5,8 @@
   </ItemGroup>
 
   <PropertyGroup>
+    <Copyright>Copyright (C) 2026 Mas Ari / masarray</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>

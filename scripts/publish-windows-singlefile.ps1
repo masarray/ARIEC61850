@@ -1,5 +1,5 @@
 # Copyright 2026 Ari Sulistiono
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 <#
 .SYNOPSIS
   Builds a Windows x64 single-file portable release for an ARIEC61850 WPF app.
@@ -9,8 +9,8 @@
   single EXE, creates a ZIP package, and writes SHA256 checksums. Generated
   output is written to .artifacts/release and must not be committed.
 
-.EXAMPLE
-  powershell.exe -ExecutionPolicy Bypass -File .\scripts\publish-windows-singlefile.ps1 -Version 0.1.0 -App SvPublisher
+  Current packages contain the GPL-3.0-or-later license only. Historical license
+  material remains on the dedicated archive branch and is not bundled here.
 #>
 [CmdletBinding()]
 param(
@@ -114,9 +114,35 @@ try {
     Copy-Item $PublishedExe $DirectExePath -Force
     Copy-Item $PublishedExe (Join-Path $PackageRoot $ExeName) -Force
 
-    Copy-Item LICENSE, NOTICE, THIRD_PARTY_NOTICES.md, README.md -Destination $PackageRoot -Force
-    New-Item -ItemType Directory -Force -Path (Join-Path $PackageRoot "docs") | Out-Null
-    Copy-Item docs\QUICK_START.md, docs\TROUBLESHOOTING.md, docs\RELEASE_PACKAGING.md, docs\CLEAN_ROOM_POLICY.md -Destination (Join-Path $PackageRoot "docs") -Force
+    $LegalFiles = @(
+        "LICENSE",
+        "COMMERCIAL-LICENSE.md",
+        "TRADEMARK.md",
+        "COPYRIGHT.md",
+        "THIRD_PARTY_NOTICES.md",
+        "NOTICE"
+    )
+
+    foreach ($LegalFile in $LegalFiles) {
+        $SourcePath = Join-Path $RepoRoot $LegalFile
+        if (-not (Test-Path $SourcePath -PathType Leaf)) {
+            throw "Required release legal file was not found: $LegalFile"
+        }
+        Copy-Item $SourcePath (Join-Path $PackageRoot $LegalFile) -Force
+    }
+
+    Copy-Item README.md -Destination $PackageRoot -Force
+
+    $PackageDocs = Join-Path $PackageRoot "docs"
+    New-Item -ItemType Directory -Force -Path $PackageDocs | Out-Null
+    Copy-Item `
+        docs\QUICK_START.md, `
+        docs\TROUBLESHOOTING.md, `
+        docs\RELEASE_PACKAGING.md, `
+        docs\CLEAN_ROOM_POLICY.md, `
+        docs\LICENSING.md `
+        -Destination $PackageDocs `
+        -Force
 
     $PortableReadme = @"
 $($Selected.DisplayName) v$Version
@@ -127,6 +153,10 @@ Run:
 
 Purpose:
   $($Selected.Note)
+
+License:
+  Current package: GPL-3.0-or-later only.
+  See LICENSE and docs/LICENSING.md.
 
 Notes:
   - The app is self-contained and does not require a separate .NET runtime.

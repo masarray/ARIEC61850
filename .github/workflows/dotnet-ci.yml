@@ -8,10 +8,17 @@ on:
       - "apps/**"
       - "tests/**"
       - "samples/**"
+      - "docs/**"
+      - "landing/**"
+      - "scripts/**"
+      - ".github/**"
+      - "*.md"
+      - "LICENSE"
+      - "NOTICE"
+      - "DCO.txt"
       - "*.sln"
       - "*.slnx"
       - "Directory.Build.props"
-      - ".github/workflows/dotnet-ci.yml"
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -21,27 +28,30 @@ permissions:
 
 jobs:
   build-test:
-    name: Build and test ARIEC61850
+    name: Build, test and public-source verification
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Checkout source
+        shell: pwsh
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" source
+
+      - name: Verify source, provenance, wording and license boundaries
+        shell: pwsh
+        run: ./source/scripts/verify-source-clean.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
-      - name: Verify source tree is clean
-        shell: pwsh
-        run: ./scripts/verify-source-clean.ps1
-
       - name: Restore
-        run: dotnet restore ARIEC61850.sln
+        run: dotnet restore .\source\ARIEC61850.sln
 
       - name: Build
-        run: dotnet build ARIEC61850.sln -c Release --no-restore
+        run: dotnet build .\source\ARIEC61850.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test ARIEC61850.sln -c Release --no-build --verbosity normal
+        run: dotnet test .\source\ARIEC61850.sln -c Release --no-build --verbosity normal

@@ -1,321 +1,92 @@
 # ARIEC61850 Roadmap
 
-ARIEC61850 is a clean-room Apache-2 IEC 61850 engineering stack for .NET. The project is currently engine-first: desktop apps and CLI commands are development harnesses used to validate the protocol stack before product applications are split into dedicated repositories.
+ARIEC61850 is an independently developed IEC 61850 engineering stack for .NET. This roadmap describes future work only. Completed changes belong in `CHANGELOG.md`; current capability and evidence boundaries belong in `docs/ENGINE_MATURITY_MATRIX.md`.
 
-## Current source milestone
+## Current baseline
 
-### N5.47 - Native smart control stack foundation
+The current source provides:
 
-- Added `AR.Iec61850.Control`, a typed client-side service for controllable Data Object roots rather than raw control leaves.
-- Added live `ctlModel`, Oper/SBOw/Cancel type discovery and exact named `ctlVal` binding for SPC, DPC, INC/ISC, BSC, APC, and explicit vendor-specific raw values.
-- Added Direct/SBO normal/enhanced sequence execution with immutable origin/`ctlNum`/`T`/Test/Check context, time-activated timeout handling, association-scoped concurrency, per-session serialization, automatic SBO lease expiry, and best-effort Cancel cleanup.
-- Added InformationReport fan-out, CommandTermination and LastApplError/AddCause decoding, and a hard guard against generic MMS writes to `Oper`, `SBOw`, and `Cancel`.
-- Added deterministic source tests for sequence paths, positive/negative enhanced completion, async SBOw rejection, exact value binding, timeout, association loss, concurrency, and report routing.
-- Live multi-vendor and formal conformance evidence remain explicit release gates.
+- MMS client association, discovery, typed reads, guarded writes, reporting, and control-model-aware command sequencing;
+- GOOSE and Sampled Values codecs, publishing, capture, and diagnostic profiles;
+- SCL parsing and expected-vs-observed engineering analysis;
+- deterministic simulation and a read-only MMS laboratory server;
+- CLI and Windows workspaces for discovery, diagnostics, simulation, and evidence export.
 
-Focused validation command:
+This baseline is suitable for laboratory validation, engineering development, education, and commissioning support under an approved test plan. Formal conformance, universal interoperability, production timing, and unrestricted operational-substation use are not claimed.
 
-```powershell
-dotnet test .\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --filter "FullyQualifiedName~SmartControlStackTests|FullyQualifiedName~MmsReceiveRouterTests"
-```
+## Priority 1 — Reporting hardening
 
-### N5.39 - Workbench evidence pack foundation
+- Implement explicit URCB and BRCB lifecycle state machines.
+- Improve reservation, ownership, `EntryID`, `PurgeBuf`, overflow, and reconnect handling.
+- Validate DataSet member order for every received report.
+- Add duplicate, loss, stale timestamp, GI-result, and buffer-recovery diagnostics.
+- Export repeatable session evidence without customer or live-network identifiers.
 
-- Added `EngineeringWorkbenchEvidencePackBuilder`, a shared engine builder that generates a structured review folder from SCL, optional PCAP, process-bus binding, GOOSE/SV diagnostics, MMS read-only loopback, and optional public-alpha readiness.
-- Added `EngineeringWorkbenchEvidencePack`, a machine-readable evidence manifest with artifact index, file sizes, SHA-256 hashes, summary metrics, and consolidated findings.
-- Added `workbench-evidence-pack`, a headless CLI command that exercises the same evidence-pack path used by the WPF workbench.
-- Upgraded the WPF Engineering Workbench `Export pack` action so the app writes a reproducible folder (`README.md`, `manifest.json`, and per-profile Markdown/JSON) instead of loose exports.
-- Added deterministic tests for evidence-pack generation, manifest/artifact writing, and Markdown artifact-index rendering.
+## Priority 2 — Sampled Values analysis
 
-Validation command for the new milestone:
+- Add a sustained subscriber and stream registry.
+- Add sample-rate detection, payload-layout checks, RMS, phasor, continuity, jitter, dropout, and synchronization evidence.
+- Separate ordinary Windows timestamp evidence from any stronger timing claim.
+- Add bounded soak tests and deterministic replay fixtures.
 
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- workbench-evidence-pack --scl .\samples\scl\minimal-station.scd --output .\.artifacts\workbench-pack
-```
+## Priority 3 — Simulator and server maturity
 
+- Harden negotiated MMS PDU size and fragmentation handling.
+- Complete directory, read, DataSet, and report-control services.
+- Add unbuffered reporting, then buffered reporting with recovery evidence.
+- Add scenario scheduling for value, quality, timestamp, GOOSE, and Sampled Values changes.
+- Keep write and control disabled until read-only services and reporting are stable and independently validated.
 
-### N5.30 - MMS listener skeleton profile foundation
+## Priority 4 — SCL and station validation
 
-- Added `MmsReadOnlyListenerSkeleton`, a loopback TCP listener harness that exercises the server-side request lifecycle before the live MMS PDU decoder is attached.
-- Added `MmsReadOnlyListenerSkeletonProfile`, a typed evidence contract for bound endpoint, accepted connection count, request count, response status, write-guard verification, diagnostics, and probe steps.
-- Added `mms-listener-skeleton-profile`, a CLI command that starts an ephemeral loopback listener, runs deterministic read-only probes, and exports Markdown/JSON evidence.
-- Added deterministic unit tests for listener self-probe, invalid target handling, write guard verification, and Markdown evidence.
-- Kept the scope explicit: this is a transport/session skeleton and JSON-line probe harness, not a full MMS PDU listener yet.
+- Deepen type-template and communication resolution.
+- Build a station dataflow graph from publishers, DataSets, subscribers, and `ExtRef` mappings.
+- Compare SCL, live MMS model, report membership, and observed process-bus traffic.
+- Produce explainable findings with explicit source and confidence.
 
-Validation command for the new milestone:
+## Priority 5 — Security and robustness
 
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .\.artifacts\out\mms-listener-skeleton.md --json .\.artifacts\out\mms-listener-skeleton.json
-```
+- Add malformed and negative PDU corpora.
+- Add resource limits, cancellation, timeout, reconnect, and fuzz-test coverage.
+- Add IEC 62351-related diagnostics only when implemented and testable.
+- Maintain a clear distinction between cybersecurity, protocol robustness, and operational safety.
 
+## Product-application direction
 
-### N5.28 - Sampled Values diagnostics profile foundation
-
-- Added `SampledValuesDiagnosticsProfile`, a typed evidence contract for SV stream health, sample counter continuity, synchronization state, payload length, and SCL-to-traffic consistency.
-- Added `SampledValuesDiagnosticsProfileBuilder` with deterministic findings for missing/extra SV streams, APPID/MAC/VLAN/confRev mismatch, `nofASDU` mismatch, sample-rate/sample-mode mismatch, payload decode issues, `smpCnt` gap/duplicate/out-of-order/wrap, and `smpSynch` issues.
-- Added `sv-diagnostics-profile`, a read-only CLI command that consumes `<scl-file> <pcap-file>` and exports Markdown/JSON diagnostic evidence.
-- Extended `generate-pcap` with `--sv-scenario diagnostic` so the SV finding engine can be tested offline without IED hardware.
-- Added deterministic unit tests for healthy, missing, unexpected, sample-counter anomaly, synchronization/payload anomaly, and Markdown evidence paths.
-
-Validation command for the new milestone:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --goose-frames 0 --sv-scenario diagnostic
-dotnet run --project .\apps\AR.Iec61850.Cli -- sv-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --output .\.artifacts\out\sv-diagnostics.md --json .\.artifacts\out\sv-diagnostics.json
-```
-
-### N5.27 - GOOSE diagnostics profile foundation
-
-- Added `GooseDiagnosticsProfile`, a typed evidence contract for GOOSE health, sequence integrity, supervision, flag status, and SCL-to-traffic consistency.
-- Added `GooseDiagnosticsProfileBuilder` with deterministic findings for missing/extra publishers, APPID/MAC/VLAN/confRev mismatch, DataSet value-count mismatch, `stNum`/`sqNum` gaps or regressions, supervision timeout, test flag, needs-commissioning flag, and suspicious value changes without a state-number increment.
-- Added `goose-diagnostics-profile`, a read-only CLI command that consumes `<scl-file> <pcap-file>` and exports Markdown/JSON diagnostic evidence.
-- Extended `generate-pcap` with `--goose-scenario diagnostic` so the GOOSE finding engine can be tested offline without IED hardware.
-- Added deterministic unit tests for healthy, missing, unexpected, sequence/supervision anomaly, flag detection, and Markdown evidence paths.
-
-Validation command for the new milestone:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic
-dotnet run --project .\apps\AR.Iec61850.Cli -- goose-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --output .\.artifacts\out\goose-diagnostics.md --json .\.artifacts\out\goose-diagnostics.json
-```
-
-### N5.26 - Expected-vs-observed process-bus binding foundation
-
-- Added `ExpectedObservedBindingProfile`, a typed evidence contract that compares SCL expected GOOSE/SV streams against observed PCAP/live process-bus summaries.
-- Added `ExpectedObservedBindingProfileBuilder` with deterministic findings for missing expected streams, unexpected observed streams, APPID/MAC/VLAN/confRev mismatch, DataSet value-count mismatch when available, and sequence/timing anomalies.
-- Added `process-bus-binding-profile`, a read-only CLI command that consumes `<scl-file> <pcap-file>` and exports Markdown/JSON evidence.
-- Added deterministic unit tests for exact binding, missing expected streams, unexpected observed streams, partial mismatch detection, and Markdown evidence.
-- This is the first bridge from static SCL engineering into observed process-bus traffic, preparing the engine for full GOOSE/SV diagnostics and station-level mapping validation.
-
-Validation command for the new milestone:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
-dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
-```
-
-### N5.25 - SCL engineering profile foundation
-
-- Added an offline SCL engineering profile engine that extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings.
-- Added `scl-engineering-profile`, an offline CLI command that exports Markdown/JSON profile evidence without requiring live hardware.
-- Added tests for SCL profile extraction, ExtRef mapping, service declaration extraction, incomplete process-bus binding detection, and Markdown generation.
-
-### N5.24 - Report readiness profile foundation
-
-- Added a static report readiness profile builder that turns live discovery + DataSet directory evidence into acceptance gates, RCB candidate ranking, selected static report plan, diagnostics, and guarded session profile JSON.
-- Added `Iec61850ReportReadinessProfile` as a deterministic engine contract for future report-workspace apps.
-- Added `Iec61850Client.DiscoverStaticReportReadinessProfileAsync(...)` so product apps can request a report profile without touching low-level MMS session classes.
-- Added `mms-report-readiness-profile`, a read-only CLI command that can export Markdown, JSON readiness evidence, and a guarded report-session profile.
-- Added deterministic unit tests for ready, blocked, occupied, reserved, and Markdown evidence cases.
-
-### N5.23 - Engine hygiene and engineering-profile foundation
-
-- Removed benchmark-product naming from source, CLI output, tests, and public docs.
-- Added forbidden-name checks to `scripts/verify-source-clean.ps1` so future public releases do not regress.
-- Added `AR.Iec61850.Engineering`, a deterministic ACSI-oriented facade layer for discovery readiness, capability assessment, report-lab gating, diagnostics, and Markdown evidence.
-- Added `Iec61850Client`, a high-level MMS discovery profile wrapper that can connect, discover, read DataSet directories, and build an engineering profile for app/test harnesses.
-- Added engineering-profile tests so engine maturity can be validated without live hardware.
-- Reframed this roadmap from app polish into protocol/service maturity.
-
-Validation to run on a Windows dev machine with .NET 8 SDK:
-
-```powershell
-dotnet restore .\ARIEC61850.sln
-dotnet build .\ARIEC61850.sln -c Release
-dotnet test .\ARIEC61850.sln -c Release --no-build
-.\scripts\verify-source-clean.cmd
-```
-
-## Public-ready maturity gates
-
-A public release is allowed only when these gates are true:
-
-| Gate | Required state |
-|---|---|
-| Build | `dotnet build .\ARIEC61850.sln -c Release` succeeds on clean Windows machine |
-| Tests | All tests pass; protocol codec and diagnostics tests keep increasing |
-| Clean-room | Source-clean script passes after restore/build/test |
-| Naming | No benchmark-product names in source/docs/scripts/tests |
-| Docs | README, Quick Start, architecture, roadmap, and release checklist are user-facing |
-| Samples | At least one SCL sample, one GOOSE/SV loopback, and one MMS discovery path are documented |
-| Packaging | CLI and development harness apps can be packaged as portable single-file builds |
-| Evidence | Discovery/report/process-bus commands can export repeatable JSON/Markdown evidence |
-
-## Near-term engine roadmap
-
-### N5.28 - Report industrial hardening
-
-- Implement explicit URCB/BRCB state machine.
-- Handle `Resv`, `ResvTms`, `Owner`, `EntryID`, `PurgeBuf`, `BufOvfl`, `TrgOps`, `OptFlds`, `BufTm`, and `IntgPd` as first-class typed fields.
-- Add report member-order validation using DataSet directory evidence.
-- Add report loss, duplicate, stale timestamp, and GI-result diagnostics.
-
-### N5.29 - Sampled Values analyzer engine
-
-- Add SV subscriber over the existing process-bus frame-source abstraction.
-- Add stream registry, sample counter continuity, sample-rate detection, ASDU/layout checks, RMS, phasor, jitter/dropout, and PTP-correlation hooks.
-- Keep the current SV publisher/injector as a test harness for the analyzer.
-
-### N5.31 - TPKT/COTP/ACSE/MMS read-only listener alpha
-
-- Attach TPKT framing to the listener skeleton.
-- Add COTP connection confirm and ACSE associate response.
-- Add MMS initiate response and confirmed read-directory/read request dispatch.
-- Keep write/control disabled until read-only discovery and report readback are stable.
-
-### N5.32 - Simulator bridge
-
-- Map simulator profiles into MMS server model, GOOSE publisher profiles, and SV publisher profiles.
-- Add scenario scheduler for value changes, quality changes, timestamp faults, report triggers, GOOSE transitions, and SV disturbances.
-
-## Product app strategy
-
-Product applications should live in separate repositories after the engine contracts stabilize. This repository should expose the reusable stack and keep only lightweight harnesses for validation:
+The reusable stack remains the primary asset. Product applications should consume stable engine contracts and must not duplicate protocol parsing or state machines.
 
 ```text
-ARIEC61850 engine repo
-├─ protocol stack
-├─ simulation core
-├─ diagnostics
+ARIEC61850 engine
+├─ protocol codecs and models
+├─ client/server services
+├─ control and reporting state machines
+├─ process-bus diagnostics
+├─ simulation
 ├─ evidence/export
-├─ CLI validation harness
-└─ minimal WPF development harnesses
+└─ test support
+
+Product applications
+├─ discovery and monitoring
+├─ simulator
+├─ process-bus publisher/analyzer
+└─ commissioning workflows
 ```
 
-Product repos can later consume the engine as project references or NuGet packages without pulling protocol logic into UI code.
+## Release gates
 
-## N5.29 — MMS Read-Only Server Alpha
+A public release may be tagged only when:
 
-Status: implemented as an offline server-model profile and high-level service handler.
+| Gate | Required evidence |
+|---|---|
+| License | Current source and package identify `GPL-3.0-or-later` without ambiguity |
+| Build | Clean Windows build succeeds |
+| Tests | All automated tests pass |
+| Source hygiene | Source-clean verification passes |
+| Provenance | Fixtures and assets have documented lawful origin and redistribution rights |
+| Claims | README, website, security policy, and maturity matrix describe the same capability boundary |
+| Packaging | Release archive contains required license and attribution files and no private evidence |
+| Active functions | Control and publishing remain guarded and documented for isolated or approved test environments |
 
-Deliverables:
+## Wording rule
 
-- virtual IED server profile from simulator model;
-- logical-device and logical-node directory handler;
-- point read and DataSet read handler;
-- RCB directory exposure;
-- variable-attribute summary;
-- read-only write rejection;
-- Markdown/JSON evidence;
-- CLI command `mms-server-readonly-profile`;
-- unit tests for server model and service handler.
-
-Next server-side milestone: add TPKT/COTP/ACSE/MMS listener skeleton while keeping read-only semantics.
-
-### N5.31 MMS handshake codec profile
-
-N5.31 adds an offline handshake codec evidence path for the server-side roadmap. It validates TPKT framing, COTP CR/CC/Data TPDU handling, and ISO Session / ACSE / MMS association payload inspection before the listener skeleton is upgraded to real MMS PDU handling.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
-```
-
-## N5.33 MMS Association Response Profile
-
-N5.33 adds a loopback server-side association response probe. The engine now accepts a TPKT/COTP transport association, receives an ACSE/MMS associate request payload, sends a deterministic ACSE AARE + MMS InitiateResponse profile, and exports Markdown/JSON evidence. This remains a safe protocol gate before live confirmed MMS request dispatch.
-
-Test command:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
-```
-
-
-## N5.34 — MMS Confirmed Request Skeleton Profile
-
-Server-side progress moves beyond association response. The loopback listener now accepts confirmed-request skeleton envelopes over COTP Data TPDU frames, dispatches read-only operations to the virtual server model, returns confirmed-response skeleton envelopes, and verifies the write guard. This remains intentionally pre-BER for confirmed MMS services; the next maturity step is live MMS ConfirmedRequest BER dispatch.
-
-
-## N5.35 — MMS Confirmed Request BER Dispatch Foundation
-
-- Added a loopback profile that carries native MMS BER ConfirmedRequest payloads after TPKT/COTP/ACSE association.
-- Dispatches read-only GetNameList, Read, GetNamedVariableListAttributes, and Write-rejection probes against the virtual IED model.
-- Exports Markdown/JSON evidence and keeps scope explicit: not yet a complete MMS server, but the first native BER confirmed-request dispatch path.
-
-
-## N5.36 — MMS Read-Only Server Loopback Alpha
-
-- Added a unified read-only server loopback alpha profile that combines the virtual IED model, TPKT/COTP association, ACSE AARE/MMS InitiateResponse profile, and native MMS BER confirmed-request dispatch.
-- Validates model readiness, directory/read/DataSet dispatch, client response decoding, and write rejection guard in a single Markdown/JSON evidence artifact.
-- Keeps scope explicit: still not a complete live MMS server, but now the server-side path has a unified readiness gate suitable for public alpha hardening.
-
-
-
-## N5.37 — Public Alpha Readiness Profile
-
-The next release gate adds `public-alpha-readiness-profile`, an aggregate engine-only evidence command that validates SCL engineering, process-bus binding, GOOSE/SV diagnostics, and read-only MMS loopback before tagging a developer-preview alpha.
-
-
-## N5.38 — Engineering Workbench Alpha
-
-Status: implemented in this milestone.
-
-The first usable WPF harness exposes the engine profiles without moving protocol logic into the UI. It covers SCL engineering, expected-vs-observed process-bus binding, GOOSE diagnostics, SV diagnostics, MMS read-only loopback, public-alpha readiness, and evidence export. The next UI milestone should add live capture harnessing while keeping all protocol logic in `src`.
-
-
-## N5.40 IED Discovery Workbench Shell
-
-The first usable IED discovery shell is now available in `apps/AR.Iec61850.IedDiscovery`. It adds a compact command bar, asynchronous Discover IED dialog flow, DO-level explorer, DA detail grid, pinned Activity Monitor, status-history ring buffer, and generated SCL export from the live model. The app remains a thin WPF harness over the engine.
-
-## N5.41 — IED Discovery Data Browser + RCB Dialog
-
-The IED Discovery harness now adds an expandable data-object detail browser and a real Enable RCB dialog. Manual reads no longer leave structured MMS values as single raw `Struct(...)` strings; the UI can expand structures into child rows such as `stVal`, `q`, `t`, `Oper`, `SBOw`, and decoded quality flags. The report dialog exposes DataSet selection, trigger options, optional fields, integrity period, GI choice, and a guarded monitor workflow while keeping protocol logic inside the engine.
-
-
-### N5.41.2 — IEC 61850 Value Binding Engine
-
-Adds schema-driven DA value binding for the IED Discovery Workbench. Structured MMS values are now bound through IEC 61850 metadata, CDC templates, quality/timestamp decoders, and control-operation templates instead of positional index guesses.
-
-## N5.41.3 display refinement
-
-- IED Discovery detail view now follows a semantic child-row display policy: Quality and timestamp are rendered as IEC 61850 child rows, not noisy flat columns; common SAS logical nodes are prioritized in the explorer.
-
-
-
-## N5.41.4
-- N5.41.5: IED Discovery smart monitoring/report readiness adds Online state gating, live polling Activity Monitor, report-driven monitor updates, and static/dynamic/occupied RCB presentation.
- Smart Value Reading & Identity Resolver
-
-- Engine-owned IED identity resolver and LD alias display.
-- Smart LN/DO read planning and collapsed DO summary values.
-- Recursive semantic decoding for nested q/t, vector, analogue and control structures.
-- WPF remains a presenter; IEC 61850 value semantics stay in the stack engine.
-
-
-## N5.41.6 IED Discovery session workflow fixes
-
-- Smart RCB fallback in WPF report enable flow.
-- Close IED clears explorer and panels.
-- Save discovered model defaults to IID-oriented engine export.
-- Open SCL projects offline SCL into the same explorer/detail visual shape as live discovery.
-
-
-## N5.41.7 IED Discovery Reporting Repair
-
-- Live RCB runtime refresh before detail display and enable planning.
-- Static/dynamic report planning now uses refreshed RCB state.
-- Explicit Pin and Unpin activity monitor workflow.
-- Report group summaries expose locked/static/dynamic state.
-
-
-## N5.42 Persistent Report Monitor
-
-The IED Discovery Workbench now starts an interactive report monitor that keeps `RptEna=true` until Stop RCB or Close IED. Report-list rows can be opened by double-click, RCB state is refreshed after enable/stop, and received report values update the Activity Monitor.
-
-
-## N5.42.1 Report Value Projector
-
-The IED Discovery Workbench now projects report payload values through a report DataSet binding layer before updating the Activity Monitor. Static and dynamic reports can update readable engineering signals with value, quality, timestamp, reason, and source instead of showing raw `Struct(...)` values.
-
-## N5.46 Live MMS IED Simulator
-
-Status: implemented for the read-only discovery/read alpha path.
-
-- `IedSimulatorMmsServer` exposes a persistent TCP MMS listener with port 102 as the default.
-- The server completes TPKT/COTP/ISO Session/ACSE negotiation and mirrors the client's presentation contexts and Session Connect parameters.
-- The negotiated MMS presentation context id is retained per connection and used for all confirmed responses.
-- SCL-derived and built-in simulator models expose logical devices, logical nodes, DataSets, RCB metadata, functional-constraint hierarchy, and readable values.
-- Native MMS BER `GetNameList`, `Read`, `GetNamedVariableListAttributes`, variable-attribute probes, and read-only Write rejection are served through the reusable stack.
-- Internal discovery/read smoke passed; an independent third-party IEC 61850 client remains a manual interoperability gate.
-
-Next server milestones: complete third-party discovery evidence, negotiated MMS PDU-size/fragmentation handling, then reporting state machines. Write/control remain disabled.
+Use evidence-based terms such as `implemented`, `unit tested`, `loopback verified`, `laboratory exercised`, `partial`, and `not yet validated`. Do not use wording that implies certification, regulatory approval, universal interoperability, autonomous operation, or operational safety unless formal evidence exists for the exact release.

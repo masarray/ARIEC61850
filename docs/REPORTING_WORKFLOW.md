@@ -1,57 +1,75 @@
 # MMS Reporting Workflow
 
-IEC 61850 reporting should not be treated as a blind `RptEna=true` shortcut. The safe flow is discovery first, planning second, guarded enable third, and cleanup last.
+IEC 61850 reporting should not be treated as a blind `RptEna=true` shortcut. The guarded flow is discovery first, planning second, explicit confirmation third, monitoring fourth, and cleanup last.
 
-## Recommended product flow
+## Recommended workflow
 
 ```text
 Connect IED
-→ Discover model
-→ Discover DataSets
-→ Discover RCBs
-→ Select candidate RCB
-→ Validate readiness
-→ Enable reporting
-→ Trigger GI when needed
-→ Monitor reports
-→ Export evidence
-→ Disable and cleanup
+→ discover model
+→ discover DataSets
+→ discover RCBs
+→ refresh live RCB state
+→ classify ownership and readiness
+→ select a candidate RCB
+→ validate DataSet identity and member order
+→ review the typed write plan
+→ confirm required writes
+→ enable reporting
+→ trigger GI when approved
+→ monitor reports
+→ export evidence
+→ stop and clean up
 ```
 
-## Why RCB/DataSet selection belongs in a wizard
+## Why RCB and DataSet selection belongs in setup
 
-RCB and DataSet selection is a setup decision, not a runtime action that operators should keep changing during monitoring. A reporting wizard should help the user make this once, validate it, then enter a stable monitoring workspace.
+RCB and DataSet selection is a setup decision, not a runtime action that operators should repeatedly change during monitoring. A report setup workflow should validate the choice once and then enter a stable monitoring view.
 
 Runtime should focus on:
 
 - active RCB identity;
 - bound DataSet identity;
-- DataSet member order;
+- member count and order;
+- ownership or reservation evidence;
 - report count;
 - sequence number and EntryID movement;
-- GI status;
+- GI state;
 - buffer overflow evidence;
-- inclusion bitstring and reason-for-inclusion diagnostics;
-- raw MMS trace and exported evidence.
+- inclusion bitstring and reason-for-inclusion;
+- typed values, quality, timestamps, and source;
+- protocol evidence and cleanup state.
 
 ## Guardrails
 
-Before enabling a report session, the UI/CLI should show:
+Before enabling a report session, show:
 
 - RCB reference;
-- buffered/unbuffered type;
+- buffered or unbuffered type;
 - current `RptEna` state;
-- reservation / ownership evidence when available;
+- reservation and ownership evidence when available;
 - DataSet reference and member count;
-- ConfRev evidence;
-- OptFlds and TrgOps evidence;
-- whether the operation will write `DatSet`, `RptEna`, `GI`, or cleanup fields.
+- `ConfRev`, `OptFlds`, and `TrgOps` evidence;
+- every field the operation may write;
+- whether a temporary DataSet will be created;
+- expected cleanup behavior and limitations.
 
-The final enable action should be explicit and should avoid changing an already-used RCB unless the user confirms the risk.
+Treat an RCB enabled or reserved by another client as occupied. Do not silently overwrite its configuration.
+
+## Persistent monitoring
+
+An interactive monitor may keep the selected RCB enabled until the user chooses **Stop RCB**, closes the IED, the session faults, or the application exits. Stop should attempt to:
+
+1. disable the RCB;
+2. release reservation touched by the session;
+3. remove a temporary dynamic DataSet created by the application;
+4. preserve cleanup evidence and any failure.
+
+Cleanup is best effort. A local success state does not prove that the remote IED completed every requested cleanup operation.
 
 ## Evidence outputs
 
-Generated report evidence should go to ignored local folders such as:
+Generated report evidence belongs in ignored local folders such as:
 
 ```text
 .artifacts/out/
@@ -59,4 +77,8 @@ evidence/
 captures/
 ```
 
-Do not commit runtime evidence, real IED captures, customer station names, relay serials, or live network details into the public repository.
+Do not commit runtime evidence, real IED captures, customer station names, relay serials, credentials, or live network details into the public repository.
+
+## Claim boundary
+
+Guarded planning reduces accidental configuration changes; it does not prove report interoperability, cybersecurity, operational safety, or complete BRCB recovery behavior. Validate each IED family and use case under an approved procedure.

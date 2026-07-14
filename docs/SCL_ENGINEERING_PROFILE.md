@@ -1,18 +1,18 @@
 # SCL Engineering Profile
 
-The SCL engineering profile is a static engine milestone used to turn ICD/CID/IID/SCD files into a testable engineering evidence model.  It is intentionally application-neutral: product applications can consume the same profile later without duplicating parser or validation logic.
+The SCL engineering profile converts ICD, CID, IID, and SCD files into a typed expected-model view for laboratory and commissioning review. It is application-neutral so product applications can consume the same engine result without duplicating parser or validation logic.
 
 ## What it extracts
 
 - IED inventory and access points
-- Server / logical-device / logical-node structure
-- DataSet count and member counts
-- Expected report sessions
-- Expected GOOSE streams
-- Expected Sampled Values streams
-- Subscriber `Inputs/ExtRef` mapping
-- Declared service capabilities from `Services`
-- Static engineering findings
+- server, logical-device, and logical-node structure
+- DataSet identity, member order, and counts
+- expected report sessions
+- expected GOOSE streams
+- expected Sampled Values streams
+- subscriber `Inputs/ExtRef` mapping
+- declared service capabilities from `Services`
+- static engineering findings with source and context
 
 ## CLI
 
@@ -24,15 +24,18 @@ The command is offline and read-only. It does not require an IED or network adap
 
 ## Why this matters
 
-Report, GOOSE, SV, simulator, and evidence engines need a common expected model. The profile provides that expected model before live capture or MMS connection is used.
-
-The next engine phases should compare:
+Reporting, GOOSE, Sampled Values, simulation, and evidence workflows need a common expected model. The profile provides that model before live MMS discovery or process-bus observation is compared.
 
 ```text
 SCL expected model
-→ MMS discovered model
-→ process-bus observed traffic
-→ report/GOOSE/SV runtime evidence
+→ live MMS discovered model
+→ observed process-bus traffic
+→ report and process-bus runtime evidence
+→ explicit match, partial, mismatch, or missing findings
 ```
 
-This enables field-grade findings such as missing publishers, incomplete communication addresses, empty report DataSets, unresolved subscriber references, duplicate APPIDs, and model mismatch between engineering file and live device.
+## Claim boundary
+
+The profile produces engineering findings intended for laboratory and commissioning review. It does not prove that an SCL file matches the installed system, that every live device exposes the same model, or that the project is formally conformant.
+
+Findings such as missing publishers, incomplete communication addresses, empty report DataSets, unresolved subscriber references, duplicate APPIDs, or model mismatch require confirmation against approved project documentation and live evidence.

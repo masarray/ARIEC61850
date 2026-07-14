@@ -327,10 +327,21 @@ public sealed class SclParser
                     {
                         var name = Attr(control, "name");
                         var dataSetName = Attr(control, "datSet");
-                        var dataSet = ResolveDataSet(dataSets, iedName, ldInst, lnPath, dataSetName);
 
-                        if (dataSet is null && !string.IsNullOrWhiteSpace(dataSetName))
-                            warnings.Add($"Report {iedName}{ldInst}/{lnPath}${name} references missing DataSet '{dataSetName}'.");
+                        var dataSetBinding = SclDataSetReferenceResolver.Resolve(
+
+                            dataSets.Values,
+
+                            iedName,
+
+                            ldInst,
+
+                            lnPath,
+
+                            dataSetName);
+
+                        var dataSet = dataSetBinding.DataSet;
+
 
                         var buffered = BoolAttr(control, "buffered");
                         yield return new SclReportControl
@@ -341,8 +352,9 @@ public sealed class SclParser
                             Name = name,
                             ReportId = Attr(control, "rptID"),
                             DataSetName = dataSetName,
-                            DataSetReference = dataSet?.Reference ?? BuildDataSetReference(iedName, ldInst, lnPath, dataSetName),
-                            ControlBlockReference = $"{iedName}{ldInst}/{lnPath}${(buffered ? "BR" : "RP")}${name}",
+                    DataSetReference = dataSetBinding.CanonicalReference,
+                    DataSetBindingStatus = dataSetBinding.Status,
+                    ControlBlockReference = $"{iedName}{ldInst}/{lnPath}${(buffered ? "BR" : "RP")}${name}",
                             Buffered = buffered,
                             Indexed = !string.Equals(Attr(control, "indexed"), "false", StringComparison.OrdinalIgnoreCase),
                             ConfigurationRevision = UIntAttr(control, "confRev"),

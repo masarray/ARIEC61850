@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>IEC 61850 Smart Control Tester for .NET — Direct Operate & SBO | ARIEC61850</title>
-  <meta name="description" content="ARIEC61850 Smart Control Tester provides simple CSWI.Pos OPEN/CLOSE operation with automatic IEC 61850 Direct Operate or SBO detection, CommandTermination, AddCause, interlock, synchrocheck, Test and origin handling." />
+  <title>IEC 61850 Guarded Control for .NET — Direct Operate & SBO | ARIEC61850</title>
+  <meta name="description" content="ARIEC61850 provides a guarded CSWI.Pos OPEN/CLOSE workflow with automatic IEC 61850 Direct Operate or SBO detection, CommandTermination, AddCause, interlock, synchrocheck, Test and origin handling." />
   <meta name="keywords" content="IEC 61850 control, IED control tester, CSWI.Pos, Direct Operate, select before operate, SBO, SBOw, CommandTermination, LastApplError, AddCause, interlock check, synchrocheck, MMS client, C#" />
   <meta name="robots" content="index,follow,max-snippet:-1" />
   <meta name="theme-color" content="#0f766e" />
   <link rel="canonical" href="https://masarray.github.io/ARIEC61850/smart-control.html" />
   <link rel="stylesheet" href="styles.css" />
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="IEC 61850 Smart Control Tester for .NET" />
-  <meta property="og:description" content="Operator-friendly OPEN/CLOSE control with automatic Direct/SBO sequencing and command evidence." />
+  <meta property="og:title" content="IEC 61850 Guarded Control for .NET" />
+  <meta property="og:description" content="Operator-oriented OPEN/CLOSE control with discovered Direct/SBO sequencing and explicit command evidence." />
   <meta property="og:url" content="https://masarray.github.io/ARIEC61850/smart-control.html" />
 </head>
 <body>
@@ -32,8 +32,8 @@
   <main class="article-page">
     <section class="article-hero">
       <p class="eyebrow">IEC 61850 client control</p>
-      <h1>Smart IED control without exposing raw MMS writes to the operator.</h1>
-      <p class="lead">The ARIEC61850 Smart Control Tester turns a live control Data Object such as <code>LD0/CSWI1.Pos</code> into a guarded OPEN/CLOSE workflow. The native engine discovers the IED's control model, exact MMS value type, status reference, and required sequence.</p>
+      <h1>Guarded IED control without exposing raw MMS writes to the operator.</h1>
+      <p class="lead">The ARIEC61850 control tester turns a live control Data Object such as <code>LD0/CSWI1.Pos</code> into an OPEN/CLOSE workflow. The engine discovers the IED's control model, exact MMS value type, status reference, and required sequence.</p>
       <div class="actions">
         <a class="button primary" href="https://github.com/masarray/ARIEC61850/blob/main/docs/IED_DISCOVERY_SMART_CONTROL_TESTER.md">Operator guide</a>
         <a class="button secondary" href="https://github.com/masarray/ARIEC61850/blob/main/docs/SMART_CONTROL_STACK.md">Engine architecture</a>
@@ -42,17 +42,17 @@
 
     <section class="article-section two-column">
       <div>
-        <p class="eyebrow">Operator experience</p>
+        <p class="eyebrow">Operator workflow</p>
         <h2>Process intent first.</h2>
-        <p>The user selects <code>CSWI.Pos</code>, verifies the current OPEN/CLOSED state, confirms the test circuit is safe, and presses OPEN or CLOSE. Advanced options remain available without dominating the normal workflow.</p>
+        <p>The user selects <code>CSWI.Pos</code>, verifies the current protocol status and approved test conditions, stages OPEN or CLOSE, reviews the exact target, and confirms the command. Advanced parameters remain visible without dominating the normal workflow.</p>
       </div>
       <ul class="clean-list">
         <li>Live control-object and status discovery</li>
-        <li>Automatic Direct or SBO selection</li>
+        <li>Automatic Direct or SBO sequence selection</li>
         <li>Interlock and synchrocheck request bits</li>
         <li>Test mode, originator, and Orig ID</li>
         <li>Command timeout, Cancel, and association cleanup</li>
-        <li>Request, response, termination, and status evidence</li>
+        <li>Request, response, termination, and feedback evidence</li>
       </ul>
     </section>
 
@@ -61,43 +61,43 @@
       <h2>All four IEC 61850 control models are represented explicitly.</h2>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Control model</th><th>Sequence</th><th>Success boundary</th></tr></thead>
+          <thead><tr><th>Control model</th><th>Sequence</th><th>Completion boundary</th></tr></thead>
           <tbody>
-            <tr><td>Direct normal</td><td><code>Oper</code></td><td>Confirmed MMS acceptance</td></tr>
-            <tr><td>SBO normal</td><td><code>SBO</code> → <code>Oper</code></td><td>Confirmed MMS acceptance</td></tr>
-            <tr><td>Direct enhanced</td><td><code>Oper</code> → CommandTermination</td><td>Positive termination</td></tr>
-            <tr><td>SBO enhanced</td><td><code>SBOw</code> → <code>Oper</code> → CommandTermination</td><td>Positive termination</td></tr>
+            <tr><td>Direct normal</td><td><code>Oper</code></td><td>Confirmed MMS result</td></tr>
+            <tr><td>SBO normal</td><td><code>SBO</code> → <code>Oper</code></td><td>Confirmed MMS result</td></tr>
+            <tr><td>Direct enhanced</td><td><code>Oper</code> → CommandTermination</td><td>Positive or negative termination</td></tr>
+            <tr><td>SBO enhanced</td><td><code>SBOw</code> → <code>Oper</code> → CommandTermination</td><td>Positive or negative termination</td></tr>
           </tbody>
         </table>
       </div>
-      <p>The stack keeps <code>ctlVal</code>, origin, <code>ctlNum</code>, timestamp <code>T</code>, Test, and Check values consistent across the sequence. Generic application writes to control service members are blocked so product code uses the typed control session.</p>
+      <p>The stack keeps <code>ctlVal</code>, origin, <code>ctlNum</code>, timestamp <code>T</code>, Test, and Check values consistent across the sequence. Generic application writes to control-service members are blocked so application code uses the typed control session.</p>
     </section>
 
     <section id="evidence" class="article-section two-column">
       <div>
         <p class="eyebrow">Failure diagnosis</p>
         <h2>Accepted is not the same as completed.</h2>
-        <p>Enhanced-security commands remain pending until the matching CommandTermination arrives. Rejection, timeout, association loss, caller cancellation, negative termination, and process feedback mismatch remain separate outcomes.</p>
+        <p>Enhanced-security commands remain pending until matching CommandTermination evidence arrives. Rejection, timeout, association loss, caller cancellation, negative termination, application error, and feedback mismatch remain separate outcomes.</p>
       </div>
       <dl class="spec-list">
-        <div><dt>Immediate result</dt><dd>MMS service acceptance/rejection</dd></div>
-        <div><dt>Enhanced completion</dt><dd>Positive/negative CommandTermination</dd></div>
+        <div><dt>Immediate result</dt><dd>MMS service acceptance or rejection</dd></div>
+        <div><dt>Enhanced completion</dt><dd>Positive or negative CommandTermination</dd></div>
         <div><dt>Application error</dt><dd>ControlError and AddCause</dd></div>
-        <div><dt>Sequence proof</dt><dd>ctlNum, T, origin, request/response hex</dd></div>
-        <div><dt>Process proof</dt><dd>Discovered status readback</dd></div>
+        <div><dt>Sequence evidence</dt><dd>ctlNum, T, origin, request/response data</dd></div>
+        <div><dt>Process evidence</dt><dd>Discovered status readback and independent indication</dd></div>
       </dl>
     </section>
 
     <section class="article-section assurance">
       <p class="eyebrow">Validation boundary</p>
-      <h2>Live IED path verified; broader interoperability remains ongoing.</h2>
-      <p>A laboratory command has reached a real IED through the Smart Control Tester. This does not replace vendor/model/firmware validation, negative-case testing, independent process indication, long-duration testing, or formal conformance assessment.</p>
+      <h2>One laboratory command path has been exercised; broader validation remains ongoing.</h2>
+      <p>This evidence does not replace model- and firmware-specific validation, negative-case testing, independent process indication, long-duration testing, site procedure approval, or formal conformance assessment.</p>
       <a class="text-link" href="https://github.com/masarray/ARIEC61850/blob/main/docs/LIVE_IED_CONTROL_VALIDATION.md">Read the public validation record →</a>
     </section>
   </main>
 
   <footer class="footer">
-    <span>ARIEC61850 Smart Control</span>
+    <span>ARIEC61850 Guarded Control</span>
     <a href="./">Project overview</a>
     <a href="https://github.com/masarray/ARIEC61850">Source</a>
   </footer>

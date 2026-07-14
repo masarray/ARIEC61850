@@ -8,10 +8,17 @@ on:
       - "apps/**"
       - "tests/**"
       - "samples/**"
+      - "docs/**"
+      - "landing/**"
+      - "scripts/**"
+      - ".github/**"
+      - "*.md"
+      - "LICENSE"
+      - "NOTICE"
+      - "DCO.txt"
       - "*.sln"
       - "*.slnx"
       - "Directory.Build.props"
-      - ".github/workflows/dotnet-ci.yml"
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -21,7 +28,7 @@ permissions:
 
 jobs:
   build-test:
-    name: Build and test ARIEC61850
+    name: Build, test and public-source verification
     runs-on: windows-latest
 
     steps:
@@ -33,7 +40,7 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Verify source tree is clean
+      - name: Verify source, provenance, wording and license boundaries
         shell: pwsh
         run: ./scripts/verify-source-clean.ps1
 

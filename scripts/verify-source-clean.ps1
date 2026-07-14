@@ -65,20 +65,22 @@ function Test-IsAllowedLegalReference {
 }
 
 function Get-TrackedRelativePaths {
-    $output = & git -C $RepoRoot ls-files -z
+    $paths = @(& git -C $RepoRoot ls-files)
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to enumerate Git-tracked files for source-clean verification."
     }
 
     return @(
-        ($output -join "`n") -split "`0" |
+        $paths |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
             ForEach-Object { Normalize-RelativePath $_ }
     )
 }
 
 foreach ($relative in (Get-TrackedRelativePaths)) {
-    $fullPath = Join-Path $RepoRoot ($relative.Replace('/', [IO.Path]::DirectorySeparatorChar))
+    $platformRelative = $relative.Replace([char]'/', [IO.Path]::DirectorySeparatorChar)
+    $fullPath = Join-Path $RepoRoot $platformRelative
+
     if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
         $Problems.Add("Tracked path is missing from the worktree: $relative")
         continue

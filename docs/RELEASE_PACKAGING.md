@@ -2,6 +2,12 @@
 
 ARIEC61850 includes a Windows single-file packaging script for the WPF workspaces.
 
+## Current release license
+
+Current packages are licensed **only** under `GPL-3.0-or-later`. Each ZIP includes the current GPL license text, licensing explanation, commercial-license information, copyright notice, trademark policy, and third-party notices.
+
+Historical alternative-license text is not included in current packages. Historical revisions remain available only on the dedicated archive branch described in [Licensing](LICENSING.md).
+
 ## Local packaging
 
 ```powershell
@@ -33,6 +39,22 @@ Output location example:
 
 `.artifacts/` is ignored by Git.
 
+## Required package legal files
+
+A current ZIP must include:
+
+```text
+LICENSE
+NOTICE
+COMMERCIAL-LICENSE.md
+COPYRIGHT.md
+TRADEMARK.md
+THIRD_PARTY_NOTICES.md
+docs/LICENSING.md
+```
+
+The release verifier rejects a package that contains the historical alternative-license file.
+
 ## GitHub Actions packaging
 
 Use `.github/workflows/release-package.yml` manually from GitHub Actions or by pushing a tag:
@@ -45,11 +67,12 @@ The workflow:
 
 1. checks out the repository;
 2. installs .NET 8;
-3. restores, builds, and tests `ARIEC61850.sln`;
-4. publishes the selected WPF app as a self-contained Windows x64 single EXE;
-5. verifies the package structure;
-6. uploads the EXE, ZIP, and SHA256 file as workflow artifacts;
-7. optionally creates or updates a GitHub Release.
+3. verifies source and current-license cleanliness;
+4. restores, builds, and tests `ARIEC61850.sln`;
+5. publishes the selected WPF app as a self-contained Windows x64 single EXE;
+6. verifies the package structure and GPL-only license boundary;
+7. uploads the EXE, ZIP, and SHA256 file as workflow artifacts;
+8. optionally creates or updates a GitHub Release.
 
 ## Runtime note
 

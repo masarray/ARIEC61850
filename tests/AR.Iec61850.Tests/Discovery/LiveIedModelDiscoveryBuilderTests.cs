@@ -160,6 +160,85 @@ public sealed class LiveIedModelDiscoveryBuilderTests
     }
 
     [Fact]
+    public void Recovers_logical_model_from_dataset_members_when_primary_fc_directory_is_empty()
+    {
+        var result = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory([]),
+            ReportInventory = new MmsReportInventory()
+        };
+        result.ReportInventory.DataSets.Add(new MmsDataSetCandidate
+        {
+            Domain = "MU01LD0",
+            LogicalNode = "LLN0",
+            Name = "dsStatus",
+            Reference = "MU01LD0/LLN0.dsStatus"
+        });
+        var dataSetDirectory = new MmsDataSetDirectoryResult
+        {
+            IsSuccess = true,
+            DataSetReference = "MU01LD0/LLN0.dsStatus",
+            Members =
+            [
+                new MmsDataSetDirectoryMember
+                {
+                    Domain = "MU01LD0",
+                    LogicalNode = "XCBR1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Pos.stVal",
+                    UserReference = "MU01LD0/XCBR1.Pos.stVal",
+                    MmsItemName = "XCBR1$ST$Pos$stVal",
+                    Confidence = 100
+                }
+            ]
+        };
+
+        var document = LiveIedModelDiscoveryBuilder.Build(
+            result,
+            new LiveIedModelDiscoveryBuildOptions { IedName = "MU01" },
+            [dataSetDirectory]);
+
+        var logicalDevice = Assert.Single(document.LogicalDevices);
+        Assert.Equal("MU01LD0", logicalDevice.MmsDomain);
+        var logicalNode = Assert.Single(logicalDevice.LogicalNodes);
+        Assert.Equal("XCBR1", logicalNode.Name);
+        var dataObject = Assert.Single(logicalNode.DataObjects);
+        Assert.Equal("Pos", dataObject.Name);
+        Assert.Equal("DPC", dataObject.InferredCdc);
+        Assert.Equal("stVal", Assert.Single(dataObject.Attributes).AttributePath);
+        Assert.Single(document.DataSets);
+        Assert.Contains(document.Warnings, warning => warning.Code == "MODEL_AUGMENTED_FROM_SECONDARY_MMS_EVIDENCE");
+        Assert.DoesNotContain(document.Warnings, warning => warning.Code == "NO_FC_POINTS");
+    }
+
+    [Fact]
+    public void Recovers_lln0_container_from_report_inventory_when_primary_fc_directory_is_empty()
+    {
+        var result = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory([]),
+            ReportInventory = new MmsReportInventory()
+        };
+        result.ReportInventory.ReportControls.Add(new MmsReportControlCandidate
+        {
+            Domain = "MU01LD0",
+            LogicalNode = "LLN0",
+            Name = "A_URCB",
+            Reference = "MU01LD0/LLN0.RP.A_URCB",
+            Buffered = false
+        });
+
+        var document = LiveIedModelDiscoveryBuilder.Build(
+            result,
+            new LiveIedModelDiscoveryBuildOptions { IedName = "MU01" });
+
+        var logicalDevice = Assert.Single(document.LogicalDevices);
+        Assert.Equal("LLN0", Assert.Single(logicalDevice.LogicalNodes).Name);
+        Assert.Single(document.ReportControls);
+        Assert.Contains(document.Warnings, warning => warning.Code == "MODEL_AUGMENTED_FROM_SECONDARY_MMS_EVIDENCE");
+    }
+
+    [Fact]
     public void Attaches_exact_mms_type_discovery_to_data_attributes()
     {
         var point = new MmsFcResolvedPoint

@@ -23,13 +23,17 @@ public static class LiveIedModelDiscoveryBuilder
         ArgumentNullException.ThrowIfNull(discovery);
         ArgumentNullException.ThrowIfNull(options);
 
-        var directory = discovery.IedDirectory;
+        var primaryDirectory = discovery.IedDirectory;
         var dataSetDirectoryMap = (dataSetDirectories ?? Array.Empty<MmsDataSetDirectoryResult>())
             .Where(x => !string.IsNullOrWhiteSpace(x.DataSetReference))
             .GroupBy(x => x.DataSetReference, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
         var variableTypeList = variableTypeAttributes ?? Array.Empty<MmsVariableAccessAttributesResult>();
         var fileDirectory = BuildFileDirectory(fileDirectoryPages ?? Array.Empty<MmsFileDirectoryResult>());
+        var (directory, supplementalPointCount) = BuildEffectiveDirectory(
+            primaryDirectory,
+            dataSetDirectoryMap.Values,
+            discovery.ReportInventory);
         var variableTypeIndex = LiveIedVariableTypeHierarchyIndex.Build(directory, variableTypeList);
 
         var logicalDevices = BuildLogicalDevices(directory, variableTypeIndex).ToArray();
@@ -38,7 +42,15 @@ public static class LiveIedModelDiscoveryBuilder
         var dataSets = BuildDataSets(discovery.ReportInventory, dataSetDirectoryMap, reportControls, controlBlocks).ToArray();
         var typeTemplates = BuildTypeTemplates(logicalDevices, options.IncludeLowConfidenceTemplates).ToArray();
         var variableTypes = BuildVariableTypeDiscoveries(variableTypeList).ToArray();
-        var warnings = BuildWarnings(directory, dataSets, controlBlocks, variableTypeList, variableTypeIndex, fileDirectory).ToArray();
+        var warnings = BuildWarnings(
+            directory,
+            primaryDirectory.PointCount,
+            supplementalPointCount,
+            dataSets,
+            controlBlocks,
+            variableTypeList,
+            variableTypeIndex,
+            fileDirectory).ToArray();
         var coverage = BuildCoverage(logicalDevices, dataSets, reportControls, controlBlocks, variableTypes, fileDirectory);
         var identity = LiveIedIdentityResolver.Resolve(
             directory.LogicalDevices.Keys,
@@ -67,6 +79,79 @@ public static class LiveIedModelDiscoveryBuilder
             Warnings = warnings,
             Summary = FormatSummary(coverage)
         };
+    }
+
+    private static (MmsIedModelDirectory Directory, int SupplementalPointCount) BuildEffectiveDirectory(
+        MmsIedModelDirectory primaryDirectory,
+        IEnumerable<MmsDataSetDirectoryResult> dataSetDirectories,
+        MmsReportInventory reportInventory)
+    {
+        var points = new List<MmsFcResolvedPoint>(primaryDirectory.Points);
+        var knownMmsReferences = new HashSet<string>(
+            primaryDirectory.Points.Select(point => point.MmsReference),
+            StringComparer.OrdinalIgnoreCase);
+        var supplementalPointCount = 0;
+
+        foreach (var member in dataSetDirectories
+                     .Where(directory => directory.IsSuccess)
+                     .SelectMany(directory => directory.Members))
+        {
+            var domain = member.Domain?.Trim() ?? string.Empty;
+            var itemName = member.MmsItemName?.Trim() ?? string.Empty;
+            var logicalNode = member.LogicalNode?.Trim() ?? string.Empty;
+            var functionalConstraint = MmsFunctionalConstraint.Normalize(member.FunctionalConstraint);
+            var dataObjectPath = member.DataObjectPath?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(domain) ||
+                string.IsNullOrWhiteSpace(itemName) ||
+                string.IsNullOrWhiteSpace(logicalNode) ||
+                string.IsNullOrWhiteSpace(functionalConstraint) ||
+                string.IsNullOrWhiteSpace(dataObjectPath))
+                continue;
+
+            var point = new MmsFcResolvedPoint
+            {
+                Domain = domain,
+                LogicalNode = logicalNode,
+                FunctionalConstraint = functionalConstraint,
+                DataObjectPath = dataObjectPath,
+                MmsItemName = itemName,
+                Source = "GetNamedVariableListAttributes",
+                Confidence = member.Confidence
+            };
+            if (!knownMmsReferences.Add(point.MmsReference))
+                continue;
+
+            points.Add(point);
+            supplementalPointCount++;
+        }
+
+        foreach (var reportControl in reportInventory.ReportControls)
+        {
+            var domain = reportControl.Domain?.Trim() ?? string.Empty;
+            var logicalNode = reportControl.LogicalNode?.Trim() ?? string.Empty;
+            var name = reportControl.Name?.Trim() ?? string.Empty;
+            var functionalConstraint = reportControl.Buffered ? "BR" : "RP";
+            if (string.IsNullOrWhiteSpace(domain) || string.IsNullOrWhiteSpace(logicalNode) || string.IsNullOrWhiteSpace(name))
+                continue;
+
+            var point = new MmsFcResolvedPoint
+            {
+                Domain = domain,
+                LogicalNode = logicalNode,
+                FunctionalConstraint = functionalConstraint,
+                DataObjectPath = $"{name}.RptEna",
+                MmsItemName = $"{logicalNode}${functionalConstraint}${name}$RptEna",
+                Source = "ReportControlInventory",
+                Confidence = 100
+            };
+            if (!knownMmsReferences.Add(point.MmsReference))
+                continue;
+
+            points.Add(point);
+            supplementalPointCount++;
+        }
+
+        return (new MmsIedModelDirectory(points), supplementalPointCount);
     }
 
     private static IEnumerable<LiveIedLogicalDeviceModel> BuildLogicalDevices(
@@ -118,12 +203,13 @@ public static class LiveIedModelDiscoveryBuilder
         foreach (var group in groups)
         {
             var attributes = group
+                .Where(point => !string.IsNullOrWhiteSpace(Iec61850ReferenceParts.DataAttributePath(point.DataObjectPath)))
                 .Select(point => BuildAttribute(point, group.Key, variableTypeIndex))
                 .OrderBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => x.AttributePath, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             var attrPaths = attributes.Select(x => x.AttributePath).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
-            var fcs = attributes.Select(x => x.FunctionalConstraint).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+            var fcs = group.Select(x => x.FunctionalConstraint).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
             var cdc = CdcInferenceEngine.Infer(parsedLn.SclLnClass, group.Key, attrPaths, fcs);
             var reference = $"{ln.Domain}/{ln.Name}.{group.Key}";
             yield return new LiveIedDataObjectModel
@@ -427,6 +513,8 @@ public static class LiveIedModelDiscoveryBuilder
 
     private static IEnumerable<LiveIedDiscoveryWarning> BuildWarnings(
         MmsIedModelDirectory directory,
+        int primaryPointCount,
+        int supplementalPointCount,
         IReadOnlyList<LiveIedDataSetModel> dataSets,
         IReadOnlyList<LiveIedControlBlockModel> controlBlocks,
         IReadOnlyList<MmsVariableAccessAttributesResult> variableTypeAttributes,
@@ -439,6 +527,17 @@ public static class LiveIedModelDiscoveryBuilder
             {
                 Code = "NO_FC_POINTS",
                 Message = "No FC points were parsed from MMS GetNameList. Deep discovery cannot build a useful SCL model."
+            };
+        }
+
+        if (supplementalPointCount > 0)
+        {
+            yield return new LiveIedDiscoveryWarning
+            {
+                Code = "MODEL_AUGMENTED_FROM_SECONDARY_MMS_EVIDENCE",
+                Message = primaryPointCount == 0
+                    ? $"GetNameList produced no FC points. The model was recovered with {supplementalPointCount} exact point(s) from DataSet member and ReportControl discovery. Objects outside that evidence remain unavailable."
+                    : $"The model was augmented with {supplementalPointCount} exact point(s) from DataSet member and ReportControl discovery that were absent from the primary GetNameList directory."
             };
         }
 

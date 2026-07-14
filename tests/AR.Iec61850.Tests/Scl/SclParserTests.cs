@@ -81,6 +81,20 @@ public sealed class SclParserTests
         Assert.Equal(SclEdition.Edition2, document.Edition);
     }
 
+    [Fact]
+    public void Parser_Detects_Edition1_When_Historical_Namespace_Has_No_Root_Version()
+    {
+        const string xml = """
+        <SCL xmlns="http://www.iec.ch/61850/2003/SCL">
+          <Header id="ED1_TEST" version="" revision="" />
+        </SCL>
+        """;
+
+        var document = new SclParser().Parse(xml, "ed1.icd");
+
+        Assert.Equal(SclEdition.Edition1, document.Edition);
+    }
+
     internal static SclDocument LoadMinimalStation()
         => new SclParser().Load(MinimalStationPath());
 

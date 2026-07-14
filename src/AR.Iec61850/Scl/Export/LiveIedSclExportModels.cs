@@ -6,6 +6,7 @@ namespace AR.Iec61850.Scl.Export;
 public sealed class LiveIedSclExportOptions
 {
     public string Profile { get; init; } = "safe-connection";
+    public SclSchemaProfile SchemaProfile { get; init; } = SclSchemaProfile.Edition2V31;
     public string SubNetworkName { get; init; } = "StationBus";
     public string IpAddress { get; init; } = string.Empty;
     public string IpSubnet { get; init; } = "255.255.255.0";
@@ -21,6 +22,7 @@ public sealed class LiveIedSclExportOptions
     public LiveIedSclLogicalDeviceNameMode LogicalDeviceNameMode { get; init; } = LiveIedSclLogicalDeviceNameMode.Auto;
 
     public LiveIedSclExportProfile ResolvedProfile => LiveIedSclExportProfileParser.Parse(Profile);
+    public SclSchemaProfileDescriptor ResolvedSchemaProfile => SclSchemaProfiles.Get(SchemaProfile);
 }
 
 public enum LiveIedSclExportProfile
@@ -59,9 +61,10 @@ public enum LiveIedSclLogicalDeviceNameMode
 
 public sealed class LiveIedSclExportResult
 {
-    public string SchemaVersion { get; init; } = "live-to-scl-export-v1";
+    public string SchemaVersion { get; init; } = "live-to-scl-export-v2";
     public DateTimeOffset GeneratedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public string Profile { get; init; } = string.Empty;
+    public string SclSchema { get; init; } = string.Empty;
     public string SclPath { get; init; } = string.Empty;
     public string ReportPath { get; init; } = string.Empty;
     public string SummaryPath { get; init; } = string.Empty;

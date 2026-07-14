@@ -454,6 +454,15 @@ public sealed class SclParser
             string.Equals(revision, "A", StringComparison.OrdinalIgnoreCase))
             return SclEdition.Edition1;
 
+        // Edition 1 IED capability files commonly use the historical SCL namespace
+        // without root version/revision attributes. Edition 2 identifies itself with
+        // version="2007" and revision="B" while retaining the same namespace URI.
+        if (string.IsNullOrWhiteSpace(version) &&
+            string.IsNullOrWhiteSpace(revision) &&
+            string.IsNullOrWhiteSpace(release) &&
+            ns.Contains("/2003/scl", StringComparison.Ordinal))
+            return SclEdition.Edition1;
+
         if (ns.Contains("2007b4", StringComparison.Ordinal) ||
             ns.Contains("ed2.1", StringComparison.Ordinal) ||
             ns.Contains("edition2.1", StringComparison.Ordinal))

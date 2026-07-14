@@ -99,7 +99,11 @@ dotnet test .\ARIEC61850.sln -c Release --no-build
 dotnet run --project .\apps\AR.Iec61850.IedDiscovery\AR.Iec61850.IedDiscovery.csproj -c Release
 ```
 
-Live discovery is read-only. It builds the model from MMS directories, preserves DataSet member order, inventories RCBs, and retrieves type information where exposed. File-service unavailability is reported without discarding an otherwise valid model snapshot.
+Live discovery is read-only. It builds the model from MMS domain and named-variable directories, preserves DataSet member order, inventories RCBs, queries `GetVariableAccessAttributes` from each logical-node root to recover the FC/DO/DA type hierarchy, and can list the MMS file directory. When a server returns a partial primary FC directory, exact DataSet-member and ReportControl evidence is merged into the model instead of discarding discovered LD/LN containers; the export report labels that recovery and its remaining coverage gap. File service unavailability is reported as evidence and does not discard an otherwise valid model snapshot.
+
+The same desktop app can open vendor SCL/CID/ICD/IID files and use **Save SCL** to write a generic IID. Offline conversion selects the local IED from an explicit name, `Header@id`, or an unambiguous filename; removes vendor `Private` content and later-edition compatibility metadata; prunes peer IED communication and unreachable type templates; and preserves standard DOI/DAI values, FCDA order, DataSets, RCBs, GOOSE/SV controls, and exact source CDC/type definitions.
+
+After live discovery, **Save SCL** offers the same compatibility choices needed by mixed-edition engineering workflows: Edition 2 Schema V3.1 writes an `.iid`; Edition 1 Schema V1.6, V1.5, or V1.4 writes an `.icd`. The selected profile controls root version attributes, schema metadata, report/service fields, and the default extension—it is not only a filename change. Every export also writes JSON/Markdown evidence and preserves warnings for inferred or unavailable information. Live discovery export remains model-driven because MMS cannot recover engineering-only metadata such as the original vendor type IDs, descriptions, private extensions, enum labels, or substation topology.
 
 Before a live command:
 
@@ -116,12 +120,39 @@ Before a live command:
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.0.2.10 --port 102 --timeout-ms 30000
 ```
 
-### Inspect synthetic SCL and PCAP data
+### Export SCL from live MMS discovery
 
 ```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-scl .\samples\scl\minimal-station.scd
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
-dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  mms-scl-export 192.0.2.10 `
+  --ied-name IED1 `
+  --scl-schema edition2-v3.1 `
+  --output .\.artifacts\out\IED1-discovered.iid
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  mms-scl-export 192.0.2.10 `
+  --ied-name IED1 `
+  --scl-schema edition1-v1.6 `
+  --output .\.artifacts\out\IED1-discovered.icd
+```
+
+### Inspect SCL and PCAP
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  inspect-scl .\samples\scl\minimal-station.scd
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  scl-save-as .\vendor-relay.cid `
+  --ied-name RELAY1 `
+  --output .\.artifacts\out\RELAY1.interoperable.iid
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
+
+dotnet run --project .\apps\AR.Iec61850.Cli -- `
+  inspect-pcap .\.artifacts\out\processbus-demo.pcap `
+  --scl .\samples\scl\minimal-station.scd
 ```
 
 ## Capability status
@@ -129,11 +160,12 @@ dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\.artifacts\out\pro
 | Area | Current public scope |
 |---|---|
 | MMS client | Association, discovery, FC-aware reads, typed write services, and type inspection |
+| Discovery-to-SCL | Edition 2 V3.1 IID and Edition 1 V1.6/V1.5/V1.4 ICD reconstruction with companion evidence and explicit coverage warnings |
 | IEC 61850 control | Direct/SBO normal/enhanced sequencing, typed values, termination and application-error handling |
 | Reporting | DataSet/RCB discovery, planning, guarded enable/GI, persistent monitoring, and evidence |
 | GOOSE | Encode/decode, SCL profiles, publish/subscribe, sequence and supervision diagnostics |
 | Sampled Values | Encode/decode, waveform and payload generation, publishing, diagnostics, and PCAP workflows |
-| SCL | Station/model parsing, communication profiles, and engineering analysis |
+| SCL | Station/model parsing, loss-aware vendor normalization, live-discovery reconstruction, communication profiles, and engineering analysis |
 | PCAP | Read/write/inspect, stream analysis, and expected-vs-observed binding |
 | Simulator | Deterministic laboratory MMS server for discovery and read workflows; broader interoperability remains under validation |
 | Security profiles | IEC 62351 profiles are not currently claimed |

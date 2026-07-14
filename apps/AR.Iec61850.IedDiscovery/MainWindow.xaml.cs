@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _cancellation;
     private MmsClientSession? _activeSession;
     private AR.Iec61850.Mms.MmsDiscoveryResult? _lastDiscovery;
+    private string? _openedSclPath;
     private Iec61850DiscoveredIdentity? _identity;
     private IReadOnlyList<MmsDataSetDirectoryResult> _lastDataSetDirectories = Array.Empty<MmsDataSetDirectoryResult>();
     private readonly DispatcherTimer _monitorTimer;
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
     {
         await CloseSessionAsync().ConfigureAwait(true);
         _viewModel.ClearResults();
+        _openedSclPath = null;
         _viewModel.IsBusy = true;
         _viewModel.IsConnected = false;
         _viewModel.IsOnline = false;
@@ -204,6 +206,7 @@ public partial class MainWindow : Window
         {
             var projected = SclLiveModelProjectionBuilder.Load(dialog.FileName);
             Populate(projected);
+            _openedSclPath = dialog.FileName;
             _lastDiscovery = null;
             _lastDataSetDirectories = Array.Empty<MmsDataSetDirectoryResult>();
             _viewModel.IsConnected = false;
@@ -220,30 +223,66 @@ public partial class MainWindow : Window
     {
         if (_viewModel.LastDocument == null)
         {
-            MessageBox.Show(this, "Run live discovery first. SCL export uses the discovered live IED snapshot.", "No live model", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "Run live discovery or open an SCL file first.", "No IED model", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
+        }
+
+        var isOfflineScl = !string.IsNullOrWhiteSpace(_openedSclPath);
+        var schema = SclSchemaProfiles.Get(SclSchemaProfile.Edition2V31);
+        if (!isOfflineScl)
+        {
+            var schemaDialog = new SaveSclWindow(_viewModel.LastDocument.IedName) { Owner = this };
+            if (schemaDialog.ShowDialog() != true)
+                return;
+
+            schema = schemaDialog.ViewModel.SelectedSchemaProfile;
         }
 
         var dialog = new SaveFileDialog
         {
-            Title = "Save discovered IED model as IID",
-            Filter = "IID capability/update file (*.iid)|*.iid|CID configured IED file (*.cid)|*.cid|SCL document (*.scd)|*.scd|All files (*.*)|*.*",
-            FileName = $"{SafeFile(_viewModel.LastDocument.IedName)}-discovered.iid"
+            Title = isOfflineScl ? "Save vendor SCL as interoperable IID" : $"Save discovered IED model — {schema.DisplayName}",
+            Filter = isOfflineScl
+                ? "IID capability/update file (*.iid)|*.iid|CID configured IED file (*.cid)|*.cid|SCL document (*.scd)|*.scd|All files (*.*)|*.*"
+                : schema.IsEdition2
+                    ? "IID capability/update file (*.iid)|*.iid|All files (*.*)|*.*"
+                    : "ICD capability file (*.icd)|*.icd|All files (*.*)|*.*",
+            DefaultExt = isOfflineScl ? ".iid" : schema.DefaultExtension,
+            AddExtension = true,
+            FileName = isOfflineScl
+                ? $"{SafeFile(_viewModel.LastDocument.IedName)}-interoperable.iid"
+                : $"{SafeFile(_viewModel.LastDocument.IedName)}-discovered{schema.DefaultExtension}"
         };
         if (dialog.ShowDialog(this) != true)
             return;
 
         try
         {
+            if (isOfflineScl)
+            {
+                var conversion = InteroperableSclConverter.WriteFiles(
+                    _openedSclPath!,
+                    dialog.FileName,
+                    new InteroperableSclConversionOptions());
+                _viewModel.AddStatus(
+                    "Info",
+                    "SCL_INTEROPERABLE_SAVED",
+                    $"Saved generic IID for {conversion.SelectedIedName}: LD={conversion.LogicalDeviceCount}, LN={conversion.LogicalNodeCount}, DataSet={conversion.DataSetCount}, RCB={conversion.ReportControlCount}. Evidence: {conversion.ReportPath}");
+                return;
+            }
+
             var result = LiveIedSclExporter.WriteFiles(
                 _viewModel.LastDocument,
                 dialog.FileName,
                 new LiveIedSclExportOptions
                 {
                     Profile = "safe-connection",
+                    SchemaProfile = schema.Profile,
                     IpAddress = _viewModel.Host
                 });
-            _viewModel.AddStatus("Info", "SCL_EXPORTED", $"Saved IID/SCL model with engine export evidence: {result.SclPath}");
+            _viewModel.AddStatus(
+                "Info",
+                "SCL_EXPORTED",
+                $"Saved {result.SclSchema} discovery SCL: LD={result.LogicalDeviceCount}, LN={result.LogicalNodeCount}, DataSet={result.DataSetCount}, RCB={result.ReportControlCount}, warnings={result.Warnings.Count}. Evidence: {result.ReportPath}");
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException)
         {
@@ -257,6 +296,7 @@ public partial class MainWindow : Window
         await CloseSessionAsync().ConfigureAwait(true);
         _viewModel.ClearResults();
         _lastDiscovery = null;
+        _openedSclPath = null;
         _viewModel.AddStatus("Info", "IED_CLOSED", "IED session closed and explorer/panels were cleared.");
     }
 

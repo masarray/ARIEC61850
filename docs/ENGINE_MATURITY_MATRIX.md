@@ -1,191 +1,61 @@
 # Engine Maturity Matrix
 
-This matrix is the public engineering checklist for growing ARIEC61850 from protocol foundation into a smart IEC 61850 stack. It is intentionally engine-first. UI applications should consume these capabilities; they should not define protocol behavior.
+This matrix is the current public capability and evidence boundary for ARIEC61850. It is intentionally conservative. A feature may be implemented without being broadly interoperable, production-ready, formally conformant, or approved for operational use.
 
-| Engine area | Current level | Next testable increment | Public-ready target |
+## Evidence labels
+
+| Label | Meaning |
+|---|---|
+| Implemented | Source path exists and is integrated |
+| Unit tested | Deterministic automated tests cover the stated behavior |
+| Loopback verified | Client/server or publisher/subscriber path is exercised locally |
+| Laboratory exercised | A controlled test with external equipment has been recorded |
+| Partial | Important behavior or negative cases remain incomplete |
+| Not claimed | No public evidence supports the claim |
+
+## Capability matrix
+
+| Area | Current scope | Evidence | Important boundary |
 |---|---|---|---|
-| ASN.1/BER/MMS codec | Implemented with unit tests | Add malformed/negative golden PDUs | Stable codec golden corpus |
-| OSI association | TCP/TPKT/COTP/ACSE client path | Add association profile diagnostics | Reconnect and session recovery evidence |
-| MMS model discovery | Online GetNameList-based discovery | High-level ACSI model-browser facade | Live model snapshot export with typed findings |
-| Data read/write | Basic read/write and smart read | Service-result facade and more typed values | Safe data reader with explicit write guard |
-| DataSet service | Directory read + dynamic define/delete basics | DataSet readiness diagnostics | Static/dynamic DataSet workflows with evidence |
-| Reporting | RCB discovery, planner, guarded live session, static readiness profile | Typed RCB state machine, BRCB recovery, and profile import | URCB/BRCB runtime with GI/recovery/evidence |
-| GOOSE | Encode/decode/publish/subscribe basics | Expected-vs-observed diagnostics | SCL-bound forensic engine |
-| Sampled Values | Encode/decode/publish/injector basics | Subscriber/analyzer engine | RMS/phasor/timing/continuity diagnostics |
-| SCL | Parser/exporter/diff basics | Deep type-template and communication resolver | Station dataflow graph and mapping validator |
-| Simulation | Offline profile + read-only server model + loopback TCP listener skeleton | TPKT/COTP/ACSE/MMS read-only listener alpha | Virtual IED with reports, GOOSE, SV scenarios |
-| File/log/setting | Not yet mature | Read-only client browser first | Typed ACSI services with guarded writes |
-| Security diagnostics | Not a base feature yet | Rule-based semantic checks | Explainable cyber/semantic findings without black-box claims |
+| ASN.1 / BER / MMS codecs | Core encode/decode and confirmed-service structures | Implemented, unit tested | Malformed and negative corpus should continue expanding |
+| TCP / TPKT / COTP / ACSE | Client association and simulator-side laboratory path | Implemented, unit tested, loopback verified | Broad endpoint variation and long-duration recovery remain under validation |
+| MMS model discovery | Domains, named variables, FC-aware model, DataSets, RCB inventory, type inspection | Implemented, unit tested, laboratory exercised | Unknown and implementation-specific model variations remain possible |
+| Data read | Typed and smart read workflows | Implemented, unit tested, laboratory exercised | Readability depends on server access and exposed type information |
+| Generic write | Typed write planning and guarded execution | Implemented, unit tested | No claim of universal write support or operational approval |
+| IEC 61850 control | Direct/SBO normal/enhanced sequencing, typed values, termination and application-error handling | Implemented, unit tested, one laboratory path exercised | Each IED family, model, firmware, CDC variant, and negative path requires validation |
+| DataSet services | Directory read and dynamic define/delete foundations | Implemented, unit tested | Dynamic mutation remains guarded and must not occur during discovery |
+| Reporting | RCB discovery, planning, guarded enable/GI, persistent monitoring, value projection | Implemented, unit tested, partial laboratory evidence | Full BRCB recovery, ownership variation, and long-duration reliability remain partial |
+| GOOSE | Encode/decode, SCL profiles, publish/subscribe, sequence and supervision diagnostics | Implemented, unit tested, bounded laboratory use | No formal conformance, production timing, or broad traffic-corpus claim |
+| Sampled Values | Encode/decode, payload generation, publishing, PCAP diagnostics | Implemented, unit tested, partial | Sustained subscriber, RMS/phasor analysis, and strong timing evidence remain future work |
+| SCL | SCD/CID/ICD/IID parsing, communication profiles, type hints, expected-model analysis | Implemented, unit tested | Deep template resolution and station-wide dataflow validation continue to mature |
+| PCAP | Read/write, replay, inspection, and expected-vs-observed binding | Implemented, unit tested | Public fixtures must remain synthetic or contributor-owned |
+| Simulator | Deterministic model, loopback MMS server, discovery and read path | Implemented, unit tested, loopback verified | Not a production IED, conformance reference, or unrestricted interoperability claim |
+| Evidence export | Markdown/JSON profiles, manifests, hashes, and workbench packs | Implemented, unit tested | Evidence quality depends on input provenance and test procedure |
+| Security profiles | No IEC 62351 profile claim | Not claimed | Security and robustness testing remain separate from protocol feature coverage |
+| Formal conformance | No formal certificate for a public release | Not claimed | Requires recognized testing for the exact release and declared scope |
 
-## Next-level test contract
+## Current release gate
 
-Every new engine feature should include one deterministic test path:
-
-```text
-input fixture → engine service → typed result → diagnostic/evidence assertion
-```
-
-Live hardware tests are useful, but they must not be the only validation method. Each live workflow should have at least one synthetic or golden-fixture equivalent.
-
-## Naming rule
-
-Public source, docs, CLI output, tests, and release packages must use neutral ARIEC61850 terminology. Do not use benchmark-product names as feature names, profiles, commands, or comments.
-
-## N5.24 report-readiness test contract
-
-The report readiness profile is the first engine contract that bridges discovery into safe runtime preparation without enabling an RCB. It must remain read-only and deterministic.
+A developer-preview release should require:
 
 ```text
-live/synthetic discovery + DataSet directories
-→ static report readiness profile
-→ acceptance gates
-→ RCB candidate matrix
-→ selected guarded session profile
-→ Markdown/JSON evidence
+clean source
++ unambiguous GPL license metadata
++ successful restore/build/test
++ source-clean verification
++ consistent README/website/security/maturity wording
++ synthetic or documented-provenance fixtures
++ verified release-package contents
 ```
 
-The profile is considered ready only when model discovery, DataSet directory member mapping, RCB selection, and member-map gates are satisfied. `RptEna` and `GI` are still live-write actions and must remain behind explicit caller confirmation.
+## Active-operation boundary
 
+Control, report-control writes, GOOSE publishing, Sampled Values publishing, and packet replay can affect equipment state or network behavior. Protocol guardrails do not prove operational safety. Use active functions only with authority, approved procedures, isolation, and independent verification.
 
-## N5.25 — SCL Deep Engineering Profile
+## Next evidence priorities
 
-This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.
-
-## N5.26 — Expected-vs-Observed Process-Bus Binding
-
-This milestone bridges the SCL engineering profile with observed process-bus summaries from PCAP/live capture. It provides typed findings for missing expected GOOSE/SV streams, unexpected observed streams, APPID/MAC/VLAN/confRev mismatch, optional DataSet value-count mismatch, and sequence/timing anomalies.
-
-```text
-SCL expected GOOSE/SV stream
-→ observed ProcessBusStreamSummary
-→ binding profile
-→ finding/evidence
-```
-
-This is the foundation for later GOOSE forensic diagnostics, SV analyzer diagnostics, station dataflow validation, and simulator verification.
-
-
-## N5.27 — GOOSE Diagnostics Profile
-
-This milestone promotes GOOSE from basic decode/binding into an explainable diagnostic profile. It provides typed findings for missing expected publishers, unexpected observed publishers, APPID/MAC/VLAN/confRev mismatch, DataSet value-count mismatch, `stNum`/`sqNum` gaps and regressions, duplicate frames, supervision timeout, test flag, needs-commissioning flag, and suspicious value changes without a state-number increment.
-
-```text
-SCL expected GOOSE stream
-→ observed PCAP/live GOOSE summary
-→ sequence/supervision semantic checks
-→ Markdown/JSON evidence
-```
-
-Maturity impact: process-bus GOOSE moves from visibility to actionable engineering diagnostics.
-
-
-## N5.28 — Sampled Values Diagnostics Profile
-
-This milestone promotes SV from basic publish/decode/binding into an explainable diagnostic profile. It provides typed findings for missing expected streams, unexpected observed streams, APPID/MAC/VLAN/confRev mismatch, `nofASDU` mismatch, sample-rate/sample-mode mismatch, payload decode issues, `smpCnt` gaps, missed samples, duplicates, out-of-order samples, wraps, and `smpSynch` issues.
-
-```text
-SCL expected SV stream
-→ observed PCAP/live SV summary
-→ sample-counter/payload/synchronization semantic checks
-→ Markdown/JSON evidence
-```
-
-Maturity impact: process-bus SV moves from visibility to actionable engineering diagnostics.
-
-## Server-side milestone
-
-- MMS read-only server alpha: implemented as offline virtual IED profile + high-level service handler.
-- MMS listener skeleton profile: implemented as loopback TCP listener lifecycle + JSON-line probe harness + write guard evidence.
-- Next maturity gate: attach TPKT/COTP/ACSE/MMS decoding/encoding to the read-only listener while preserving the same service contract.
-
-
-## N5.30 — MMS Listener Skeleton Profile
-
-This milestone adds the first live transport boundary for the simulator-backed server model. The listener binds to a loopback TCP endpoint, accepts a client session, dispatches deterministic read-only service requests, verifies write rejection, and exports Markdown/JSON evidence.
-
-```text
-virtual IED profile
-→ read-only service handler
-→ TCP listener skeleton
-→ loopback probe
-→ listener evidence
-```
-
-Scope boundary: the harness intentionally uses a JSON-line probe protocol. The next milestone should replace the probe decoder with TPKT/COTP/ACSE/MMS request handling while keeping the same read-only service semantics.
-
-### N5.31 MMS handshake codec profile
-
-N5.31 adds an offline handshake codec evidence path for the server-side roadmap. It validates TPKT framing, COTP CR/CC/Data TPDU handling, and ISO Session / ACSE / MMS association payload inspection before the listener skeleton is upgraded to real MMS PDU handling.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
-```
-
-
-
-## N5.32 - MMS Handshake Listener Profile
-
-Status: source milestone. The engine now includes a loopback OSI listener probe that validates TCP listener lifecycle, TPKT frame exchange, COTP CR/CC handshake, COTP Data TPDU reception, and ACSE/MMS association payload inspection. This remains a transport skeleton, not a full MMS server. The next protocol milestone is ACSE AARE + MMS initiate response.
-
-## N5.33 MMS Association Response Profile
-
-N5.33 adds a loopback server-side association response probe. The engine now accepts a TPKT/COTP transport association, receives an ACSE/MMS associate request payload, sends a deterministic ACSE AARE + MMS InitiateResponse profile, and exports Markdown/JSON evidence. This remains a safe protocol gate before live confirmed MMS request dispatch.
-
-Test command:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
-```
-
-
-## N5.34 confirmed-request skeleton gate
-
-The server lifecycle now includes a deterministic confirmed-request dispatch path after ACSE/MMS association. The profile validates directory/read/DataSet request dispatch and write rejection over TPKT/COTP loopback frames. Full MMS ConfirmedRequest BER decoding remains a future maturity gate.
-
-
-## N5.35 — MMS Confirmed Request BER Dispatch Foundation
-
-- Added a loopback profile that carries native MMS BER ConfirmedRequest payloads after TPKT/COTP/ACSE association.
-- Dispatches read-only GetNameList, Read, GetNamedVariableListAttributes, and Write-rejection probes against the virtual IED model.
-- Exports Markdown/JSON evidence and keeps scope explicit: not yet a complete MMS server, but the first native BER confirmed-request dispatch path.
-
-
-## N5.36 — MMS Read-Only Server Loopback Alpha
-
-| Area | Maturity |
-| --- | --- |
-| Virtual IED model | Read-only alpha readiness gate |
-| TPKT/COTP listener path | Loopback verified |
-| ACSE/MMS association response | Deterministic profile verified |
-| MMS BER confirmed-request dispatch | Read-only GetNameList / Read / DataSet directory / Write rejection verified |
-| Safety posture | Write guard enforced |
-| Product claim | Server-side alpha; not yet full live MMS server conformance |
-
-
-
-## N5.37 Public Alpha Readiness
-
-The `public-alpha-readiness-profile` command is the aggregate release gate for the developer-preview engine. It validates SCL engineering, process-bus expected-vs-observed logic, GOOSE/SV diagnostics, and read-only MMS loopback in one Markdown/JSON evidence artifact.
-
-
-## Workbench usability gate
-
-N5.38 adds a WPF Engineering Workbench Alpha. This does not change protocol conformance level by itself, but it raises usability maturity because SCL, PCAP diagnostics, MMS loopback and evidence can now be exercised without remembering individual CLI commands.
-
-
-## N5.39 Workbench Evidence Pack
-
-N5.39 adds a structured Workbench evidence pack. This raises usability and release-readiness maturity because the same engine profiles used by WPF can now be exported and validated headlessly as a folder containing `README.md`, `manifest.json`, per-profile Markdown/JSON, byte sizes, SHA-256 hashes, and consolidated findings.
-
-
-## N5.40 IED Discovery Workbench Shell
-
-The first usable IED discovery shell is now available in `apps/AR.Iec61850.IedDiscovery`. It adds a compact command bar, asynchronous Discover IED dialog flow, DO-level explorer, DA detail grid, pinned Activity Monitor, status-history ring buffer, and generated SCL export from the live model. The app remains a thin WPF harness over the engine.
-
-
-## N5.41.4 Smart Value Reading & Identity Resolver
-
-- Engine-owned IED identity resolver and LD alias display.
-- Smart LN/DO read planning and collapsed DO summary values.
-- Recursive semantic decoding for nested q/t, vector, analogue and control structures.
-- WPF remains a presenter; IEC 61850 value semantics stay in the stack engine.
+1. Multi-family control validation covering all four control models and negative completion paths.
+2. Persistent reporting soak tests, reconnect, reservation, and BRCB recovery evidence.
+3. Sustained Sampled Values subscriber and timing diagnostics.
+4. Broader malformed-input and resource-limit tests.
+5. Independent review of release claims, provenance records, and commercial-license ownership prerequisites.

@@ -1,303 +1,143 @@
 # Quick Start
 
-## 1. Install requirements
+## 1. Requirements
 
 - .NET 8 SDK.
-- Windows for the WPF app and Npcap-backed live Ethernet transport.
-- Npcap when using live raw Ethernet process-bus publishing or capture.
-- An isolated lab adapter, TAP, or test switch for active GOOSE/SV traffic.
+- Windows for WPF applications and the current raw-Ethernet transport.
+- An isolated laboratory or approved commissioning network for active control or process-bus publishing.
 
 ## 2. Build and test
 
 ```powershell
+git clone https://github.com/masarray/ARIEC61850.git
+cd ARIEC61850
+
 dotnet restore .\ARIEC61850.sln
 dotnet build .\ARIEC61850.sln -c Release
 dotnet test .\ARIEC61850.sln -c Release --no-build
+.\scripts\verify-source-clean.cmd
 ```
 
-## 3. Run CLI examples
+## 3. Inspect synthetic SCL and PCAP data
 
-Inspect an SCL file:
+Inspect the included synthetic SCL model:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-scl .\samples\scl\minimal-station.scd
 ```
 
-Generate a local PCAP and inspect it:
+Generate and inspect a deterministic PCAP:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
 dotnet run --project .\apps\AR.Iec61850.Cli -- inspect-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd
-dotnet run --project .\apps\AR.Iec61850.Cli -- stream-pcap .\.artifacts\out\processbus-demo.pcap --scl .\samples\scl\minimal-station.scd --delay-ms 0 --limit 20
 ```
 
-List available adapters:
+Generated output belongs under `.artifacts/` or another ignored local folder.
+
+## 4. Discover a live MMS endpoint
+
+Use a documentation-only address in examples and replace it with an approved laboratory endpoint:
 
 ```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- list-adapters
+dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.0.2.10 --port 102 --timeout-ms 30000
 ```
 
-Run a read-only live GOOSE subscriber:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- goose-subscribe-live --adapter 1 --scl .\samples\scl\minimal-station.scd --duration-sec 30
-```
-
-Run an SV publish dry run:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- publish-sv-live ".\samples\scl\01_SV_Stream_4I+4V_(9-2LE).scd" --adapter 1 --stream-index 1 --frames 4000 --dry-run
-```
-
-Run a GOOSE publish dry run:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 1 --stream-index 1 --frames 4 --dry-run
-```
-
-## 4. Use MMS discovery and reporting commands
-
-Discover a live IED or simulator:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-discover 192.0.2.10 --port 102 --timeout-ms 30000 --max-report-probes 16
-```
-
-Build a model directory and show points:
+Build the live model directory:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-directory 192.0.2.10 --port 102 --timeout-ms 30000 --show-points --raw-limit 40
 ```
 
-Resolve and read a point without manually typing the Functional Constraint:
+Resolve and read a point without manually entering its Functional Constraint:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-resolve 192.0.2.10 IED1LD0/MMXU1.PhV.phsA.cVal.mag.f
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-read-smart 192.0.2.10 IED1LD0/MMXU1.PhV.phsA.cVal.mag.f
 ```
 
-Plan report usage before enabling anything:
+These discovery and read commands are read-only.
+
+## 5. Plan and monitor reports
+
+Plan report use before changing an RCB:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-plan 192.0.2.10 --port 102 --timeout-ms 60000 --max-report-probes 64 --only-safe
 ```
 
-Run a guarded report monitor and write evidence outside the repository:
+Run a guarded report monitor only against an approved test endpoint:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-monitor 192.0.2.10 --port 102 --timeout-ms 120000 --rcb IED1LD0/LLN0.RP.rpt01 --duration-sec 60 --evidence .\.artifacts\out\report-session01 --yes
 ```
 
+The monitor may write report-control attributes. Review the plan, target, reservation state, cleanup behavior, and evidence before execution.
 
-## 5. Run the WPF workspaces
+## 6. Run Windows workspaces
 
-SV publisher / injector workspace:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.SvPublisher -c Release
-```
-
-Live IED discovery workspace:
+IED discovery, reporting, and guarded control:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.IedDiscovery -c Release
 ```
 
-IED simulator workspace with read-only MMS server:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.IedSimulator -c Release
-```
-
-Read-only engineering workbench alpha:
+Read-only engineering analysis:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench -c Release
 ```
 
-The simulator provides deterministic point values, DataSets, RCB profiles, JSON export, and a read-only MMS server on `127.0.0.1:102`. Port 102 normally requires an elevated shell on Windows.
+Laboratory MMS simulator:
 
-Start the CLI server and discover it from another shell:
+```powershell
+dotnet run --project .\apps\AR.Iec61850.IedSimulator -c Release
+```
+
+Sampled Values laboratory publisher:
+
+```powershell
+dotnet run --project .\apps\AR.Iec61850.SvPublisher -c Release
+```
+
+## 7. Run the simulator and discover it
+
+Start the CLI simulator on loopback:
 
 ```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -c Release -- simulate-ied --port 102 --duration-sec 600
+```
+
+From another elevated shell when required by Windows port policy:
+
+```powershell
 dotnet run --project .\apps\AR.Iec61850.Cli -c Release -- mms-discover 127.0.0.1 --port 102 --timeout-ms 30000 --no-report-probe
 ```
 
-Point an independent IEC 61850 client at `127.0.0.1:102`. The simulator activity monitor must progress from `COTP CR/CC` and `ACSE AARQ/AARE` to `GetNameList` requests.
+The simulator currently supports deterministic laboratory discovery and read workflows. It is not presented as a production IED or formal conformance reference.
 
-## 6. Build a WPF app as a single EXE
+## 8. Process-bus dry runs
 
-```powershell
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App SvPublisher
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App IedDiscovery
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App IedSimulator
-.\scripts\publish-windows-singlefile.cmd -Version 0.1.0 -App EngineeringWorkbench
-```
-
-The output is created under `.artifacts/release`. The folder is ignored by Git and should not be committed.
-
-## 7. Keep the source tree clean
-
-Build output is centralized under `.artifacts/` and ignored by Git. To clean and verify the working tree before committing:
+List adapters:
 
 ```powershell
-.\scripts\clean-local-artifacts.cmd
-.\scripts\verify-source-clean.cmd
+dotnet run --project .\apps\AR.Iec61850.Cli -- list-adapters
 ```
 
-## Generate an engineering profile from a live MMS endpoint
-
-Use this read-only command when validating engine maturity against a real IED or simulator. It connects, discovers the model, reads available DataSet directories, classifies report readiness, and writes capability/diagnostic evidence.
+Run bounded dry runs before any active publishing:
 
 ```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-engine-profile 192.0.2.10 --port 102 --timeout-ms 30000 --output .\.artifacts\out\engineering-profile.md --json .\.artifacts\out\engineering-profile.json
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-goose-live .\samples\scl\minimal-station.scd --adapter 1 --stream-index 1 --frames 4 --dry-run
+dotnet run --project .\apps\AR.Iec61850.Cli -- publish-sv-live .\samples\scl\minimal-station.scd --adapter 1 --stream-index 1 --frames 4000 --dry-run
 ```
 
-The command performs no RCB writes. It is intended as the baseline model/capability test before report runtime, GOOSE diagnostics, SV analyzer, and simulator-server phases.
+Do not publish on an operational network without authority, an approved plan, isolation, and independent verification.
 
-Generate a static report readiness profile before enabling any report:
+## 9. Evidence and source hygiene
 
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-report-readiness-profile 192.0.2.10 --port 102 --timeout-ms 120000 --output .\.artifacts\out\report-readiness.md --json .\.artifacts\out\report-readiness.json --session-json .\.artifacts\out\report-session-profile.json
-```
+- Use synthetic or contributor-owned samples.
+- Do not commit customer SCL, live captures, station names, serial numbers, credentials, or internal paths.
+- Store generated output under `.artifacts/`.
+- Run `scripts/verify-source-clean.cmd` before every public push.
 
-This command is also read-only. It produces acceptance gates, RCB candidate ranking, a selected static report plan, and a guarded report-session profile that future product apps can consume.
-
-
-## N5.25 — SCL Deep Engineering Profile
-
-This milestone adds an offline SCL engineering profile engine. It extracts access points, server/logical-device/logical-node structure, expected report sessions, expected GOOSE/SV streams, subscriber ExtRef mapping, service declarations, and static findings. The profile is available through `scl-engineering-profile` and is designed as the expected-model input for future report, GOOSE, SV, simulator, and evidence engines.
-
-## N5.26 — Expected-vs-Observed Process-Bus Binding
-
-Generate a deterministic process-bus PCAP from the sample SCL:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap
-```
-
-Compare the SCL expected model against the observed PCAP:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- process-bus-binding-profile .\samples\scl\minimal-station.scd .\.artifacts\out\processbus-demo.pcap --output .\.artifacts\out\process-bus-binding.md --json .\.artifacts\out\process-bus-binding.json
-```
-
-This command is read-only and is the first offline test path for expected-vs-observed GOOSE/SV diagnostics.
-
-
-## N5.27 — GOOSE Diagnostics Profile
-
-Generate an offline diagnostic PCAP with deterministic GOOSE anomalies:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --sv-frames 0 --goose-scenario diagnostic
-```
-
-Run the read-only GOOSE diagnostic evidence command:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- goose-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\goose-diagnostic-demo.pcap --output .\.artifacts\out\goose-diagnostics.md --json .\.artifacts\out\goose-diagnostics.json
-```
-
-Expected result: the command should report GOOSE findings for sequence/supervision/flag conditions and write Markdown/JSON evidence under `.artifacts\out`.
-
-
-## N5.28 — Sampled Values Diagnostics Profile
-
-Generate an offline diagnostic PCAP with deterministic SV anomalies:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- generate-pcap .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --goose-frames 0 --sv-scenario diagnostic
-```
-
-Run the read-only SV diagnostic evidence command:
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- sv-diagnostics-profile .\samples\scl\minimal-station.scd .\.artifacts\out\sv-diagnostic-demo.pcap --output .\.artifacts\out\sv-diagnostics.md --json .\.artifacts\out\sv-diagnostics.json
-```
-
-Expected result: the command should report SV findings for sample-counter, synchronization, payload, and model-alignment conditions and write Markdown/JSON evidence under `.artifacts\out`.
-
-## MMS read-only virtual server profile
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-server-readonly-profile --steps 5 --output .\.artifacts\out\mms-server-readonly.md --json .\.artifacts\out\mms-server-readonly.json
-```
-
-This command needs no IED and no network adapter. It builds a virtual IED model from the simulator profile and exercises read-only directory, read, DataSet read, and write-guard probes.
-
-## MMS listener skeleton self-probe
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-listener-skeleton-profile --port 0 --output .\.artifacts\out\mms-listener-skeleton.md --json .\.artifacts\out\mms-listener-skeleton.json
-```
-
-This command starts a loopback TCP listener, sends deterministic read-only probe requests, verifies directory/read/DataSet responses, confirms write rejection, and exits. It is a listener/session lifecycle harness, not a full MMS PDU server yet.
-
-### N5.31 MMS handshake codec profile
-
-N5.31 adds an offline handshake codec evidence path for the server-side roadmap. It validates TPKT framing, COTP CR/CC/Data TPDU handling, and ISO Session / ACSE / MMS association payload inspection before the listener skeleton is upgraded to real MMS PDU handling.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-codec-profile --output .\.artifacts\out\mms-handshake-codec.md --json .\.artifacts\out\mms-handshake-codec.json
-```
-
-### N5.32 MMS handshake listener profile
-
-N5.32 moves the handshake foundation from offline codec proof into a loopback listener proof. It accepts a TCP client, receives TPKT/COTP CR, sends COTP CC, receives COTP Data TPDU, and inspects the ACSE/MMS association payload. It still does not claim a full MMS server response.
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-handshake-listener-profile --port 0 --output .\.artifacts\out\mms-handshake-listener.md --json .\.artifacts\out\mms-handshake-listener.json
-```
-
-### MMS association response profile
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-association-response-profile --port 0 --output .\.artifacts\out\mms-association-response.md --json .\.artifacts\out\mms-association-response.json
-```
-
-This loopback probe verifies TPKT/COTP transport, ACSE AARE response generation, and MMS InitiateResponse marker inspection before live confirmed MMS request dispatch.
-
-
-### MMS confirmed-request and read-only loopback profiles
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-confirmed-request-skeleton-profile --port 0 --output .\.artifacts\out\mms-confirmed-request-skeleton.md --json .\.artifacts\out\mms-confirmed-request-skeleton.json
-
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-confirmed-request-ber-profile --port 0 --output .\.artifacts\out\mms-confirmed-request-ber.md --json .\.artifacts\out\mms-confirmed-request-ber.json
-
-dotnet run --project .\apps\AR.Iec61850.Cli -- mms-readonly-loopback-profile --port 0 --output .\.artifacts\out\mms-readonly-loopback.md --json .\.artifacts\out\mms-readonly-loopback.json
-```
-
-The skeleton profile validates the request lifecycle with deterministic internal envelopes. The BER profile upgrades that path to native MMS BER confirmed-request payloads. The read-only loopback alpha profile unifies virtual model readiness, association response, native BER dispatch, and write guard evidence into one server-side readiness gate.
-
-
-## Public alpha readiness gate
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- public-alpha-readiness-profile --output .\.artifacts\out\public-alpha-readiness.md --json .\.artifacts\out\public-alpha-readiness.json
-```
-
-A passing result means the engine alpha gates are green: SCL engineering, synthetic process-bus binding, GOOSE/SV diagnostics, and read-only MMS loopback.
-
-## Run the WPF Engineering Workbench Alpha
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.EngineeringWorkbench
-```
-
-Use it as a read-only harness: open an SCL file, optionally add a PCAP, run the workbench, review findings, and export a structured evidence pack.
-
-## Generate a Workbench evidence pack from CLI
-
-```powershell
-dotnet run --project .\apps\AR.Iec61850.Cli -- workbench-evidence-pack --scl .\samples\scl\minimal-station.scd --output .\.artifacts\workbench-pack
-```
-
-The generated folder contains a review `README.md`, `manifest.json`, and per-profile Markdown/JSON artifacts. See `docs/WORKBENCH_EVIDENCE_PACK.md`.
-
-## N5.41.3 display refinement
-
-- IED Discovery detail view now follows a semantic child-row display policy: Quality and timestamp are rendered as IEC 61850 child rows, not noisy flat columns; common SAS logical nodes are prioritized in the explorer.
-
+For current capability and claim boundaries, see [Engine Maturity Matrix](ENGINE_MATURITY_MATRIX.md). For future work, see [Roadmap](../ROADMAP.md).

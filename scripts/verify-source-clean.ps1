@@ -3,13 +3,13 @@
 <#
 .SYNOPSIS
   Fails when tracked repository content contains prohibited public-release wording,
-  external-product identifiers, confidential evidence, binary payloads, or an
-  ambiguous historical license file in the current branch.
+  external-product identifiers, confidential evidence, binary payloads, ambiguous
+  current-license metadata, or known stale claim language.
 
 .DESCRIPTION
-  The legal gate scans every Git-tracked path. Disallowed external identifiers are
-  represented only by one-way fingerprints so the repository itself does not
-  publish or repeat unrelated product and company names.
+  The gate scans every Git-tracked path. Disallowed external identifiers are
+  represented only by one-way fingerprints so the repository does not publish or
+  repeat unrelated product and company names.
 
   The current branch and current releases are GPL-3.0-or-later only. Historical
   license text belongs only on the dedicated archive branch.
@@ -47,6 +47,20 @@ $ForbiddenTextPatterns = @(
     "ARIEC60870", "IEC60870", "IEC 60870", "IEC101", "IEC 101",
     "IEC103", "IEC 103", "IEC104", "IEC 104",
     "C:\Users\", "C:\Program Files\dotnet\sdk", "blocked in the current sandbox", "_wpftmp"
+)
+
+$ForbiddenPublicWordingPatterns = @(
+    "https://www.apache.org/licenses/LICENSE-2.0",
+    "clean-room Apache-2",
+    "External IP Cleanliness Audit",
+    "field-grade findings",
+    "safety arming",
+    "confirmed safe",
+    "Correct IEC 61850 sequencing",
+    "public product capability descriptions",
+    "behavioral references",
+    "regulated engineering workbench",
+    "192.16.1.157"
 )
 
 $TextExtensions = @(
@@ -141,7 +155,13 @@ foreach ($relative in (Get-TrackedRelativePaths)) {
 
     foreach ($pattern in $ForbiddenTextPatterns) {
         if ($content -match [regex]::Escape($pattern)) {
-            $Problems.Add("Forbidden internal-release text: $relative")
+            $Problems.Add("Forbidden internal-release text '$pattern': $relative")
+        }
+    }
+
+    foreach ($pattern in $ForbiddenPublicWordingPatterns) {
+        if ($content -match [regex]::Escape($pattern)) {
+            $Problems.Add("Stale or ambiguous public wording '$pattern': $relative")
         }
     }
 }
@@ -153,4 +173,4 @@ if ($Problems.Count -gt 0) {
     throw "Source tree is not public-release clean. Found $($Problems.Count) problem(s)."
 }
 
-Write-Host "All Git-tracked content passed source-clean, external-IP, and current-license checks." -ForegroundColor Green
+Write-Host "All Git-tracked content passed source hygiene, provenance, wording, and current-license checks." -ForegroundColor Green

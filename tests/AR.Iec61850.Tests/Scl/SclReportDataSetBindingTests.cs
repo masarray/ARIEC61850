@@ -27,9 +27,11 @@ public sealed class SclReportDataSetBindingTests
         var profile = new SclEngineeringProfileBuilder().Parse(
             BuildScl("LLN0$MissingEvents", includeDataSet: true, includeMember: true));
 
-        var finding = Assert.Single(profile.Findings.Where(f => f.Code == "SCL_REPORT_DATASET_UNRESOLVED"));
+        var finding = Assert.Single(
+            profile.Findings,
+            finding => finding.Code == "SCL_REPORT_DATASET_UNRESOLVED");
         Assert.Equal("Warning", finding.Severity);
-        Assert.DoesNotContain(profile.Findings, f => f.Code == "SCL_REPORT_DATASET_EMPTY");
+        Assert.DoesNotContain(profile.Findings, finding => finding.Code == "SCL_REPORT_DATASET_EMPTY");
     }
 
     [Fact]
@@ -42,9 +44,11 @@ public sealed class SclReportDataSetBindingTests
 
         var profile = new SclEngineeringProfileBuilder().Parse(
             BuildScl("LLN0$Events", includeDataSet: true, includeMember: false));
-        var finding = Assert.Single(profile.Findings.Where(f => f.Code == "SCL_REPORT_DATASET_EMPTY"));
+        var finding = Assert.Single(
+            profile.Findings,
+            finding => finding.Code == "SCL_REPORT_DATASET_EMPTY");
         Assert.Equal("High", finding.Severity);
-        Assert.DoesNotContain(profile.Findings, f => f.Code == "SCL_REPORT_DATASET_UNRESOLVED");
+        Assert.DoesNotContain(profile.Findings, finding => finding.Code == "SCL_REPORT_DATASET_UNRESOLVED");
     }
 
     [Fact]
@@ -53,9 +57,11 @@ public sealed class SclReportDataSetBindingTests
         var profile = new SclEngineeringProfileBuilder().Parse(
             BuildScl(null, includeDataSet: false, includeMember: false, indexed: true));
 
-        var finding = Assert.Single(profile.Findings.Where(f => f.Code == "SCL_REPORT_DATASET_UNASSIGNED"));
+        var finding = Assert.Single(
+            profile.Findings,
+            finding => finding.Code == "SCL_REPORT_DATASET_UNASSIGNED");
         Assert.Equal("Warning", finding.Severity);
-        Assert.DoesNotContain(profile.Findings, f => f.Code == "SCL_REPORT_DATASET_EMPTY");
+        Assert.DoesNotContain(profile.Findings, finding => finding.Code == "SCL_REPORT_DATASET_EMPTY");
     }
 
     private static string BuildScl(

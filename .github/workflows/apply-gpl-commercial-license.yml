@@ -32,7 +32,7 @@ jobs:
           set +e
           rm -f LICENSE_TRANSITION_FAILURE.txt
           sed -i '/apply-gpl-commercial-license.yml/d' scripts/apply-license-transition.py
-          python -c "import runpy, urllib.request; urllib.request.urlopen=lambda *a, **k: open('/usr/share/common-licenses/GPL-3','rb'); runpy.run_path('scripts/apply-license-transition.py', run_name='__main__')" > /tmp/license-transition.log 2>&1
+          python -c "import runpy, urllib.request; original=urllib.request.urlopen; urllib.request.urlopen=lambda req,*a,**k: open('/usr/share/common-licenses/GPL-3','rb') if 'gnu.org/licenses/gpl' in getattr(req,'full_url',str(req)) else original(req,*a,**k); runpy.run_path('scripts/apply-license-transition.py', run_name='__main__')" > /tmp/license-transition.log 2>&1
           status=$?
           cat /tmp/license-transition.log
           if [ "$status" -ne 0 ]; then

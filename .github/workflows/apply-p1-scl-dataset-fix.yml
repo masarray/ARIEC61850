@@ -25,27 +25,29 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
           import shutil
 
           changed = False
 
-          def replace_once(path: str, old: str, new: str) -> None:
+          def sub_once(path: str, pattern: str, replacement: str) -> None:
               global changed
               file = Path(path)
               text = file.read_text(encoding="utf-8")
-              if new in text:
-                  return
-              if old not in text:
-                  raise SystemExit(f"Expected source block was not found in {path}")
-              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE | re.DOTALL)
+              if count == 0:
+                  if replacement.strip() in text:
+                      return
+                  raise SystemExit(f"Scoped source block was not found in {path}: {pattern}")
+              file.write_text(updated, encoding="utf-8")
               changed = True
 
-          replace_once(
-              "src/AR.Iec61850/Scl/SclModels.cs",
-              """public sealed class SclReportControl
-          {
-          """,
-              """public enum SclDataSetBindingStatus
+          models = Path("src/AR.Iec61850/Scl/SclModels.cs")
+          model_text = models.read_text(encoding="utf-8")
+          if "enum SclDataSetBindingStatus" not in model_text:
+              model_text = model_text.replace(
+                  "public sealed class SclReportControl",
+                  """public enum SclDataSetBindingStatus
           {
               NotSpecified,
               Unresolved,
@@ -53,109 +55,86 @@ jobs:
               Resolved
           }
 
-          public sealed class SclReportControl
-          {
-          """)
+          public sealed class SclReportControl""",
+                  1)
+              model_text = model_text.replace(
+                  "    public string DataSetReference { get; init; } = string.Empty;\n    public string ControlBlockReference",
+                  "    public string DataSetReference { get; init; } = string.Empty;\n    public SclDataSetBindingStatus DataSetBindingStatus { get; init; }\n    public string ControlBlockReference",
+                  1)
+              models.write_text(model_text, encoding="utf-8")
+              changed = True
 
-          replace_once(
-              "src/AR.Iec61850/Scl/SclModels.cs",
-              """    public string DataSetReference { get; init; } = string.Empty;
-              public string ControlBlockReference { get; init; } = string.Empty;
-          """,
-              """    public string DataSetReference { get; init; } = string.Empty;
-              public SclDataSetBindingStatus DataSetBindingStatus { get; init; }
-              public string ControlBlockReference { get; init; } = string.Empty;
-          """)
+          parser_path = "src/AR.Iec61850/Scl/SclParser.cs"
+          parser = Path(parser_path).read_text(encoding="utf-8")
+          if "var dataSetBinding = SclDataSetReferenceResolver.Resolve(" not in parser:
+              sub_once(
+                  parser_path,
+                  r'''(?P<indent>\s*)var dataSetName = Attr\(control, "datSet"\);\s*var dataSet = ResolveDataSet\(dataSets, iedName, ldInst, lnPath, dataSetName\);\s*if \(dataSet is null && !string\.IsNullOrWhiteSpace\(dataSetName\)\)\s*warnings\.Add\(\$"Report \{iedName\}\{ldInst\}/\{lnPath\}\$\{name\} references missing DataSet '\{dataSetName\}'\."\);\s*var buffered = BoolAttr\(control, "buffered"\);''',
+                  '''\g<indent>var dataSetName = Attr(control, "datSet");
+          \g<indent>var dataSetBinding = SclDataSetReferenceResolver.Resolve(
+          \g<indent>    dataSets.Values,
+          \g<indent>    iedName,
+          \g<indent>    ldInst,
+          \g<indent>    lnPath,
+          \g<indent>    dataSetName);
+          \g<indent>var dataSet = dataSetBinding.DataSet;
 
-          replace_once(
-              "src/AR.Iec61850/Scl/SclParser.cs",
-              """                        var dataSetName = Attr(control, \"datSet\");
-                          var dataSet = ResolveDataSet(dataSets, iedName, ldInst, lnPath, dataSetName);
-
-                          if (dataSet is null && !string.IsNullOrWhiteSpace(dataSetName))
-                              warnings.Add($\"Report {iedName}{ldInst}/{lnPath}${name} references missing DataSet '{dataSetName}'.\");
-
-                          var buffered = BoolAttr(control, \"buffered\");
-          """,
-              """                        var dataSetName = Attr(control, \"datSet\");
-                          var dataSetBinding = SclDataSetReferenceResolver.Resolve(
-                              dataSets.Values,
-                              iedName,
-                              ldInst,
-                              lnPath,
-                              dataSetName);
-                          var dataSet = dataSetBinding.DataSet;
-
-                          var buffered = BoolAttr(control, \"buffered\");
-          """)
-
-          replace_once(
-              "src/AR.Iec61850/Scl/SclParser.cs",
-              """                            DataSetName = dataSetName,
-                              DataSetReference = dataSet?.Reference ?? BuildDataSetReference(iedName, ldInst, lnPath, dataSetName),
-                              ControlBlockReference = $\"{iedName}{ldInst}/{lnPath}${(buffered ? \"BR\" : \"RP\")}${name}\",
-          """,
-              """                            DataSetName = dataSetName,
+          \g<indent>var buffered = BoolAttr(control, "buffered");''')
+              sub_once(
+                  parser_path,
+                  r'''DataSetName = dataSetName,\s*DataSetReference = dataSet\?\.Reference \?\? BuildDataSetReference\(iedName, ldInst, lnPath, dataSetName\),\s*ControlBlockReference =''',
+                  '''DataSetName = dataSetName,
                               DataSetReference = dataSetBinding.CanonicalReference,
                               DataSetBindingStatus = dataSetBinding.Status,
-                              ControlBlockReference = $\"{iedName}{ldInst}/{lnPath}${(buffered ? \"BR\" : \"RP\")}${name}\",
-          """)
+                              ControlBlockReference =''')
 
-          replace_once(
-              "src/AR.Iec61850/Scl/Engineering/SclEngineeringProfileBuilder.cs",
-              """        foreach (var report in document.ReportControls)
+          engineering_path = "src/AR.Iec61850/Scl/Engineering/SclEngineeringProfileBuilder.cs"
+          engineering = Path(engineering_path).read_text(encoding="utf-8")
+          if "SCL_REPORT_DATASET_UNRESOLVED" not in engineering:
+              sub_once(
+                  engineering_path,
+                  r'''        foreach \(var report in document\.ReportControls\)\s*\{\s*if \(string\.IsNullOrWhiteSpace\(report\.DataSetName\)\)\s*findings\.Add\(Finding\("High", "SCL_REPORT_DATASET_MISSING", \$"Report \{report\.ControlBlockReference\} has no datSet attribute\.", report\.ControlBlockReference\)\);\s*if \(report\.Entries\.Count == 0\)\s*findings\.Add\(Finding\("High", "SCL_REPORT_DATASET_EMPTY", \$"Report \{report\.ControlBlockReference\} has no resolved DataSet members\.", report\.ControlBlockReference\)\);\s*if \(report\.ConfigurationRevision == 0\)\s*findings\.Add\(Finding\("Warning", "SCL_REPORT_CONFREV_ZERO", \$"Report \{report\.ControlBlockReference\} has confRev=0\.", report\.ControlBlockReference\)\);\s*\}''',
+                  '''        foreach (var report in document.ReportControls)
+          {
+              switch (report.DataSetBindingStatus)
               {
-                  if (string.IsNullOrWhiteSpace(report.DataSetName))
-                      findings.Add(Finding(\"High\", \"SCL_REPORT_DATASET_MISSING\", $\"Report {report.ControlBlockReference} has no datSet attribute.\", report.ControlBlockReference));
-                  if (report.Entries.Count == 0)
-                      findings.Add(Finding(\"High\", \"SCL_REPORT_DATASET_EMPTY\", $\"Report {report.ControlBlockReference} has no resolved DataSet members.\", report.ControlBlockReference));
-                  if (report.ConfigurationRevision == 0)
-                      findings.Add(Finding(\"Warning\", \"SCL_REPORT_CONFREV_ZERO\", $\"Report {report.ControlBlockReference} has confRev=0.\", report.ControlBlockReference));
+                  case SclDataSetBindingStatus.NotSpecified when report.Indexed:
+                      findings.Add(Finding(
+                          "Warning",
+                          "SCL_REPORT_DATASET_UNASSIGNED",
+                          $"Indexed report {report.ControlBlockReference} has no datSet assignment. The RCB may be preallocated and must be bound before use.",
+                          report.ControlBlockReference));
+                      break;
+                  case SclDataSetBindingStatus.NotSpecified:
+                      findings.Add(Finding(
+                          "High",
+                          "SCL_REPORT_DATASET_MISSING",
+                          $"Report {report.ControlBlockReference} has no datSet attribute.",
+                          report.ControlBlockReference));
+                      break;
+                  case SclDataSetBindingStatus.Unresolved:
+                      findings.Add(Finding(
+                          "Warning",
+                          "SCL_REPORT_DATASET_UNRESOLVED",
+                          $"Report {report.ControlBlockReference} references DataSet '{report.DataSetName}', but no unique matching DataSet was resolved in the same IED, logical device, and logical node scope.",
+                          report.ControlBlockReference));
+                      break;
+                  case SclDataSetBindingStatus.ResolvedEmpty:
+                      findings.Add(Finding(
+                          "High",
+                          "SCL_REPORT_DATASET_EMPTY",
+                          $"Report {report.ControlBlockReference} resolves to DataSet {report.DataSetReference}, but that DataSet contains no FCDA members.",
+                          report.ControlBlockReference));
+                      break;
               }
-          """,
-              """        foreach (var report in document.ReportControls)
-              {
-                  switch (report.DataSetBindingStatus)
-                  {
-                      case SclDataSetBindingStatus.NotSpecified when report.Indexed:
-                          findings.Add(Finding(
-                              \"Warning\",
-                              \"SCL_REPORT_DATASET_UNASSIGNED\",
-                              $\"Indexed report {report.ControlBlockReference} has no datSet assignment. The RCB may be preallocated and must be bound before use.\",
-                              report.ControlBlockReference));
-                          break;
-                      case SclDataSetBindingStatus.NotSpecified:
-                          findings.Add(Finding(
-                              \"High\",
-                              \"SCL_REPORT_DATASET_MISSING\",
-                              $\"Report {report.ControlBlockReference} has no datSet attribute.\",
-                              report.ControlBlockReference));
-                          break;
-                      case SclDataSetBindingStatus.Unresolved:
-                          findings.Add(Finding(
-                              \"Warning\",
-                              \"SCL_REPORT_DATASET_UNRESOLVED\",
-                              $\"Report {report.ControlBlockReference} references DataSet '{report.DataSetName}', but no unique matching DataSet was resolved in the same IED, logical device, and logical node scope.\",
-                              report.ControlBlockReference));
-                          break;
-                      case SclDataSetBindingStatus.ResolvedEmpty:
-                          findings.Add(Finding(
-                              \"High\",
-                              \"SCL_REPORT_DATASET_EMPTY\",
-                              $\"Report {report.ControlBlockReference} resolves to DataSet {report.DataSetReference}, but that DataSet contains no FCDA members.\",
-                              report.ControlBlockReference));
-                          break;
-                  }
 
-                  if (report.ConfigurationRevision == 0)
-                      findings.Add(Finding(\"Warning\", \"SCL_REPORT_CONFREV_ZERO\", $\"Report {report.ControlBlockReference} has confRev=0.\", report.ControlBlockReference));
-              }
-          """)
+              if (report.ConfigurationRevision == 0)
+                  findings.Add(Finding("Warning", "SCL_REPORT_CONFREV_ZERO", $"Report {report.ControlBlockReference} has confRev=0.", report.ControlBlockReference));
+          }''')
 
           if Path(".p1").exists():
               shutil.rmtree(".p1")
               changed = True
-
           for marker in Path("docs").glob(".keep-p1-note*"):
               marker.unlink()
               changed = True

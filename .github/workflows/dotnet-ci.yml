@@ -32,14 +32,15 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          show-progress: false
+      - name: Checkout source
+        shell: pwsh
+        run: |
+          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" source
 
       - name: Verify source, provenance, wording and license boundaries
         shell: pwsh
-        run: ./scripts/verify-source-clean.ps1
+        run: ./source/scripts/verify-source-clean.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -47,10 +48,10 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore ARIEC61850.sln
+        run: dotnet restore .\source\ARIEC61850.sln
 
       - name: Build
-        run: dotnet build ARIEC61850.sln -c Release --no-restore
+        run: dotnet build .\source\ARIEC61850.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test ARIEC61850.sln -c Release --no-build --verbosity normal
+        run: dotnet test .\source\ARIEC61850.sln -c Release --no-build --verbosity normal

@@ -13,7 +13,7 @@ public sealed class MmsFileTransferTests
         var request = MmsFileOpenRequest.Build(17, @"COMTRADE\TRIP_001.cfg");
         var mms = MmsPresentation.StripPresentationPrefix(request);
         var outer = ReadSingle(mms);
-        Assert.Equal(0xA0, outer.EncodedTag);
+        Assert.Equal((byte)0xA0, outer.EncodedTag);
 
         var children = BerReader.ReadChildren(outer.Value);
         Assert.Equal((ulong)17, BerReader.ReadUnsignedInteger(children[0])!.Value);

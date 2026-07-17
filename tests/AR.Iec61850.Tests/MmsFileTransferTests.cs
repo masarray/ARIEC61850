@@ -23,7 +23,7 @@ public sealed class MmsFileTransferTests
         Assert.Equal(72, service.TagNumber);
 
         var fields = BerReader.ReadChildren(service.Value);
-        var fileName = Assert.Single(fields.Where(field => field.TagNumber == 0));
+        var fileName = Assert.Single(fields, field => field.TagNumber == 0);
         var segments = BerReader.ReadChildren(fileName.Value)
             .Select(BerReader.ReadAsciiString)
             .ToArray();

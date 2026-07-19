@@ -3,6 +3,8 @@ name: Temporary source snapshot
 on:
   push:
     branches: [ fix/live-rcb-dataset-export ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: read

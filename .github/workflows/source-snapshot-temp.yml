@@ -1,23 +1,51 @@
-name: Temporary source snapshot
+name: Temporary apply remaining live RCB export fix
 
 on:
   push:
     branches: [ fix/live-rcb-dataset-export ]
-  pull_request:
-    branches: [ main ]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  snapshot:
+  patch-test-commit:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/upload-artifact@v4
         with:
-          name: ariec61850-source-snapshot
-          path: .
-          include-hidden-files: true
-          retention-days: 1
-      # A second user-authored push activates the one-time patch workflow.
+          ref: fix/live-rcb-dataset-export
+          fetch-depth: 0
+
+      - name: Apply filter and regression-test patch
+        shell: bash
+        run: |
+          if ! grep -q "MergeLiveDataSetEvidence" src/AR.Iec61850/Scl/Export/SclReportControlFilter.cs; then
+            git apply --check --exclude=src/AR.Iec61850/Mms/MmsRcbAvailability.cs scripts/live-rcb-dataset-export.patch
+            git apply --exclude=src/AR.Iec61850/Mms/MmsRcbAvailability.cs scripts/live-rcb-dataset-export.patch
+          fi
+          if ! grep -q "using AR.Iec61850.Mms;" src/AR.Iec61850/Scl/Export/SclReportControlFilter.cs; then
+            sed -i '/using AR.Iec61850.Discovery;/a using AR.Iec61850.Mms;' src/AR.Iec61850/Scl/Export/SclReportControlFilter.cs
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore and test all engine projects
+        shell: bash
+        run: |
+          dotnet restore ARIEC61850.sln
+          dotnet test ARIEC61850.sln -c Release --no-restore
+
+      - name: Commit tested source changes
+        shell: bash
+        run: |
+          if git diff --quiet -- src tests; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          git commit -m "Preserve live DataSet members for selected-RCB export"
+          git push origin HEAD:fix/live-rcb-dataset-export

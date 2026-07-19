@@ -20,3 +20,4 @@ jobs:
           path: .
           include-hidden-files: true
           retention-days: 1
+      # A second user-authored push activates the one-time patch workflow.

@@ -44,7 +44,9 @@ public sealed class MmsRcbAvailabilitySnapshot
     public string Owner { get; init; } = string.Empty;
     public bool DataSetDirectoryRead { get; init; }
     public bool DataSetDirectorySuccess { get; init; }
+    public bool? DataSetIsDeletable { get; init; }
     public int DataSetMemberCount { get; init; }
+    public IReadOnlyList<MmsDataSetDirectoryMember> DataSetMembers { get; init; } = Array.Empty<MmsDataSetDirectoryMember>();
     public MmsRcbOperationalAvailability Availability { get; init; }
     public MmsRcbAvailabilityConfidence Confidence { get; init; } = MmsRcbAvailabilityConfidence.Unknown;
     public string Reason { get; init; } = string.Empty;
@@ -161,7 +163,9 @@ public static class MmsRcbAvailabilityEvaluator
             Owner = candidate.Owner,
             DataSetDirectoryRead = directoryRead,
             DataSetDirectorySuccess = directorySuccess,
+            DataSetIsDeletable = dataSetDirectory?.IsDeletable,
             DataSetMemberCount = memberCount,
+            DataSetMembers = dataSetDirectory?.Members.ToArray() ?? Array.Empty<MmsDataSetDirectoryMember>(),
             Availability = availability,
             Confidence = confidence,
             Reason = reason,

@@ -1,0 +1,49 @@
+name: Temporary apply tested live RCB patch v2
+
+on:
+  push:
+    branches: [ fix/live-rcb-dataset-export ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/live-rcb-dataset-export
+          fetch-depth: 0
+
+      - name: Apply patch
+        shell: bash
+        run: |
+          if grep -q "DataSetMembers { get; init; }" src/AR.Iec61850/Mms/MmsRcbAvailability.cs; then
+            echo "Patch already applied."
+          else
+            git apply --check scripts/live-rcb-dataset-export.patch
+            git apply scripts/live-rcb-dataset-export.patch
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore and run all tests
+        shell: bash
+        run: |
+          dotnet restore ARIEC61850.sln
+          dotnet test ARIEC61850.sln -c Release --no-restore
+
+      - name: Commit tested source changes
+        shell: bash
+        run: |
+          if git diff --quiet -- src tests; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          git commit -m "Preserve live DataSet members for selected-RCB export"
+          git push origin HEAD:fix/live-rcb-dataset-export

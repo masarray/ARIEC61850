@@ -24,6 +24,7 @@ public sealed class MmsReportControlCandidate
     public string EnabledState { get; set; } = string.Empty;
     public string ReservationState { get; set; } = string.Empty;
     public string ReservationTimeSeconds { get; set; } = string.Empty;
+    public string Owner { get; set; } = string.Empty;
     public string BufferTimeMs { get; set; } = string.Empty;
     public string TriggerOptions { get; set; } = string.Empty;
     public string OptionalFields { get; set; } = string.Empty;

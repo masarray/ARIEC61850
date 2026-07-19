@@ -1,0 +1,331 @@
+diff --git a/src/AR.Iec61850/Mms/MmsRcbAvailability.cs b/src/AR.Iec61850/Mms/MmsRcbAvailability.cs
+index ec3073b..6fcddea 100644
+--- a/src/AR.Iec61850/Mms/MmsRcbAvailability.cs
++++ b/src/AR.Iec61850/Mms/MmsRcbAvailability.cs
+@@ -44,7 +44,9 @@ public sealed class MmsRcbAvailabilitySnapshot
+     public string Owner { get; init; } = string.Empty;
+     public bool DataSetDirectoryRead { get; init; }
+     public bool DataSetDirectorySuccess { get; init; }
++    public bool? DataSetIsDeletable { get; init; }
+     public int DataSetMemberCount { get; init; }
++    public IReadOnlyList<MmsDataSetDirectoryMember> DataSetMembers { get; init; } = Array.Empty<MmsDataSetDirectoryMember>();
+     public MmsRcbOperationalAvailability Availability { get; init; }
+     public MmsRcbAvailabilityConfidence Confidence { get; init; } = MmsRcbAvailabilityConfidence.Unknown;
+     public string Reason { get; init; } = string.Empty;
+@@ -161,7 +163,9 @@ public static MmsRcbAvailabilitySnapshot Evaluate(
+             Owner = candidate.Owner,
+             DataSetDirectoryRead = directoryRead,
+             DataSetDirectorySuccess = directorySuccess,
++            DataSetIsDeletable = dataSetDirectory?.IsDeletable,
+             DataSetMemberCount = memberCount,
++            DataSetMembers = dataSetDirectory?.Members.ToArray() ?? Array.Empty<MmsDataSetDirectoryMember>(),
+             Availability = availability,
+             Confidence = confidence,
+             Reason = reason,
+diff --git a/src/AR.Iec61850/Scl/Export/SclReportControlFilter.cs b/src/AR.Iec61850/Scl/Export/SclReportControlFilter.cs
+index 6fa3bd6..dfdd433 100644
+--- a/src/AR.Iec61850/Scl/Export/SclReportControlFilter.cs
++++ b/src/AR.Iec61850/Scl/Export/SclReportControlFilter.cs
+@@ -237,6 +237,202 @@ public static SclReportControlFilterResult Filter(
+         };
+     }
+ 
++    public static LiveIedModelDiscoveryDocument FilterLiveModel(
++        LiveIedModelDiscoveryDocument source,
++        string selectedReportControlReference,
++        MmsRcbAvailabilityResult availability)
++    {
++        ArgumentNullException.ThrowIfNull(availability);
++        return FilterLiveModel(
++            MergeLiveDataSetEvidence(source, availability.ReportControls),
++            selectedReportControlReference);
++    }
++
++    /// <summary>
++    /// Merges the exact DataSet directory returned by the read-only RCB availability
++    /// audit into a cloned live discovery document. Some relays expose the DataSet
++    /// member count during discovery but only return the actual member references when
++    /// GetDataSetDirectory is requested explicitly. The source model is never mutated.
++    /// </summary>
++    public static LiveIedModelDiscoveryDocument MergeLiveDataSetEvidence(
++        LiveIedModelDiscoveryDocument source,
++        IEnumerable<MmsRcbAvailabilitySnapshot> availabilitySnapshots)
++    {
++        ArgumentNullException.ThrowIfNull(source);
++        ArgumentNullException.ThrowIfNull(availabilitySnapshots);
++
++        var evidenceByReference = availabilitySnapshots
++            .Where(snapshot => snapshot.DataSetDirectorySuccess &&
++                               !string.IsNullOrWhiteSpace(snapshot.DataSetReference) &&
++                               snapshot.DataSetMembers.Count > 0)
++            .GroupBy(snapshot => NormalizeReference(snapshot.DataSetReference), StringComparer.OrdinalIgnoreCase)
++            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
++
++        if (evidenceByReference.Count == 0)
++            return source;
++
++        var mergedDataSets = new List<LiveIedDataSetModel>();
++        var mergedReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
++        foreach (var dataSet in source.DataSets)
++        {
++            var normalized = NormalizeReference(dataSet.Reference);
++            if (!evidenceByReference.TryGetValue(normalized, out var evidence))
++            {
++                mergedDataSets.Add(dataSet);
++                mergedReferences.Add(normalized);
++                continue;
++            }
++
++            mergedDataSets.Add(MergeDataSet(dataSet, evidence));
++            mergedReferences.Add(normalized);
++        }
++
++        foreach (var pair in evidenceByReference)
++        {
++            if (mergedReferences.Contains(pair.Key))
++                continue;
++            mergedDataSets.Add(CreateDataSetFromEvidence(source, pair.Value));
++        }
++
++        var coverage = source.Coverage;
++        var mergedCoverage = new LiveIedModelDiscoveryCoverage
++        {
++            LogicalDeviceCount = coverage.LogicalDeviceCount,
++            LogicalNodeCount = coverage.LogicalNodeCount,
++            DataObjectCount = coverage.DataObjectCount,
++            DataAttributeCount = coverage.DataAttributeCount,
++            ExactFunctionalConstraintCount = coverage.ExactFunctionalConstraintCount,
++            HighConfidenceCdcCount = coverage.HighConfidenceCdcCount,
++            MediumConfidenceCdcCount = coverage.MediumConfidenceCdcCount,
++            LowConfidenceCdcCount = coverage.LowConfidenceCdcCount,
++            UnknownCdcCount = coverage.UnknownCdcCount,
++            DataSetCount = mergedDataSets.Count,
++            FileCount = coverage.FileCount,
++            VariableTypeReadAttemptCount = coverage.VariableTypeReadAttemptCount,
++            VariableTypeReadSuccessCount = coverage.VariableTypeReadSuccessCount,
++            VariableTypeReadFailureCount = coverage.VariableTypeReadFailureCount,
++            ExactMmsTypeCount = coverage.ExactMmsTypeCount,
++            ReportControlCount = coverage.ReportControlCount,
++            BufferedReportControlCount = coverage.BufferedReportControlCount,
++            UnbufferedReportControlCount = coverage.UnbufferedReportControlCount,
++            GooseControlBlockCount = coverage.GooseControlBlockCount,
++            SampledValueControlBlockCount = coverage.SampledValueControlBlockCount,
++            SettingGroupControlCount = coverage.SettingGroupControlCount,
++            LogControlCount = coverage.LogControlCount
++        };
++
++        return new LiveIedModelDiscoveryDocument
++        {
++            SchemaVersion = source.SchemaVersion,
++            GeneratedAtUtc = source.GeneratedAtUtc,
++            Source = source.Source,
++            Host = source.Host,
++            Port = source.Port,
++            IedName = source.IedName,
++            IedIdentity = source.IedIdentity,
++            AccessPointName = source.AccessPointName,
++            Summary = $"{source.Summary} Live DataSet directory evidence merged for selected-RCB export.",
++            Coverage = mergedCoverage,
++            LogicalDevices = source.LogicalDevices,
++            FileDirectory = source.FileDirectory,
++            DataSets = mergedDataSets
++                .OrderBy(item => item.Reference, StringComparer.OrdinalIgnoreCase)
++                .ToArray(),
++            ReportControls = source.ReportControls,
++            GooseControlBlocks = source.GooseControlBlocks,
++            SampledValueControlBlocks = source.SampledValueControlBlocks,
++            SettingGroupControls = source.SettingGroupControls,
++            LogControls = source.LogControls,
++            TypeTemplates = source.TypeTemplates,
++            VariableTypeDiscoveries = source.VariableTypeDiscoveries,
++            Warnings = source.Warnings
++        };
++    }
++
++    private static LiveIedDataSetModel MergeDataSet(
++        LiveIedDataSetModel source,
++        MmsRcbAvailabilitySnapshot evidence)
++    {
++        var members = ConvertDataSetMembers(evidence);
++        return new LiveIedDataSetModel
++        {
++            Reference = source.Reference,
++            Domain = source.Domain,
++            LogicalNode = source.LogicalNode,
++            Name = source.Name,
++            IsDeletable = evidence.DataSetIsDeletable ?? source.IsDeletable,
++            MemberCount = members.Count,
++            Members = members,
++            UsedByReportControls = source.UsedByReportControls,
++            UsedByGooseControls = source.UsedByGooseControls,
++            UsedBySampledValueControls = source.UsedBySampledValueControls
++        };
++    }
++
++    private static LiveIedDataSetModel CreateDataSetFromEvidence(
++        LiveIedModelDiscoveryDocument source,
++        MmsRcbAvailabilitySnapshot evidence)
++    {
++        var (domain, logicalNode, name) = ParseDataSetReference(evidence.DataSetReference);
++        var usedByReports = source.ReportControls
++            .Where(control => NormalizeReference(control.DataSetReference)
++                .Equals(NormalizeReference(evidence.DataSetReference), StringComparison.OrdinalIgnoreCase))
++            .Select(control => control.Reference)
++            .Distinct(StringComparer.OrdinalIgnoreCase)
++            .ToArray();
++        var members = ConvertDataSetMembers(evidence);
++        return new LiveIedDataSetModel
++        {
++            Reference = evidence.DataSetReference,
++            Domain = domain,
++            LogicalNode = logicalNode,
++            Name = name,
++            IsDeletable = evidence.DataSetIsDeletable,
++            MemberCount = members.Count,
++            Members = members,
++            UsedByReportControls = usedByReports
++        };
++    }
++
++    private static IReadOnlyList<LiveIedDataSetMemberModel> ConvertDataSetMembers(
++        MmsRcbAvailabilitySnapshot evidence)
++        => evidence.DataSetMembers
++            .Select((member, index) => new LiveIedDataSetMemberModel
++            {
++                Index = index,
++                Reference = FirstNonEmpty(member.UserReference, member.MmsReference),
++                FunctionalConstraint = member.FunctionalConstraint,
++                MmsReference = member.MmsReference,
++                Confidence = member.Confidence >= 90
++                    ? LiveIedDiscoveryConfidenceLevel.Exact
++                    : LiveIedDiscoveryConfidenceLevel.High
++            })
++            .Where(member => !string.IsNullOrWhiteSpace(member.Reference))
++            .GroupBy(member => $"{NormalizeReference(member.Reference)}|{member.FunctionalConstraint}", StringComparer.OrdinalIgnoreCase)
++            .Select(group => group.First())
++            .Select((member, index) => new LiveIedDataSetMemberModel
++            {
++                Index = index,
++                Reference = member.Reference,
++                FunctionalConstraint = member.FunctionalConstraint,
++                MmsReference = member.MmsReference,
++                Confidence = member.Confidence
++            })
++            .ToArray();
++
++    private static (string Domain, string LogicalNode, string Name) ParseDataSetReference(string reference)
++    {
++        var normalized = NormalizeReference(reference);
++        var slash = normalized.IndexOf('/');
++        var dot = normalized.LastIndexOf('.');
++        if (slash <= 0 || dot <= slash || dot >= normalized.Length - 1)
++            throw new InvalidOperationException($"DataSet reference '{reference}' cannot be mapped into the live SCL model.");
++        return (normalized[..slash], normalized[(slash + 1)..dot], normalized[(dot + 1)..]);
++    }
++
++    private static string FirstNonEmpty(params string?[] values)
++        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
++
+     public static LiveIedModelDiscoveryDocument FilterLiveModel(
+         LiveIedModelDiscoveryDocument source,
+         string selectedReportControlReference)
+diff --git a/tests/AR.Iec61850.Tests/Mms/MmsRcbAvailabilityTests.cs b/tests/AR.Iec61850.Tests/Mms/MmsRcbAvailabilityTests.cs
+index 0605682..d3559f9 100644
+--- a/tests/AR.Iec61850.Tests/Mms/MmsRcbAvailabilityTests.cs
++++ b/tests/AR.Iec61850.Tests/Mms/MmsRcbAvailabilityTests.cs
+@@ -17,6 +17,8 @@ public void Evaluate_Requires_Explicit_Free_Runtime_State_For_Green_Available()
+         Assert.Equal(MmsRcbAvailabilityConfidence.Exact, result.Confidence);
+         Assert.True(result.IsSelectable);
+         Assert.Equal(2, result.DataSetMemberCount);
++        Assert.Equal(2, result.DataSetMembers.Count);
++        Assert.Equal("IED1LD0/XCBR1.Pos.stVal", result.DataSetMembers[0].UserReference);
+     }
+ 
+     [Theory]
+diff --git a/tests/AR.Iec61850.Tests/Scl/SclReportControlFilterTests.cs b/tests/AR.Iec61850.Tests/Scl/SclReportControlFilterTests.cs
+index 49001e2..549231b 100644
+--- a/tests/AR.Iec61850.Tests/Scl/SclReportControlFilterTests.cs
++++ b/tests/AR.Iec61850.Tests/Scl/SclReportControlFilterTests.cs
+@@ -1,5 +1,6 @@
+ using System.Xml.Linq;
+ using AR.Iec61850.Discovery;
++using AR.Iec61850.Mms;
+ using AR.Iec61850.Scl;
+ using AR.Iec61850.Scl.Export;
+ 
+@@ -181,6 +182,75 @@ public void FilterLiveModel_Retains_One_Rcb_And_Validates_DataSet()
+         Assert.Equal(2, source.ReportControls.Count);
+     }
+ 
++
++    [Fact]
++    public void FilterLiveModel_Merges_ReadOnly_DataSet_Directory_Evidence_Before_Export()
++    {
++        var dataSet = new LiveIedDataSetModel
++        {
++            Reference = "IED1LD0/LLN0.DataSet",
++            Domain = "IED1LD0",
++            LogicalNode = "LLN0",
++            Name = "DataSet",
++            MemberCount = 1,
++            Members = Array.Empty<LiveIedDataSetMemberModel>()
++        };
++        var selected = new LiveIedReportControlModel
++        {
++            Reference = "IED1LD0/LLN0.RP.URCB01",
++            Domain = "IED1LD0",
++            LogicalNode = "LLN0",
++            Name = "URCB01",
++            Buffered = false,
++            DataSetReference = dataSet.Reference
++        };
++        var source = new LiveIedModelDiscoveryDocument
++        {
++            IedName = "IED1",
++            DataSets = new[] { dataSet },
++            ReportControls = new[] { selected },
++            Coverage = new LiveIedModelDiscoveryCoverage
++            {
++                ReportControlCount = 1,
++                UnbufferedReportControlCount = 1,
++                DataSetCount = 1
++            }
++        };
++        var availability = new MmsRcbAvailabilityResult
++        {
++            ReportControls = new[]
++            {
++                new MmsRcbAvailabilitySnapshot
++                {
++                    Reference = selected.Reference,
++                    DataSetReference = dataSet.Reference,
++                    DataSetDirectoryRead = true,
++                    DataSetDirectorySuccess = true,
++                    DataSetMemberCount = 1,
++                    DataSetMembers = new[]
++                    {
++                        new MmsDataSetDirectoryMember
++                        {
++                            Domain = "IED1LD0",
++                            MmsItemName = "XCBR1$ST$Pos$stVal",
++                            UserReference = "IED1LD0/XCBR1.Pos.stVal",
++                            FunctionalConstraint = "ST"
++                        }
++                    }
++                }
++            }
++        };
++
++        var filtered = SclReportControlFilter.FilterLiveModel(source, selected.Reference, availability);
++
++        var mergedDataSet = Assert.Single(filtered.DataSets);
++        var member = Assert.Single(mergedDataSet.Members);
++        Assert.Equal("IED1LD0/XCBR1.Pos.stVal", member.Reference);
++        Assert.Equal("ST", member.FunctionalConstraint);
++        Assert.Empty(source.DataSets[0].Members);
++        Assert.Single(filtered.ReportControls);
++    }
++
+     private static string Fixture()
+         => """
+            <?xml version="1.0" encoding="utf-8"?>

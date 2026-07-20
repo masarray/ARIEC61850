@@ -1,0 +1,117 @@
+name: Temporary apply live SCL IED identity fix
+
+on:
+  push:
+    branches: [ fix/live-scl-ied-identity ]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/live-scl-ied-identity
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Apply exporter identity patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs')
+          text = path.read_text(encoding='utf-8')
+
+          old = 'EffectiveIedName(model)'
+          if text.count(old) != 4:
+              raise SystemExit(f'Expected 4 EffectiveIedName(model) calls, found {text.count(old)}')
+          text = text.replace(old, 'EffectiveIedName(model, options)', 3)
+
+          old_map = 'StripIedNamePrefix(domain, model.IedName)'
+          new_map = 'StripIedNamePrefix(domain, EffectiveIedName(model, options))'
+          if old_map not in text:
+              raise SystemExit('Logical-device identity mapping anchor not found')
+          text = text.replace(old_map, new_map, 1)
+
+          old_ld = '        var lDevice = new XElement(Scl + "LDevice", new XAttribute("inst", sclLdInst));'
+          new_ld = '''        var effectiveIedName = EffectiveIedName(model, options);
+          var implicitCommunicationName = $"{effectiveIedName}{sclLdInst}";
+          var explicitCommunicationName = !ldDomain.Equals(implicitCommunicationName, StringComparison.OrdinalIgnoreCase)
+              ? new XAttribute("ldName", ldDomain)
+              : null;
+          var lDevice = new XElement(
+              Scl + "LDevice",
+              new XAttribute("inst", sclLdInst),
+              explicitCommunicationName);'''
+          if old_ld not in text:
+              raise SystemExit('LDevice construction anchor not found')
+          text = text.replace(old_ld, new_ld, 1)
+
+          old_reconstructed = '''    private static string ReconstructedLogicalDeviceReference(
+              LiveIedModelDiscoveryDocument model,
+              LiveIedSclBuildContext context,
+              string domain)
+          {
+              var sclLdInst = SclLogicalDeviceInstByDomain(context, domain);
+              return $"{EffectiveIedName(model)}{sclLdInst}";
+          }'''
+          new_reconstructed = '''    private static string ReconstructedLogicalDeviceReference(
+              LiveIedModelDiscoveryDocument model,
+              LiveIedSclBuildContext context,
+              string domain)
+          {
+              _ = model;
+              _ = context;
+              // The MMS domain is the communication-level Logical Device name. It can be
+              // explicitly configured through LDevice.ldName and must not be reconstructed
+              // by concatenating an inferred IED name with an arbitrary LD instance.
+              return domain.Trim();
+          }'''
+          if old_reconstructed not in text:
+              raise SystemExit('Reconstructed Logical Device reference anchor not found')
+          text = text.replace(old_reconstructed, new_reconstructed, 1)
+
+          old_effective = '''    private static string EffectiveIedName(LiveIedModelDiscoveryDocument model)
+              => string.IsNullOrWhiteSpace(model.IedName) ? "LIVE_IED" : SafeXmlName(model.IedName);'''
+          new_effective = '''    private static string EffectiveIedName(
+              LiveIedModelDiscoveryDocument model,
+              LiveIedSclExportOptions options)
+          {
+              var authoritative = string.IsNullOrWhiteSpace(options.IedNameOverride)
+                  ? model.IedName
+                  : options.IedNameOverride;
+              return string.IsNullOrWhiteSpace(authoritative) ? "LIVE_IED" : SafeXmlName(authoritative);
+          }'''
+          if old_effective not in text:
+              raise SystemExit('Effective IED name method anchor not found')
+          text = text.replace(old_effective, new_effective, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Verify focused identity contracts
+        shell: bash
+        run: |
+          grep -q 'IedNameOverride' src/AR.Iec61850/Scl/Export/LiveIedSclExportModels.cs
+          grep -q 'new XAttribute("ldName", ldDomain)' src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs
+          grep -q 'return domain.Trim();' src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs
+          grep -q 'OCR7SJ8Mod2' tests/AR.Iec61850.Tests/Scl/LiveIedSclIedIdentityTests.cs
+
+      - name: Test engine
+        run: dotnet test ARIEC61850.sln -c Release --no-restore
+
+      - name: Commit source and remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-live-scl-ied-identity-temp.yml .github/live-scl-ied-identity-trigger.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/AR.Iec61850/Scl/Export/LiveIedSclExporter.cs src/AR.Iec61850/Scl/Export/LiveIedSclExportModels.cs tests/AR.Iec61850.Tests/Scl/LiveIedSclIedIdentityTests.cs
+          git commit -m "Preserve authoritative IED identity in live SCL export"
+          git push origin HEAD:fix/live-scl-ied-identity

@@ -1,0 +1,1 @@
+Large DAT files may be returned as one MMS FileRead response carried over thousands of COTP segments. The transport must reassemble that response before MMS decoding.

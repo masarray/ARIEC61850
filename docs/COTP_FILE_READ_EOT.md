@@ -1,0 +1,1 @@
+A segmented response completes only when the COTP EOT bit is set on the final Data TPDU.

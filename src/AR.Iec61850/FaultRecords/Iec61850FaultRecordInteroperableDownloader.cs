@@ -93,9 +93,9 @@ public static class Iec61850FaultRecordInteroperableDownloader
                     if (!transfer.IsSuccess)
                     {
                         throw new InvalidDataException(
-                            $"{file.RemotePath}: {transfer.Message} " +
-                            $"Request={ValueOrDash(session.LastDiscoveryRequestHex)}; " +
-                            $"Response={ValueOrDash(session.LastDiscoveryResponseHex)}");
+                            $"Fault-record file transfer failed for '{file.RemotePath}'.\n" +
+                            $"Transfer summary: {transfer.Message}\n\n" +
+                            session.LastFileTransferDiagnosticText);
                     }
 
                     totalBytes += transfer.BytesTransferred;
@@ -186,7 +186,4 @@ public static class Iec61850FaultRecordInteroperableDownloader
             RecordId = record.RecordId,
             Message = message
         };
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 }

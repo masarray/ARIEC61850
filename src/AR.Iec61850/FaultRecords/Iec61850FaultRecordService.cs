@@ -11,7 +11,8 @@ public enum Iec61850FaultRecordFileKind
     Header,
     Information,
     Combined,
-    Archive
+    Archive,
+    VendorPackage
 }
 
 public sealed class Iec61850FaultRecordFile
@@ -38,6 +39,7 @@ public sealed class Iec61850FaultRecordSet
     public long KnownSizeBytes { get; init; }
     public bool HasUnknownSize { get; init; }
     public DateTimeOffset? LastModifiedUtc { get; init; }
+    public bool CanDownload => Files.Count > 0;
 }
 
 public sealed class Iec61850FaultRecordCatalog
@@ -110,8 +112,16 @@ public static class Iec61850FaultRecordCatalogBuilder
             [".zip"] = Iec61850FaultRecordFileKind.Archive
         };
 
+    private static readonly string[] VendorPackagePrefixes =
+    [
+        "FRA", "FAULT", "DIST", "COMTRADE", "OSC", "RECORD", "REC", "DR"
+    ];
+
     public static bool IsSupportedFile(string path)
-        => SupportedExtensions.ContainsKey(Path.GetExtension(path ?? string.Empty));
+    {
+        var normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
+        return SupportedExtensions.ContainsKey(Path.GetExtension(normalized)) || LooksLikeVendorFaultRecordPackage(normalized);
+    }
 
     public static Iec61850FaultRecordCatalog Build(
         IEnumerable<MmsFileDirectoryEntry> entries,
@@ -121,7 +131,7 @@ public static class Iec61850FaultRecordCatalogBuilder
         ArgumentNullException.ThrowIfNull(entries);
 
         var files = entries
-            .Where(entry => IsSupportedFile(entry.Path))
+            .Where(entry => !entry.IsLikelyDirectory && IsSupportedFile(entry.Path))
             .Select(ToFaultRecordFile)
             .DistinctBy(file => file.RemotePath, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -155,7 +165,9 @@ public static class Iec61850FaultRecordCatalogBuilder
         var directory = Iec61850RemotePath.GetDirectoryName(remotePath);
         var extension = Path.GetExtension(name).ToLowerInvariant();
         var baseName = Path.GetFileNameWithoutExtension(name);
-        var kind = SupportedExtensions[extension];
+        var kind = SupportedExtensions.TryGetValue(extension, out var knownKind)
+            ? knownKind
+            : Iec61850FaultRecordFileKind.VendorPackage;
 
         return new Iec61850FaultRecordFile
         {
@@ -183,7 +195,8 @@ public static class Iec61850FaultRecordCatalogBuilder
         var hasData = files.Any(file => file.Kind == Iec61850FaultRecordFileKind.Data);
         var hasCombined = files.Any(file => file.Kind == Iec61850FaultRecordFileKind.Combined);
         var hasArchive = files.Any(file => file.Kind == Iec61850FaultRecordFileKind.Archive);
-        var complete = hasCombined || hasArchive || (hasConfiguration && hasData);
+        var hasVendorPackage = files.Any(file => file.Kind == Iec61850FaultRecordFileKind.VendorPackage);
+        var complete = hasVendorPackage || hasCombined || hasArchive || (hasConfiguration && hasData);
         var first = files[0];
         var modifiedTimes = files
             .Where(file => file.LastModifiedUtc.HasValue)
@@ -197,7 +210,7 @@ public static class Iec61850FaultRecordCatalogBuilder
             BaseName = first.BaseName,
             Files = files,
             IsComplete = complete,
-            Completeness = DescribeCompleteness(hasConfiguration, hasData, hasCombined, hasArchive),
+            Completeness = DescribeCompleteness(hasConfiguration, hasData, hasCombined, hasArchive, hasVendorPackage),
             KnownSizeBytes = files.Sum(file => (long)(file.SizeBytes ?? 0)),
             HasUnknownSize = files.Any(file => !file.SizeBytes.HasValue || file.SizeBytes.Value == 0),
             LastModifiedUtc = modifiedTimes.Length == 0 ? null : modifiedTimes.Max()
@@ -208,8 +221,11 @@ public static class Iec61850FaultRecordCatalogBuilder
         bool hasConfiguration,
         bool hasData,
         bool hasCombined,
-        bool hasArchive)
+        bool hasArchive,
+        bool hasVendorPackage)
     {
+        if (hasVendorPackage)
+            return "IED fault-record package";
         if (hasCombined)
             return "Combined COMTRADE file";
         if (hasArchive)
@@ -221,6 +237,22 @@ public static class Iec61850FaultRecordCatalogBuilder
         if (hasData)
             return "Missing CFG";
         return "Incomplete";
+    }
+
+    private static bool LooksLikeVendorFaultRecordPackage(string path)
+    {
+        var name = Iec61850RemotePath.GetFileName(path);
+        if (string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(Path.GetExtension(name)))
+            return false;
+
+        var compact = new string(name
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToUpperInvariant)
+            .ToArray());
+        if (!compact.Any(char.IsDigit))
+            return false;
+
+        return VendorPackagePrefixes.Any(prefix => compact.StartsWith(prefix, StringComparison.Ordinal));
     }
 
     private static string BuildRecordId(string directory, string baseName)
@@ -537,8 +569,8 @@ internal static class Iec61850RemotePath
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var normalized = NormalizeSegments(path.Trim().Replace('\\', '/'), allowEmpty: false);
-        if (string.IsNullOrWhiteSpace(Path.GetExtension(GetFileName(normalized))))
-            throw new ArgumentException("Remote file path has no supported file extension.", nameof(path));
+        if (string.IsNullOrWhiteSpace(GetFileName(normalized)))
+            throw new ArgumentException("Remote file path has no usable filename.", nameof(path));
 
         return normalized;
     }

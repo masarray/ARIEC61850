@@ -42,27 +42,81 @@ public static class LiveIedIdentityResolver
                 [$"IED name was supplied explicitly as '{name}'."]);
         }
 
-        var suffixCandidates = materialized
-            .Select(domain => TryExtractKnownLogicalDevicePrefix(domain, out var candidate) ? candidate : string.Empty)
-            .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+        var suffixMatches = materialized
+            .Select(domain => new
+            {
+                Domain = domain,
+                Candidate = TryExtractKnownLogicalDevicePrefix(domain, out var candidate) ? candidate : string.Empty
+            })
+            .Where(match => !string.IsNullOrWhiteSpace(match.Candidate))
             .ToArray();
-        var distinctSuffixCandidates = suffixCandidates
+        var distinctSuffixCandidates = suffixMatches
+            .Select(match => match.Candidate)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(candidate => candidate, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        if (distinctSuffixCandidates.Length == 1)
+        // A known LD suffix is authoritative only when it explains the complete domain set.
+        // A single nested domain such as OCR7SJ8Mod2_MU1 must never rename the physical IED
+        // to OCR7SJ8Mod2 while sibling domains prove the shared OCR7SJ8 prefix.
+        if (materialized.Length > 0 && suffixMatches.Length == materialized.Length)
         {
-            var name = distinctSuffixCandidates[0];
-            var confidence = suffixCandidates.Length == materialized.Length && materialized.Length > 1
+            if (distinctSuffixCandidates.Length == 1)
+            {
+                var name = distinctSuffixCandidates[0];
+                var confidence = materialized.Length > 1
+                    ? LiveIedDiscoveryConfidenceLevel.High
+                    : LiveIedDiscoveryConfidenceLevel.Medium;
+                var evidence = suffixMatches
+                    .Select(match => $"MMS domain '{match.Domain}' matched the logical-device suffix pattern for IED '{name}'.")
+                    .ToArray();
+
+                return Create(name, "MmsDomainKnownLogicalDeviceSuffix", confidence, false, distinctSuffixCandidates, materialized, evidence);
+            }
+
+            if (distinctSuffixCandidates.Length > 1)
+            {
+                return CreateFallback(
+                    host,
+                    fallbackName,
+                    distinctSuffixCandidates,
+                    materialized,
+                    true,
+                    $"MMS domains produced conflicting IED-name candidates: {string.Join(", ", distinctSuffixCandidates)}.");
+            }
+        }
+
+        var commonPrefix = InferCommonPrefix(materialized);
+        if (!string.IsNullOrWhiteSpace(commonPrefix))
+        {
+            var confidence = materialized.Length >= 3
                 ? LiveIedDiscoveryConfidenceLevel.High
                 : LiveIedDiscoveryConfidenceLevel.Medium;
-            var evidence = materialized
-                .Where(domain => domain.StartsWith(name, StringComparison.OrdinalIgnoreCase))
-                .Select(domain => $"MMS domain '{domain}' matched the logical-device suffix pattern for IED '{name}'.")
-                .ToArray();
+            return Create(
+                commonPrefix,
+                "MmsDomainCommonPrefix",
+                confidence,
+                false,
+                [commonPrefix],
+                materialized,
+                [$"IED name '{commonPrefix}' was derived from the common prefix of {materialized.Length} MMS domain(s)."]);
+        }
 
-            return Create(name, "MmsDomainKnownLogicalDeviceSuffix", confidence, false, distinctSuffixCandidates, materialized, evidence);
+        // Retain the useful single-domain behavior (for example OLSF501LD0), but do not
+        // let one partially matching domain dominate a larger mixed domain inventory.
+        if (distinctSuffixCandidates.Length == 1 &&
+            (materialized.Length == 1 ||
+             (suffixMatches.Length >= 2 && materialized.All(domain => domain.StartsWith(distinctSuffixCandidates[0], StringComparison.OrdinalIgnoreCase)))))
+        {
+            var name = distinctSuffixCandidates[0];
+            return Create(
+                name,
+                "MmsDomainKnownLogicalDeviceSuffix",
+                materialized.Length == 1 ? LiveIedDiscoveryConfidenceLevel.Medium : LiveIedDiscoveryConfidenceLevel.High,
+                false,
+                distinctSuffixCandidates,
+                materialized,
+                suffixMatches.Select(match => $"MMS domain '{match.Domain}' matched the logical-device suffix pattern for IED '{name}'.").ToArray());
         }
 
         if (distinctSuffixCandidates.Length > 1)
@@ -74,19 +128,6 @@ public static class LiveIedIdentityResolver
                 materialized,
                 true,
                 $"MMS domains produced conflicting IED-name candidates: {string.Join(", ", distinctSuffixCandidates)}.");
-        }
-
-        var commonPrefix = InferCommonPrefix(materialized);
-        if (!string.IsNullOrWhiteSpace(commonPrefix))
-        {
-            return Create(
-                commonPrefix,
-                "MmsDomainCommonPrefix",
-                LiveIedDiscoveryConfidenceLevel.Medium,
-                false,
-                [commonPrefix],
-                materialized,
-                [$"IED name '{commonPrefix}' was derived from the common prefix of {materialized.Length} MMS domain(s)."]);
         }
 
         return CreateFallback(

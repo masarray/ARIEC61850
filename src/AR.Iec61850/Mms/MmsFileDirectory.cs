@@ -10,7 +10,25 @@ public sealed class MmsFileDirectoryEntry
     public uint? SizeBytes { get; init; }
     public byte[] LastModifiedRaw { get; init; } = Array.Empty<byte>();
     public string LastModifiedDisplay => LastModifiedRaw.Length == 0 ? string.Empty : Convert.ToHexString(LastModifiedRaw);
-    public bool IsLikelyDirectory => string.IsNullOrWhiteSpace(System.IO.Path.GetExtension(Name));
+
+    // Several protection relays expose disturbance packages with no filename extension
+    // (for example FRA00019). A non-zero declared size proves such an entry is a file,
+    // not a directory. Directories are accepted when the server uses a trailing separator
+    // or reports an extensionless zero/unknown-size entry.
+    public bool IsLikelyDirectory
+    {
+        get
+        {
+            var hasDirectoryTerminator =
+                Name.EndsWith('/') || Name.EndsWith('\\') ||
+                Path.EndsWith('/') || Path.EndsWith('\\');
+            if (hasDirectoryTerminator)
+                return true;
+
+            return string.IsNullOrWhiteSpace(System.IO.Path.GetExtension(Name)) &&
+                   (!SizeBytes.HasValue || SizeBytes.Value == 0);
+        }
+    }
 }
 
 public sealed class MmsFileDirectoryResult

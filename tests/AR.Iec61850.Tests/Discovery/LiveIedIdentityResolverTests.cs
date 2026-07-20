@@ -31,6 +31,26 @@ public sealed class LiveIedIdentityResolverTests
     }
 
     [Fact]
+    public void Resolve_Does_Not_Promote_A_Nested_Mu_Domain_To_The_Physical_Ied_Name()
+    {
+        var identity = LiveIedIdentityResolver.Resolve(
+            [
+                "OCR7SJ8Application",
+                "OCR7SJ8CB1",
+                "OCR7SJ8Dc1",
+                "OCR7SJ8Mod2_MU1",
+                "OCR7SJ8V3p1_5051OC3phase1"
+            ],
+            "1.110.1.1");
+
+        Assert.Equal("OCR7SJ8", identity.IedName);
+        Assert.Equal("MmsDomainCommonPrefix", identity.Source);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.Equal("Mod2_MU1", identity.LogicalDeviceAliases["OCR7SJ8Mod2_MU1"]);
+        Assert.DoesNotContain("OCR7SJ8Mod2", identity.CandidateNames);
+    }
+
+    [Fact]
     public void Resolve_Rejects_Conflicting_Domain_Candidates()
     {
         var identity = LiveIedIdentityResolver.Resolve(["ALPHA_LD0", "BETA_LD0"], "192.0.2.10");

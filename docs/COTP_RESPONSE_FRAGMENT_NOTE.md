@@ -1,0 +1,1 @@
+Fragment count is no longer the primary response-size limit; EOT and total reassembled bytes define completion and the main bound.

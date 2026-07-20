@@ -1,0 +1,1 @@
+The reassembly boundary is one complete COTP Data sequence ending with EOT.

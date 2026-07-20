@@ -1,0 +1,1 @@
+Reassembly remains bounded by total response bytes, fragment count, empty-fragment count, and cancellation.

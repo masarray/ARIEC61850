@@ -1,0 +1,1 @@
+CotpClient now streams user-data fragments into a bounded accumulator and returns the presentation payload only after EOT.

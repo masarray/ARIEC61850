@@ -9,6 +9,12 @@ public sealed class LiveIedSclExportOptions
     public SclSchemaProfile SchemaProfile { get; init; } = SclSchemaProfile.Edition2V31;
     public string SubNetworkName { get; init; } = "StationBus";
     public string IpAddress { get; init; } = string.Empty;
+    /// <summary>
+    /// Authoritative SCL IED identity supplied by the caller. MMS exposes Logical Device
+    /// domain names, which are not a reliable source for recovering the enclosing IED name
+    /// when an implementation uses explicit communication-level LD names.
+    /// </summary>
+    public string IedNameOverride { get; init; } = string.Empty;
     public string IpSubnet { get; init; } = "255.255.255.0";
     public string IpGateway { get; init; } = "0.0.0.0";
     public string OsiApTitle { get; init; } = string.Empty;

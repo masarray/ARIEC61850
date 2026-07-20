@@ -1,0 +1,1 @@
+COTP transport regression tests cover reassembly of multi-megabyte responses split across thousands of Data TPDUs and verify the bounded byte and empty-fragment guards.

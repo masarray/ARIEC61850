@@ -123,6 +123,8 @@ public sealed partial class MmsClientSession
             throw new ArgumentOutOfRangeException(nameof(options), "MaximumReadOperations must be greater than zero.");
 
         var normalizedPath = MmsFileNameEncoding.Normalize(remotePath);
+        BeginFileTransferDiagnostic(normalizedPath);
+
         int? stateMachineId = null;
         long bytesTransferred = 0;
         long? expectedBytes = null;
@@ -144,6 +146,12 @@ public sealed partial class MmsClientSession
                 if (expectedBytes > options.MaximumBytes)
                 {
                     failure = $"Remote file declares {expectedBytes.Value} byte(s), exceeding the configured limit of {options.MaximumBytes}.";
+                    RecordFileTransferDiagnostic(
+                        stage: "Validation after FileOpen",
+                        success: false,
+                        message: failure,
+                        fileReadStateMachineId: stateMachineId,
+                        bytesTransferred: bytesTransferred);
                 }
                 else
                 {
@@ -154,10 +162,22 @@ public sealed partial class MmsClientSession
                         if (++readOperations > options.MaximumReadOperations)
                         {
                             failure = $"FileRead exceeded the configured operation limit of {options.MaximumReadOperations}.";
+                            RecordFileTransferDiagnostic(
+                                stage: "FileRead limit",
+                                success: false,
+                                message: failure,
+                                fileReadStateMachineId: stateMachineId,
+                                readOperation: readOperations,
+                                bytesTransferred: bytesTransferred,
+                                moreFollows: moreFollows);
                             break;
                         }
 
-                        var chunk = await FileReadInteroperableAsync(stateMachineId.Value, cancellationToken).ConfigureAwait(false);
+                        var chunk = await FileReadInteroperableAsync(
+                            stateMachineId.Value,
+                            readOperations,
+                            bytesTransferred,
+                            cancellationToken).ConfigureAwait(false);
                         if (!chunk.IsSuccess)
                         {
                             failure = chunk.Message;
@@ -167,19 +187,52 @@ public sealed partial class MmsClientSession
                         if (chunk.Data.Length == 0 && chunk.MoreFollows)
                         {
                             failure = "FileRead returned an empty block while moreFollows remained true.";
+                            RecordFileTransferDiagnostic(
+                                stage: $"FileRead #{readOperations} validation",
+                                success: false,
+                                message: failure,
+                                fileReadStateMachineId: stateMachineId,
+                                readOperation: readOperations,
+                                bytesTransferred: bytesTransferred,
+                                moreFollows: chunk.MoreFollows);
                             break;
                         }
 
                         if (bytesTransferred + chunk.Data.LongLength > options.MaximumBytes)
                         {
                             failure = $"File transfer exceeded the configured limit of {options.MaximumBytes} byte(s).";
+                            RecordFileTransferDiagnostic(
+                                stage: $"FileRead #{readOperations} size validation",
+                                success: false,
+                                message: failure,
+                                fileReadStateMachineId: stateMachineId,
+                                readOperation: readOperations,
+                                bytesTransferred: bytesTransferred,
+                                moreFollows: chunk.MoreFollows);
                             break;
                         }
 
                         if (chunk.Data.Length > 0)
                         {
-                            await destination.WriteAsync(chunk.Data.AsMemory(), cancellationToken).ConfigureAwait(false);
-                            bytesTransferred += chunk.Data.LongLength;
+                            try
+                            {
+                                await destination.WriteAsync(chunk.Data.AsMemory(), cancellationToken).ConfigureAwait(false);
+                                bytesTransferred += chunk.Data.LongLength;
+                            }
+                            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+                            {
+                                failure = $"Local destination write failed: {ex.GetType().Name}: {ex.Message}";
+                                RecordFileTransferDiagnostic(
+                                    stage: $"Local write after FileRead #{readOperations}",
+                                    success: false,
+                                    message: failure,
+                                    fileReadStateMachineId: stateMachineId,
+                                    readOperation: readOperations,
+                                    bytesTransferred: bytesTransferred,
+                                    moreFollows: chunk.MoreFollows,
+                                    exception: ex);
+                                break;
+                            }
                         }
 
                         moreFollows = chunk.MoreFollows;
@@ -199,16 +252,48 @@ public sealed partial class MmsClientSession
                         expectedBytes.Value != bytesTransferred)
                     {
                         failure = $"Transferred size {bytesTransferred} does not match declared size {expectedBytes.Value}.";
+                        RecordFileTransferDiagnostic(
+                            stage: "Declared-size validation",
+                            success: false,
+                            message: failure,
+                            fileReadStateMachineId: stateMachineId,
+                            readOperation: readOperations,
+                            bytesTransferred: bytesTransferred);
                     }
 
                     if (failure == null && options.FlushDestinationOnSuccess)
-                        await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    {
+                        try
+                        {
+                            await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+                        {
+                            failure = $"Local destination flush failed: {ex.GetType().Name}: {ex.Message}";
+                            RecordFileTransferDiagnostic(
+                                stage: "Local destination flush",
+                                success: false,
+                                message: failure,
+                                fileReadStateMachineId: stateMachineId,
+                                readOperation: readOperations,
+                                bytesTransferred: bytesTransferred,
+                                exception: ex);
+                        }
+                    }
                 }
             }
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
         {
-            failure = $"File transfer failed: {ex.GetType().Name}: {ex.Message}";
+            failure = $"File transfer pipeline failed: {ex.GetType().Name}: {ex.Message}";
+            RecordFileTransferDiagnostic(
+                stage: "Transfer pipeline",
+                success: false,
+                message: failure,
+                fileReadStateMachineId: stateMachineId,
+                readOperation: readOperations,
+                bytesTransferred: bytesTransferred,
+                exception: ex);
         }
         finally
         {
@@ -217,16 +302,40 @@ public sealed partial class MmsClientSession
                 try
                 {
                     using var closeCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                    var close = await FileCloseInteroperableAsync(stateMachineId.Value, closeCancellation.Token).ConfigureAwait(false);
+                    var close = await FileCloseInteroperableAsync(
+                        stateMachineId.Value,
+                        bytesTransferred,
+                        readOperations,
+                        closeCancellation.Token).ConfigureAwait(false);
                     remoteFileClosed = close.IsSuccess;
                     if (!close.IsSuccess && failure == null)
                         failure = close.Message;
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException ex)
                 {
                     if (failure == null)
                         failure = "FileClose did not complete within the bounded close timeout.";
+                    RecordFileTransferDiagnostic(
+                        stage: "FileClose timeout",
+                        success: false,
+                        message: "FileClose did not complete within the bounded close timeout.",
+                        fileReadStateMachineId: stateMachineId,
+                        readOperation: readOperations,
+                        bytesTransferred: bytesTransferred,
+                        exception: ex);
                 }
+            }
+            else if (stateMachineId.HasValue)
+            {
+                RecordFileTransferDiagnostic(
+                    stage: "FileClose skipped",
+                    success: false,
+                    message: "FileClose was skipped because the MMS association was no longer initiated.",
+                    fileReadStateMachineId: stateMachineId,
+                    readOperation: readOperations,
+                    bytesTransferred: bytesTransferred);
+                if (failure == null)
+                    failure = "FileClose was skipped because the MMS association was no longer initiated.";
             }
         }
 
@@ -243,6 +352,18 @@ public sealed partial class MmsClientSession
             });
         }
 
+        var completionMessage = success
+            ? $"Downloaded {bytesTransferred} byte(s) from '{normalizedPath}' in {readOperations} FileRead operation(s); FRSM={stateMachineId}."
+            : $"{failure ?? "MMS file transfer failed."} RemotePath='{normalizedPath}', FRSM={stateMachineId?.ToString() ?? "not-opened"}.";
+
+        CompleteFileTransferDiagnostic(
+            success,
+            completionMessage,
+            bytesTransferred,
+            readOperations,
+            stateMachineId,
+            remoteFileClosed);
+
         return new MmsFileTransferResult
         {
             IsSuccess = success,
@@ -251,9 +372,7 @@ public sealed partial class MmsClientSession
             ExpectedBytes = expectedBytes,
             ReadOperations = readOperations,
             RemoteFileClosed = remoteFileClosed,
-            Message = success
-                ? $"Downloaded {bytesTransferred} byte(s) from '{normalizedPath}' in {readOperations} FileRead operation(s); FRSM={stateMachineId}."
-                : $"{failure ?? "MMS file transfer failed."} RemotePath='{normalizedPath}', FRSM={stateMachineId?.ToString() ?? "not-opened"}."
+            Message = completionMessage
         };
     }
 
@@ -263,7 +382,8 @@ public sealed partial class MmsClientSession
     {
         var invokeId = NextInvokeId();
         var request = MmsFileOpenRequest.Build(invokeId, remotePath, initialPosition: 0);
-        LastDiscoveryRequestHex = HexDump.ToCompactString(request);
+        var requestHex = HexDump.ToCompactString(request);
+        LastDiscoveryRequestHex = requestHex;
 
         try
         {
@@ -271,27 +391,47 @@ public sealed partial class MmsClientSession
             var result = MmsInteroperableFileOpenResponseDecoder.Decode(response, invokeId);
             LastDiscoveryResponseHex = result.ResponseHexPreview;
             LastDiscoveryAttemptSummary = result.Message;
+            RecordFileTransferDiagnostic(
+                stage: "FileOpen",
+                success: result.IsSuccess,
+                message: result.Message,
+                invokeId: invokeId,
+                fileReadStateMachineId: result.IsSuccess ? result.FileReadStateMachineId : null,
+                requestHex: requestHex,
+                responseHex: result.ResponseHexPreview);
             return result;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
         {
+            var message = $"FileOpen transport fault: {ex.GetType().Name}: {ex.Message}";
+            RecordFileTransferDiagnostic(
+                stage: "FileOpen",
+                success: false,
+                message: message,
+                invokeId: invokeId,
+                requestHex: requestHex,
+                responseHex: string.Empty,
+                exception: ex);
             await MarkProtocolFaultAsync().ConfigureAwait(false);
             return new MmsFileOpenResult
             {
                 IsSuccess = false,
-                Message = $"FileOpen transport fault: {ex.GetType().Name}: {ex.Message}",
-                ResponseHexPreview = LastDiscoveryResponseHex
+                Message = message,
+                ResponseHexPreview = string.Empty
             };
         }
     }
 
     private async Task<MmsFileReadResult> FileReadInteroperableAsync(
         int fileReadStateMachineId,
+        int readOperation,
+        long bytesTransferred,
         CancellationToken cancellationToken)
     {
         var invokeId = NextInvokeId();
         var request = MmsInteroperableFileReadRequest.Build(invokeId, fileReadStateMachineId);
-        LastDiscoveryRequestHex = HexDump.ToCompactString(request);
+        var requestHex = HexDump.ToCompactString(request);
+        LastDiscoveryRequestHex = requestHex;
 
         try
         {
@@ -299,28 +439,54 @@ public sealed partial class MmsClientSession
             var result = MmsFileReadResponseDecoder.Decode(response, invokeId, fileReadStateMachineId);
             LastDiscoveryResponseHex = result.ResponseHexPreview;
             LastDiscoveryAttemptSummary = result.Message;
+            RecordFileTransferDiagnostic(
+                stage: $"FileRead #{readOperation}",
+                success: result.IsSuccess,
+                message: result.Message,
+                invokeId: invokeId,
+                fileReadStateMachineId: fileReadStateMachineId,
+                readOperation: readOperation,
+                bytesTransferred: bytesTransferred + (result.IsSuccess ? result.Data.LongLength : 0),
+                moreFollows: result.IsSuccess ? result.MoreFollows : null,
+                requestHex: requestHex,
+                responseHex: result.ResponseHexPreview);
             return result;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
         {
+            var message = $"FileRead transport fault: {ex.GetType().Name}: {ex.Message}";
+            RecordFileTransferDiagnostic(
+                stage: $"FileRead #{readOperation}",
+                success: false,
+                message: message,
+                invokeId: invokeId,
+                fileReadStateMachineId: fileReadStateMachineId,
+                readOperation: readOperation,
+                bytesTransferred: bytesTransferred,
+                requestHex: requestHex,
+                responseHex: string.Empty,
+                exception: ex);
             await MarkProtocolFaultAsync().ConfigureAwait(false);
             return new MmsFileReadResult
             {
                 IsSuccess = false,
                 FileReadStateMachineId = fileReadStateMachineId,
-                Message = $"FileRead transport fault: {ex.GetType().Name}: {ex.Message}",
-                ResponseHexPreview = LastDiscoveryResponseHex
+                Message = message,
+                ResponseHexPreview = string.Empty
             };
         }
     }
 
     private async Task<MmsFileCloseResult> FileCloseInteroperableAsync(
         int fileReadStateMachineId,
+        long bytesTransferred,
+        int readOperations,
         CancellationToken cancellationToken)
     {
         var invokeId = NextInvokeId();
         var request = MmsInteroperableFileCloseRequest.Build(invokeId, fileReadStateMachineId);
-        LastDiscoveryRequestHex = HexDump.ToCompactString(request);
+        var requestHex = HexDump.ToCompactString(request);
+        LastDiscoveryRequestHex = requestHex;
 
         try
         {
@@ -328,17 +494,39 @@ public sealed partial class MmsClientSession
             var result = MmsFileCloseResponseDecoder.Decode(response, invokeId, fileReadStateMachineId);
             LastDiscoveryResponseHex = result.ResponseHexPreview;
             LastDiscoveryAttemptSummary = result.Message;
+            RecordFileTransferDiagnostic(
+                stage: "FileClose",
+                success: result.IsSuccess,
+                message: result.Message,
+                invokeId: invokeId,
+                fileReadStateMachineId: fileReadStateMachineId,
+                readOperation: readOperations,
+                bytesTransferred: bytesTransferred,
+                requestHex: requestHex,
+                responseHex: result.ResponseHexPreview);
             return result;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
         {
+            var message = $"FileClose transport fault: {ex.GetType().Name}: {ex.Message}";
+            RecordFileTransferDiagnostic(
+                stage: "FileClose",
+                success: false,
+                message: message,
+                invokeId: invokeId,
+                fileReadStateMachineId: fileReadStateMachineId,
+                readOperation: readOperations,
+                bytesTransferred: bytesTransferred,
+                requestHex: requestHex,
+                responseHex: string.Empty,
+                exception: ex);
             await MarkProtocolFaultAsync().ConfigureAwait(false);
             return new MmsFileCloseResult
             {
                 IsSuccess = false,
                 FileReadStateMachineId = fileReadStateMachineId,
-                Message = $"FileClose transport fault: {ex.GetType().Name}: {ex.Message}",
-                ResponseHexPreview = LastDiscoveryResponseHex
+                Message = message,
+                ResponseHexPreview = string.Empty
             };
         }
     }

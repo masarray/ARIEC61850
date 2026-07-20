@@ -1,0 +1,1 @@
+Field interoperability note: a successful rooted FileOpen can be followed by a FileRead response split across more than 32 COTP Data TPDUs. Reassembly must continue until the EOT flag while respecting the configured response-size bound.

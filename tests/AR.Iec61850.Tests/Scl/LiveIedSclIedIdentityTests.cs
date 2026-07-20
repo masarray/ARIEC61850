@@ -55,15 +55,18 @@ public sealed class LiveIedSclIedIdentityTests
             ]
         };
 
-        var document = LiveIedSclExporter.BuildDocument(
+        var generated = LiveIedSclExporter.BuildDocument(
             model,
             new LiveIedSclExportOptions
             {
                 Profile = "full-model",
                 SchemaProfile = SclSchemaProfile.Edition1V16,
-                IedNameOverride = "OCR7SJ8Mod2",
                 IpAddress = "1.110.1.1"
             });
+        var document = AuthoritativeLiveIedSclExporter.ApplyIdentity(
+            generated,
+            model,
+            "OCR7SJ8Mod2");
 
         var root = Assert.IsType<XElement>(document.Root);
         var ns = root.Name.Namespace;
@@ -96,7 +99,8 @@ public sealed class LiveIedSclIedIdentityTests
             LogicalDevices = [LogicalDevice("IED1PROT")]
         };
 
-        var document = LiveIedSclExporter.BuildDocument(model, new LiveIedSclExportOptions());
+        var generated = LiveIedSclExporter.BuildDocument(model, new LiveIedSclExportOptions());
+        var document = AuthoritativeLiveIedSclExporter.ApplyIdentity(generated, model, "IED1");
         var root = Assert.IsType<XElement>(document.Root);
         var ns = root.Name.Namespace;
         var logicalDevice = Assert.Single(root.Descendants(ns + "LDevice"));

@@ -57,59 +57,113 @@ public sealed class CotpClient
         if (!IsConnected)
             throw new InvalidOperationException("COTP session is not connected.");
 
-        using var reassembled = new MemoryStream();
-        var fragmentCount = 0;
-        var emptyNonFinalFragments = 0;
+        using var accumulator = new CotpDataSequenceAccumulator(
+            MaximumReassembledResponseBytes,
+            MaximumResponseFragments,
+            MaximumEmptyNonFinalFragments);
 
-        while (true)
+        while (!accumulator.IsComplete)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             var tpktPayload = await _tpkt.ReceiveTpktAsync(cancellationToken).ConfigureAwait(false);
-            if (tpktPayload.Length < 3)
-                throw new InvalidDataException($"COTP data response is too short ({tpktPayload.Length} byte)." );
-
-            var headerLength = tpktPayload[0];
-            if (headerLength < 2 || tpktPayload.Length < headerLength + 1)
-                throw new InvalidDataException($"Invalid COTP data header length {headerLength} for payload size {tpktPayload.Length}." );
-
-            if (tpktPayload[1] != 0xF0)
-                throw new InvalidDataException($"Expected COTP Data TPDU 0xF0, received 0x{tpktPayload[1]:X2}." );
-
-            fragmentCount++;
-            if (fragmentCount > MaximumResponseFragments)
-            {
-                throw new InvalidDataException(
-                    $"COTP segmented response exceeded the bounded limit of {MaximumResponseFragments:N0} TPDU fragments. " +
-                    $"Reassembled {reassembled.Length:N0} byte(s) before EOT." );
-            }
-
-            var endOfTransmission = (tpktPayload[2] & 0x80) != 0;
-            var userDataOffset = headerLength + 1;
-            var userDataLength = tpktPayload.Length - userDataOffset;
-
-            if (userDataLength == 0 && !endOfTransmission)
-            {
-                emptyNonFinalFragments++;
-                if (emptyNonFinalFragments > MaximumEmptyNonFinalFragments)
-                {
-                    throw new InvalidDataException(
-                        $"COTP segmented response contained more than {MaximumEmptyNonFinalFragments:N0} empty non-final TPDU fragments." );
-                }
-            }
-
-            if (reassembled.Length + userDataLength > MaximumReassembledResponseBytes)
-            {
-                throw new InvalidDataException(
-                    $"COTP segmented response exceeded the bounded reassembly limit of {MaximumReassembledResponseBytes:N0} byte(s). " +
-                    $"Fragments={fragmentCount:N0}, receivedBeforeFragment={reassembled.Length:N0}, incoming={userDataLength:N0}." );
-            }
-
-            if (userDataLength > 0)
-                reassembled.Write(tpktPayload, userDataOffset, userDataLength);
-
-            if (endOfTransmission)
-                return reassembled.ToArray();
+            accumulator.AppendTpktPayload(tpktPayload);
         }
+
+        return accumulator.Complete();
     }
+}
+
+/// <summary>
+/// Reassembles one COTP Data TPDU sequence. Large MMS FileRead responses can
+/// legitimately span thousands of TPKT/COTP frames, so safety is enforced by
+/// bounded total bytes plus very high fragment and empty-fragment guards rather
+/// than the previous interoperability-breaking 32-fragment ceiling.
+/// </summary>
+internal sealed class CotpDataSequenceAccumulator : IDisposable
+{
+    private readonly long _maximumBytes;
+    private readonly int _maximumFragments;
+    private readonly int _maximumEmptyNonFinalFragments;
+    private readonly MemoryStream _buffer = new();
+    private int _fragmentCount;
+    private int _emptyNonFinalFragments;
+
+    public CotpDataSequenceAccumulator(
+        long maximumBytes,
+        int maximumFragments,
+        int maximumEmptyNonFinalFragments)
+    {
+        if (maximumBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumBytes));
+        if (maximumFragments <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumFragments));
+        if (maximumEmptyNonFinalFragments <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumEmptyNonFinalFragments));
+
+        _maximumBytes = maximumBytes;
+        _maximumFragments = maximumFragments;
+        _maximumEmptyNonFinalFragments = maximumEmptyNonFinalFragments;
+    }
+
+    public bool IsComplete { get; private set; }
+    public int FragmentCount => _fragmentCount;
+    public long ReassembledBytes => _buffer.Length;
+
+    public void AppendTpktPayload(ReadOnlySpan<byte> tpktPayload)
+    {
+        if (IsComplete)
+            throw new InvalidOperationException("The COTP Data TPDU sequence is already complete.");
+        if (tpktPayload.Length < 3)
+            throw new InvalidDataException($"COTP data response is too short ({tpktPayload.Length} byte)." );
+
+        var headerLength = tpktPayload[0];
+        if (headerLength < 2 || tpktPayload.Length < headerLength + 1)
+            throw new InvalidDataException($"Invalid COTP data header length {headerLength} for payload size {tpktPayload.Length}." );
+        if (tpktPayload[1] != 0xF0)
+            throw new InvalidDataException($"Expected COTP Data TPDU 0xF0, received 0x{tpktPayload[1]:X2}." );
+
+        _fragmentCount++;
+        if (_fragmentCount > _maximumFragments)
+        {
+            throw new InvalidDataException(
+                $"COTP segmented response exceeded the bounded limit of {_maximumFragments:N0} TPDU fragments. " +
+                $"Reassembled {_buffer.Length:N0} byte(s) before EOT." );
+        }
+
+        var endOfTransmission = (tpktPayload[2] & 0x80) != 0;
+        var userDataOffset = headerLength + 1;
+        var userDataLength = tpktPayload.Length - userDataOffset;
+
+        if (userDataLength == 0 && !endOfTransmission)
+        {
+            _emptyNonFinalFragments++;
+            if (_emptyNonFinalFragments > _maximumEmptyNonFinalFragments)
+            {
+                throw new InvalidDataException(
+                    $"COTP segmented response contained more than {_maximumEmptyNonFinalFragments:N0} empty non-final TPDU fragments." );
+            }
+        }
+
+        if (_buffer.Length + userDataLength > _maximumBytes)
+        {
+            throw new InvalidDataException(
+                $"COTP segmented response exceeded the bounded reassembly limit of {_maximumBytes:N0} byte(s). " +
+                $"Fragments={_fragmentCount:N0}, receivedBeforeFragment={_buffer.Length:N0}, incoming={userDataLength:N0}." );
+        }
+
+        if (userDataLength > 0)
+            _buffer.Write(tpktPayload[userDataOffset..]);
+
+        IsComplete = endOfTransmission;
+    }
+
+    public byte[] Complete()
+    {
+        if (!IsComplete)
+            throw new InvalidOperationException("The COTP Data TPDU sequence ended before EOT.");
+
+        return _buffer.ToArray();
+    }
+
+    public void Dispose() => _buffer.Dispose();
 }

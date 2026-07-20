@@ -1,0 +1,1 @@
+The maximum reassembled COTP presentation response is 64 MiB per confirmed service response.

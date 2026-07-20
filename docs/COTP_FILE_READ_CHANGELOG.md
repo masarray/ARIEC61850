@@ -1,0 +1,1 @@
+The fixed 32-fragment COTP receive ceiling was replaced by bounded total-response reassembly so valid multi-megabyte MMS FileRead responses can complete.

@@ -4,10 +4,8 @@ using AR.Iec61850.Mms;
 namespace AR.Iec61850.Scl.Export;
 
 /// <summary>
-/// Reconciles a live discovery model with the exact DataSet directory read during
-/// the passive RCB availability check. Some IEDs expose a DataSet count during the
-/// initial scan but only return the FCDA member references through an explicit
-/// GetDataSetDirectory request. The source model is never mutated.
+/// Reconciles a live discovery model with exact read-only evidence collected during
+/// the RCB availability check. The source model is never mutated.
 /// </summary>
 public static class LiveRcbDataSetEvidenceMerger
 {
@@ -26,11 +24,7 @@ public static class LiveRcbDataSetEvidenceMerger
         if (selected is null)
             throw new InvalidOperationException($"ReportControl '{selectedReportControlReference}' was not found in the live model.");
 
-        var evidence = availability.ReportControls.FirstOrDefault(snapshot =>
-            Normalize(snapshot.Reference).Equals(selectedReference, StringComparison.OrdinalIgnoreCase));
-        if (evidence is null)
-            throw new InvalidOperationException(
-                $"No live DataSet directory evidence is available for '{selectedReportControlReference}'. Run Check Availability before exporting this RCB.");
+        var evidence = FindEvidence(availability, selectedReportControlReference);
         if (!evidence.DataSetDirectorySuccess)
             throw new InvalidOperationException(
                 $"The DataSet directory for '{selectedReportControlReference}' was not read successfully. Run Check Availability again before export.");
@@ -95,7 +89,79 @@ public static class LiveRcbDataSetEvidenceMerger
                 : dataSet)
             .ToArray();
 
-        return new LiveIedModelDiscoveryDocument
+        return CloneDocument(
+            source,
+            dataSets: mergedDataSets,
+            reportControls: source.ReportControls,
+            summarySuffix: "Live DataSet directory evidence merged for selected-RCB export.");
+    }
+
+    public static LiveIedModelDiscoveryDocument MergeSelectedReportControlEvidence(
+        LiveIedModelDiscoveryDocument source,
+        string selectedReportControlReference,
+        MmsRcbAvailabilityResult availability)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selectedReportControlReference);
+        ArgumentNullException.ThrowIfNull(availability);
+
+        var selectedReference = Normalize(selectedReportControlReference);
+        var sourceControl = source.ReportControls.FirstOrDefault(control =>
+            Normalize(control.Reference).Equals(selectedReference, StringComparison.OrdinalIgnoreCase));
+        if (sourceControl is null)
+            throw new InvalidOperationException($"ReportControl '{selectedReportControlReference}' was not found in the live model.");
+
+        var evidence = FindEvidence(availability, selectedReportControlReference);
+        var mergedControl = new LiveIedReportControlModel
+        {
+            Reference = sourceControl.Reference,
+            Domain = sourceControl.Domain,
+            LogicalNode = sourceControl.LogicalNode,
+            Name = sourceControl.Name,
+            Buffered = sourceControl.Buffered,
+            DataSetReference = FirstNonEmpty(evidence.DataSetReference, sourceControl.DataSetReference),
+            ReportId = FirstNonEmpty(evidence.ReportId, sourceControl.ReportId),
+            ConfRev = FirstNonEmpty(evidence.ConfRev, sourceControl.ConfRev),
+            TriggerOptions = FirstNonEmpty(evidence.TriggerOptions, sourceControl.TriggerOptions),
+            OptionalFields = FirstNonEmpty(evidence.OptionalFields, sourceControl.OptionalFields),
+            BufferTimeMs = FirstNonEmpty(evidence.BufferTimeMs, sourceControl.BufferTimeMs),
+            IntegrityPeriodMs = FirstNonEmpty(evidence.IntegrityPeriodMs, sourceControl.IntegrityPeriodMs),
+            EnabledState = FirstNonEmpty(evidence.EnabledState, sourceControl.EnabledState),
+            ReservationState = FirstNonEmpty(evidence.ReservationState, sourceControl.ReservationState),
+            ReservationTimeSeconds = FirstNonEmpty(evidence.ReservationTimeSeconds, sourceControl.ReservationTimeSeconds),
+            Status = sourceControl.Status
+        };
+
+        var reportControls = source.ReportControls
+            .Select(control => Normalize(control.Reference).Equals(selectedReference, StringComparison.OrdinalIgnoreCase)
+                ? mergedControl
+                : control)
+            .ToArray();
+
+        return CloneDocument(
+            source,
+            source.DataSets,
+            reportControls,
+            "Exact live RCB configuration evidence merged for selected-RCB export.");
+    }
+
+    private static MmsRcbAvailabilitySnapshot FindEvidence(
+        MmsRcbAvailabilityResult availability,
+        string selectedReportControlReference)
+    {
+        var selectedReference = Normalize(selectedReportControlReference);
+        return availability.ReportControls.FirstOrDefault(snapshot =>
+                   Normalize(snapshot.Reference).Equals(selectedReference, StringComparison.OrdinalIgnoreCase))
+               ?? throw new InvalidOperationException(
+                   $"No live RCB evidence is available for '{selectedReportControlReference}'. Run Check Availability before exporting this RCB.");
+    }
+
+    private static LiveIedModelDiscoveryDocument CloneDocument(
+        LiveIedModelDiscoveryDocument source,
+        IReadOnlyList<LiveIedDataSetModel> dataSets,
+        IReadOnlyList<LiveIedReportControlModel> reportControls,
+        string summarySuffix)
+        => new()
         {
             SchemaVersion = source.SchemaVersion,
             GeneratedAtUtc = source.GeneratedAtUtc,
@@ -105,12 +171,12 @@ public static class LiveRcbDataSetEvidenceMerger
             IedName = source.IedName,
             IedIdentity = source.IedIdentity,
             AccessPointName = source.AccessPointName,
-            Summary = $"{source.Summary} Live DataSet directory evidence merged for selected-RCB export.",
+            Summary = $"{source.Summary} {summarySuffix}".Trim(),
             Coverage = source.Coverage,
             LogicalDevices = source.LogicalDevices,
             FileDirectory = source.FileDirectory,
-            DataSets = mergedDataSets,
-            ReportControls = source.ReportControls,
+            DataSets = dataSets,
+            ReportControls = reportControls,
             GooseControlBlocks = source.GooseControlBlocks,
             SampledValueControlBlocks = source.SampledValueControlBlocks,
             SettingGroupControls = source.SettingGroupControls,
@@ -119,7 +185,6 @@ public static class LiveRcbDataSetEvidenceMerger
             VariableTypeDiscoveries = source.VariableTypeDiscoveries,
             Warnings = source.Warnings
         };
-    }
 
     private static string Normalize(string? reference)
         => (reference ?? string.Empty).Trim().Replace('$', '.');

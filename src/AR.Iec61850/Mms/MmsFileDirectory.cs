@@ -74,16 +74,25 @@ public static class MmsFileDirectoryRequest
 
     private static byte[] EncodeFileNameContent(string value)
     {
-        var normalized = (value ?? string.Empty).Trim().Replace('\\', '/');
-        var parts = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0 && !string.IsNullOrWhiteSpace(normalized))
-            parts = new[] { normalized };
+        var normalized = NormalizeFileSpecification(value);
 
-        var body = Array.Empty<byte>();
-        foreach (var part in parts)
-            body = MmsPresentation.Concat(body, BerWriter.EncodeTlv(0x19, BerWriter.EncodeAscii(part)));
+        // FileName is a SEQUENCE OF GraphicString. Real IEDs commonly expose the complete
+        // case-sensitive path in one GraphicString with '/' separators, so preserve that
+        // representation rather than splitting each directory into a separate element.
+        return BerWriter.EncodeTlv(0x19, BerWriter.EncodeAscii(normalized));
+    }
 
-        return body;
+    private static string NormalizeFileSpecification(string value)
+    {
+        var segments = (value ?? string.Empty)
+            .Trim()
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Length == 0)
+            throw new ArgumentException("MMS file specification has no usable path segment.", nameof(value));
+        if (segments.Any(segment => segment is "." or ".."))
+            throw new ArgumentException("MMS file specification contains a traversal segment.", nameof(value));
+        return string.Join('/', segments);
     }
 }
 
@@ -137,18 +146,19 @@ public static class MmsFileDirectoryResponseDecoder
             var entries = new List<MmsFileDirectoryEntry>();
             var moreFollows = false;
             DecodeServiceResponse(service, dir, entries, ref moreFollows);
+            var distinctEntries = entries
+                .DistinctBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
             return new MmsFileDirectoryResult
             {
                 IsSuccess = true,
                 DirectoryName = dir,
                 ContinueAfter = continuation,
-                Entries = entries
-                    .DistinctBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
-                    .ToArray(),
+                Entries = distinctEntries,
                 MoreFollows = moreFollows,
-                Message = $"MMS FileDirectory decoded {entries.Count} entr(y/ies), moreFollows={moreFollows}.",
+                Message = $"MMS FileDirectory decoded {distinctEntries.Length} entr(y/ies), moreFollows={moreFollows}.",
                 ResponseHexPreview = hex
             };
         }
@@ -158,24 +168,63 @@ public static class MmsFileDirectoryResponseDecoder
         }
     }
 
-    private static void DecodeServiceResponse(BerTlv service, string directoryName, List<MmsFileDirectoryEntry> entries, ref bool moreFollows)
+    private static void DecodeServiceResponse(
+        BerTlv service,
+        string directoryName,
+        List<MmsFileDirectoryEntry> entries,
+        ref bool moreFollows)
     {
         foreach (var child in BerReader.ReadChildren(service.Value))
         {
             if (child.Class == BerClass.ContextSpecific && child.TagNumber == 0 && child.Constructed)
             {
-                foreach (var entry in BerReader.ReadChildren(child.Value))
-                {
-                    var decoded = DecodeDirectoryEntry(entry, directoryName);
-                    if (decoded != null)
-                        entries.Add(decoded);
-                }
+                CollectDirectoryEntries(child, directoryName, entries, depth: 0);
             }
             else if (child.Class == BerClass.ContextSpecific && child.TagNumber == 1 && child.Value.Length > 0)
             {
-                moreFollows = child.Value.Span[0] != 0;
+                moreFollows = BerReader.ReadBoolean(child) ?? child.Value.Span[0] != 0;
             }
         }
+    }
+
+    private static void CollectDirectoryEntries(
+        BerTlv container,
+        string directoryName,
+        List<MmsFileDirectoryEntry> entries,
+        int depth)
+    {
+        if (!container.Constructed || depth > 6)
+            return;
+
+        foreach (var child in BerReader.ReadChildren(container.Value))
+        {
+            if (LooksLikeDirectoryEntry(child))
+            {
+                var decoded = DecodeDirectoryEntry(child, directoryName);
+                if (decoded != null)
+                    entries.Add(decoded);
+            }
+            else if (child.Constructed)
+            {
+                // Some stacks encode listOfDirectoryEntry as [0] -> SEQUENCE ->
+                // DirectoryEntry SEQUENCE(s), while others place the DirectoryEntry
+                // SEQUENCE(s) directly under [0]. Accept both without collapsing all
+                // filenames into one synthetic entry.
+                CollectDirectoryEntries(child, directoryName, entries, depth + 1);
+            }
+        }
+    }
+
+    private static bool LooksLikeDirectoryEntry(BerTlv candidate)
+    {
+        if (!candidate.Constructed)
+            return false;
+
+        var fields = BerReader.ReadChildren(candidate.Value);
+        return fields.Any(field =>
+            field.Class == BerClass.ContextSpecific &&
+            field.TagNumber == 0 &&
+            field.Constructed);
     }
 
     private static MmsFileDirectoryEntry? DecodeDirectoryEntry(BerTlv entry, string directoryName)
@@ -189,14 +238,11 @@ public static class MmsFileDirectoryResponseDecoder
 
         foreach (var field in BerReader.ReadChildren(entry.Value))
         {
-            if (field.EncodedTag == 0x30 || field.Constructed)
+            if (field.Class == BerClass.ContextSpecific && field.TagNumber == 0 && field.Constructed)
             {
-                var candidate = DecodeFileName(field);
-                if (!string.IsNullOrWhiteSpace(candidate))
-                    fileName ??= candidate;
+                fileName = DecodeFileName(field);
             }
-
-            if (field.Class == BerClass.ContextSpecific && field.TagNumber == 1 && field.Constructed)
+            else if (field.Class == BerClass.ContextSpecific && field.TagNumber == 1 && field.Constructed)
             {
                 foreach (var attr in BerReader.ReadChildren(field.Value))
                 {
@@ -211,10 +257,11 @@ public static class MmsFileDirectoryResponseDecoder
         if (string.IsNullOrWhiteSpace(fileName))
             return null;
 
-        var path = CombinePath(directoryName, fileName);
+        var normalizedName = NormalizeReturnedPath(fileName);
+        var path = CombinePath(directoryName, normalizedName);
         return new MmsFileDirectoryEntry
         {
-            Name = fileName,
+            Name = normalizedName,
             Path = path,
             SizeBytes = size,
             LastModifiedRaw = modified
@@ -228,7 +275,9 @@ public static class MmsFileDirectoryResponseDecoder
 
         var parts = new List<string>();
         CollectGraphicStrings(tlv, parts, depth: 0);
-        return string.Join('/', parts.Where(x => !string.IsNullOrWhiteSpace(x)));
+        return string.Join('/', parts
+            .Select(part => part.Trim().Replace('\\', '/'))
+            .Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
     private static void CollectGraphicStrings(BerTlv tlv, List<string> parts, int depth)
@@ -247,13 +296,27 @@ public static class MmsFileDirectoryResponseDecoder
 
     private static string CombinePath(string directoryName, string fileName)
     {
-        if (string.IsNullOrWhiteSpace(directoryName))
-            return fileName;
+        var dir = NormalizeReturnedPath(directoryName);
+        var name = NormalizeReturnedPath(fileName);
+        if (string.IsNullOrWhiteSpace(dir))
+            return name;
+        if (string.IsNullOrWhiteSpace(name))
+            return dir;
 
-        var dir = directoryName.Trim().TrimEnd('/', '\\');
-        var name = fileName.Trim().TrimStart('/', '\\');
-        return string.IsNullOrWhiteSpace(dir) ? name : $"{dir}/{name}";
+        if (name.Equals(dir, StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith(dir + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return name;
+        }
+
+        return $"{dir}/{name}";
     }
+
+    private static string NormalizeReturnedPath(string? value)
+        => string.Join('/', (value ?? string.Empty)
+            .Trim()
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
     private static MmsFileDirectoryResult Fail(string directoryName, string continueAfter, string message, string hex)
         => new()

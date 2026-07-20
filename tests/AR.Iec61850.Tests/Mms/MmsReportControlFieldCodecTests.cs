@@ -25,4 +25,45 @@ public sealed class MmsReportControlFieldCodecTests
         Assert.Equal(MmsDataKind.BitString, value.Kind);
         Assert.Equal(new byte[] { 6, 0x7C, 0x80 }, value.RawValue);
     }
+
+    [Fact]
+    public void TriggerOptions_Decodes_Gi_Only_From_Live_Rendered_BitString()
+    {
+        var flags = MmsReportControlFieldCodec.DecodeTriggerOptions("bits(08, unused=2)");
+
+        Assert.False(flags.DataChange);
+        Assert.False(flags.QualityChange);
+        Assert.False(flags.DataUpdate);
+        Assert.False(flags.Integrity);
+        Assert.True(flags.GeneralInterrogation);
+        Assert.False(flags.ApplicationTrigger);
+    }
+
+    [Fact]
+    public void OptionalFields_Decodes_BufferOverflow_Only_From_Live_Rendered_BitString()
+    {
+        var flags = MmsReportControlFieldCodec.DecodeOptionalFields("bits(0200, unused=6)");
+
+        Assert.False(flags.SequenceNumber);
+        Assert.False(flags.ReportTimestamp);
+        Assert.False(flags.ReasonForInclusion);
+        Assert.False(flags.DataSetName);
+        Assert.False(flags.DataReference);
+        Assert.True(flags.BufferOverflow);
+        Assert.False(flags.EntryId);
+        Assert.False(flags.ConfigurationRevision);
+        Assert.False(flags.Segmentation);
+    }
+
+    [Fact]
+    public void Decoders_Also_Accept_Engineer_Readable_Names()
+    {
+        var trigger = MmsReportControlFieldCodec.DecodeTriggerOptions("dchg qchg");
+        var optional = MmsReportControlFieldCodec.DecodeOptionalFields("sequence-number buffer-overflow");
+
+        Assert.True(trigger.DataChange);
+        Assert.True(trigger.QualityChange);
+        Assert.True(optional.SequenceNumber);
+        Assert.True(optional.BufferOverflow);
+    }
 }

@@ -38,6 +38,10 @@ public sealed class MmsRcbAvailabilitySnapshot
     public string DataSetReference { get; init; } = string.Empty;
     public string ReportId { get; init; } = string.Empty;
     public string ConfRev { get; init; } = string.Empty;
+    public string BufferTimeMs { get; init; } = string.Empty;
+    public string IntegrityPeriodMs { get; init; } = string.Empty;
+    public string TriggerOptions { get; init; } = string.Empty;
+    public string OptionalFields { get; init; } = string.Empty;
     public string EnabledState { get; init; } = string.Empty;
     public string ReservationState { get; init; } = string.Empty;
     public string ReservationTimeSeconds { get; init; } = string.Empty;
@@ -157,6 +161,10 @@ public static class MmsRcbAvailabilityEvaluator
             DataSetReference = candidate.DataSetReference,
             ReportId = candidate.ReportId,
             ConfRev = candidate.ConfRev,
+            BufferTimeMs = candidate.BufferTimeMs,
+            IntegrityPeriodMs = candidate.IntegrityPeriodMs,
+            TriggerOptions = candidate.TriggerOptions,
+            OptionalFields = candidate.OptionalFields,
             EnabledState = candidate.EnabledState,
             ReservationState = candidate.ReservationState,
             ReservationTimeSeconds = candidate.ReservationTimeSeconds,

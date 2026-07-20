@@ -1,11 +1,13 @@
 using System.Xml.Linq;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Mms;
 
 namespace AR.Iec61850.Scl.Export;
 
 /// <summary>
 /// Exports a live-discovery model while keeping the physical IED identity separate from
-/// communication-level MMS Logical Device domain names.
+/// communication-level MMS Logical Device domain names and preserving exact read-only
+/// ReportControl configuration evidence.
 /// </summary>
 public static class AuthoritativeLiveIedSclExporter
 {
@@ -20,11 +22,11 @@ public static class AuthoritativeLiveIedSclExporter
         options ??= new LiveIedSclExportOptions();
 
         var result = LiveIedSclExporter.WriteFiles(model, sclPath, options);
-        if (string.IsNullOrWhiteSpace(options.IedNameOverride))
-            return result;
-
         var document = XDocument.Load(result.SclPath, LoadOptions.PreserveWhitespace);
-        ApplyIdentity(document, model, options.IedNameOverride);
+        if (!string.IsNullOrWhiteSpace(options.IedNameOverride))
+            document = ApplyIdentity(document, model, options.IedNameOverride);
+
+        document = ApplyReportControlConfiguration(document, model, options.ResolvedSchemaProfile);
         document.Save(result.SclPath);
         return result;
     }
@@ -80,6 +82,68 @@ public static class AuthoritativeLiveIedSclExporter
         ValidateIdentity(document, safeIedName, model);
         return document;
     }
+
+    public static XDocument ApplyReportControlConfiguration(
+        XDocument source,
+        LiveIedModelDiscoveryDocument model,
+        SclSchemaProfileDescriptor schema)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(schema);
+
+        var document = new XDocument(source);
+        var reportControls = model.ReportControls.ToArray();
+        foreach (var element in document.Descendants(Scl + "ReportControl"))
+        {
+            var name = ((string?)element.Attribute("name") ?? string.Empty).Trim();
+            var buffered = bool.TryParse((string?)element.Attribute("buffered"), out var parsedBuffered) && parsedBuffered;
+            var matches = reportControls
+                .Where(control =>
+                    control.Name.Equals(name, StringComparison.OrdinalIgnoreCase) &&
+                    control.Buffered == buffered)
+                .ToArray();
+            var modelControl = matches.Length == 1
+                ? matches[0]
+                : reportControls.Length == 1
+                    ? reportControls[0]
+                    : null;
+            if (modelControl is null)
+                continue;
+
+            var trigger = MmsReportControlFieldCodec.DecodeTriggerOptions(modelControl.TriggerOptions);
+            var triggerElement = element.Element(Scl + "TrgOps") ?? new XElement(Scl + "TrgOps");
+            triggerElement.SetAttributeValue("dchg", XmlBool(trigger.DataChange));
+            triggerElement.SetAttributeValue("qchg", XmlBool(trigger.QualityChange));
+            triggerElement.SetAttributeValue("dupd", XmlBool(trigger.DataUpdate));
+            triggerElement.SetAttributeValue("period", XmlBool(trigger.Integrity));
+            triggerElement.SetAttributeValue(
+                "gi",
+                schema.SupportsTriggerGi ? XmlBool(trigger.GeneralInterrogation) : null);
+            if (triggerElement.Parent is null)
+                element.Add(triggerElement);
+
+            var optional = MmsReportControlFieldCodec.DecodeOptionalFields(modelControl.OptionalFields);
+            var optionalElement = element.Element(Scl + "OptFields") ?? new XElement(Scl + "OptFields");
+            optionalElement.SetAttributeValue("seqNum", XmlBool(optional.SequenceNumber));
+            optionalElement.SetAttributeValue("timeStamp", XmlBool(optional.ReportTimestamp));
+            optionalElement.SetAttributeValue("reasonCode", XmlBool(optional.ReasonForInclusion));
+            optionalElement.SetAttributeValue("dataSet", XmlBool(optional.DataSetName));
+            optionalElement.SetAttributeValue("dataRef", XmlBool(optional.DataReference));
+            optionalElement.SetAttributeValue("bufOvfl", XmlBool(optional.BufferOverflow));
+            optionalElement.SetAttributeValue("entryID", XmlBool(optional.EntryId));
+            optionalElement.SetAttributeValue("configRef", XmlBool(optional.ConfigurationRevision));
+            optionalElement.SetAttributeValue(
+                "segmentation",
+                schema.IsEdition2 ? XmlBool(optional.Segmentation) : null);
+            if (optionalElement.Parent is null)
+                element.Add(optionalElement);
+        }
+
+        return document;
+    }
+
+    private static string XmlBool(bool value) => value ? "true" : "false";
 
     private static string MatchMmsDomain(
         string generatedInst,

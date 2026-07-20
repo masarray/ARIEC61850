@@ -2,6 +2,10 @@ namespace AR.Iec61850.Osi;
 
 public sealed class CotpClient
 {
+    internal const int MaximumReassembledResponseBytes = 64 * 1024 * 1024;
+    internal const int MaximumResponseFragments = 1_048_576;
+    internal const int MaximumEmptyNonFinalFragments = 1_024;
+
     private readonly TpktClient _tpkt;
 
     public CotpClient(TpktClient tpkt)
@@ -53,9 +57,9 @@ public sealed class CotpClient
         if (!IsConnected)
             throw new InvalidOperationException("COTP session is not connected.");
 
-        var parts = new List<byte[]>();
-        var total = 0;
-        var guard = 0;
+        using var reassembled = new MemoryStream();
+        var fragmentCount = 0;
+        var emptyNonFinalFragments = 0;
 
         while (true)
         {
@@ -63,40 +67,49 @@ public sealed class CotpClient
 
             var tpktPayload = await _tpkt.ReceiveTpktAsync(cancellationToken).ConfigureAwait(false);
             if (tpktPayload.Length < 3)
-                throw new InvalidDataException($"COTP data response is too short ({tpktPayload.Length} byte).");
+                throw new InvalidDataException($"COTP data response is too short ({tpktPayload.Length} byte)." );
 
             var headerLength = tpktPayload[0];
             if (headerLength < 2 || tpktPayload.Length < headerLength + 1)
-                throw new InvalidDataException($"Invalid COTP data header length {headerLength} for payload size {tpktPayload.Length}.");
+                throw new InvalidDataException($"Invalid COTP data header length {headerLength} for payload size {tpktPayload.Length}." );
 
             if (tpktPayload[1] != 0xF0)
-                throw new InvalidDataException($"Expected COTP Data TPDU 0xF0, received 0x{tpktPayload[1]:X2}.");
+                throw new InvalidDataException($"Expected COTP Data TPDU 0xF0, received 0x{tpktPayload[1]:X2}." );
+
+            fragmentCount++;
+            if (fragmentCount > MaximumResponseFragments)
+            {
+                throw new InvalidDataException(
+                    $"COTP segmented response exceeded the bounded limit of {MaximumResponseFragments:N0} TPDU fragments. " +
+                    $"Reassembled {reassembled.Length:N0} byte(s) before EOT." );
+            }
 
             var endOfTransmission = (tpktPayload[2] & 0x80) != 0;
             var userDataOffset = headerLength + 1;
-            var userData = tpktPayload[userDataOffset..];
-            parts.Add(userData);
-            total += userData.Length;
+            var userDataLength = tpktPayload.Length - userDataOffset;
+
+            if (userDataLength == 0 && !endOfTransmission)
+            {
+                emptyNonFinalFragments++;
+                if (emptyNonFinalFragments > MaximumEmptyNonFinalFragments)
+                {
+                    throw new InvalidDataException(
+                        $"COTP segmented response contained more than {MaximumEmptyNonFinalFragments:N0} empty non-final TPDU fragments." );
+                }
+            }
+
+            if (reassembled.Length + userDataLength > MaximumReassembledResponseBytes)
+            {
+                throw new InvalidDataException(
+                    $"COTP segmented response exceeded the bounded reassembly limit of {MaximumReassembledResponseBytes:N0} byte(s). " +
+                    $"Fragments={fragmentCount:N0}, receivedBeforeFragment={reassembled.Length:N0}, incoming={userDataLength:N0}." );
+            }
+
+            if (userDataLength > 0)
+                reassembled.Write(tpktPayload, userDataOffset, userDataLength);
 
             if (endOfTransmission)
-                break;
-
-            guard++;
-            if (guard > 32)
-                throw new InvalidDataException("COTP segmented response exceeded 32 TPDU fragments.");
+                return reassembled.ToArray();
         }
-
-        if (parts.Count == 1)
-            return parts[0];
-
-        var result = new byte[total];
-        var offset = 0;
-        foreach (var part in parts)
-        {
-            Buffer.BlockCopy(part, 0, result, offset, part.Length);
-            offset += part.Length;
-        }
-
-        return result;
     }
 }

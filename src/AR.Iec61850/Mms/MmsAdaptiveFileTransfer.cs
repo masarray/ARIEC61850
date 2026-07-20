@@ -146,9 +146,11 @@ public sealed partial class MmsClientSession
             rootedDiagnostic);
 
         return rooted.IsSuccess
-            ? rooted withMessage(
+            ? CloneWithMessage(
+                rooted,
                 $"{rooted.Message} Adaptive FileOpen fallback succeeded with remote path '{rootedPath}'.")
-            : rooted withMessage(
+            : CloneWithMessage(
+                rooted,
                 $"{rooted.Message} Primary bare path also failed with file-non-existent; rooted fallback path was '{rootedPath}'.");
     }
 
@@ -490,23 +492,15 @@ public sealed partial class MmsClientSession
     private static MmsFileTransferResult CloneFailure(
         MmsFileTransferResult source,
         string message)
-        => new()
-        {
-            IsSuccess = false,
-            RemotePath = source.RemotePath,
-            BytesTransferred = source.BytesTransferred,
-            ExpectedBytes = source.ExpectedBytes,
-            ReadOperations = source.ReadOperations,
-            RemoteFileClosed = source.RemoteFileClosed,
-            Message = message
-        };
+        => CloneWithMessage(source, message, isSuccess: false);
 
-    private static MmsFileTransferResult withMessage(
-        this MmsFileTransferResult source,
-        string message)
+    private static MmsFileTransferResult CloneWithMessage(
+        MmsFileTransferResult source,
+        string message,
+        bool? isSuccess = null)
         => new()
         {
-            IsSuccess = source.IsSuccess,
+            IsSuccess = isSuccess ?? source.IsSuccess,
             RemotePath = source.RemotePath,
             BytesTransferred = source.BytesTransferred,
             ExpectedBytes = source.ExpectedBytes,

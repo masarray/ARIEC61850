@@ -38,7 +38,7 @@ public static class Iec61850FaultRecordInteroperableDownloader
 
         var downloadedFiles = new List<Iec61850FaultRecordDownloadedFile>();
         long totalBytes = 0;
-        var expectedBytes = record.HasUnknownSize ? null : record.KnownSizeBytes;
+        long? expectedBytes = record.HasUnknownSize ? null : record.KnownSizeBytes;
         string? failure = null;
 
         try

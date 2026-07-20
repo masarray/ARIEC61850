@@ -1,0 +1,1 @@
+The COTP client bounds each reassembled response to 64 MiB. It also guards excessive fragment counts and empty non-final fragments. Fault-record file and bundle limits remain enforced separately.

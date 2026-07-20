@@ -1,0 +1,1 @@
+Regression coverage includes a 2,048-fragment response, total-byte limit enforcement, and empty non-final fragment enforcement.

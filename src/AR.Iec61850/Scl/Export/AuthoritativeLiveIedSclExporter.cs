@@ -111,6 +111,20 @@ public static class AuthoritativeLiveIedSclExporter
             if (modelControl is null)
                 continue;
 
+            // MMS discovery returns a concrete RCB object name. IEC 61850-6 defines
+            // ReportControl@indexed with a default value of true; if the attribute is
+            // omitted, an engineering tool appends another two-digit instance suffix.
+            // Therefore A_BRCB_1201 would become the invalid A_BRCB_120101. Preserve
+            // the proven live object exactly as one non-indexed instance.
+            element.SetAttributeValue("name", SafeXmlName(modelControl.Name));
+            element.SetAttributeValue("indexed", "false");
+            var rptEnabled = element.Element(Scl + "RptEnabled") ?? new XElement(Scl + "RptEnabled");
+            rptEnabled.SetAttributeValue("max", "1");
+            foreach (var clientLn in rptEnabled.Elements(Scl + "ClientLN").ToArray())
+                clientLn.Remove();
+            if (rptEnabled.Parent is null)
+                element.Add(rptEnabled);
+
             var trigger = MmsReportControlFieldCodec.DecodeTriggerOptions(modelControl.TriggerOptions);
             var triggerElement = element.Element(Scl + "TrgOps") ?? new XElement(Scl + "TrgOps");
             triggerElement.SetAttributeValue("dchg", XmlBool(trigger.DataChange));
@@ -140,7 +154,43 @@ public static class AuthoritativeLiveIedSclExporter
                 element.Add(optionalElement);
         }
 
+        var confReportControl = document.Descendants(Scl + "ConfReportControl").SingleOrDefault();
+        if (confReportControl is not null)
+            confReportControl.SetAttributeValue("max", reportControls.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        ValidateReportControlIdentity(document, reportControls);
         return document;
+    }
+
+    private static void ValidateReportControlIdentity(
+        XDocument document,
+        IReadOnlyCollection<LiveIedReportControlModel> reportControls)
+    {
+        var exported = document.Descendants(Scl + "ReportControl").ToArray();
+        if (exported.Length != reportControls.Count)
+        {
+            throw new InvalidDataException(
+                $"Generated SCL contains {exported.Length} ReportControl element(s), but live discovery contains {reportControls.Count}.");
+        }
+
+        foreach (var modelControl in reportControls)
+        {
+            var matches = exported.Where(element =>
+                string.Equals((string?)element.Attribute("name"), SafeXmlName(modelControl.Name), StringComparison.Ordinal) &&
+                string.Equals((string?)element.Attribute("indexed"), "false", StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (matches.Length != 1)
+            {
+                throw new InvalidDataException(
+                    $"Live RCB '{modelControl.Name}' was not exported exactly once as indexed=false.");
+            }
+
+            var rptEnabled = matches[0].Element(Scl + "RptEnabled");
+            if (rptEnabled is null || !string.Equals((string?)rptEnabled.Attribute("max"), "1", StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    $"Live RCB '{modelControl.Name}' must be exported with RptEnabled max=1.");
+            }
+        }
     }
 
     private static string XmlBool(bool value) => value ? "true" : "false";

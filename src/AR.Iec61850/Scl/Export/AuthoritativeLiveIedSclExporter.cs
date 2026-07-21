@@ -156,7 +156,7 @@ public static class AuthoritativeLiveIedSclExporter
 
         var confReportControl = document.Descendants(Scl + "ConfReportControl").SingleOrDefault();
         if (confReportControl is not null)
-            confReportControl.SetAttributeValue("max", reportControls.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            confReportControl.SetAttributeValue("max", reportControls.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         ValidateReportControlIdentity(document, reportControls);
         return document;

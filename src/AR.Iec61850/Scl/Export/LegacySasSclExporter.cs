@@ -75,10 +75,12 @@ public static class LegacySasSclExporter
             sourceName);
 
         var document = new XDocument(filtered.Document);
+        ApplyExactRuntimeReportControlIdentity(document, options.SelectedReportControl);
         var root = document.Root ?? throw new InvalidDataException("Filtered SCL document has no root element.");
         var schema = SclSchemaProfiles.Get(options.SchemaProfile);
         ApplySchemaProfile(root, schema);
         Validate(document, normalized.SelectedIedName);
+        ValidateExactRuntimeReportControlIdentity(document, options.SelectedReportControl);
 
         var retained = AssertSingleRetained(filtered);
         var findings = normalized.Findings
@@ -100,7 +102,7 @@ public static class LegacySasSclExporter
             IedName = normalized.SelectedIedName,
             AccessPointName = retained.AccessPointName,
             SclSchema = schema.DisplayName,
-            RetainedReportControlReference = retained.DisplayReference,
+            RetainedReportControlReference = ExactRetainedReference(retained, options.SelectedReportControl),
             RetainedDataSetName = retained.DataSetName,
             RetainedDataSetMemberCount = retained.DataSetMemberCount,
             RemovedReportControlCount = filtered.RemovedReportControlCount,
@@ -147,6 +149,63 @@ public static class LegacySasSclExporter
         File.WriteAllText(reportPath, JsonSerializer.Serialize(written, JsonOptions), new UTF8Encoding(false));
         File.WriteAllText(summaryPath, BuildMarkdown(written), new UTF8Encoding(false));
         return written;
+    }
+
+    private static void ApplyExactRuntimeReportControlIdentity(
+        XDocument document,
+        SclReportControlSelection selection)
+    {
+        var exactRuntimeName = (selection.ExportName ?? string.Empty).Trim();
+        if (exactRuntimeName.Length == 0)
+            return;
+
+        var reportControls = document.Descendants(Scl + "ReportControl").ToArray();
+        if (reportControls.Length != 1)
+            throw new InvalidDataException($"Exact runtime RCB normalization requires one retained ReportControl; found {reportControls.Length}.");
+
+        var retained = reportControls[0];
+        retained.SetAttributeValue("name", exactRuntimeName);
+        retained.SetAttributeValue("indexed", "false");
+
+        // ExportName already identifies the concrete MMS RCB instance. Keeping
+        // RptEnabled max=1 makes some legacy clients instantiate that exact name
+        // again and append another "01" (for example A_BRCB_1201 ->
+        // A_BRCB_120101). A non-indexed exact instance must therefore not carry
+        // the indexed-instantiation element in this legacy interoperability CID.
+        foreach (var rptEnabled in retained.Elements(Scl + "RptEnabled").ToArray())
+            rptEnabled.Remove();
+    }
+
+    private static void ValidateExactRuntimeReportControlIdentity(
+        XDocument document,
+        SclReportControlSelection selection)
+    {
+        var exactRuntimeName = (selection.ExportName ?? string.Empty).Trim();
+        if (exactRuntimeName.Length == 0)
+            return;
+
+        var retained = document.Descendants(Scl + "ReportControl").Single();
+        var actualName = (string?)retained.Attribute("name") ?? string.Empty;
+        if (!actualName.Equals(exactRuntimeName, StringComparison.Ordinal))
+            throw new InvalidDataException($"Filtered SCL changed exact runtime RCB name '{exactRuntimeName}' to '{actualName}'.");
+        if (!string.Equals((string?)retained.Attribute("indexed"), "false", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"Exact runtime RCB '{exactRuntimeName}' must be exported as non-indexed.");
+        if (retained.Elements(Scl + "RptEnabled").Any())
+            throw new InvalidDataException($"Exact runtime RCB '{exactRuntimeName}' must not contain RptEnabled because that can append a second instance suffix.");
+    }
+
+    private static string ExactRetainedReference(
+        SclReportControlDescriptor retained,
+        SclReportControlSelection selection)
+    {
+        var exactRuntimeName = (selection.ExportName ?? string.Empty).Trim();
+        if (exactRuntimeName.Length == 0)
+            return retained.DisplayReference;
+
+        var separator = retained.DisplayReference.LastIndexOf('.');
+        return separator < 0
+            ? exactRuntimeName
+            : retained.DisplayReference[..(separator + 1)] + exactRuntimeName;
     }
 
     private static SclReportControlDescriptor AssertSingleRetained(SclReportControlFilterResult filtered)

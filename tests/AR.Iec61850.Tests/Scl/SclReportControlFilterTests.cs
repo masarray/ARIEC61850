@@ -129,6 +129,34 @@ public sealed class SclReportControlFilterTests
     }
 
     [Fact]
+    public void LegacyExporter_Preserves_Exact_Runtime_Rcb_Name_Without_Double_Indexing()
+    {
+        var source = XDocument.Parse(Fixture());
+        var descriptor = SclReportControlFilter.Inspect(source, "IED1.cid", "IED1", "AP1")
+            .ReportControls.Single(item => item.Name == "BRCB_EVENTS");
+
+        var result = LegacySasSclExporter.Build(
+            source,
+            "IED1.cid",
+            new LegacySasSclExportOptions
+            {
+                IedName = "IED1",
+                AccessPointName = "AP1",
+                SchemaProfile = SclSchemaProfile.Edition1V16,
+                SelectedReportControl = new SclReportControlSelection(
+                    descriptor.SelectionKey,
+                    "A_BRCB_1201")
+            });
+
+        var retained = Assert.Single(result.Document.Descendants(Scl + "ReportControl"));
+        Assert.Equal("A_BRCB_1201", (string?)retained.Attribute("name"));
+        Assert.Equal("false", (string?)retained.Attribute("indexed"));
+        Assert.Empty(retained.Elements(Scl + "RptEnabled"));
+        Assert.EndsWith(".A_BRCB_1201", result.RetainedReportControlReference, StringComparison.Ordinal);
+        Assert.DoesNotContain("A_BRCB_120101", result.Document.ToString(SaveOptions.DisableFormatting), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FilterLiveModel_Retains_One_Rcb_And_Validates_DataSet()
     {
         var dataSet = new LiveIedDataSetModel

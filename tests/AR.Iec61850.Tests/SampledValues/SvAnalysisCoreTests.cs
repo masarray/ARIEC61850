@@ -175,8 +175,8 @@ public sealed class SvAnalysisCoreTests
             SvMeasurementValueDomain.PrimaryEngineering,
             ratio);
 
-        Assert.Equal(500, value.PrimaryValue);
-        Assert.Equal(0.5, value.SecondaryEquivalentValue, 9);
+        Assert.Equal(500.0, Assert.IsType<double>(value.PrimaryValue));
+        Assert.Equal(0.5, Assert.IsType<double>(value.SecondaryEquivalentValue), 9);
         Assert.Equal(SvRatioSource.DeviceConfiguration, value.RatioSource);
     }
 

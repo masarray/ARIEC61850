@@ -54,4 +54,23 @@ jobs:
         run: dotnet build .\source\ARIEC61850.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test .\source\ARIEC61850.sln -c Release --no-build --verbosity normal
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/test-results -Force | Out-Null
+          dotnet test .\source\ARIEC61850.sln `
+            -c Release `
+            --no-build `
+            --verbosity normal `
+            --logger "trx;LogFileName=ARIEC61850.Tests.trx" `
+            --results-directory artifacts/test-results 2>&1 |
+            Tee-Object -FilePath artifacts/test-results/dotnet-test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ariec61850-test-diagnostics
+          path: artifacts/test-results
+          if-no-files-found: warn
+          retention-days: 14

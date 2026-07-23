@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using AR.Iec61850.SampledValues;
 using AR.Iec61850.SampledValues.Measurements;
-using AR.Iec61850.TimeSync.Health;
 
 namespace AR.Iec61850.Tests.SampledValues;
 

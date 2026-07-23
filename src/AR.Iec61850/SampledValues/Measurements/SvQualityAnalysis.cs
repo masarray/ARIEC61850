@@ -5,8 +5,8 @@ namespace AR.Iec61850.SampledValues.Measurements;
 public enum SvQualityValidity
 {
     Good,
-    Reserved,
     Invalid,
+    Reserved,
     Questionable
 }
 
@@ -134,11 +134,13 @@ public static class SvQualityDecoder
         SvQualityWordPlacement placement = SvQualityWordPlacement.TwoByteWord,
         bool allowLegacyDerived = true)
     {
+        // IEC 61850 Quality validity is encoded as good=00, invalid=01,
+        // reserved=10 and questionable=11.
         var validity = (word & 0x0003) switch
         {
             0 => SvQualityValidity.Good,
-            1 => SvQualityValidity.Reserved,
-            2 => SvQualityValidity.Invalid,
+            1 => SvQualityValidity.Invalid,
+            2 => SvQualityValidity.Reserved,
             _ => SvQualityValidity.Questionable
         };
 

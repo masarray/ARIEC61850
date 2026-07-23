@@ -38,19 +38,35 @@ public sealed class SampledValuesPublisherSession
     {
         ArgumentNullException.ThrowIfNull(samplePayload);
 
-        var sampleCount = NextSampleCount;
-        NextSampleCount = IncrementSampleCount(sampleCount, SampleCounterWrap);
+        if (_profile.AsduPerFrame != 1)
+            throw new InvalidOperationException($"SV {_profile.Stream.ControlBlockReference} declares nofASDU={_profile.AsduPerFrame}. Use PublishNextBatchAsync.");
 
-        var frame = _profile.BuildEthernetFrame(_source, sampleCount, samplePayload, referenceTime, sampleSynchronization);
-        await _transport.SendAsync(frame, cancellationToken).ConfigureAwait(false);
-        return frame;
+        return await PublishNextBatchAsync(
+            [samplePayload],
+            referenceTime,
+            sampleSynchronization,
+            cancellationToken).ConfigureAwait(false);
     }
 
-    private static ushort IncrementSampleCount(ushort current, ushort? wrap)
+    public async ValueTask<byte[]> PublishNextBatchAsync(
+        IReadOnlyList<byte[]> samplePayloads,
+        Iec61850UtcTime? referenceTime = null,
+        byte sampleSynchronization = 2,
+        CancellationToken cancellationToken = default)
     {
-        if (wrap is > 1)
-            return current + 1 >= wrap.Value ? (ushort)0 : (ushort)(current + 1);
+        ArgumentNullException.ThrowIfNull(samplePayloads);
 
-        return current == ushort.MaxValue ? (ushort)0 : (ushort)(current + 1);
+        var sampleCount = NextSampleCount;
+        NextSampleCount = SampleCounterPolicy.Increment(sampleCount, SampleCounterWrap, samplePayloads.Count);
+
+        var frame = _profile.BuildEthernetFrame(
+            _source,
+            sampleCount,
+            samplePayloads,
+            referenceTime,
+            sampleSynchronization,
+            SampleCounterWrap);
+        await _transport.SendAsync(frame, cancellationToken).ConfigureAwait(false);
+        return frame;
     }
 }

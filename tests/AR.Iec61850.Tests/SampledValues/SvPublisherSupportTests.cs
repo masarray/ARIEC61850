@@ -99,15 +99,25 @@ public sealed class SvPublisherSupportTests
     }
 
     [Fact]
-    public void TxTimingHealthReportsBadWhenOneIntervalIsMissed()
+    public void TxTimingHealthReportsBadWhenOneIntervalIsMissedAfterWarmup()
     {
         const double rate = 1000;
         var monitor = new TxTimingHealth(rate);
         var intervalTicks = (long)Math.Round(Stopwatch.Frequency / rate);
         var start = Stopwatch.GetTimestamp();
 
-        monitor.Record(start, start + intervalTicks + ToTicks(100), start + intervalTicks + ToTicks(150));
-        var snapshot = monitor.Snapshot(start + (2 * intervalTicks));
+        for (var index = 0; index < 8; index++)
+        {
+            var scheduled = start + (index * intervalTicks);
+            monitor.Record(scheduled, scheduled, scheduled + ToTicks(25));
+        }
+
+        var missedSchedule = start + (8 * intervalTicks);
+        monitor.Record(
+            missedSchedule,
+            missedSchedule + intervalTicks + ToTicks(100),
+            missedSchedule + intervalTicks + ToTicks(150));
+        var snapshot = monitor.Snapshot(start + (10 * intervalTicks));
 
         Assert.Equal(TxTimingHealthStatus.Bad, snapshot.Status);
         Assert.True(snapshot.MissedScheduleCount >= 1);

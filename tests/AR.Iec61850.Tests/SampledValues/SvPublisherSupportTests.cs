@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AR.Iec61850.SampledValues;
+using AR.Iec61850.SampledValues.Measurements;
 using AR.Iec61850.TimeSync.Health;
 
 namespace AR.Iec61850.Tests.SampledValues;
@@ -21,6 +22,14 @@ public sealed class SvPublisherSupportTests
         Assert.Equal(quality, restored);
         Assert.Equal(new byte[] { 0x00, 0x00, 0x18, 0x87 }, quality.ToBytes());
     }
+
+    [Theory]
+    [InlineData(0, SvQualityValidity.Good)]
+    [InlineData(1, SvQualityValidity.Invalid)]
+    [InlineData(2, SvQualityValidity.Reserved)]
+    [InlineData(3, SvQualityValidity.Questionable)]
+    public void SemanticQualityDecoderUsesIecValidityEncoding(ushort word, SvQualityValidity expected)
+        => Assert.Equal(expected, SvQualityDecoder.DecodeWord(word).Validity);
 
     [Fact]
     public void PublisherEvidenceWriterRecordsStreamAndSafetyBoundary()

@@ -60,7 +60,11 @@ public static class SampledValuesPublisherEvidenceReportWriter
         ArgumentNullException.ThrowIfNull(report);
 
         var builder = new StringBuilder();
-        builder.AppendLine("# Sampled Values Publisher Evidence");
+        builder.Append("# ")
+            .Append(EmptyAsDash(report.ToolName))
+            .AppendLine(" Sampled Values Publisher Evidence Report");
+        builder.AppendLine();
+        builder.AppendLine("> TX-side publisher evidence only. This report records configured intent and local transmitter observations; it does not prove remote subscription, calibrated accuracy, or formal IEC 61850 conformance.");
         builder.AppendLine();
         AppendField(builder, "Tool", $"{report.ToolName} {report.ToolVersion}".Trim());
         AppendField(builder, "Created", report.CreatedAt.ToString("O", CultureInfo.InvariantCulture));

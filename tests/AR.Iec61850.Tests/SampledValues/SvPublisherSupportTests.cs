@@ -70,7 +70,8 @@ public sealed class SvPublisherSupportTests
 
         var markdown = SampledValuesPublisherEvidenceReportWriter.ToMarkdown(report);
 
-        Assert.Contains("# Sampled Values Publisher Evidence", markdown, StringComparison.Ordinal);
+        Assert.Contains("# Test Publisher Sampled Values Publisher Evidence Report", markdown, StringComparison.Ordinal);
+        Assert.Contains("TX-side publisher evidence only", markdown, StringComparison.Ordinal);
         Assert.Contains("MU01", markdown, StringComparison.Ordinal);
         Assert.Contains("TX-side evidence only", markdown, StringComparison.Ordinal);
         Assert.Contains("4.032 Mbit/s", markdown, StringComparison.Ordinal);

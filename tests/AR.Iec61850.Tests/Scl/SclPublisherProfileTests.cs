@@ -14,7 +14,7 @@ public sealed class SclPublisherProfileTests
         var profile = SampledValuesPublisherProfile.FromScl(document, "MU01LD0/LLN0$SV$MSVCB01");
         var source = MacAddress.Parse("02:00:00:00:10:01");
         var referenceTime = new Iec61850UtcTime(new DateTimeOffset(2026, 6, 12, 11, 0, 0, TimeSpan.Zero), Quality: 0);
-        var payload = Convert.FromHexString("0000006400000001000000C800000003");
+        var payload = profile.BuildDefaultPayload(referenceTime);
 
         var bytes = profile.BuildEthernetFrame(source, sampleCount: 44, payload, referenceTime);
 
@@ -83,15 +83,25 @@ public sealed class SclPublisherProfileTests
     }
 
     [Fact]
-    public void SampledValues_Profile_Rejects_MultiAsdu_Stream_Until_Supported()
+    public void SampledValues_Profile_Supports_MultiAsdu_Stream_With_Sequential_Counters()
     {
         var xml = File.ReadAllText(SclParserTests.MinimalStationPath())
             .Replace("nofASDU=\"1\"", "nofASDU=\"2\"", StringComparison.Ordinal);
         var document = new AR.Iec61850.Scl.SclParser().Parse(xml, "multi-asdu.scd");
+        var profile = SampledValuesPublisherProfile.FromScl(document);
+        var source = MacAddress.Parse("02:00:00:00:10:01");
+        var payload = profile.BuildDefaultPayload();
 
-        void Action() => _ = SampledValuesPublisherProfile.FromScl(document);
-        var error = Assert.Throws<AR.Iec61850.Scl.SclProfileException>(Action);
+        var bytes = profile.BuildEthernetFrame(
+            source,
+            sampleCount: 3999,
+            samplePayloads: [payload, payload],
+            sampleCounterWrap: 4000);
 
-        Assert.Contains("nofASDU=2", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(SampledValuesFrameParser.TryParseEthernetFrame(bytes, out var parsed));
+        Assert.Equal(2, parsed.Pdu.Asdus.Count);
+        Assert.Equal((ushort)3999, parsed.Pdu.Asdus[0].SampleCount);
+        Assert.Equal((ushort)0, parsed.Pdu.Asdus[1].SampleCount);
+        Assert.All(parsed.Pdu.Asdus, asdu => Assert.Equal(payload, asdu.SamplePayload));
     }
 }

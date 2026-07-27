@@ -19,16 +19,19 @@ public static class SampledValuesPayloadBuilder
             throw new ArgumentException($"SV payload value count mismatch. Expected {layout.Elements.Count}, got {values.Count}.", nameof(values));
 
         var payload = new byte[layout.PayloadByteLength];
-        for (var i = 0; i < layout.Elements.Count; i++)
+        for (var index = 0; index < layout.Elements.Count; index++)
         {
-            var element = layout.Elements[i];
-            WriteValue(payload.AsSpan(element.Offset, element.Width), element, values[i]);
+            var element = layout.Elements[index];
+            WriteValue(payload.AsSpan(element.Offset, element.Width), element, values[index]);
         }
 
         return payload;
     }
 
-    public static byte[] BuildDefaultPayload(SampledValuesPayloadLayout layout, Iec61850UtcTime? timestamp = null)
+    public static byte[] BuildDefaultPayload(
+        SampledValuesPayloadLayout layout,
+        Iec61850UtcTime? timestamp = null,
+        SampledValueQuality? quality = null)
     {
         ArgumentNullException.ThrowIfNull(layout);
 
@@ -38,8 +41,12 @@ public static class SampledValuesPayloadBuilder
         var payload = new byte[layout.PayloadByteLength];
         foreach (var element in layout.Elements)
         {
+            var destination = payload.AsSpan(element.Offset, element.Width);
             if (element.Kind == SampledValuePayloadElementKind.Timestamp && timestamp is { } time)
-                BerWriter.EncodeUtcTime(time.Value, time.Quality).CopyTo(payload.AsSpan(element.Offset, element.Width));
+                BerWriter.EncodeUtcTime(time.Value, time.Quality).CopyTo(destination);
+
+            if (element.Kind == SampledValuePayloadElementKind.Quality)
+                (quality ?? SampledValueQuality.Good).ToBytes(element.Width).CopyTo(destination);
         }
 
         return payload;
@@ -50,25 +57,30 @@ public static class SampledValuesPayloadBuilder
         long sampleIndex,
         double sampleRateHz,
         double nominalHz,
-        Iec61850UtcTime? timestamp = null)
+        Iec61850UtcTime? timestamp = null,
+        SampledValueQuality? quality = null)
     {
         ArgumentNullException.ThrowIfNull(layout);
 
         if (!layout.IsFullySupported)
             throw new InvalidOperationException(BuildUnsupportedLayoutMessage(layout));
 
-        if (sampleRateHz <= 0)
-            throw new ArgumentOutOfRangeException(nameof(sampleRateHz), "Sample rate must be greater than 0.");
-
-        if (nominalHz <= 0)
-            throw new ArgumentOutOfRangeException(nameof(nominalHz), "Nominal frequency must be greater than 0.");
+        if (!double.IsFinite(sampleRateHz) || sampleRateHz <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sampleRateHz), "Sample rate must be greater than 0 and finite.");
+        if (!double.IsFinite(nominalHz) || nominalHz <= 0)
+            throw new ArgumentOutOfRangeException(nameof(nominalHz), "Nominal frequency must be greater than 0 and finite.");
 
         var payload = new byte[layout.PayloadByteLength];
         foreach (var element in layout.Elements)
         {
             var destination = payload.AsSpan(element.Offset, element.Width);
-            if (element.Kind == SampledValuePayloadElementKind.Quality ||
-                element.Kind == SampledValuePayloadElementKind.BitString ||
+            if (element.Kind == SampledValuePayloadElementKind.Quality)
+            {
+                (quality ?? SampledValueQuality.Good).ToBytes(element.Width).CopyTo(destination);
+                continue;
+            }
+
+            if (element.Kind == SampledValuePayloadElementKind.BitString ||
                 element.Kind == SampledValuePayloadElementKind.EntryTime)
             {
                 continue;
@@ -216,7 +228,6 @@ public static class SampledValuesPayloadBuilder
 
         if (raw.Length > destination.Length)
             throw new ArgumentException($"SV raw value has {raw.Length} bytes but the payload slot has {destination.Length} bytes.");
-
         raw.CopyTo(destination);
     }
 
@@ -239,13 +250,13 @@ public static class SampledValuesPayloadBuilder
         };
 
     private static float ToSingle(MmsDataValue value)
-        => value.Kind == MmsDataKind.FloatingPoint && value.Value is float f
-            ? f
+        => value.Kind == MmsDataKind.FloatingPoint && value.Value is float number
+            ? number
             : Convert.ToSingle(value.Value, CultureInfo.InvariantCulture);
 
     private static double ToDouble(MmsDataValue value)
-        => value.Kind == MmsDataKind.FloatingPoint && value.Value is float f
-            ? f
+        => value.Kind == MmsDataKind.FloatingPoint && value.Value is float number
+            ? number
             : Convert.ToDouble(value.Value, CultureInfo.InvariantCulture);
 
     private static long ComputeDemoValue(SampledValuePayloadElement element, long sampleIndex, double sampleRateHz, double nominalHz)

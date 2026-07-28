@@ -163,10 +163,31 @@ public sealed class SvStreamObservationManager
 
     private static SampledValuesPublisherProfile? ValidateProfileBinding(SampledValuesFrame frame, SampledValuesPublisherProfile? profile, ICollection<string> diagnostics)
     {
-        if (profile is null) return null;
-        if (profile.AppId == frame.AppId && string.Equals(profile.Destination.ToString(), frame.Destination.ToString(), StringComparison.OrdinalIgnoreCase) && profile.Vlan?.VlanId == frame.Vlan?.VlanId) return profile;
-        diagnostics.Add($"Rejected SCL candidate {profile.Stream.ControlBlockReference}: APPID, destination MAC, and VLAN must identify the same configured stream before comparison.");
-        return null;
+        if (profile is null)
+            return null;
+
+        var appIdMatches = profile.AppId == frame.AppId;
+        var destinationMatches = string.Equals(profile.Destination.ToString(), frame.Destination.ToString(), StringComparison.OrdinalIgnoreCase);
+        if (!appIdMatches || !destinationMatches)
+        {
+            diagnostics.Add($"Rejected SCL candidate {profile.Stream.ControlBlockReference}: APPID and destination MAC must identify the same configured stream before comparison.");
+            return null;
+        }
+
+        var expectedVlan = profile.Vlan?.VlanId;
+        var observedVlan = frame.Vlan?.VlanId;
+        if (expectedVlan.HasValue && observedVlan.HasValue && expectedVlan.Value != observedVlan.Value)
+        {
+            diagnostics.Add($"Rejected SCL candidate {profile.Stream.ControlBlockReference}: expected VLAN {expectedVlan.Value}, observed VLAN {observedVlan.Value}.");
+            return null;
+        }
+
+        if (expectedVlan.HasValue && !observedVlan.HasValue)
+        {
+            diagnostics.Add($"SCL expects VLAN {expectedVlan.Value}, but the capture does not expose an 802.1Q tag. Binding retained because NIC/driver VLAN stripping is possible; verify with a TAP or mirror port.");
+        }
+
+        return profile;
     }
 
     private static IReadOnlyList<string> ValidateFrameConsistency(IReadOnlyList<SampledValueAsdu> asdus)

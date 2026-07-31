@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" />
+    <ProjectReference Include="..\..\src\AR.Iec61850\AR.Iec61850.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <Copyright>Copyright (C) 2026 Mas Ari / masarray</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>AR.Iec61850.VirtualRelayLab</AssemblyName>
+    <RootNamespace>AR.Iec61850.VirtualRelayLab</RootNamespace>
+    <Product>AR Virtual Relay Lab</Product>
+    <Description>IEC 61850 Sampled Values virtual overcurrent and earth-fault protection laboratory.</Description>
+  </PropertyGroup>
+
+</Project>

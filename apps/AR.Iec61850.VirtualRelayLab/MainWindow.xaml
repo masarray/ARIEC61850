@@ -1,0 +1,450 @@
+<Window x:Class="AR.Iec61850.VirtualRelayLab.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:AR.Iec61850.VirtualRelayLab.Controls"
+        Title="AR Virtual Relay Lab"
+        Width="1480"
+        Height="880"
+        MinWidth="1280"
+        MinHeight="720"
+        WindowStartupLocation="CenterScreen"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True">
+
+    <Window.Resources>
+        <Style x:Key="LedStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Fill" Value="#53616B" />
+            <Setter Property="Stroke" Value="#6B7B86" />
+            <Setter Property="StrokeThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="RelayKey" TargetType="Button" BasedOn="{StaticResource LeanButton}">
+            <Setter Property="Width" Value="48" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="Background" Value="#26323B" />
+            <Setter Property="Foreground" Value="#EDF2F5" />
+            <Setter Property="BorderBrush" Value="#4D5B65" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="ElementTag" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="Padding" Value="8,4" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="54" />
+            <RowDefinition Height="54" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="30" />
+        </Grid.RowDefinitions>
+
+        <!-- Compact product chrome -->
+        <Border Grid.Row="0" Background="#17232D" BorderBrush="#2D3C47" BorderThickness="0,0,0,1">
+            <Grid Margin="18,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="30" Height="30" CornerRadius="5" Background="#2F6E9C" Margin="0,0,10,0">
+                        <TextBlock Text="AR" Foreground="White" FontWeight="SemiBold" FontSize="12"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel>
+                        <TextBlock Text="Virtual Relay Lab" Foreground="#F4F7F9" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="IEC 61850 Process Bus Protection Workbench" Foreground="#9FB0BC" FontSize="10.5" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Padding="9,4" CornerRadius="4" Background="#203440" BorderBrush="#355262" BorderThickness="1" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="TopHealthLed" Style="{StaticResource LedStyle}" Width="9" Height="9" Margin="0,0,6,0" />
+                            <TextBlock x:Name="TopHealthText" Text="LAB READY" Foreground="#B9C7D0" FontSize="10.5" />
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="P0 ENGINEERING BUILD" Foreground="#758895" FontFamily="Cascadia Mono, Consolas" FontSize="10" VerticalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Lean workflow toolbar -->
+        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="14,9">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="180" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="190" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="170" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="SOURCE" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox Grid.Column="1" x:Name="SourceCombo" SelectedIndex="0">
+                    <ComboBoxItem Content="Internal deterministic demo" />
+                    <ComboBoxItem Content="Live Npcap subscriber" />
+                    <ComboBoxItem Content="PCAP replay" />
+                </ComboBox>
+
+                <TextBlock Grid.Column="3" Text="SV STREAM" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox Grid.Column="4" x:Name="StreamCombo" SelectedIndex="0">
+                    <ComboBoxItem Content="MU01 / APPID 0x4000" />
+                </ComboBox>
+
+                <TextBlock Grid.Column="6" Text="VIEW" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox Grid.Column="7" SelectedIndex="0">
+                    <ComboBoxItem Content="Primary current" />
+                    <ComboBoxItem Content="Secondary current" />
+                </ComboBox>
+
+                <StackPanel Grid.Column="9" Orientation="Horizontal">
+                    <Button Style="{StaticResource LeanButton}" Content="Import SCL" Margin="0,0,7,0" />
+                    <Button Style="{StaticResource LeanButton}" Content="Algorithm Editor" Margin="0,0,7,0" Click="OpenAlgorithmEditor_Click" />
+                    <Button x:Name="RunButton" Style="{StaticResource PrimaryButton}" Content="Run lab" Click="RunButton_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- One-screen cause and effect workspace -->
+        <Grid Grid.Row="2" Margin="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.72*" MinWidth="760" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="0.92*" MinWidth="390" MaxWidth="540" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="10" />
+                    <RowDefinition Height="196" />
+                </Grid.RowDefinitions>
+
+                <!-- Scope -->
+                <Border Grid.Row="0" Style="{StaticResource PanelBorder}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="54" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="38" />
+                        </Grid.RowDefinitions>
+
+                        <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="14,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="SMV waveform" FontSize="14" FontWeight="SemiBold" />
+                                        <Border Margin="8,0,0,0" Padding="6,2" CornerRadius="4" Background="{StaticResource AccentSoftBrush}">
+                                            <TextBlock Text="2 CYCLES" Foreground="{StaticResource AccentBrush}" FontSize="9.5" FontWeight="SemiBold" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Stationary oscilloscope window · protection markers remain visible" Foreground="{StaticResource MutedBrush}" FontSize="10.5" Margin="0,2,0,0" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Margin="0,0,20,0">
+                                        <TextBlock Text="IA" Style="{StaticResource SectionLabel}" />
+                                        <TextBlock x:Name="IaValueText" Text="1.00 A" Style="{StaticResource EngineeringValue}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,20,0">
+                                        <TextBlock Text="IB" Style="{StaticResource SectionLabel}" />
+                                        <TextBlock x:Name="IbValueText" Text="1.00 A" Style="{StaticResource EngineeringValue}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,20,0">
+                                        <TextBlock Text="IC" Style="{StaticResource SectionLabel}" />
+                                        <TextBlock x:Name="IcValueText" Text="1.00 A" Style="{StaticResource EngineeringValue}" />
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="3I0" Style="{StaticResource SectionLabel}" />
+                                        <TextBlock x:Name="ResidualValueText" Text="0.00 A" Style="{StaticResource EngineeringValue}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <controls:WaveformScope Grid.Row="1" x:Name="SmvScope" Margin="12" />
+
+                        <Border Grid.Row="2" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="12,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="50.000 Hz" Style="{StaticResource EngineeringValue}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="  ·  80 samples/cycle" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" x:Name="SampleCounterText" Text="  ·  smpCnt 0000" Style="{StaticResource EngineeringValue}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="  ·  smpSynch 2" Foreground="{StaticResource HealthyBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="11" VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Style="{StaticResource LeanButton}" Content="Inject A-G fault" Padding="10,5" Margin="0,0,6,0" Click="InjectFault_Click" />
+                                    <Button Style="{StaticResource LeanButton}" Content="Degrade SMV" Padding="10,5" Margin="0,0,6,0" Click="DegradeSmv_Click" />
+                                    <Button Style="{StaticResource LeanButton}" Content="Reset" Padding="10,5" Click="Reset_Click" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Protection causality strip -->
+                <Border Grid.Row="2" Style="{StaticResource PanelBorder}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="43" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="13,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Protection operation" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ProtectionReasonText" Text="  ·  Measurements stable · no pickup" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Border Grid.Column="1" x:Name="PermissionBadge" Padding="8,3" CornerRadius="4" Background="#EAF5EC" BorderBrush="#B9D8BF" BorderThickness="1" VerticalAlignment="Center">
+                                    <TextBlock x:Name="PermissionText" Text="TRIP PERMITTED" Foreground="{StaticResource HealthyBrush}" FontSize="9.5" FontWeight="SemiBold" />
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <Grid Grid.Row="1" Margin="12,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.05*" />
+                                <ColumnDefinition Width="1.05*" />
+                                <ColumnDefinition Width="1.05*" />
+                                <ColumnDefinition Width="1.05*" />
+                                <ColumnDefinition Width="1.25*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                <Border Style="{StaticResource ElementTag}"><TextBlock Text="50P-1  ·  4.00 A / 60 ms" FontSize="10.5" /></Border>
+                                <TextBlock x:Name="Phase50StateText" Text="READY" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="2,9,0,5" />
+                                <ProgressBar x:Name="Phase50Progress" Height="5" Minimum="0" Maximum="100" Value="0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                <Border Style="{StaticResource ElementTag}"><TextBlock Text="51P  ·  IEC SI / TMS 0.12" FontSize="10.5" /></Border>
+                                <TextBlock x:Name="Phase51StateText" Text="READY" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="2,9,0,5" />
+                                <ProgressBar x:Name="Phase51Progress" Height="5" Minimum="0" Maximum="100" Value="0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Margin="0,0,10,0">
+                                <Border Style="{StaticResource ElementTag}"><TextBlock Text="50N  ·  0.80 A / 100 ms" FontSize="10.5" /></Border>
+                                <TextBlock x:Name="Earth50StateText" Text="READY" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="2,9,0,5" />
+                                <ProgressBar x:Name="Earth50Progress" Height="5" Minimum="0" Maximum="100" Value="0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="3" Margin="0,0,10,0">
+                                <Border Style="{StaticResource ElementTag}"><TextBlock Text="51N  ·  IEC SI / TMS 0.15" FontSize="10.5" /></Border>
+                                <TextBlock x:Name="Earth51StateText" Text="READY" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="2,9,0,5" />
+                                <ProgressBar x:Name="Earth51Progress" Height="5" Minimum="0" Maximum="100" Value="0" />
+                            </StackPanel>
+
+                            <Border Grid.Column="4" Background="#F8FAFC" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="5" Padding="12">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="EVENT TRACE" Style="{StaticResource SectionLabel}" />
+                                    <TextBlock Grid.Row="1" x:Name="EventTraceText"
+                                               Text="READY       Protection engine initialized&#x0a;HEALTHY     SMV trust gate permits trip"
+                                               FontFamily="Cascadia Mono, Consolas" FontSize="10.5" Foreground="{StaticResource MutedBrush}"
+                                               TextWrapping="Wrap" Margin="0,8,0,0" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" Background="Transparent" />
+
+            <!-- Neutral original virtual relay faceplate -->
+            <Border Grid.Column="2" Background="#8F9FAA" BorderBrush="#6F808B" BorderThickness="1" CornerRadius="9" Padding="12">
+                <Border Background="{StaticResource RelayBodyBrush}" BorderBrush="#CBD5DB" BorderThickness="1" CornerRadius="7" Padding="17">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="44" />
+                            <RowDefinition Height="206" />
+                            <RowDefinition Height="14" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="126" />
+                            <RowDefinition Height="38" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Width="31" Height="31" Background="#315E7B" CornerRadius="4" Margin="0,0,9,0">
+                                    <TextBlock Text="AR" Foreground="White" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel>
+                                    <TextBlock Text="VIRTUAL RELAY" FontSize="14" FontWeight="SemiBold" Foreground="#263640" />
+                                    <TextBlock Text="VR-51 PROCESS BUS" FontFamily="Cascadia Mono, Consolas" FontSize="9.5" Foreground="#5C6D77" />
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Grid.Column="1" Padding="7,4" Background="#E5EBEE" BorderBrush="#82939D" BorderThickness="1" CornerRadius="3" VerticalAlignment="Center">
+                                <TextBlock Text="LAB / 001" FontFamily="Cascadia Mono, Consolas" FontSize="9.5" Foreground="#44555F" />
+                            </Border>
+                        </Grid>
+
+                        <Border Grid.Row="1" Background="#58666F" BorderBrush="#6F7D85" BorderThickness="1" CornerRadius="7" Padding="8">
+                            <Border Background="{StaticResource LcdBrush}" BorderBrush="#CDD8D2" BorderThickness="1" CornerRadius="3" Padding="15,13">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="10" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="PRIMARY CURRENT" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                                    <Grid Grid.Row="2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="IA" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15" Margin="0,0,0,7" />
+                                            <TextBlock Text="IB" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15" Margin="0,0,0,7" />
+                                            <TextBlock Text="IC" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15" Margin="0,0,0,7" />
+                                            <TextBlock Text="3I0" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock x:Name="LcdIaText" Text="1.00 A" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15" TextAlignment="Right" Margin="0,0,0,7" />
+                                            <TextBlock x:Name="LcdIbText" Text="1.00 A" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15" TextAlignment="Right" Margin="0,0,0,7" />
+                                            <TextBlock x:Name="LcdIcText" Text="1.00 A" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15" TextAlignment="Right" Margin="0,0,0,7" />
+                                            <TextBlock x:Name="LcdResidualText" Text="0.00 A" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15" TextAlignment="Right" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Grid.Row="3" x:Name="LcdStatusText" Text="READY · SMV HEALTHY" Foreground="{StaticResource LcdTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="10.5" />
+                                </Grid>
+                            </Border>
+                        </Border>
+
+                        <Grid Grid.Row="3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.05*" />
+                                <ColumnDefinition Width="0.95*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="2,0,12,0" VerticalAlignment="Top">
+                                <TextBlock Text="INDICATION" Foreground="#50616C" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="31" />
+                                        <RowDefinition Height="31" />
+                                        <RowDefinition Height="31" />
+                                        <RowDefinition Height="31" />
+                                        <RowDefinition Height="31" />
+                                        <RowDefinition Height="31" />
+                                        <RowDefinition Height="31" />
+                                    </Grid.RowDefinitions>
+                                    <Ellipse x:Name="HealthyLed" Style="{StaticResource LedStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="HEALTHY" Foreground="#31424C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <Ellipse Grid.Row="1" x:Name="PickupLed" Style="{StaticResource LedStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="PICKUP" Foreground="#31424C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <Ellipse Grid.Row="2" x:Name="TripLed" Style="{StaticResource LedStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="TRIP" Foreground="#31424C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <Ellipse Grid.Row="3" x:Name="PhaseALed" Style="{StaticResource LedStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="PHASE A" Foreground="#31424C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <Ellipse Grid.Row="4" x:Name="PhaseBLed" Style="{StaticResource LedStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="PHASE B" Foreground="#31424C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <Ellipse Grid.Row="5" x:Name="PhaseCLed" Style="{StaticResource LedStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="PHASE C" Foreground="#31424C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <Ellipse Grid.Row="6" x:Name="EarthLed" Style="{StaticResource LedStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Text="EARTH FAULT" Foreground="#31424C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+
+                            <Border Grid.Column="1" Background="#A5B2BA" BorderBrush="#81919B" BorderThickness="1" CornerRadius="5" Padding="7" VerticalAlignment="Top">
+                                <StackPanel>
+                                    <TextBlock Text="SMV TRUST" Foreground="#465761" FontSize="9.5" FontWeight="SemiBold" Margin="2,0,0,7" />
+                                    <TextBlock x:Name="TrustStateText" Text="HEALTHY" FontFamily="Cascadia Mono, Consolas" FontSize="11" Foreground="#315E40" Margin="2,0,0,3" />
+                                    <TextBlock x:Name="TrustDetailText" Text="continuous · mapped&#x0a;smpSynch 2 · fresh" FontFamily="Cascadia Mono, Consolas" FontSize="9.5" Foreground="#53636D" LineHeight="15" />
+                                    <Border Height="1" Background="#85959F" Margin="0,9,0,8" />
+                                    <TextBlock Text="ACTIVE ELEMENT" Foreground="#465761" FontSize="9.5" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ActiveElementText" Text="READY" FontFamily="Cascadia Mono, Consolas" FontSize="11" Foreground="#2F526A" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Grid Grid.Row="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Style="{StaticResource RelayKey}" Content="▲" />
+                                <Button Style="{StaticResource RelayKey}" Content="↵" />
+                                <Button Style="{StaticResource RelayKey}" Content="▶" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Style="{StaticResource RelayKey}" Content="▼" />
+                                <Button Style="{StaticResource RelayKey}" Content="×" />
+                                <Button Style="{StaticResource RelayKey}" Content="R" Click="Reset_Click" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Grid.Row="5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="IEC 61850 SV · VIRTUAL OUTPUT ONLY" Foreground="#53646E" FontFamily="Cascadia Mono, Consolas" FontSize="8.8" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse x:Name="BlockedLed" Style="{StaticResource LedStyle}" Width="9" Height="9" Margin="0,0,5,0" />
+                                <TextBlock Text="BLOCK" Foreground="#53646E" FontSize="9.5" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3" Background="#E8EDF1" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+            <Grid Margin="12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="FooterStatusText" Text="Ready. Start the lab, inject a fault, then observe waveform → pickup → operate → trip." Foreground="{StaticResource MutedBrush}" FontSize="10.5" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Virtual trip only · no GOOSE or physical output" Foreground="#7A8994" FontSize="10" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

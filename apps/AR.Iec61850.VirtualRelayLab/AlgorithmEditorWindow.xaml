@@ -85,7 +85,6 @@
                              TextWrapping="NoWrap"
                              FontFamily="Cascadia Mono, Consolas"
                              FontSize="12.5"
-                             LineHeight="20"
                              Background="#111B22"
                              Foreground="#D8E4EB"
                              BorderThickness="0"
@@ -119,7 +118,7 @@
                         <Border x:Name="ValidationBadge" Padding="9,6" CornerRadius="4" Background="#EEF2F5" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
                             <TextBlock x:Name="ValidationText" Text="Not validated" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" />
                         </Border>
-                        <TextBlock Text="The active algorithm remains unchanged until validation and staging both succeed." TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" FontSize="10.5" LineHeight="16" Margin="1,9,1,0" />
+                        <TextBlock Text="The active algorithm remains unchanged until validation and staging both succeed." TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" FontSize="10.5" Margin="1,9,1,0" />
                     </StackPanel>
                     <Border Grid.Row="2" Background="{StaticResource LineBrush}" />
                     <StackPanel Grid.Row="3" Margin="12">
@@ -150,7 +149,7 @@
 
                         <TextBlock Text="SAFETY GATES" Style="{StaticResource SectionLabel}" Margin="0,18,0,8" />
                         <TextBlock Text="✓ bounded instruction budget&#x0a;✓ unit/type analysis&#x0a;✓ deterministic state&#x0a;✓ mandatory SMV trip gate"
-                                   Foreground="#4D7257" FontFamily="Cascadia Mono, Consolas" FontSize="10.5" LineHeight="19" />
+                                   Foreground="#4D7257" FontFamily="Cascadia Mono, Consolas" FontSize="10.5" />
                     </StackPanel>
                 </Grid>
             </Border>

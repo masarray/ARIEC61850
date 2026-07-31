@@ -22,6 +22,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.Transports.Npca
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.Tests", "tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj", "{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AR.Iec61850.VirtualRelayLab.Tests", "tests\AR.Iec61850.VirtualRelayLab.Tests\AR.Iec61850.VirtualRelayLab.Tests.csproj", "{B7E2A1D4-73C6-4F90-8D8F-9A5B2C4E1F33}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -64,6 +66,10 @@ Global
 		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0D9D1E7D-FF86-49A3-A81D-38D3E0880BF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B7E2A1D4-73C6-4F90-8D8F-9A5B2C4E1F33}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B7E2A1D4-73C6-4F90-8D8F-9A5B2C4E1F33}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B7E2A1D4-73C6-4F90-8D8F-9A5B2C4E1F33}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B7E2A1D4-73C6-4F90-8D8F-9A5B2C4E1F33}.Release|Any CPU.Build.0 = Release|Any CPU
 		{7B46B7B7-DF3F-4F3A-9DC9-E49AF0D97B61}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7B46B7B7-DF3F-4F3A-9DC9-E49AF0D97B61}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B46B7B7-DF3F-4F3A-9DC9-E49AF0D97B61}.Release|Any CPU.ActiveCfg = Release|Any CPU

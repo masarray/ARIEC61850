@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using AR.Iec61850.Transports;
@@ -11,9 +13,16 @@ namespace AR.Iec61850.Transports.Npcap;
 /// </summary>
 public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProcessBusFrameSource, IDisposable
 {
+    private const ushort VlanEtherType = 0x8100;
+    private const ushort SampledValuesEtherType = 0x88BA;
+    private static readonly long MinimumLearnableIntervalTicks = Math.Max(1, Stopwatch.Frequency / 50_000); // 20 us
+    private static readonly long MaximumLearnableIntervalTicks = Math.Max(1, Stopwatch.Frequency / 200); // 5 ms
+
     private readonly ICaptureDevice _device;
     private readonly IInjectionDevice _injectionDevice;
     private readonly object _gate = new();
+    private readonly SemaphoreSlim _sendGate = new(1, 1);
+    private readonly Dictionary<SvTransmitKey, SvTransmitClock> _svTransmitClocks = new();
     private bool _capturing;
     private bool _disposed;
 
@@ -31,12 +40,27 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
         _device.Open(DeviceModes.Promiscuous, 1000);
     }
 
-    public ValueTask SendAsync(ReadOnlyMemory<byte> frame, CancellationToken cancellationToken = default)
+    public async ValueTask SendAsync(ReadOnlyMemory<byte> frame, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
-        _injectionDevice.SendPacket(frame.ToArray());
-        return ValueTask.CompletedTask;
+
+        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var isSampledValues = TryReadSampledValuesKey(frame.Span, out var streamKey);
+            if (isSampledValues)
+                await PaceSampledValuesAsync(streamKey, cancellationToken).ConfigureAwait(false);
+
+            _injectionDevice.SendPacket(frame.ToArray());
+
+            if (isSampledValues)
+                CommitSampledValuesSend(streamKey, Stopwatch.GetTimestamp());
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
     }
 
     public async IAsyncEnumerable<ProcessBusCapturedFrame> CaptureAsync(
@@ -72,22 +96,22 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
 
             handler = (_, capture) =>
             {
-                var frame = new ProcessBusCapturedFrame
+                var capturedFrame = new ProcessBusCapturedFrame
                 {
                     Timestamp = ToDateTimeOffset(capture.Header.Timeval),
                     Frame = capture.Data.ToArray(),
                     Source = _device.Name ?? string.Empty
                 };
 
-                channel.Writer.TryWrite(frame);
+                channel.Writer.TryWrite(capturedFrame);
             };
 
             _device.OnPacketArrival += handler;
             _device.StartCapture();
             started = true;
 
-            await foreach (var frame in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
-                yield return frame;
+            await foreach (var capturedFrame in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+                yield return capturedFrame;
         }
         finally
         {
@@ -127,7 +151,90 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
             // Best-effort cleanup only.
         }
 
+        _sendGate.Dispose();
         _disposed = true;
+    }
+
+    private async ValueTask PaceSampledValuesAsync(SvTransmitKey key, CancellationToken cancellationToken)
+    {
+        if (!_svTransmitClocks.TryGetValue(key, out var clock) || clock.NominalIntervalTicks <= 0)
+            return;
+
+        var targetTicks = clock.LastSentTicks + clock.NominalIntervalTicks;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var remainingTicks = targetTicks - Stopwatch.GetTimestamp();
+            if (remainingTicks <= 0)
+                return;
+
+            var remainingMilliseconds = remainingTicks * 1000.0 / Stopwatch.Frequency;
+            if (remainingMilliseconds > 2)
+            {
+                await Task.Delay(
+                        TimeSpan.FromMilliseconds(Math.Min(remainingMilliseconds - 1, 10)),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                Thread.SpinWait(64);
+            }
+        }
+    }
+
+    private void CommitSampledValuesSend(SvTransmitKey key, long sentTicks)
+    {
+        if (!_svTransmitClocks.TryGetValue(key, out var clock))
+        {
+            _svTransmitClocks[key] = new SvTransmitClock(sentTicks, 0);
+            return;
+        }
+
+        var observedInterval = sentTicks - clock.LastSentTicks;
+        var nominalInterval = clock.NominalIntervalTicks;
+        var learnable = observedInterval >= MinimumLearnableIntervalTicks &&
+                        observedInterval <= MaximumLearnableIntervalTicks &&
+                        (nominalInterval <= 0 || observedInterval <= nominalInterval * 3);
+
+        if (learnable)
+        {
+            nominalInterval = nominalInterval <= 0
+                ? observedInterval
+                : (long)Math.Round((nominalInterval * 0.9) + (observedInterval * 0.1));
+        }
+
+        _svTransmitClocks[key] = new SvTransmitClock(sentTicks, nominalInterval);
+    }
+
+    private static bool TryReadSampledValuesKey(ReadOnlySpan<byte> frame, out SvTransmitKey key)
+    {
+        key = default;
+        if (frame.Length < 22)
+            return false;
+
+        var etherType = BinaryPrimitives.ReadUInt16BigEndian(frame.Slice(12, 2));
+        var processBusOffset = 14;
+        ushort vlanId = 0;
+        if (etherType == VlanEtherType)
+        {
+            if (frame.Length < 26)
+                return false;
+
+            vlanId = (ushort)(BinaryPrimitives.ReadUInt16BigEndian(frame.Slice(14, 2)) & 0x0FFF);
+            etherType = BinaryPrimitives.ReadUInt16BigEndian(frame.Slice(16, 2));
+            processBusOffset = 18;
+        }
+
+        if (etherType != SampledValuesEtherType || frame.Length < processBusOffset + 2)
+            return false;
+
+        key = new SvTransmitKey(
+            BinaryPrimitives.ReadUInt64BigEndian(frame.Slice(0, 8)),
+            BinaryPrimitives.ReadUInt32BigEndian(frame.Slice(8, 4)),
+            BinaryPrimitives.ReadUInt16BigEndian(frame.Slice(processBusOffset, 2)),
+            vlanId);
+        return true;
     }
 
     private static DateTimeOffset ToDateTimeOffset(PosixTimeval timeval)
@@ -136,4 +243,7 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
         var microseconds = Convert.ToInt64(timeval.MicroSeconds);
         return DateTimeOffset.FromUnixTimeSeconds(seconds).AddTicks(checked(microseconds * 10));
     }
+
+    private readonly record struct SvTransmitKey(ulong MacPrefix, uint MacSuffix, ushort AppId, ushort VlanId);
+    private sealed record SvTransmitClock(long LastSentTicks, long NominalIntervalTicks);
 }

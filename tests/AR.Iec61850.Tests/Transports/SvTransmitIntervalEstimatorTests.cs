@@ -37,25 +37,45 @@ public sealed class SvTransmitIntervalEstimatorTests
     [Fact]
     public void ActiveNominalRate_IgnoresLongSchedulerStall()
     {
-        var estimator = new SvTransmitIntervalEstimator(20, 5_000, requiredConsistentIntervals: 4);
-        foreach (var interval in new long[] { 250, 249, 251, 250 })
-            estimator.Observe(interval);
-
+        var estimator = CreateActiveEstimator();
         var nominalBeforeStall = estimator.NominalIntervalTicks;
+
         estimator.Observe(4_000);
 
         Assert.Equal(nominalBeforeStall, estimator.NominalIntervalTicks);
     }
 
     [Fact]
-    public void ActiveNominalRate_TracksOnlyNearbySteadyIntervals()
+    public void ActiveNominalRate_DoesNotRatchetOnModerateLateness()
     {
-        var estimator = new SvTransmitIntervalEstimator(20, 5_000, requiredConsistentIntervals: 4);
-        foreach (var interval in new long[] { 250, 250, 250, 250 })
-            estimator.Observe(interval);
+        var estimator = CreateActiveEstimator();
+        var nominal = estimator.NominalIntervalTicks;
 
+        foreach (var delayedInterval in new long[] { 300, 310, 290, 320, 300, 305, 295, 315 })
+            estimator.Observe(delayedInterval);
+
+        Assert.Equal(nominal, estimator.NominalIntervalTicks);
+    }
+
+    [Fact]
+    public void ActiveNominalRate_DoesNotFeedPacedIntervalsBackIntoEstimator()
+    {
+        var estimator = CreateActiveEstimator();
+        var nominal = estimator.NominalIntervalTicks;
+
+        estimator.Observe(248);
+        estimator.Observe(252);
         estimator.Observe(260);
 
-        Assert.InRange(estimator.NominalIntervalTicks, 250, 252);
+        Assert.Equal(nominal, estimator.NominalIntervalTicks);
+    }
+
+    private static SvTransmitIntervalEstimator CreateActiveEstimator()
+    {
+        var estimator = new SvTransmitIntervalEstimator(20, 5_000, requiredConsistentIntervals: 4);
+        foreach (var interval in new long[] { 250, 249, 251, 250 })
+            estimator.Observe(interval);
+        Assert.InRange(estimator.NominalIntervalTicks, 249, 251);
+        return estimator;
     }
 }

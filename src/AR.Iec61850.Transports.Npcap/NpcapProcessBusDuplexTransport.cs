@@ -20,8 +20,9 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
 
     private readonly ICaptureDevice _device;
     private readonly IInjectionDevice _injectionDevice;
-    private readonly object _gate = new();
-    private readonly SemaphoreSlim _sendGate = new(1, 1);
+    private readonly object _captureGate = new();
+    private readonly object _clockMapGate = new();
+    private readonly SemaphoreSlim _injectionGate = new(1, 1);
     private readonly Dictionary<SvTransmitKey, SvTransmitClock> _svTransmitClocks = new();
     private bool _capturing;
     private bool _disposed;
@@ -45,21 +46,23 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (!TryReadSampledValuesKey(frame.Span, out var streamKey))
+        {
+            await InjectAsync(frame, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var clock = GetOrCreateClock(streamKey);
+        await clock.PacingGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var isSampledValues = TryReadSampledValuesKey(frame.Span, out var streamKey);
-            if (isSampledValues)
-                await PaceSampledValuesAsync(streamKey, cancellationToken).ConfigureAwait(false);
-
-            _injectionDevice.SendPacket(frame.ToArray());
-
-            if (isSampledValues)
-                CommitSampledValuesSend(streamKey, Stopwatch.GetTimestamp());
+            await PaceSampledValuesAsync(clock, cancellationToken).ConfigureAwait(false);
+            await InjectAsync(frame, cancellationToken).ConfigureAwait(false);
+            clock.Commit(Stopwatch.GetTimestamp());
         }
         finally
         {
-            _sendGate.Release();
+            clock.PacingGate.Release();
         }
     }
 
@@ -83,7 +86,7 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
 
         try
         {
-            lock (_gate)
+            lock (_captureGate)
             {
                 if (_capturing)
                     throw new InvalidOperationException("This Npcap session is already capturing.");
@@ -130,7 +133,7 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
                 }
             }
 
-            lock (_gate)
+            lock (_captureGate)
                 _capturing = false;
 
             channel.Writer.TryComplete();
@@ -151,16 +154,56 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
             // Best-effort cleanup only.
         }
 
-        _sendGate.Dispose();
+        _injectionGate.Dispose();
+        lock (_clockMapGate)
+        {
+            foreach (var clock in _svTransmitClocks.Values)
+                clock.Dispose();
+            _svTransmitClocks.Clear();
+        }
+
         _disposed = true;
     }
 
-    private async ValueTask PaceSampledValuesAsync(SvTransmitKey key, CancellationToken cancellationToken)
+    private async ValueTask InjectAsync(ReadOnlyMemory<byte> frame, CancellationToken cancellationToken)
     {
-        if (!_svTransmitClocks.TryGetValue(key, out var clock) || clock.NominalIntervalTicks <= 0)
+        // Keep the device critical section intentionally short. PTP and GOOSE may pass
+        // while another SV stream is waiting for its pacing deadline.
+        await _injectionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _injectionDevice.SendPacket(frame.ToArray());
+        }
+        finally
+        {
+            _injectionGate.Release();
+        }
+    }
+
+    private SvTransmitClock GetOrCreateClock(SvTransmitKey key)
+    {
+        lock (_clockMapGate)
+        {
+            if (_svTransmitClocks.TryGetValue(key, out var existing))
+                return existing;
+
+            var created = new SvTransmitClock(
+                MinimumLearnableIntervalTicks,
+                MaximumLearnableIntervalTicks);
+            _svTransmitClocks.Add(key, created);
+            return created;
+        }
+    }
+
+    private static async ValueTask PaceSampledValuesAsync(
+        SvTransmitClock clock,
+        CancellationToken cancellationToken)
+    {
+        var intervalTicks = clock.NominalIntervalTicks;
+        if (clock.LastSentTicks <= 0 || intervalTicks <= 0)
             return;
 
-        var targetTicks = clock.LastSentTicks + clock.NominalIntervalTicks;
+        var targetTicks = clock.LastSentTicks + intervalTicks;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -181,30 +224,6 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
                 Thread.SpinWait(64);
             }
         }
-    }
-
-    private void CommitSampledValuesSend(SvTransmitKey key, long sentTicks)
-    {
-        if (!_svTransmitClocks.TryGetValue(key, out var clock))
-        {
-            _svTransmitClocks[key] = new SvTransmitClock(sentTicks, 0);
-            return;
-        }
-
-        var observedInterval = sentTicks - clock.LastSentTicks;
-        var nominalInterval = clock.NominalIntervalTicks;
-        var learnable = observedInterval >= MinimumLearnableIntervalTicks &&
-                        observedInterval <= MaximumLearnableIntervalTicks &&
-                        (nominalInterval <= 0 || observedInterval <= nominalInterval * 3);
-
-        if (learnable)
-        {
-            nominalInterval = nominalInterval <= 0
-                ? observedInterval
-                : (long)Math.Round((nominalInterval * 0.9) + (observedInterval * 0.1));
-        }
-
-        _svTransmitClocks[key] = new SvTransmitClock(sentTicks, nominalInterval);
     }
 
     private static bool TryReadSampledValuesKey(ReadOnlySpan<byte> frame, out SvTransmitKey key)
@@ -245,5 +264,27 @@ public sealed class NpcapProcessBusDuplexTransport : IProcessBusTransport, IProc
     }
 
     private readonly record struct SvTransmitKey(ulong MacPrefix, uint MacSuffix, ushort AppId, ushort VlanId);
-    private sealed record SvTransmitClock(long LastSentTicks, long NominalIntervalTicks);
+
+    private sealed class SvTransmitClock : IDisposable
+    {
+        private readonly SvTransmitIntervalEstimator _estimator;
+
+        public SvTransmitClock(long minimumIntervalTicks, long maximumIntervalTicks)
+        {
+            _estimator = new SvTransmitIntervalEstimator(minimumIntervalTicks, maximumIntervalTicks);
+        }
+
+        public SemaphoreSlim PacingGate { get; } = new(1, 1);
+        public long LastSentTicks { get; private set; }
+        public long NominalIntervalTicks => _estimator.NominalIntervalTicks;
+
+        public void Commit(long sentTicks)
+        {
+            if (LastSentTicks > 0)
+                _estimator.Observe(sentTicks - LastSentTicks);
+            LastSentTicks = sentTicks;
+        }
+
+        public void Dispose() => PacingGate.Dispose();
+    }
 }

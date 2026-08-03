@@ -1,9 +1,10 @@
 namespace AR.Iec61850.Transports.Npcap;
 
 /// <summary>
-/// Learns a stable SV transmit interval without allowing one scheduler-late observation
+/// Learns a stable SV transmit interval without allowing scheduler-late observations
 /// to become the permanent wire rate. The estimator activates only after several
-/// mutually consistent intervals have been observed.
+/// mutually consistent unpaced intervals have been observed, then remains immutable
+/// for the lifetime of that stream session.
 /// </summary>
 internal sealed class SvTransmitIntervalEstimator
 {
@@ -35,23 +36,16 @@ internal sealed class SvTransmitIntervalEstimator
 
     public void Observe(long intervalTicks)
     {
+        // Once pacing is active, every subsequent interval is influenced by the pacer
+        // itself and by injection/scheduler lateness. Feeding those observations back
+        // into the nominal would create a one-way ratchet toward a slower wire rate.
+        // A deliberate sample-rate change therefore starts a new transport/session.
+        if (NominalIntervalTicks > 0)
+            return;
+
         if (intervalTicks < _minimumIntervalTicks || intervalTicks > _maximumIntervalTicks)
         {
-            if (NominalIntervalTicks == 0)
-                ResetCandidate();
-            return;
-        }
-
-        if (NominalIntervalTicks > 0)
-        {
-            var minimumAccepted = NominalIntervalTicks * 3 / 4;
-            var maximumAccepted = NominalIntervalTicks * 3 / 2;
-            if (intervalTicks >= minimumAccepted && intervalTicks <= maximumAccepted)
-            {
-                NominalIntervalTicks = (long)Math.Round(
-                    (NominalIntervalTicks * 0.9) + (intervalTicks * 0.1));
-            }
-
+            ResetCandidate();
             return;
         }
 

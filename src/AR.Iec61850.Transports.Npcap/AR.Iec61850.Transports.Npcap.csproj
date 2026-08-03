@@ -8,6 +8,10 @@
     <PackageReference Include="SharpPcap" Version="6.3.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="AR.Iec61850.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <Copyright>Copyright (C) 2026 Mas Ari / masarray</Copyright>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>

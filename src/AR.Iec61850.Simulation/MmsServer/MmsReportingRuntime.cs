@@ -120,6 +120,9 @@ public static class MmsReportControlBlockLayout
     public static bool OptionalFieldEntryId(IReadOnlyList<byte> optFlds) => (First(optFlds) & 0x01) != 0;
     public static bool OptionalFieldConfRev(IReadOnlyList<byte> optFlds) => (Second(optFlds) & 0x80) != 0;
 
+    public static bool TriggerDataChange(byte trgOps) => (trgOps & 0x40) != 0;
+    public static bool TriggerQualityChange(byte trgOps) => (trgOps & 0x20) != 0;
+    public static bool TriggerDataUpdate(byte trgOps) => (trgOps & 0x10) != 0;
     public static bool TriggerIntegrity(byte trgOps) => (trgOps & 0x08) != 0;
     public static bool TriggerGeneralInterrogation(byte trgOps) => (trgOps & 0x04) != 0;
 
@@ -150,10 +153,7 @@ public static class MmsReportControlBlockLayout
 public sealed class MmsRcbRuntimeState
 {
     public required MmsReadOnlyReportControlBlock Definition { get; init; }
-
-    /// <summary>MMS reference of the control block, e.g. <c>SIE7SL87CTRL/LLN0$RP$A_URCB</c>.</summary>
     public required string MmsReference { get; init; }
-
     public string RptId = string.Empty;
     public bool RptEna;
     public bool Resv;
@@ -171,11 +171,9 @@ public sealed class MmsRcbRuntimeState
 }
 
 /// <summary>
-/// Per-association reporting engine. It owns the runtime state of every RCB in the served model,
-/// accepts client writes to RCB attributes (RptEna, GI, TrgOps, OptFlds, IntgPd, DatSet, RptID,
-/// BufTm, Resv/ResvTms, PurgeBuf, EntryID), reflects that state on reads, and emits IEC 61850-8-1
-/// unsolicited MMS InformationReport PDUs (general-interrogation and integrity) over the owning
-/// association's socket via the injected send delegate.
+/// Per-association reporting engine. Besides GI and integrity it continuously observes enabled
+/// DataSets and emits unsolicited data-change reports when a member value/quality changes. The
+/// observer is server-side; clients such as IEDScout do not need to poll process values.
 /// </summary>
 public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDisposable
 {
@@ -183,6 +181,7 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
     private const int DataAccessErrorObjectAccessDenied = 3;
     private const int DataAccessErrorTypeInconsistent = 7;
     private const int DataAccessErrorObjectNonExistent = 10;
+    private const int DataChangeScanPeriodMs = 50;
 
     private readonly Func<MmsReadOnlyServerSession> _sessionFactory;
     private readonly Func<byte[], CancellationToken, Task> _sendPresentationPayload;
@@ -190,8 +189,12 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
     private readonly Action<string, bool, string>? _activity;
     private readonly Dictionary<string, MmsRcbRuntimeState> _states;
     private readonly Dictionary<string, Timer> _integrityTimers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _lastDataSetFingerprints = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _pendingDataChangeReports = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Timer _dataChangeTimer;
     private readonly object _gate = new();
     private readonly CancellationTokenSource _cts = new();
+    private int _dataChangeScanActive;
     private bool _disposed;
 
     public MmsAssociationReportingRuntime(
@@ -226,6 +229,8 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
                 IntgPd = (uint)Math.Max(0, rcb.IntegrityPeriodMs)
             };
         }
+
+        _dataChangeTimer = new Timer(_ => DetectDataChanges(), null, DataChangeScanPeriodMs, DataChangeScanPeriodMs);
     }
 
     public IReadOnlyCollection<MmsRcbRuntimeState> States => _states.Values;
@@ -263,6 +268,7 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
             return false;
 
         var sendGeneralInterrogation = false;
+        var seedDataChangeBaseline = false;
         lock (_gate)
         {
             switch (attribute.ToUpperInvariant())
@@ -279,13 +285,15 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
                         state.RptEna = true;
                         state.SqNum = 0;
                         RestartIntegrityTimerLocked(state);
+                        seedDataChangeBaseline = true;
                     }
                     else if (!enable && state.RptEna)
                     {
                         state.RptEna = false;
                         StopIntegrityTimerLocked(state);
+                        _lastDataSetFingerprints.Remove(state.MmsReference);
+                        _pendingDataChangeReports.Remove(state.MmsReference);
                     }
-
                     break;
 
                 case "GI":
@@ -298,19 +306,13 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
                     break;
 
                 case "RESV":
-                    if (TryBoolean(value, out var resv))
-                        state.Resv = resv;
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (TryBoolean(value, out var resv)) state.Resv = resv;
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "RESVTMS":
-                    if (TrySigned(value, out var resvTms))
-                        state.ResvTms = (short)Math.Clamp(resvTms, short.MinValue, short.MaxValue);
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (TrySigned(value, out var resvTms)) state.ResvTms = (short)Math.Clamp(resvTms, short.MinValue, short.MaxValue);
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "PURGEBUF":
                     if (TryBoolean(value, out var purge))
                     {
@@ -321,144 +323,177 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
                             System.Array.Clear(state.EntryId, 0, state.EntryId.Length);
                         }
                     }
-                    else
-                    {
-                        dataAccessError = DataAccessErrorTypeInconsistent;
-                    }
-
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "RPTID":
-                    if (state.RptEna)
-                        dataAccessError = DataAccessErrorObjectAccessDenied;
-                    else if (TryString(value, out var rptId))
-                        state.RptId = rptId;
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (state.RptEna) dataAccessError = DataAccessErrorObjectAccessDenied;
+                    else if (TryString(value, out var rptId)) state.RptId = rptId;
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "DATSET":
-                    if (state.RptEna)
-                        dataAccessError = DataAccessErrorObjectAccessDenied;
-                    else if (TryString(value, out var datSet))
-                        state.DatSet = datSet;
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (state.RptEna) dataAccessError = DataAccessErrorObjectAccessDenied;
+                    else if (TryString(value, out var datSet)) state.DatSet = datSet;
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "OPTFLDS":
-                    if (state.RptEna)
-                        dataAccessError = DataAccessErrorObjectAccessDenied;
-                    else if (TryBitString(value, 2, out var optFlds))
-                        state.OptFlds = optFlds;
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (state.RptEna) dataAccessError = DataAccessErrorObjectAccessDenied;
+                    else if (TryBitString(value, 2, out var optFlds)) state.OptFlds = optFlds;
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "TRGOPS":
-                    if (state.RptEna)
-                        dataAccessError = DataAccessErrorObjectAccessDenied;
-                    else if (TryBitString(value, 1, out var trgOps))
-                        state.TrgOps = trgOps.Length > 0 ? trgOps[0] : (byte)0;
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (state.RptEna) dataAccessError = DataAccessErrorObjectAccessDenied;
+                    else if (TryBitString(value, 1, out var trgOps)) state.TrgOps = trgOps.Length > 0 ? trgOps[0] : (byte)0;
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "BUFTM":
-                    if (state.RptEna)
-                        dataAccessError = DataAccessErrorObjectAccessDenied;
-                    else if (TryUnsigned(value, out var bufTm))
-                        state.BufTm = (uint)Math.Min(bufTm, uint.MaxValue);
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (state.RptEna) dataAccessError = DataAccessErrorObjectAccessDenied;
+                    else if (TryUnsigned(value, out var bufTm)) state.BufTm = (uint)Math.Min(bufTm, uint.MaxValue);
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "INTGPD":
-                    if (state.RptEna)
-                        dataAccessError = DataAccessErrorObjectAccessDenied;
-                    else if (TryUnsigned(value, out var intgPd))
-                        state.IntgPd = (uint)Math.Min(intgPd, uint.MaxValue);
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (state.RptEna) dataAccessError = DataAccessErrorObjectAccessDenied;
+                    else if (TryUnsigned(value, out var intgPd)) state.IntgPd = (uint)Math.Min(intgPd, uint.MaxValue);
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "ENTRYID":
-                    if (value.Kind == MmsDataKind.OctetString)
-                        state.EntryId = value.RawValue.ToArray();
-                    else
-                        dataAccessError = DataAccessErrorTypeInconsistent;
+                    if (value.Kind == MmsDataKind.OctetString) state.EntryId = value.RawValue.ToArray();
+                    else dataAccessError = DataAccessErrorTypeInconsistent;
                     break;
-
                 case "SQNUM":
                 case "CONFREV":
                 case "TIMEOFENTRY":
                 case "OWNER":
                     dataAccessError = DataAccessErrorObjectAccessDenied;
                     break;
-
                 default:
                     dataAccessError = DataAccessErrorObjectNonExistent;
                     break;
             }
         }
 
+        if (seedDataChangeBaseline)
+            SeedDataChangeBaseline(state);
         if (sendGeneralInterrogation)
             QueueReport(state, ReasonGeneralInterrogation);
-
         return true;
     }
 
     public void Dispose()
     {
-        if (_disposed)
-            return;
-
+        if (_disposed) return;
         _disposed = true;
         _cts.Cancel();
+        _dataChangeTimer.Dispose();
         lock (_gate)
         {
-            foreach (var timer in _integrityTimers.Values)
-                timer.Dispose();
+            foreach (var timer in _integrityTimers.Values) timer.Dispose();
             _integrityTimers.Clear();
+            _lastDataSetFingerprints.Clear();
+            _pendingDataChangeReports.Clear();
         }
-
         _cts.Dispose();
     }
 
-    private const byte ReasonGeneralInterrogation = 0x08; // reason bit 4 (GI)
-    private const byte ReasonIntegrity = 0x10;            // reason bit 3 (integrity)
+    private const byte ReasonDataChange = 0x80;
+    private const byte ReasonGeneralInterrogation = 0x08;
+    private const byte ReasonIntegrity = 0x10;
+
+    private void SeedDataChangeBaseline(MmsRcbRuntimeState state)
+    {
+        if (!MmsReportControlBlockLayout.TriggerDataChange(state.TrgOps)) return;
+        var fingerprint = ReadDataSetFingerprint(state);
+        if (fingerprint is null) return;
+        lock (_gate) _lastDataSetFingerprints[state.MmsReference] = fingerprint;
+    }
+
+    private void DetectDataChanges()
+    {
+        if (_disposed || Interlocked.Exchange(ref _dataChangeScanActive, 1) != 0) return;
+        try
+        {
+            MmsRcbRuntimeState[] enabled;
+            lock (_gate)
+                enabled = _states.Values.Where(s => s.RptEna && MmsReportControlBlockLayout.TriggerDataChange(s.TrgOps)).ToArray();
+
+            foreach (var state in enabled)
+            {
+                var fingerprint = ReadDataSetFingerprint(state);
+                if (fingerprint is null) continue;
+                var changed = false;
+                lock (_gate)
+                {
+                    if (!_lastDataSetFingerprints.TryGetValue(state.MmsReference, out var previous))
+                        _lastDataSetFingerprints[state.MmsReference] = fingerprint;
+                    else if (!string.Equals(previous, fingerprint, StringComparison.Ordinal))
+                    {
+                        _lastDataSetFingerprints[state.MmsReference] = fingerprint;
+                        changed = true;
+                    }
+                }
+                if (changed) QueueDataChangeReport(state);
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _dataChangeScanActive, 0);
+        }
+    }
+
+    private string? ReadDataSetFingerprint(MmsRcbRuntimeState state)
+    {
+        var response = _sessionFactory().Handle(new MmsReadOnlyServerRequest
+        {
+            Operation = MmsReadOnlyOperation.ReadDataSet,
+            Target = FromMmsReference(state.DatSet)
+        });
+        if (!response.IsSuccess || response.Values.Count == 0) return null;
+        return string.Join("\u001e", response.Values.Select(point => $"{point.Reference}\u001f{point.Value}\u001f{point.Quality}"));
+    }
+
+    private void QueueDataChangeReport(MmsRcbRuntimeState state)
+    {
+        uint delay;
+        lock (_gate)
+        {
+            if (!state.RptEna || !_pendingDataChangeReports.Add(state.MmsReference)) return;
+            delay = state.BufTm;
+        }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (delay > 0) await Task.Delay(TimeSpan.FromMilliseconds(delay), _cts.Token).ConfigureAwait(false);
+                lock (_gate) _pendingDataChangeReports.Remove(state.MmsReference);
+                await SendReportAsync(state, ReasonDataChange, _cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or System.Net.Sockets.SocketException or InvalidOperationException)
+            {
+                _activity?.Invoke(state.MmsReference, false, $"Data-change report send failed: {ex.Message}");
+            }
+        }, CancellationToken.None);
+    }
 
     private void RestartIntegrityTimerLocked(MmsRcbRuntimeState state)
     {
         StopIntegrityTimerLocked(state);
-        if (!state.RptEna || state.IntgPd == 0 || !MmsReportControlBlockLayout.TriggerIntegrity(state.TrgOps))
-            return;
-
+        if (!state.RptEna || state.IntgPd == 0 || !MmsReportControlBlockLayout.TriggerIntegrity(state.TrgOps)) return;
         var period = TimeSpan.FromMilliseconds(Math.Max(100, state.IntgPd));
         _integrityTimers[state.MmsReference] = new Timer(_ => QueueReport(state, ReasonIntegrity), null, period, period);
     }
 
     private void StopIntegrityTimerLocked(MmsRcbRuntimeState state)
     {
-        if (_integrityTimers.Remove(state.MmsReference, out var timer))
-            timer.Dispose();
+        if (_integrityTimers.Remove(state.MmsReference, out var timer)) timer.Dispose();
     }
 
     private void QueueReport(MmsRcbRuntimeState state, byte reason)
     {
-        if (_disposed)
-            return;
-
+        if (_disposed) return;
         _ = Task.Run(async () =>
         {
-            try
-            {
-                await SendReportAsync(state, reason, _cts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Association closing.
-            }
+            try { await SendReportAsync(state, reason, _cts.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException or System.Net.Sockets.SocketException or InvalidOperationException)
             {
                 _activity?.Invoke(state.MmsReference, false, $"InformationReport send failed: {ex.Message}");
@@ -473,8 +508,7 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
         string rptId;
         lock (_gate)
         {
-            if (!state.RptEna)
-                return;
+            if (!state.RptEna) return;
             rptId = state.RptId;
         }
 
@@ -484,11 +518,9 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
             Operation = MmsReadOnlyOperation.ReadDataSet,
             Target = FromMmsReference(state.DatSet)
         });
-
         if (!dataSetResponse.IsSuccess || dataSetResponse.Values.Count == 0)
         {
-            _activity?.Invoke(state.MmsReference, false,
-                $"InformationReport skipped: DataSet '{state.DatSet}' unresolved ({dataSetResponse.Message}).");
+            _activity?.Invoke(state.MmsReference, false, $"InformationReport skipped: DataSet '{state.DatSet}' unresolved ({dataSetResponse.Message}).");
             return;
         }
 
@@ -499,56 +531,43 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
             if (state.Definition.Buffered)
             {
                 var stamp = state.TimeOfEntry.ToUnixTimeMilliseconds();
-                for (var i = 0; i < 8; i++)
-                    state.EntryId[7 - i] = (byte)(stamp >> (8 * i));
+                for (var i = 0; i < 8; i++) state.EntryId[7 - i] = (byte)(stamp >> (8 * i));
             }
-
             memberCount = dataSetResponse.Values.Count;
             payload = EncodeInformationReport(state, reason, dataSetResponse.Values, dataSetResponse.Items);
         }
 
         await _sendPresentationPayload(payload, cancellationToken).ConfigureAwait(false);
         _activity?.Invoke(state.MmsReference, true,
-            $"InformationReport sent: rptId='{rptId}' reason={(reason == ReasonGeneralInterrogation ? "GI" : "integrity")} members={memberCount.ToString(CultureInfo.InvariantCulture)} sqNum={state.SqNum.ToString(CultureInfo.InvariantCulture)}.");
+            $"InformationReport sent: rptId='{rptId}' reason={ReasonName(reason)} members={memberCount.ToString(CultureInfo.InvariantCulture)} sqNum={state.SqNum.ToString(CultureInfo.InvariantCulture)}.");
     }
 
-    private byte[] EncodeInformationReport(
-        MmsRcbRuntimeState state,
-        byte reason,
-        IReadOnlyList<MmsReadOnlyPoint> members,
-        IReadOnlyList<string> memberReferences)
+    private static string ReasonName(byte reason) => reason switch
+    {
+        ReasonDataChange => "data-change",
+        ReasonGeneralInterrogation => "GI",
+        ReasonIntegrity => "integrity",
+        _ => $"0x{reason:X2}"
+    };
+
+    private byte[] EncodeInformationReport(MmsRcbRuntimeState state, byte reason, IReadOnlyList<MmsReadOnlyPoint> members, IReadOnlyList<string> memberReferences)
     {
         var entries = new List<byte[]>
         {
             MmsDataCodec.Encode(MmsDataValue.VisibleString(state.RptId)),
             MmsDataCodec.Encode(MmsDataValue.BitString(6, state.OptFlds))
         };
+        if (MmsReportControlBlockLayout.OptionalFieldSequenceNumber(state.OptFlds)) entries.Add(MmsDataCodec.Encode(MmsDataValue.Unsigned(state.SqNum)));
+        if (MmsReportControlBlockLayout.OptionalFieldTimeStamp(state.OptFlds)) entries.Add(MmsDataCodec.Encode(MmsDataValue.BinaryTime(MmsReportControlBlockLayout.ToBinaryTime6(state.TimeOfEntry))));
+        if (MmsReportControlBlockLayout.OptionalFieldDataSet(state.OptFlds)) entries.Add(MmsDataCodec.Encode(MmsDataValue.VisibleString(state.DatSet)));
+        if (MmsReportControlBlockLayout.OptionalFieldBufferOverflow(state.OptFlds) && state.Definition.Buffered) entries.Add(MmsDataCodec.Encode(MmsDataValue.Boolean(false)));
+        if (MmsReportControlBlockLayout.OptionalFieldEntryId(state.OptFlds) && state.Definition.Buffered) entries.Add(MmsDataCodec.Encode(MmsDataValue.OctetString(state.EntryId)));
+        if (MmsReportControlBlockLayout.OptionalFieldConfRev(state.OptFlds)) entries.Add(MmsDataCodec.Encode(MmsDataValue.Unsigned(state.ConfRev)));
 
-        if (MmsReportControlBlockLayout.OptionalFieldSequenceNumber(state.OptFlds))
-            entries.Add(MmsDataCodec.Encode(MmsDataValue.Unsigned(state.SqNum)));
-
-        if (MmsReportControlBlockLayout.OptionalFieldTimeStamp(state.OptFlds))
-            entries.Add(MmsDataCodec.Encode(MmsDataValue.BinaryTime(MmsReportControlBlockLayout.ToBinaryTime6(state.TimeOfEntry))));
-
-        if (MmsReportControlBlockLayout.OptionalFieldDataSet(state.OptFlds))
-            entries.Add(MmsDataCodec.Encode(MmsDataValue.VisibleString(state.DatSet)));
-
-        if (MmsReportControlBlockLayout.OptionalFieldBufferOverflow(state.OptFlds) && state.Definition.Buffered)
-            entries.Add(MmsDataCodec.Encode(MmsDataValue.Boolean(false)));
-
-        if (MmsReportControlBlockLayout.OptionalFieldEntryId(state.OptFlds) && state.Definition.Buffered)
-            entries.Add(MmsDataCodec.Encode(MmsDataValue.OctetString(state.EntryId)));
-
-        if (MmsReportControlBlockLayout.OptionalFieldConfRev(state.OptFlds))
-            entries.Add(MmsDataCodec.Encode(MmsDataValue.Unsigned(state.ConfRev)));
-
-        // Inclusion-bitstring: one bit per DataSet member, all set for GI/integrity snapshots.
         var memberCount = members.Count;
         var inclusionBytes = new byte[(memberCount + 7) / 8];
-        for (var i = 0; i < memberCount; i++)
-            inclusionBytes[i / 8] |= (byte)(0x80 >> (i % 8));
-        var unusedInclusionBits = (byte)(inclusionBytes.Length * 8 - memberCount);
-        entries.Add(MmsDataCodec.Encode(MmsDataValue.BitString(unusedInclusionBits, inclusionBytes)));
+        for (var i = 0; i < memberCount; i++) inclusionBytes[i / 8] |= (byte)(0x80 >> (i % 8));
+        entries.Add(MmsDataCodec.Encode(MmsDataValue.BitString((byte)(inclusionBytes.Length * 8 - memberCount), inclusionBytes)));
 
         if (MmsReportControlBlockLayout.OptionalFieldDataReference(state.OptFlds))
         {
@@ -558,26 +577,14 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
                 entries.Add(MmsDataCodec.Encode(MmsDataValue.VisibleString(reference)));
             }
         }
-
-        foreach (var member in members)
-            entries.Add(MmsConfirmedRequestBerDispatcher.EncodePointAccessResult(member));
-
+        foreach (var member in members) entries.Add(MmsConfirmedRequestBerDispatcher.EncodePointAccessResult(member));
         if (MmsReportControlBlockLayout.OptionalFieldReasonCode(state.OptFlds))
-        {
-            for (var i = 0; i < memberCount; i++)
-                entries.Add(MmsDataCodec.Encode(MmsDataValue.BitString(2, [reason])));
-        }
+            for (var i = 0; i < memberCount; i++) entries.Add(MmsDataCodec.Encode(MmsDataValue.BitString(2, [reason])));
 
-        // InformationReport ::= SEQUENCE {
-        //   variableAccessSpecification CHOICE { variableListName [1] ObjectName { vmd-specific [0] "RPT" } },
-        //   listOfAccessResult [0] IMPLICIT SEQUENCE OF AccessResult }
         var vmdSpecificRpt = BerWriter.EncodeTlv(0x80, BerWriter.EncodeAscii("RPT"));
         var variableListName = BerWriter.EncodeTlv(0xA1, vmdSpecificRpt);
         var listOfAccessResult = BerWriter.EncodeTlv(0xA0, ConcatAll(entries));
         var informationReport = ConcatAll([variableListName, listOfAccessResult]);
-
-        // UnconfirmedService ::= CHOICE { informationReport [0] IMPLICIT InformationReport }
-        // Unconfirmed-PDU ::= [3] IMPLICIT SEQUENCE { unconfirmedService }
         var unconfirmedService = BerWriter.EncodeTlv(0xA0, informationReport);
         var unconfirmedPdu = BerWriter.EncodeTlv(0xA3, unconfirmedService);
         return MmsPresentation.WrapIsoPresentationPData(unconfirmedPdu, _presentationContextId);
@@ -609,29 +616,17 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
         state = null!;
         attribute = string.Empty;
         var mmsTarget = ToMmsReference(iecTarget);
-        if (string.IsNullOrWhiteSpace(mmsTarget))
-            return false;
-
-        if (_states.TryGetValue(mmsTarget, out var exact))
-        {
-            state = exact;
-            return true;
-        }
-
+        if (string.IsNullOrWhiteSpace(mmsTarget)) return false;
+        if (_states.TryGetValue(mmsTarget, out var exact)) { state = exact; return true; }
         foreach (var candidate in _states.Values)
         {
-            if (!mmsTarget.StartsWith(candidate.MmsReference + "$", StringComparison.OrdinalIgnoreCase))
-                continue;
-
+            if (!mmsTarget.StartsWith(candidate.MmsReference + "$", StringComparison.OrdinalIgnoreCase)) continue;
             var remainder = mmsTarget[(candidate.MmsReference.Length + 1)..];
-            if (remainder.Contains('$', StringComparison.Ordinal))
-                return false; // RCB attributes are single-level.
-
+            if (remainder.Contains('$', StringComparison.Ordinal)) return false;
             state = candidate;
             attribute = remainder;
             return true;
         }
-
         return false;
     }
 
@@ -639,9 +634,7 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
     {
         var normalized = (reference ?? string.Empty).Trim();
         var slash = normalized.IndexOf('/');
-        if (slash < 0)
-            return normalized.Replace('.', '$');
-
+        if (slash < 0) return normalized.Replace('.', '$');
         return normalized[..slash] + "/" + normalized[(slash + 1)..].Replace('.', '$');
     }
 
@@ -649,9 +642,7 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
     {
         var normalized = (reference ?? string.Empty).Trim();
         var slash = normalized.IndexOf('/');
-        if (slash < 0)
-            return normalized.Replace('$', '.');
-
+        if (slash < 0) return normalized.Replace('$', '.');
         return normalized[..slash] + "/" + normalized[(slash + 1)..].Replace('$', '.');
     }
 
@@ -671,15 +662,9 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
     {
         switch (value.Kind)
         {
-            case MmsDataKind.Unsigned when value.Value is ulong u:
-                result = u;
-                return true;
-            case MmsDataKind.Integer when value.Value is long s && s >= 0:
-                result = (ulong)s;
-                return true;
-            default:
-                result = 0;
-                return false;
+            case MmsDataKind.Unsigned when value.Value is ulong u: result = u; return true;
+            case MmsDataKind.Integer when value.Value is long s && s >= 0: result = (ulong)s; return true;
+            default: result = 0; return false;
         }
     }
 
@@ -687,29 +672,18 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
     {
         switch (value.Kind)
         {
-            case MmsDataKind.Integer when value.Value is long s:
-                result = s;
-                return true;
-            case MmsDataKind.Unsigned when value.Value is ulong u && u <= long.MaxValue:
-                result = (long)u;
-                return true;
-            default:
-                result = 0;
-                return false;
+            case MmsDataKind.Integer when value.Value is long s: result = s; return true;
+            case MmsDataKind.Unsigned when value.Value is ulong u && u <= long.MaxValue: result = (long)u; return true;
+            default: result = 0; return false;
         }
     }
 
     private static bool TryBitString(MmsDataValue value, int minimumBytes, out byte[] result)
     {
         result = System.Array.Empty<byte>();
-        if (value.Kind != MmsDataKind.BitString || value.RawValue.Count < 1)
-            return false;
-
-        // RawValue = [unusedBits][data...]
+        if (value.Kind != MmsDataKind.BitString || value.RawValue.Count < 1) return false;
         var data = value.RawValue.Skip(1).ToArray();
-        if (data.Length < minimumBytes)
-            data = data.Concat(Enumerable.Repeat((byte)0, minimumBytes - data.Length)).ToArray();
-
+        if (data.Length < minimumBytes) data = data.Concat(Enumerable.Repeat((byte)0, minimumBytes - data.Length)).ToArray();
         result = data;
         return true;
     }
@@ -724,7 +698,6 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
             Buffer.BlockCopy(part, 0, buffer, offset, part.Length);
             offset += part.Length;
         }
-
         return buffer;
     }
 }

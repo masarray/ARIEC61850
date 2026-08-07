@@ -22,6 +22,15 @@ public sealed class IedSimulatorMmsServerOptions
 
     /// <summary>Maximum number of recent activity records kept in memory for monitoring.</summary>
     public int ActivityHistoryLimit { get; init; } = 500;
+
+    /// <summary>
+    /// Optional per-association application runtime. The persistent MMS server always keeps its
+    /// built-in RCB/reporting runtime; when this factory returns another runtime both are composed.
+    /// Applications can therefore add writable process controls/settings while the protocol stack,
+    /// association lifecycle, reporting and read-only default guard remain owned by ARIEC61850.
+    /// The remote endpoint is supplied for audit/policy decisions.
+    /// </summary>
+    public Func<string, IMmsAssociationRuntime?>? AssociationRuntimeFactory { get; init; }
 }
 
 public enum IedSimulatorServerActivityKind
@@ -59,19 +68,17 @@ public sealed record IedSimulatorServerActivity
 }
 
 /// <summary>
-/// A runnable, persistent, read-only IEC 61850 MMS server for the IED simulator. It binds a TCP
+/// A runnable, persistent IEC 61850 MMS server for the IED simulator. It binds a TCP
 /// listener, accepts external clients (for example IED Discovery or another MMS browser), runs the
 /// TPKT/COTP/ACSE association, and answers native MMS BER confirmed requests from a live snapshot of
-/// the simulator model. Writes and controls are rejected by the underlying read-only session guard.
+/// the simulator model. The default data model remains read-only; an application may opt in to
+/// additional per-association writable process semantics through <see cref="IedSimulatorMmsServerOptions.AssociationRuntimeFactory"/>.
 ///
 /// This is the "Open SCL → Run" capability: combined with <see cref="IedSimulatorProfileBuilder"/> a
 /// caller can load any SCL model and serve it. All protocol encode/decode is delegated to the existing
 /// tested codecs (<c>TpktFrameCodec</c>, <c>CotpFrameCodec</c>, <c>AcseMmsAssociateResponse</c>) and
 /// the <c>MmsConfirmedRequestBerDispatcher</c>; this class only owns the socket lifecycle and the
 /// per-association loop.
-///
-/// Scope: read-only confirmed services (GetNameList, Read, GetNamedVariableListAttributes, Write
-/// rejection). Reports, GOOSE/SV publishing, and control remain future milestones.
 /// </summary>
 public sealed class IedSimulatorMmsServer : IAsyncDisposable
 {
@@ -247,6 +254,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         // Serializes MMS confirmed responses and unsolicited InformationReports onto one stream.
         using var writeLock = new SemaphoreSlim(1, 1);
         MmsAssociationReportingRuntime? reportingRuntime = null;
+        IMmsAssociationRuntime? associationRuntime = null;
         try
         {
             await using var stream = client.GetStream();
@@ -280,6 +288,11 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                     Message = message
                 }));
 
+            var applicationRuntime = _options.AssociationRuntimeFactory?.Invoke(remote);
+            associationRuntime = applicationRuntime is null
+                ? reportingRuntime
+                : new MmsCompositeAssociationRuntime(reportingRuntime, applicationRuntime);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 var requestPayload = await ReadCotpDataPayloadAsync(stream, cancellationToken).ConfigureAwait(false);
@@ -293,7 +306,7 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
                 activeResponseCotpSegmentCount = 0;
 
                 var session = _sessionFactory();
-                var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestPayload, session, association.PresentationContextId, reportingRuntime);
+                var dispatch = MmsConfirmedRequestBerDispatcher.Dispatch(requestPayload, session, association.PresentationContextId, associationRuntime);
                 if (!dispatch.IsRequestDecoded)
                 {
                     var hasErrorResponse = dispatch.ResponsePresentationPayload.Length > 0;
@@ -399,7 +412,11 @@ public sealed class IedSimulatorMmsServer : IAsyncDisposable
         }
         finally
         {
-            reportingRuntime?.Dispose();
+            if (associationRuntime is IDisposable disposable)
+                disposable.Dispose();
+            else
+                reportingRuntime?.Dispose();
+
             _clients.TryRemove(connectionId, out _);
             try { client.Close(); }
             catch (Exception ex) when (ex is SocketException or ObjectDisposedException) { }

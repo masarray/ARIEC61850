@@ -17,6 +17,7 @@ public sealed class MmsRcbAvailabilityTests
         Assert.Equal(MmsRcbAvailabilityConfidence.Exact, result.Confidence);
         Assert.True(result.IsSelectable);
         Assert.Equal(2, result.DataSetMemberCount);
+        Assert.Equal(MmsRcbDataSetProbeState.ReadSucceeded, result.DataSetProbeState);
     }
 
     [Theory]
@@ -69,16 +70,88 @@ public sealed class MmsRcbAvailabilityTests
     }
 
     [Fact]
-    public void Evaluate_Blocks_Missing_Empty_And_Unreadable_DataSets()
+    public void Evaluate_Only_Claims_NoDataSet_When_Live_DatSet_Read_Succeeded_Empty()
     {
-        var noDataSet = Candidate(buffered: false);
-        noDataSet.DataSetReference = string.Empty;
-        noDataSet.EnabledState = "false";
-        noDataSet.ReservationState = "false";
-        Assert.Equal(
-            MmsRcbOperationalAvailability.NoDataSet,
-            MmsRcbAvailabilityEvaluator.Evaluate(noDataSet, null, false).Availability);
+        var rcb = Candidate(buffered: false);
+        rcb.DataSetReference = string.Empty;
+        rcb.DataSetProbeState = MmsRcbDataSetProbeState.ReadSucceeded;
+        rcb.DataSetProbeMessage = "DatSet item=LLN0$RP$URCB01$DatSet: OK \"\"";
+        rcb.EnabledState = "false";
+        rcb.ReservationState = "false";
 
+        var result = MmsRcbAvailabilityEvaluator.Evaluate(rcb, null, false);
+
+        Assert.Equal(MmsRcbOperationalAvailability.NoDataSet, result.Availability);
+        Assert.Equal(MmsRcbAvailabilityConfidence.Exact, result.Confidence);
+        Assert.Contains("read successfully and is empty", result.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Evaluate_DatSet_Read_Failure_Is_Unknown_Not_NoDataSet()
+    {
+        var rcb = Candidate(buffered: false);
+        rcb.DataSetReference = string.Empty;
+        rcb.DataSetProbeState = MmsRcbDataSetProbeState.ReadFailed;
+        rcb.DataSetProbeMessage = "DatSet item=LLN0$RP$URCB01$DatSet: object-access-denied";
+        rcb.EnabledState = "false";
+        rcb.ReservationState = "false";
+
+        var result = MmsRcbAvailabilityEvaluator.Evaluate(rcb, null, false);
+
+        Assert.Equal(MmsRcbOperationalAvailability.Unknown, result.Availability);
+        Assert.Equal(MmsRcbAvailabilityConfidence.Reduced, result.Confidence);
+        Assert.NotEqual(MmsRcbOperationalAvailability.NoDataSet, result.Availability);
+        Assert.Contains("absence is not proven", result.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Evaluate_Unprobed_Blank_DataSet_Is_Unknown_Not_NoDataSet()
+    {
+        var rcb = Candidate(buffered: false);
+        rcb.DataSetReference = string.Empty;
+        rcb.DataSetProbeState = MmsRcbDataSetProbeState.NotAttempted;
+        rcb.EnabledState = "false";
+        rcb.ReservationState = "false";
+
+        var result = MmsRcbAvailabilityEvaluator.Evaluate(rcb, null, false);
+
+        Assert.Equal(MmsRcbOperationalAvailability.Unknown, result.Availability);
+        Assert.Equal(MmsRcbAvailabilityConfidence.Unknown, result.Confidence);
+        Assert.NotEqual(MmsRcbOperationalAvailability.NoDataSet, result.Availability);
+    }
+
+    [Fact]
+    public void Evaluate_RptEnaFalse_Does_Not_Upgrade_Failed_DatSet_Read_To_Exact_NoDataSet()
+    {
+        var rcb = Candidate(buffered: false);
+        rcb.DataSetReference = string.Empty;
+        rcb.DataSetProbeState = MmsRcbDataSetProbeState.ReadFailed;
+        rcb.EnabledState = "false";
+        rcb.ReservationState = "false";
+
+        var result = MmsRcbAvailabilityEvaluator.Evaluate(rcb, null, false);
+
+        Assert.Equal(MmsRcbOperationalAvailability.Unknown, result.Availability);
+        Assert.Equal(MmsRcbAvailabilityConfidence.Reduced, result.Confidence);
+    }
+
+    [Fact]
+    public void Evaluate_Known_DataSet_Without_Directory_Verification_Is_Not_Green_Available()
+    {
+        var rcb = Candidate(buffered: false);
+        rcb.EnabledState = "false";
+        rcb.ReservationState = "false";
+
+        var result = MmsRcbAvailabilityEvaluator.Evaluate(rcb, null, false);
+
+        Assert.Equal(MmsRcbOperationalAvailability.Unknown, result.Availability);
+        Assert.Equal(MmsRcbAvailabilityConfidence.Reduced, result.Confidence);
+        Assert.False(result.IsSelectable);
+    }
+
+    [Fact]
+    public void Evaluate_Blocks_Empty_And_Unreadable_DataSets()
+    {
         var empty = Candidate(buffered: false);
         empty.EnabledState = "false";
         empty.ReservationState = "false";
@@ -101,6 +174,22 @@ public sealed class MmsRcbAvailabilityTests
             }, false).Availability);
     }
 
+    [Fact]
+    public void Evaluate_Preserved_Reference_With_Current_DatSet_Failure_Remains_Unknown()
+    {
+        var rcb = Candidate(buffered: false);
+        rcb.DataSetProbeState = MmsRcbDataSetProbeState.ReadFailed;
+        rcb.EnabledState = "false";
+        rcb.ReservationState = "false";
+
+        var result = MmsRcbAvailabilityEvaluator.Evaluate(rcb, PopulatedDirectory(), false);
+
+        Assert.Equal(MmsRcbOperationalAvailability.Unknown, result.Availability);
+        Assert.Equal(MmsRcbAvailabilityConfidence.Reduced, result.Confidence);
+        Assert.Equal(2, result.DataSetMemberCount);
+        Assert.Contains("cannot be reconfirmed", result.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static MmsReportControlCandidate Candidate(bool buffered)
         => new()
         {
@@ -111,6 +200,8 @@ public sealed class MmsRcbAvailabilityTests
             Reference = buffered ? "IED1LD0/LLN0.BR.BRCB01" : "IED1LD0/LLN0.RP.URCB01",
             Buffered = buffered,
             DataSetReference = "IED1LD0/LLN0.Events",
+            DataSetProbeState = MmsRcbDataSetProbeState.ReadSucceeded,
+            DataSetProbeMessage = "DatSet live read succeeded.",
             Status = "Attribute-probed"
         };
 

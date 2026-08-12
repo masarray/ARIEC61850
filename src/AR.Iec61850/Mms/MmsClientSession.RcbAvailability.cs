@@ -37,7 +37,17 @@ public sealed partial class MmsClientSession
         {
             cancellationToken.ThrowIfCancellationRequested();
             var candidate = CloneReportControl(source);
+
+            // Preserve discovery/SCL-derived binding only as fallback evidence. Clear the
+            // candidate before the forced live probe so a successful empty DatSet read can
+            // be distinguished from a failed read that merely left an old value in memory.
+            var previouslyKnownDataSetReference = candidate.DataSetReference;
+            candidate.DataSetReference = string.Empty;
+            candidate.DataSetProbeState = MmsRcbDataSetProbeState.NotAttempted;
+            candidate.DataSetProbeMessage = string.Empty;
+
             await ProbeReportControlAttributesAsync(candidate, cancellationToken).ConfigureAwait(false);
+            CaptureDataSetProbeEvidence(candidate, previouslyKnownDataSetReference);
             await ProbeOwnerReadOnlyAsync(candidate, cancellationToken).ConfigureAwait(false);
 
             MmsDataSetDirectoryResult? dataSetDirectory = null;
@@ -69,6 +79,52 @@ public sealed partial class MmsClientSession
                 .ToArray(),
             Warnings = warnings
         };
+    }
+
+    private static void CaptureDataSetProbeEvidence(
+        MmsReportControlCandidate candidate,
+        string previouslyKnownDataSetReference)
+    {
+        var datSetDiagnostic = candidate.ProbeDiagnostics
+            .LastOrDefault(line => line.StartsWith("DatSet", StringComparison.OrdinalIgnoreCase));
+        var directReadSucceeded = datSetDiagnostic?.Contains(": OK ", StringComparison.OrdinalIgnoreCase) == true;
+        var structureReadSucceeded = !string.IsNullOrWhiteSpace(candidate.DataSetReference) &&
+                                     candidate.ProbeDiagnostics.Any(line =>
+                                         line.StartsWith("RCB base ", StringComparison.OrdinalIgnoreCase) &&
+                                         line.Contains(": OK", StringComparison.OrdinalIgnoreCase));
+
+        if (directReadSucceeded)
+        {
+            candidate.DataSetProbeState = MmsRcbDataSetProbeState.ReadSucceeded;
+            candidate.DataSetProbeMessage = datSetDiagnostic ?? "Live DatSet read succeeded.";
+            return;
+        }
+
+        if (structureReadSucceeded)
+        {
+            candidate.DataSetProbeState = MmsRcbDataSetProbeState.ReadSucceeded;
+            candidate.DataSetProbeMessage = "Live DatSet binding was recovered from a successful complete RCB structure read.";
+            return;
+        }
+
+        if (datSetDiagnostic is not null)
+        {
+            candidate.DataSetProbeState = MmsRcbDataSetProbeState.ReadFailed;
+            candidate.DataSetProbeMessage = datSetDiagnostic;
+        }
+        else
+        {
+            candidate.DataSetProbeState = MmsRcbDataSetProbeState.NotAttempted;
+            candidate.DataSetProbeMessage = "No explicit DatSet probe evidence was captured.";
+        }
+
+        // A failed live read must never erase a previously known reference, but it also
+        // must never be interpreted as positive proof that the RCB has no DataSet.
+        if (string.IsNullOrWhiteSpace(candidate.DataSetReference) &&
+            !string.IsNullOrWhiteSpace(previouslyKnownDataSetReference))
+        {
+            candidate.DataSetReference = previouslyKnownDataSetReference;
+        }
     }
 
     private async Task ProbeOwnerReadOnlyAsync(
@@ -105,6 +161,8 @@ public sealed partial class MmsClientSession
             Reference = source.Reference,
             Buffered = source.Buffered,
             DataSetReference = source.DataSetReference,
+            DataSetProbeState = source.DataSetProbeState,
+            DataSetProbeMessage = source.DataSetProbeMessage,
             ReportId = source.ReportId,
             ConfRev = source.ConfRev,
             IntegrityPeriodMs = source.IntegrityPeriodMs,

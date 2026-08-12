@@ -1,5 +1,12 @@
 namespace AR.Iec61850.Mms;
 
+public enum MmsRcbDataSetProbeState
+{
+    NotAttempted,
+    ReadSucceeded,
+    ReadFailed
+}
+
 public sealed class MmsDataSetCandidate
 {
     public string Domain { get; set; } = string.Empty;
@@ -18,6 +25,8 @@ public sealed class MmsReportControlCandidate
     public string Reference { get; set; } = string.Empty;
     public bool Buffered { get; set; }
     public string DataSetReference { get; set; } = string.Empty;
+    public MmsRcbDataSetProbeState DataSetProbeState { get; set; } = MmsRcbDataSetProbeState.NotAttempted;
+    public string DataSetProbeMessage { get; set; } = string.Empty;
     public string ReportId { get; set; } = string.Empty;
     public string ConfRev { get; set; } = string.Empty;
     public string IntegrityPeriodMs { get; set; } = string.Empty;

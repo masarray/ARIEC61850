@@ -44,6 +44,22 @@ public class MmsClientCodecTests
         Assert.True(result.IsSuccess, result.Message);
         Assert.Equal(["LD0", "LD1"], result.Names);
         Assert.True(result.MoreFollows);
+        Assert.True(result.MoreFollowsWasPresent);
+    }
+
+    [Fact]
+    public void GetNameListResponseDecoderTreatsOmittedMoreFollowsAsDefaultTrue()
+    {
+        var response = BuildGetNameListResponse(
+            invokeId: 18,
+            names: ["GGIO1$ST$SwLoc$t"],
+            moreFollows: null);
+
+        var result = MmsGetNameListResponseDecoder.Decode(response, expectedInvokeId: 18);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.True(result.MoreFollows);
+        Assert.False(result.MoreFollowsWasPresent);
     }
 
     [Fact]
@@ -92,17 +108,22 @@ public class MmsClientCodecTests
         Assert.DoesNotContain("8388874", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static byte[] BuildGetNameListResponse(int invokeId, IReadOnlyList<string> names, bool moreFollows)
+    private static byte[] BuildGetNameListResponse(int invokeId, IReadOnlyList<string> names, bool? moreFollows)
     {
         var identifiers = Concat(names
             .Select(name => BerWriter.EncodeTlv(0x1A, BerWriter.EncodeAscii(name)))
             .ToArray());
 
+        var fields = new List<byte[]>
+        {
+            BerWriter.EncodeTlv(0xA0, identifiers)
+        };
+        if (moreFollows.HasValue)
+            fields.Add(BerWriter.EncodeTlv(0x81, [(byte)(moreFollows.Value ? 1 : 0)]));
+
         var service = BerWriter.EncodeTlv(
             0xA1,
-            Concat(
-                BerWriter.EncodeTlv(0xA0, identifiers),
-                BerWriter.EncodeTlv(0x81, [(byte)(moreFollows ? 1 : 0)])));
+            Concat(fields.ToArray()));
 
         var mms = BerWriter.EncodeTlv(
             0xA1,

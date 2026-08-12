@@ -221,14 +221,25 @@ public sealed partial class MmsClientSession : IAsyncDisposable
                     };
                 }
 
+                var before = names.Count;
                 foreach (var name in last.Names)
                 {
                     if (!names.Contains(name, StringComparer.OrdinalIgnoreCase))
                         names.Add(name);
                 }
 
+                var newCount = names.Count - before;
                 continueAfter = last.Names.LastOrDefault() ?? continueAfter;
-                LastDiscoveryAttemptSummary = $"GetNameList {objectClass}/{domainId ?? "VMD"}: page={page}, total={names.Count}, more={last.MoreFollows}.";
+                LastDiscoveryAttemptSummary = $"GetNameList {objectClass}/{domainId ?? "VMD"}: page={page}, total={names.Count}, new={newCount}, more={last.MoreFollows}, morePresent={last.MoreFollowsWasPresent}.";
+
+                // Stop defensively if a broken endpoint repeats a page while claiming
+                // that more data follows. This keeps DEFAULT TRUE interoperable without
+                // allowing an unbounded continuation loop.
+                if (last.MoreFollows && newCount <= 0)
+                {
+                    LastDiscoveryAttemptSummary += " Stopped paging because the IED returned no new names.";
+                    break;
+                }
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
             {

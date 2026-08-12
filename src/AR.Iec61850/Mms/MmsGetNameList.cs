@@ -15,6 +15,7 @@ public sealed class MmsNameListResult
     public bool IsSuccess { get; init; }
     public IReadOnlyList<string> Names { get; init; } = Array.Empty<string>();
     public bool MoreFollows { get; init; }
+    public bool MoreFollowsWasPresent { get; init; }
     public string Message { get; init; } = string.Empty;
     public string ResponseHexPreview { get; init; } = string.Empty;
 }
@@ -89,7 +90,11 @@ public static class MmsGetNameListResponseDecoder
                 return Fail("MMS GetNameList response has no service response node [1].", hex);
 
             var names = new List<string>();
-            var moreFollows = false;
+            // ISO 9506 GetNameList defines moreFollows with DEFAULT TRUE.
+            // A number of production IEDs omit the field on non-final pages, so
+            // absence must continue paging rather than truncate the directory.
+            var moreFollows = true;
+            var moreFollowsWasPresent = false;
 
             foreach (var field in BerReader.ReadChildren(service.Value))
             {
@@ -103,6 +108,7 @@ public static class MmsGetNameListResponseDecoder
                 }
                 else if (field.EncodedTag == 0x81 && field.Value.Length > 0)
                 {
+                    moreFollowsWasPresent = true;
                     moreFollows = field.Value.Span[0] != 0;
                 }
             }
@@ -113,7 +119,8 @@ public static class MmsGetNameListResponseDecoder
                 IsSuccess = true,
                 Names = distinct,
                 MoreFollows = moreFollows,
-                Message = $"MMS GetNameList decoded {distinct.Length} name(s), moreFollows={moreFollows}.",
+                MoreFollowsWasPresent = moreFollowsWasPresent,
+                Message = $"MMS GetNameList decoded {distinct.Length} name(s), moreFollows={moreFollows}, moreFollowsPresent={moreFollowsWasPresent}.",
                 ResponseHexPreview = hex
             };
         }

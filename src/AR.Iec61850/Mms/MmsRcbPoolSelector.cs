@@ -375,7 +375,7 @@ public static class MmsRcbPoolSelector
         var score = 0;
         if (isPreferred)
             score += 500;
-        if (string.IsNullOrWhiteSpace(rcb.DataSetReference))
+        if (string.IsNullOrWhiteSpace(rcb.DataSetReference) && rcb.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded)
             score += 140;
         if (sameLogicalDevice)
             score += 100;
@@ -397,7 +397,7 @@ public static class MmsRcbPoolSelector
         return CreateEvaluation(
             rcb,
             isPreferred,
-            string.IsNullOrWhiteSpace(rcb.DataSetReference),
+            string.IsNullOrWhiteSpace(rcb.DataSetReference) && rcb.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded,
             sameLogicalDevice,
             false,
             score,
@@ -418,18 +418,31 @@ public static class MmsRcbPoolSelector
         var hasDataSet = !string.IsNullOrWhiteSpace(rcb.DataSetReference);
         var rptEna = ParseBool(rcb.EnabledState);
         var wasProbed = WasProbed(rcb);
+        var dataSetProbeSucceeded = rcb.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded;
+        var dataSetProbeFailed = rcb.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed;
+
+        // Never turn an unread/unproven blank DatSet into a dynamic empty slot. Likewise,
+        // a current DatSet read failure must prevent automatic static claim even if a stale
+        // reference from earlier discovery is still available as diagnostic evidence.
+        if (requireEmptyDataSet && !hasDataSet && !dataSetProbeSucceeded)
+            return MmsRcbAvailabilityKind.UnknownNeedsProbe;
+
+        if (requireDataSet && dataSetProbeFailed)
+            return MmsRcbAvailabilityKind.UnknownNeedsProbe;
 
         if (requireDataSet && hasDataSet && rptEna != true && wasProbed)
             return MmsRcbAvailabilityKind.AvailableStatic;
 
-        if (requireEmptyDataSet && !hasDataSet && rptEna != true && wasProbed)
+        if (requireEmptyDataSet && !hasDataSet && dataSetProbeSucceeded && rptEna != true && wasProbed)
             return MmsRcbAvailabilityKind.AvailableDynamicEmpty;
 
         if (!wasProbed || rptEna == null)
             return MmsRcbAvailabilityKind.UnknownNeedsProbe;
 
         if (requireDataSet && !hasDataSet)
-            return MmsRcbAvailabilityKind.NotApplicable;
+            return dataSetProbeSucceeded
+                ? MmsRcbAvailabilityKind.NotApplicable
+                : MmsRcbAvailabilityKind.UnknownNeedsProbe;
 
         if (requireEmptyDataSet && hasDataSet)
             return MmsRcbAvailabilityKind.NotApplicable;
@@ -522,15 +535,17 @@ public static class MmsRcbPoolSelector
         {
             MmsRcbAvailabilityKind.AvailableStatic when !hasDataSetDirectory => "Static RCB is free, but DataSet directory is missing/empty; value mapping would be unsafe.",
             MmsRcbAvailabilityKind.AvailableStatic => "Static RCB has DatSet, RptEna=false, no active reservation, and DataSet directory is usable.",
-            MmsRcbAvailabilityKind.AvailableDynamicEmpty => "Dynamic slot has empty DatSet, RptEna=false, and no active reservation.",
+            MmsRcbAvailabilityKind.AvailableDynamicEmpty => "Dynamic slot has a live-verified empty DatSet, RptEna=false, and no active reservation.",
             MmsRcbAvailabilityKind.BusyEnabled => "RptEna=true; another client or previous session appears to own this RCB. Do not disable automatically.",
             MmsRcbAvailabilityKind.BusyReserved => rcb.Buffered
                 ? $"BRCB ResvTms={TextOrDash(rcb.ReservationTimeSeconds)} before claim; treat as reserved/busy."
                 : $"URCB Resv={TextOrDash(rcb.ReservationState)} before claim; treat as reserved/busy.",
             MmsRcbAvailabilityKind.ContendedFlapping => "RCB state flips across probes; treat as contended/flapping and do not claim automatically.",
             MmsRcbAvailabilityKind.ClaimCooldown => "RCB is in command-local claim cooldown after contention/write rejection; do not claim automatically.",
+            MmsRcbAvailabilityKind.UnknownNeedsProbe when rcb.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed => "Live DatSet binding read failed; do not infer either a populated static binding or an empty dynamic slot.",
+            MmsRcbAvailabilityKind.UnknownNeedsProbe when string.IsNullOrWhiteSpace(rcb.DataSetReference) => "DatSet binding absence is not positively verified; probe DatSet before selecting this RCB automatically.",
             MmsRcbAvailabilityKind.UnknownNeedsProbe => "RCB runtime state is not explicit; probe attributes before selecting automatically.",
-            MmsRcbAvailabilityKind.NotApplicable => staticMode ? "RCB has no DatSet, so it is not a static report candidate." : "RCB already has a DatSet, so it is not an empty dynamic slot.",
+            MmsRcbAvailabilityKind.NotApplicable => staticMode ? "Live DatSet was verified empty, so this RCB is not a static report candidate." : "RCB already has a DatSet, so it is not an empty dynamic slot.",
             _ => requestedMatches ? "RCB state is incomplete or not safe for automatic claim." : "RCB does not match the requested scope."
         };
     }

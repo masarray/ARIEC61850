@@ -36,6 +36,8 @@ public sealed class MmsRcbAvailabilitySnapshot
     public string Mode { get; init; } = string.Empty;
     public bool Buffered { get; init; }
     public string DataSetReference { get; init; } = string.Empty;
+    public MmsRcbDataSetProbeState DataSetProbeState { get; init; } = MmsRcbDataSetProbeState.NotAttempted;
+    public string DataSetProbeMessage { get; init; } = string.Empty;
     public string ReportId { get; init; } = string.Empty;
     public string ConfRev { get; init; } = string.Empty;
     public string BufferTimeMs { get; init; } = string.Empty;
@@ -88,6 +90,9 @@ public static class MmsRcbAvailabilityEvaluator
         var reservationSeconds = ParseUnsigned(candidate.ReservationTimeSeconds);
         var hasOwner = HasOwner(candidate.Owner);
         var hasDataSet = !string.IsNullOrWhiteSpace(candidate.DataSetReference);
+        var dataSetProbeSucceeded = candidate.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded;
+        var dataSetProbeFailed = candidate.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed;
+        var confirmedNoDataSet = dataSetProbeSucceeded && !hasDataSet;
         var directoryRead = dataSetDirectory is not null;
         var directorySuccess = dataSetDirectory?.IsSuccess == true;
         var memberCount = dataSetDirectory?.Members.Count ?? 0;
@@ -108,11 +113,23 @@ public static class MmsRcbAvailabilityEvaluator
             confidence = MmsRcbAvailabilityConfidence.Exact;
             reason = BuildBusyReason(candidate, enabled, reserved, reservationSeconds, hasOwner);
         }
-        else if (!hasDataSet)
+        else if (confirmedNoDataSet)
         {
             availability = MmsRcbOperationalAvailability.NoDataSet;
-            confidence = enabled == false ? MmsRcbAvailabilityConfidence.Exact : MmsRcbAvailabilityConfidence.Reduced;
-            reason = "The RCB does not reference a static DataSet and cannot be exported as a populated legacy-SAS report block.";
+            confidence = MmsRcbAvailabilityConfidence.Exact;
+            reason = "The live DatSet attribute was read successfully and is empty; this RCB has no configured static DataSet binding.";
+        }
+        else if (!hasDataSet && dataSetProbeFailed)
+        {
+            availability = MmsRcbOperationalAvailability.Unknown;
+            confidence = MmsRcbAvailabilityConfidence.Reduced;
+            reason = "The live DatSet attribute could not be read. DataSet absence is not proven, so this RCB must not be classified as NoDataSet.";
+        }
+        else if (!hasDataSet)
+        {
+            availability = MmsRcbOperationalAvailability.Unknown;
+            confidence = MmsRcbAvailabilityConfidence.Unknown;
+            reason = "No DataSet reference is currently known, but the live DatSet attribute has not been positively proven empty.";
         }
         else if (directoryRead && !directorySuccess)
         {
@@ -126,13 +143,29 @@ public static class MmsRcbAvailabilityEvaluator
         {
             availability = MmsRcbOperationalAvailability.DataSetEmpty;
             confidence = MmsRcbAvailabilityConfidence.Exact;
-            reason = "The referenced DataSet is empty.";
+            reason = "The referenced DataSet was read successfully and is empty.";
+        }
+        else if (!directorySuccess)
+        {
+            availability = MmsRcbOperationalAvailability.Unknown;
+            confidence = MmsRcbAvailabilityConfidence.Reduced;
+            reason = "A DataSet reference is known, but its directory has not been verified as populated.";
+        }
+        else if (dataSetProbeFailed)
+        {
+            availability = MmsRcbOperationalAvailability.Unknown;
+            confidence = MmsRcbAvailabilityConfidence.Reduced;
+            reason = "A previously known DataSet directory is populated, but the current live DatSet binding read failed and cannot be reconfirmed.";
         }
         else if (enabled == false && ReservationIsExplicitlyFree(candidate, reserved, reservationSeconds, hasOwner))
         {
             availability = MmsRcbOperationalAvailability.Available;
-            confidence = MmsRcbAvailabilityConfidence.Exact;
-            reason = "RptEna is false, reservation state is explicitly free, and the referenced DataSet is populated.";
+            confidence = dataSetProbeSucceeded
+                ? MmsRcbAvailabilityConfidence.Exact
+                : MmsRcbAvailabilityConfidence.Reduced;
+            reason = dataSetProbeSucceeded
+                ? "RptEna is false, reservation state is explicitly free, and the live DataSet binding/directory are verified and populated."
+                : "RptEna is false, reservation state is explicitly free, and the known DataSet directory is populated; live DatSet binding evidence was not captured in this evaluation.";
         }
         else if (enabled == false && candidate.Buffered && directorySuccess && memberCount > 0)
         {
@@ -159,6 +192,8 @@ public static class MmsRcbAvailabilityEvaluator
             Mode = candidate.Mode,
             Buffered = candidate.Buffered,
             DataSetReference = candidate.DataSetReference,
+            DataSetProbeState = candidate.DataSetProbeState,
+            DataSetProbeMessage = candidate.DataSetProbeMessage,
             ReportId = candidate.ReportId,
             ConfRev = candidate.ConfRev,
             BufferTimeMs = candidate.BufferTimeMs,

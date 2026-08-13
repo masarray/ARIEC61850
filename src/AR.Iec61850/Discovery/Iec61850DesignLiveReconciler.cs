@@ -315,6 +315,10 @@ public static class Iec61850DesignLiveReconciler
             foreach (var attribute in member.ResolvedAttributes.Where(x => !string.IsNullOrWhiteSpace(x.MmsReference)))
             {
                 var key = NormalizeMmsReference(attribute.MmsReference);
+                var isPrimaryValue = Iec61850ProbeValuePolicy.IsPrimaryValueBearing(attribute);
+                var semanticRole = isPrimaryValue && attribute.SemanticRole == Iec61850DataAttributeSemanticRole.Other
+                    ? Iec61850DataAttributeSemanticRole.PrimaryValue
+                    : attribute.SemanticRole;
                 if (!index.TryGetValue(key, out var descriptor))
                 {
                     descriptor = new MandatoryDescriptor
@@ -324,8 +328,8 @@ public static class Iec61850DesignLiveReconciler
                         FunctionalConstraint = attribute.FunctionalConstraint,
                         SclBType = attribute.SclBType,
                         MmsType = attribute.MmsType,
-                        SemanticRole = attribute.SemanticRole,
-                        IsPrimaryValue = attribute.IsPrimaryValue
+                        SemanticRole = semanticRole,
+                        IsPrimaryValue = isPrimaryValue
                     };
                     index[key] = descriptor;
                 }

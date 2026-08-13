@@ -15,6 +15,11 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 - Added automated checks for known stale public wording.
 - Updated documentation to reflect persistent report monitoring and the current read-only simulator path.
 
+### Fixed
+
+- Preserved IEC 61850 UTC-Time sub-millisecond precision through the shared MMS renderer and report `TimeOfEntry` path instead of falling back to three fractional digits.
+- Added one UTC-Time formatting policy with full seven-digit engine evidence and a five-digit engineering display option for dispute and event-analysis views.
+
 ## Previous unreleased work — Control and public release refresh
 
 ### Added
@@ -47,4 +52,4 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 Earlier milestones include MMS association and discovery, reporting readiness and persistent monitoring, GOOSE and Sampled Values codecs and diagnostics, SCL engineering profiles, PCAP workflows, deterministic simulation, Windows raw-Ethernet transport, Sampled Values laboratory publishing, and engineering evidence export.
 
-See [Engine Maturity Matrix](docs/ENGINE_MATURITY_MATRIX.md) for current evidence and [Roadmap](ROADMAP.md) for future work.
+See [Engine Maturity Matrix](docs/ENGINE_MATURITY_MATRIX.md) for current evidence and [Roadmap](ROADMAP.md) for future work only.

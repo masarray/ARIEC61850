@@ -4,6 +4,11 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ## Unreleased — public wording, provenance and release assurance
 
+### Added
+
+- Added typed IEC 61850 UTC-Time forensic evidence exposing exact preserved wire bytes, the 24-bit fractional-second field, TimeQuality flags/accuracy, explicit UTC/local-offset views, and report timestamp-source separation.
+- Added report timestamp evidence that keeps IED data timestamps, report `TimeOfEntry`, and client `ReceivedAt` as distinct timing concepts; exact `TimeOfEntry` wire evidence is linked when the original decoded InformationReport is supplied.
+
 ### Changed
 
 - Corrected website structured-data licensing to `GPL-3.0-or-later`.
@@ -19,6 +24,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 - Preserved IEC 61850 UTC-Time sub-millisecond precision through the shared MMS renderer and report `TimeOfEntry` path instead of falling back to three fractional digits.
 - Added one UTC-Time formatting policy with full seven-digit engine evidence and a five-digit engineering display option for dispute and event-analysis views.
+- Preserved the exact 8-byte UTC-Time payload in decoded MMS values and reuse it for byte-exact re-encoding instead of reconstructing a potentially different fractional field from rounded .NET ticks.
 
 ## Previous unreleased work — Control and public release refresh
 

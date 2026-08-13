@@ -55,4 +55,35 @@ public sealed class Iec61850ProbeValuePolicyTests
 
         Assert.False(Iec61850ProbeValuePolicy.IsPrimaryValueBearing(attribute));
     }
+
+    [Theory]
+    [InlineData("IEDLD0/MMXU1$MX$A$phsA$cVal$mag$f", "IEDLD0/MMXU1$MX$A$phsA$instCVal$mag$f", Iec61850AlternateReferenceStrategyKind.ComplexValueInstantaneousSibling)]
+    [InlineData("IEDLD0/MMXU1$MX$A$phsA$instCVal$mag$f", "IEDLD0/MMXU1$MX$A$phsA$cVal$mag$f", Iec61850AlternateReferenceStrategyKind.ComplexValueInstantaneousSibling)]
+    [InlineData("IEDLD0/MMXU1$MX$TotW$mag$f", "IEDLD0/MMXU1$MX$TotW$instMag$f", Iec61850AlternateReferenceStrategyKind.MagnitudeInstantaneousSibling)]
+    [InlineData("IEDLD0/MMXU1$MX$TotW$instMag$f", "IEDLD0/MMXU1$MX$TotW$mag$f", Iec61850AlternateReferenceStrategyKind.MagnitudeInstantaneousSibling)]
+    public void Alternate_Reference_Policy_Uses_Known_Measurement_Siblings(
+        string canonical,
+        string expected,
+        Iec61850AlternateReferenceStrategyKind strategy)
+    {
+        var candidate = Assert.Single(Iec61850AlternateReferencePolicy.GetCandidates(canonical));
+
+        Assert.Equal(canonical, candidate.CanonicalMmsReference);
+        Assert.Equal(expected, candidate.MmsReference);
+        Assert.Equal(strategy, candidate.Strategy);
+    }
+
+    [Fact]
+    public void Complex_Alternate_Does_Not_Create_InstMag_Inside_CVal()
+    {
+        var candidate = Assert.Single(Iec61850AlternateReferencePolicy.GetCandidates(
+            "RPRE_CurrentMeasurements/MMXU1$MX$A$phsA$cVal$mag$f"));
+
+        Assert.Equal("RPRE_CurrentMeasurements/MMXU1$MX$A$phsA$instCVal$mag$f", candidate.MmsReference);
+        Assert.DoesNotContain("$cVal$instMag$f", candidate.MmsReference, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Non_Measurement_Target_Has_No_Alternate()
+        => Assert.Empty(Iec61850AlternateReferencePolicy.GetCandidates("IEDLD0/GGIO1$ST$Ind1$stVal"));
 }

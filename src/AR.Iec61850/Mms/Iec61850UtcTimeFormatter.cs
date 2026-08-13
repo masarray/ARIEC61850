@@ -12,6 +12,8 @@ public static class Iec61850UtcTimeFormatter
 {
     public const string FullPrecisionPattern = "yyyy-MM-dd HH:mm:ss.fffffff";
     public const string EngineeringPattern = "yyyy-MM-dd HH:mm:ss.fffff";
+    public const string FullPrecisionOffsetPattern = "yyyy-MM-dd HH:mm:ss.fffffff zzz";
+    public const string EngineeringOffsetPattern = "yyyy-MM-dd HH:mm:ss.fffff zzz";
 
     public static string FormatFullPrecisionUtc(Iec61850UtcTime utc, bool includeQuality = true)
     {
@@ -24,6 +26,9 @@ public static class Iec61850UtcTimeFormatter
     public static string FormatFullPrecisionLocalTimestamp(Iec61850UtcTime utc)
         => utc.Value.ToLocalTime().ToString(FullPrecisionPattern, CultureInfo.InvariantCulture);
 
+    public static string FormatFullPrecisionLocalWithOffset(Iec61850UtcTime utc)
+        => utc.Value.ToLocalTime().ToString(FullPrecisionOffsetPattern, CultureInfo.InvariantCulture);
+
     public static string FormatEngineeringUtcTimestamp(Iec61850UtcTime utc)
     {
         var timestamp = utc.Value.ToUniversalTime().ToString(EngineeringPattern, CultureInfo.InvariantCulture);
@@ -32,4 +37,7 @@ public static class Iec61850UtcTimeFormatter
 
     public static string FormatEngineeringLocalTimestamp(Iec61850UtcTime utc)
         => utc.Value.ToLocalTime().ToString(EngineeringPattern, CultureInfo.InvariantCulture);
+
+    public static string FormatEngineeringLocalWithOffset(Iec61850UtcTime utc)
+        => utc.Value.ToLocalTime().ToString(EngineeringOffsetPattern, CultureInfo.InvariantCulture);
 }

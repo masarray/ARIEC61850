@@ -8,6 +8,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 - Added typed IEC 61850 UTC-Time forensic evidence exposing exact preserved wire bytes, the 24-bit fractional-second field, TimeQuality flags/accuracy, explicit UTC/local-offset views, and report timestamp-source separation.
 - Added report timestamp evidence that keeps IED data timestamps, report `TimeOfEntry`, and client `ReceivedAt` as distinct timing concepts; exact `TimeOfEntry` wire evidence is linked when the original decoded InformationReport is supplied.
+- Synthetic/programmatically created UTC-Time values remain usable but are explicitly reported as having no raw-wire provenance.
 
 ### Changed
 

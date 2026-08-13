@@ -466,7 +466,7 @@ public static class Iec61850TimestampDecoder
         var accuracy = accuracyCode == 31 ? "unspecified" : $"2^-{accuracyCode.ToString(CultureInfo.InvariantCulture)} s";
         return new Iec61850DecodedTimestamp(
             true,
-            utc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
+            utc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture),
             leapSecondsKnown,
             clockFailure,
             clockNotSynchronized,

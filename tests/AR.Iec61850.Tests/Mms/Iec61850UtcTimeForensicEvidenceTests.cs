@@ -110,6 +110,37 @@ public sealed class Iec61850UtcTimeForensicEvidenceTests
         Assert.Matches(@"[+-]\d{2}:\d{2}$", evidence.ReceivedAtLocal);
     }
 
+    [Fact]
+    public void Report_Evidence_Does_Not_Guess_TimeOfEntry_Wire_Bytes_When_Display_Does_Not_Match()
+    {
+        var candidateRaw = CreateRawUtcTime(32, 0x10, 0x00, 0x00, 0x80);
+        var candidateValue = DecodeRawUtcTime(candidateRaw);
+        var decoded = new MmsInformationReport
+        {
+            IsSuccess = true,
+            Items =
+            [
+                new MmsInformationReportItem { Index = 0, Value = MmsDataValue.VisibleString("LD0/LLN0$BR$brcbA01") },
+                new MmsInformationReportItem { Index = 1, Value = MmsDataValue.BitString(5, [0x60]) },
+                new MmsInformationReportItem { Index = 2, Value = candidateValue },
+                new MmsInformationReportItem { Index = 3, Value = MmsDataValue.BitString(7, [0x80]) }
+            ]
+        };
+        var frame = new MmsReportFrame
+        {
+            ReceivedAt = DateTimeOffset.UnixEpoch,
+            Header = new MmsReportHeader { TimeOfEntry = "2026-08-13 10:00:59.9999999 UTC (q=0x00)" },
+            InclusionBitstringItemIndex = 3
+        };
+
+        var evidence = MmsReportTimestampEvidence.FromFrame(frame, decoded);
+
+        Assert.Equal(frame.Header.TimeOfEntry, evidence.ReportTimeOfEntryDisplay);
+        Assert.False(evidence.ReportTimeOfEntry.IsDecoded);
+        Assert.False(evidence.HasReportTimeOfEntryWireEvidence);
+        Assert.Equal(string.Empty, evidence.ReportTimeOfEntry.RawHex);
+    }
+
     private static MmsDataValue DecodeRawUtcTime(byte[] raw)
     {
         var tag = BerWriter.EncodeIdentifier(BerClass.ContextSpecific, false, 17);

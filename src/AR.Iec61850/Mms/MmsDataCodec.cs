@@ -48,7 +48,7 @@ public static class MmsDataCodec
             10 => MmsDataValue.VisibleString(BerReader.ReadAsciiString(tlv)),
             12 => MmsDataValue.BinaryTime(tlv.Value.Span),
             16 => MmsDataValue.MmsString(BerReader.ReadAsciiString(tlv)),
-            17 => MmsDataValue.UtcTime(Iec61850UtcTime.FromBytes(tlv.Value.Span)),
+            17 => MmsDataValue.UtcTime(Iec61850UtcTime.FromBytes(tlv.Value.Span), tlv.Value.Span),
             _ => MmsDataValue.Unknown(tlv.TagNumber, tlv.Value.Span)
         };
     }
@@ -88,6 +88,7 @@ public static class MmsDataCodec
             MmsDataKind.VisibleString => BerWriter.EncodeAscii((string)value.Value!),
             MmsDataKind.MmsString => BerWriter.EncodeAscii((string)value.Value!),
             MmsDataKind.BinaryTime => value.RawValue.ToArray(),
+            MmsDataKind.UtcTime when value.RawValue.Count == 8 => value.RawValue.ToArray(),
             MmsDataKind.UtcTime => value.Value is Iec61850UtcTime utc
                 ? BerWriter.EncodeUtcTime(utc.Value, utc.Quality)
                 : throw new InvalidOperationException("UTC time value is missing."),

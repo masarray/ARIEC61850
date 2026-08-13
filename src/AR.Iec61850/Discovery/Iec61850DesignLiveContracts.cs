@@ -7,7 +7,6 @@ public enum Iec61850DesignLiveStatus
     Exact,
     Compatible,
     RecoveredByProbe,
-    RecoveredByAlternateProbe,
     DesignOnly,
     LiveOnly,
     FunctionalConstraintMismatch,
@@ -17,7 +16,8 @@ public enum Iec61850DesignLiveStatus
     Unreadable,
     Absent,
     TransportFailure,
-    UnresolvedDesign
+    UnresolvedDesign,
+    RecoveredByAlternateProbe
 }
 
 public enum Iec61850ExactProbeStatus

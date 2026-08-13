@@ -75,7 +75,6 @@ public sealed class MmsReportTimestampEvidence
             ? Math.Min(inclusionIndex, decodedReport.Items.Count)
             : decodedReport.Items.Count;
 
-        Iec61850UtcTimeEvidence? firstUtcCandidate = null;
         for (var index = 0; index < limit; index++)
         {
             var value = decodedReport.Items[index].Value;
@@ -86,13 +85,15 @@ public sealed class MmsReportTimestampEvidence
             if (!evidence.IsDecoded)
                 continue;
 
-            firstUtcCandidate ??= evidence;
             var display = MmsDataValueRenderer.ToCompactString(value);
             if (string.Equals(display, frame.Header.TimeOfEntry, StringComparison.Ordinal))
                 return evidence;
         }
 
-        return firstUtcCandidate ?? new Iec61850UtcTimeEvidence();
+        // Forensic provenance must be exact. If the mapped TimeOfEntry cannot be
+        // matched to the original decoded UTC-Time value, keep the display string
+        // but do not attach candidate raw bytes by inference.
+        return new Iec61850UtcTimeEvidence();
     }
 
     private static bool IsDirectTimestampReference(string reference)

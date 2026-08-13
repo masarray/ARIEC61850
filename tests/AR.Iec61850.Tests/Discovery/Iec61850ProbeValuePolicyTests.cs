@@ -32,6 +32,18 @@ public sealed class Iec61850ProbeValuePolicyTests
     }
 
     [Fact]
+    public void Existing_Primary_Role_Is_Always_Value_Bearing()
+    {
+        var attribute = new LiveIedResolvedDataSetAttributeModel
+        {
+            Reference = "IEDLD0/GGIO1.CustomValue",
+            SemanticRole = Iec61850DataAttributeSemanticRole.PrimaryValue
+        };
+
+        Assert.True(Iec61850ProbeValuePolicy.IsPrimaryValueBearing(attribute));
+    }
+
+    [Fact]
     public void Frozen_Value_Is_Not_Default_Primary_Probe_Target()
     {
         var attribute = new LiveIedResolvedDataSetAttributeModel

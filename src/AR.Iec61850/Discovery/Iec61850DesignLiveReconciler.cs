@@ -12,6 +12,7 @@ public enum Iec61850DesignLiveStatus
     FunctionalConstraintMismatch,
     TypeMismatch,
     Ambiguous,
+    InvalidTarget,
     Unreadable,
     Absent,
     TransportFailure,
@@ -21,6 +22,7 @@ public enum Iec61850DesignLiveStatus
 public enum Iec61850ExactProbeStatus
 {
     Readable,
+    InvalidTarget,
     Unreadable,
     Absent,
     TransportFailure
@@ -66,7 +68,7 @@ public sealed class MmsClientSessionExactReadProbe : IIec61850ExactReadProbe
         {
             return new Iec61850ExactProbeEvidence
             {
-                Status = Iec61850ExactProbeStatus.Unreadable,
+                Status = Iec61850ExactProbeStatus.InvalidTarget,
                 MmsReference = normalized,
                 FunctionalConstraint = NormalizeFc(functionalConstraint),
                 Message = "Exact MMS target is invalid; expected domain/item form."
@@ -89,11 +91,14 @@ public sealed class MmsClientSessionExactReadProbe : IIec61850ExactReadProbe
             };
         }
 
-        var status = !_session.IsMmsInitiated && result.Message.Contains("transport fault", StringComparison.OrdinalIgnoreCase)
+        var status = !_session.IsMmsInitiated
             ? Iec61850ExactProbeStatus.TransportFailure
-            : result.FailureCode is 4 or 5 or 10
-                ? Iec61850ExactProbeStatus.Absent
-                : Iec61850ExactProbeStatus.Unreadable;
+            : result.FailureCode switch
+            {
+                4 or 10 => Iec61850ExactProbeStatus.Absent,
+                5 => Iec61850ExactProbeStatus.InvalidTarget,
+                _ => Iec61850ExactProbeStatus.Unreadable
+            };
 
         return new Iec61850ExactProbeEvidence
         {
@@ -149,6 +154,7 @@ public sealed class Iec61850DesignLiveReconciliationDocument
     public int LiveOnlyCount => Points.Count(x => x.Status == Iec61850DesignLiveStatus.LiveOnly);
     public int DirectlyMatchedCount => Points.Count(x => x.Status is Iec61850DesignLiveStatus.Exact or Iec61850DesignLiveStatus.Compatible);
     public int RecoveredByProbeCount => Points.Count(x => x.Status == Iec61850DesignLiveStatus.RecoveredByProbe);
+    public int InvalidTargetCount => Points.Count(x => x.Status == Iec61850DesignLiveStatus.InvalidTarget);
     public int UnreadableCount => Points.Count(x => x.Status == Iec61850DesignLiveStatus.Unreadable);
     public int AbsentCount => Points.Count(x => x.Status == Iec61850DesignLiveStatus.Absent);
     public int TransportFailureCount => Points.Count(x => x.Status == Iec61850DesignLiveStatus.TransportFailure);
@@ -270,6 +276,7 @@ public static class Iec61850DesignLiveReconciler
             var probeStatus = probeEvidence.Status switch
             {
                 Iec61850ExactProbeStatus.Readable => Iec61850DesignLiveStatus.RecoveredByProbe,
+                Iec61850ExactProbeStatus.InvalidTarget => Iec61850DesignLiveStatus.InvalidTarget,
                 Iec61850ExactProbeStatus.Absent => Iec61850DesignLiveStatus.Absent,
                 Iec61850ExactProbeStatus.TransportFailure => Iec61850DesignLiveStatus.TransportFailure,
                 _ => Iec61850DesignLiveStatus.Unreadable

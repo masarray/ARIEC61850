@@ -68,7 +68,7 @@ public static class MmsDataCodec
             },
             MmsDataKind.VisibleString or MmsDataKind.MmsString => Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty,
             MmsDataKind.BinaryTime => MmsBinaryTime.FromBytes(value.RawValue).ToDisplayString(),
-            MmsDataKind.UtcTime => value.Value is Iec61850UtcTime utc ? $"{utc.Value:yyyy-MM-dd HH:mm:ss.fffffff} UTC (q=0x{utc.Quality:X2})" : string.Empty,
+            MmsDataKind.UtcTime => value.Value is Iec61850UtcTime utc ? Iec61850UtcTimeFormatter.FormatFullPrecisionUtc(utc) : string.Empty,
             MmsDataKind.Structure or MmsDataKind.Array => MmsDataValueRenderer.ToCompactString(value),
             _ => Convert.ToHexString(value.RawValue.ToArray())
         };

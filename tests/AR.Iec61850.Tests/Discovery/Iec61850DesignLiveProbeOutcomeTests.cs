@@ -5,6 +5,7 @@ namespace AR.Iec61850.Tests.Discovery;
 public sealed class Iec61850DesignLiveProbeOutcomeTests
 {
     [Theory]
+    [InlineData(Iec61850ExactProbeStatus.InvalidTarget, Iec61850DesignLiveStatus.InvalidTarget)]
     [InlineData(Iec61850ExactProbeStatus.Unreadable, Iec61850DesignLiveStatus.Unreadable)]
     [InlineData(Iec61850ExactProbeStatus.TransportFailure, Iec61850DesignLiveStatus.TransportFailure)]
     public async Task Probe_Failure_Outcomes_Are_Not_Reported_As_Absent(
@@ -20,6 +21,8 @@ public sealed class Iec61850DesignLiveProbeOutcomeTests
         Assert.Equal(expectedStatus, point.Status);
         Assert.Equal(0, result.AbsentCount);
         Assert.False(result.HasConfirmedAbsence);
+        if (probeStatus == Iec61850ExactProbeStatus.InvalidTarget)
+            Assert.Equal(1, result.InvalidTargetCount);
     }
 
     private static LiveIedModelDiscoveryDocument BuildMandatoryDesign()

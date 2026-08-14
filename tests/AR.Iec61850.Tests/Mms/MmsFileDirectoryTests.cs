@@ -43,12 +43,14 @@ public sealed class MmsFileDirectoryTests
             {
                 Assert.Equal("COMTRADE/FRA00019.cfg", entry.Name);
                 Assert.Equal("COMTRADE/FRA00019.cfg", entry.Path);
+                Assert.Equal("COMTRADE/FRA00019.cfg", entry.RawName);
                 Assert.Equal((uint)2048, entry.SizeBytes);
             },
             entry =>
             {
                 Assert.Equal("COMTRADE/FRA00019.dat", entry.Name);
                 Assert.Equal("COMTRADE/FRA00019.dat", entry.Path);
+                Assert.Equal("COMTRADE/FRA00019.dat", entry.RawName);
                 Assert.Equal((uint)119_000, entry.SizeBytes);
             });
     }
@@ -67,17 +69,79 @@ public sealed class MmsFileDirectoryTests
         var decoded = Assert.Single(result.Entries);
         Assert.Equal("fault.cfg", decoded.Name);
         Assert.Equal("COMTRADE/fault.cfg", decoded.Path);
+        Assert.Equal("fault.cfg", decoded.RawName);
         Assert.Equal((uint)1234, decoded.SizeBytes);
         Assert.Equal("01020304", decoded.LastModifiedDisplay);
     }
 
-    private static byte[] BuildDirectoryEntry(string fileName, uint size, byte[] modified)
+    [Fact]
+    public void Decode_Preserves_Leading_Backslash_RawIdentity_While_Normalizing_CatalogPath()
     {
+        var entry = BuildDirectoryEntry(@"\COMTRADE\FRA00056.cfg", 2048, [0x01]);
+        var list = BerWriter.EncodeTlv(BerClass.ContextSpecific, constructed: true, 0, entry);
+        var response = BuildConfirmedResponse(9, list);
+
+        var result = MmsFileDirectoryResponseDecoder.Decode(response, 9, "COMTRADE");
+
+        Assert.True(result.IsSuccess, result.Message);
+        var decoded = Assert.Single(result.Entries);
+        Assert.Equal("COMTRADE/FRA00056.cfg", decoded.Name);
+        Assert.Equal("COMTRADE/FRA00056.cfg", decoded.Path);
+        Assert.Equal(@"\COMTRADE\FRA00056.cfg", decoded.RawName);
+        Assert.Equal(new[] { @"\COMTRADE\FRA00056.cfg" }, decoded.RawNameComponents);
+    }
+
+    [Fact]
+    public void Decode_Preserves_Leading_Slash_RawIdentity_While_Normalizing_CatalogPath()
+    {
+        var entry = BuildDirectoryEntry("/COMTRADE/FRA00056.cfg", 2048, [0x01]);
+        var list = BerWriter.EncodeTlv(BerClass.ContextSpecific, constructed: true, 0, entry);
+        var response = BuildConfirmedResponse(10, list);
+
+        var result = MmsFileDirectoryResponseDecoder.Decode(response, 10, "COMTRADE");
+
+        Assert.True(result.IsSuccess, result.Message);
+        var decoded = Assert.Single(result.Entries);
+        Assert.Equal("COMTRADE/FRA00056.cfg", decoded.Name);
+        Assert.Equal("COMTRADE/FRA00056.cfg", decoded.Path);
+        Assert.Equal("/COMTRADE/FRA00056.cfg", decoded.RawName);
+        Assert.Equal(new[] { "/COMTRADE/FRA00056.cfg" }, decoded.RawNameComponents);
+    }
+
+    [Fact]
+    public void Decode_Preserves_MultiGraphicString_Components_Without_Inventing_Single_RawName()
+    {
+        var entry = BuildDirectoryEntry(
+            ["COMTRADE", "FRA00056.cfg"],
+            2048,
+            [0x01]);
+        var list = BerWriter.EncodeTlv(BerClass.ContextSpecific, constructed: true, 0, entry);
+        var response = BuildConfirmedResponse(11, list);
+
+        var result = MmsFileDirectoryResponseDecoder.Decode(response, 11, "COMTRADE");
+
+        Assert.True(result.IsSuccess, result.Message);
+        var decoded = Assert.Single(result.Entries);
+        Assert.Equal("COMTRADE/FRA00056.cfg", decoded.Name);
+        Assert.Equal("COMTRADE/FRA00056.cfg", decoded.Path);
+        Assert.Equal(string.Empty, decoded.RawName);
+        Assert.Equal(new[] { "COMTRADE", "FRA00056.cfg" }, decoded.RawNameComponents);
+    }
+
+    private static byte[] BuildDirectoryEntry(string fileName, uint size, byte[] modified)
+        => BuildDirectoryEntry([fileName], size, modified);
+
+    private static byte[] BuildDirectoryEntry(string[] fileNameComponents, uint size, byte[] modified)
+    {
+        var encodedComponents = fileNameComponents
+            .Select(component => BerWriter.EncodeTlv(0x19, BerWriter.EncodeAscii(component)))
+            .SelectMany(bytes => bytes)
+            .ToArray();
         var name = BerWriter.EncodeTlv(
             BerClass.ContextSpecific,
             constructed: true,
             0,
-            BerWriter.EncodeTlv(0x19, BerWriter.EncodeAscii(fileName)));
+            encodedComponents);
         var attributes = BerWriter.EncodeTlv(
             BerClass.ContextSpecific,
             constructed: true,

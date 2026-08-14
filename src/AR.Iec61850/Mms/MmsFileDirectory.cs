@@ -7,6 +7,14 @@ public sealed class MmsFileDirectoryEntry
 {
     public string Name { get; init; } = string.Empty;
     public string Path { get; init; } = string.Empty;
+    /// <summary>
+    /// Exact single GraphicString returned by the IED for this FileDirectory entry.
+    /// This is intentionally not normalized: leading separators, slash direction,
+    /// and case are preserved. It is empty when the MMS FileName used multiple
+    /// GraphicString components because no single raw string existed on the wire.
+    /// </summary>
+    public string RawName { get; init; } = string.Empty;
+    public IReadOnlyList<string> RawNameComponents { get; init; } = Array.Empty<string>();
     public uint? SizeBytes { get; init; }
     public byte[] LastModifiedRaw { get; init; } = Array.Empty<byte>();
     public string LastModifiedDisplay => LastModifiedRaw.Length == 0 ? string.Empty : Convert.ToHexString(LastModifiedRaw);
@@ -232,7 +240,7 @@ public static class MmsFileDirectoryResponseDecoder
         if (!entry.Constructed)
             return null;
 
-        string? fileName = null;
+        IReadOnlyList<string> fileNameComponents = Array.Empty<string>();
         uint? size = null;
         byte[] modified = Array.Empty<byte>();
 
@@ -240,7 +248,7 @@ public static class MmsFileDirectoryResponseDecoder
         {
             if (field.Class == BerClass.ContextSpecific && field.TagNumber == 0 && field.Constructed)
             {
-                fileName = DecodeFileName(field);
+                fileNameComponents = DecodeFileNameComponents(field);
             }
             else if (field.Class == BerClass.ContextSpecific && field.TagNumber == 1 && field.Constructed)
             {
@@ -254,31 +262,39 @@ public static class MmsFileDirectoryResponseDecoder
             }
         }
 
-        if (string.IsNullOrWhiteSpace(fileName))
+        var normalizedName = NormalizeReturnedPath(NormalizeFileNameComponents(fileNameComponents));
+        if (string.IsNullOrWhiteSpace(normalizedName))
             return null;
 
-        var normalizedName = NormalizeReturnedPath(fileName);
+        var rawName = fileNameComponents.Count == 1
+            ? fileNameComponents[0]
+            : string.Empty;
         var path = CombinePath(directoryName, normalizedName);
         return new MmsFileDirectoryEntry
         {
             Name = normalizedName,
             Path = path,
+            RawName = rawName,
+            RawNameComponents = fileNameComponents.ToArray(),
             SizeBytes = size,
             LastModifiedRaw = modified
         };
     }
 
-    private static string DecodeFileName(BerTlv tlv)
+    private static IReadOnlyList<string> DecodeFileNameComponents(BerTlv tlv)
     {
         if (!tlv.Constructed)
-            return string.Empty;
+            return Array.Empty<string>();
 
         var parts = new List<string>();
         CollectGraphicStrings(tlv, parts, depth: 0);
-        return string.Join('/', parts
+        return parts.ToArray();
+    }
+
+    private static string NormalizeFileNameComponents(IReadOnlyList<string> parts)
+        => string.Join('/', parts
             .Select(part => part.Trim().Replace('\\', '/'))
             .Where(part => !string.IsNullOrWhiteSpace(part)));
-    }
 
     private static void CollectGraphicStrings(BerTlv tlv, List<string> parts, int depth)
     {

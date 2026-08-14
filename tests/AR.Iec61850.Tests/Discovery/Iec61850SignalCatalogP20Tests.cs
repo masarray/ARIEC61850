@@ -19,7 +19,8 @@ public sealed class Iec61850SignalCatalogP20Tests
         Assert.Equal(0, catalog.VerifiedPresentCount);
         Assert.Equal(0, catalog.ConfirmedAbsentCount);
 
-        var primary = Assert.NotNull(catalog.FindByCanonicalMmsReference("iedld0/MMTR1$ST$SupWh$actVal"));
+        var primary = catalog.FindByCanonicalMmsReference("iedld0/MMTR1$ST$SupWh$actVal")!;
+        Assert.NotNull(primary);
         Assert.Equal("IEDLD0/MMTR1.SupWh.actVal", primary.DesignReference);
         Assert.Equal("IEDLD0/MMTR1$ST$SupWh$actVal", primary.EffectiveMmsReference);
         Assert.Equal("ST", primary.FunctionalConstraint);
@@ -86,7 +87,8 @@ public sealed class Iec61850SignalCatalogP20Tests
             Assert.False(signal.IsEngineeringOnly);
         });
 
-        var primary = Assert.NotNull(catalog.FindByCanonicalMmsReference("IEDLD0/MMTR1$ST$SupWh$actVal"));
+        var primary = catalog.FindByCanonicalMmsReference("IEDLD0/MMTR1$ST$SupWh$actVal")!;
+        Assert.NotNull(primary);
         Assert.Equal("INT64", primary.SclBType);
         Assert.Equal(Iec61850DataAttributeSemanticRole.PrimaryValue, primary.SemanticRole);
         Assert.True(primary.IsOperationalCandidate);

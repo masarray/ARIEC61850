@@ -12,6 +12,8 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Changed
 
+- Native MMS discovery can now carry bounded, ordered DataSet-directory results in its typed result, allowing live-model, engineering-profile, and readiness builders to consume the same member evidence without application-side reconstruction.
+- Hybrid dynamic reporting can host a temporary DataSet in a verified-free RCB Logical Device while its members reference live points in other Logical Devices, matching the MMS named-variable-list model used by Siemens auxiliary RCB pools.
 - Preserved full seven-digit UTC-Time precision through the shared MMS scalar/structured renderer and retained exact decoded UTC-Time bytes for byte-exact re-encoding; synthetic UTC-Time values remain explicitly without wire provenance.
 - Corrected website structured-data licensing to `GPL-3.0-or-later`.
 - Replaced stale active-license wording and milestone journals with current evidence and future-only roadmap documents.
@@ -21,6 +23,11 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 - Replaced broad safety and certification-sounding language with scoped protocol guardrails and evidence boundaries.
 - Added automated checks for known stale public wording.
 - Updated documentation to reflect persistent report monitoring and the current read-only simulator path.
+
+### Fixed
+
+- Live-model discovery no longer drops DataSet members when callers request DataSet-directory reads through `MmsClientSession.DiscoverAsync`.
+- Dynamic hybrid planning no longer rejects a verified-free RCB solely because the RCB and requested signal belong to different MMS domains.
 
 ## Previous unreleased work — Control and public release refresh
 

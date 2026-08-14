@@ -179,7 +179,7 @@ public static class Iec61850ReportReadinessProfileBuilder
         ArgumentNullException.ThrowIfNull(discovery);
 
         options ??= new Iec61850ReportReadinessProfileOptions();
-        var directories = (dataSetDirectories ?? Array.Empty<MmsDataSetDirectoryResult>()).ToArray();
+        var directories = (dataSetDirectories ?? discovery.DataSetDirectories).ToArray();
         var readiness = MmsReportReadinessPlanner.Build(discovery.ReportInventory);
         var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(
             discovery.ReportInventory,

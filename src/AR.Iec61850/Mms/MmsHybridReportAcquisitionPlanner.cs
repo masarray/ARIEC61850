@@ -453,7 +453,6 @@ public static class MmsHybridReportAcquisitionPlanner
                     Slot = slot,
                     SameDomainCount = resolved.Count(item => item.Point.Domain.Equals(slot.Domain, StringComparison.OrdinalIgnoreCase))
                 })
-                .Where(item => item.SameDomainCount > 0)
                 .OrderByDescending(item => item.SameDomainCount)
                 .ThenBy(item => item.Slot.Buffered ? 0 : 1)
                 .ThenBy(item => item.Slot.Reference, StringComparer.OrdinalIgnoreCase)
@@ -464,7 +463,9 @@ public static class MmsHybridReportAcquisitionPlanner
 
             var slot = slotChoice.Slot;
             var chunk = resolved
-                .Where(item => item.Point.Domain.Equals(slot.Domain, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(item => item.Point.Domain.Equals(slot.Domain, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenBy(item => item.Point.Domain, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => SignalKey(item.Signal), StringComparer.OrdinalIgnoreCase)
                 .Take(options.MaxDynamicMembersPerReport)
                 .ToArray();
             if (chunk.Length == 0)

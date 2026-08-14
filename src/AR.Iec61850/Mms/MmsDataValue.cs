@@ -55,8 +55,24 @@ public sealed class MmsDataValue
     public static MmsDataValue MmsString(string value)
         => new(MmsDataKind.MmsString, value);
 
+    /// <summary>
+    /// Creates a UTC-Time value without claiming wire provenance. MMS decoding
+    /// attaches exact raw provenance through an internal validated path.
+    /// </summary>
     public static MmsDataValue UtcTime(Iec61850UtcTime value)
         => new(MmsDataKind.UtcTime, value);
+
+    internal static MmsDataValue UtcTime(Iec61850UtcTime value, ReadOnlySpan<byte> rawValue)
+    {
+        if (rawValue.Length != 8)
+            throw new ArgumentException("IEC 61850 UTC-Time wire provenance requires exactly 8 bytes.", nameof(rawValue));
+
+        var decoded = Iec61850UtcTime.FromBytes(rawValue);
+        if (decoded.Value != value.Value || decoded.Quality != value.Quality)
+            throw new ArgumentException("IEC 61850 UTC-Time wire provenance does not match the decoded value.", nameof(rawValue));
+
+        return new MmsDataValue(MmsDataKind.UtcTime, value, rawValue: rawValue.ToArray());
+    }
 
     public static MmsDataValue BinaryTime(ReadOnlySpan<byte> value)
         => new(MmsDataKind.BinaryTime, rawValue: value.ToArray());

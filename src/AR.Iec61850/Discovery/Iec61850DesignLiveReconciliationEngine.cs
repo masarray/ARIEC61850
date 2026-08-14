@@ -40,6 +40,8 @@ public static class Iec61850DesignLiveReconciler
             .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.OrdinalIgnoreCase);
         var consumedObserved = new HashSet<PointDescriptor>();
         var reconciled = new List<Iec61850DesignLivePointReconciliation>();
+        var probeTargetCount = 0;
+        var maxProbeTargetCount = Math.Max(0, options.MaxProbeTargetCount);
 
         foreach (var expected in designPoints.OrderBy(x => x.MmsReference, StringComparer.OrdinalIgnoreCase))
         {
@@ -94,6 +96,74 @@ public static class Iec61850DesignLiveReconciler
                 continue;
             }
 
+            if (options.MatchKnownAlternateReferencesInDiscovery)
+            {
+                var alternateDiscoveryMatches = Iec61850AlternateReferencePolicy
+                    .GetCandidates(expected.MmsReference)
+                    .SelectMany(candidate => observedByExact.TryGetValue(NormalizeMmsReference(candidate.MmsReference), out var matches)
+                        ? matches.Select(match => new AlternateDiscoveryMatch(candidate, match))
+                        : Array.Empty<AlternateDiscoveryMatch>())
+                    .ToArray();
+
+                if (alternateDiscoveryMatches.Length > 0)
+                {
+                    foreach (var match in alternateDiscoveryMatches)
+                        consumedObserved.Add(match.Observed);
+
+                    if (alternateDiscoveryMatches.Length > 1)
+                    {
+                        reconciled.Add(ToResult(
+                            expected,
+                            Iec61850DesignLiveStatus.Ambiguous,
+                            alternateDiscoveryMatches[0].Observed,
+                            null,
+                            "More than one native live attribute matched an engine-owned alternate semantic reference."));
+                        continue;
+                    }
+
+                    var alternateMatch = alternateDiscoveryMatches[0];
+                    var live = alternateMatch.Observed;
+                    if (!SameFc(expected.FunctionalConstraint, live.FunctionalConstraint))
+                    {
+                        reconciled.Add(ToResult(
+                            expected,
+                            Iec61850DesignLiveStatus.FunctionalConstraintMismatch,
+                            live,
+                            null,
+                            $"Alternate semantic sibling exists under FC={live.FunctionalConstraint}, expected FC={expected.FunctionalConstraint}.",
+                            alternateStrategy: alternateMatch.Candidate.Strategy));
+                        continue;
+                    }
+
+                    var typeCompatibility = Iec61850TypeCompatibility.Compare(
+                        expected.SclBType,
+                        expected.MmsType,
+                        live.SclBType,
+                        live.MmsType);
+                    if (typeCompatibility == Iec61850TypeCompatibilityKind.Conflict)
+                    {
+                        reconciled.Add(ToResult(
+                            expected,
+                            Iec61850DesignLiveStatus.TypeMismatch,
+                            live,
+                            null,
+                            $"Alternate semantic sibling was discovered, but authoritative type families conflict: design={DisplayType(expected)}, live={DisplayType(live)}.",
+                            alternateStrategy: alternateMatch.Candidate.Strategy));
+                        continue;
+                    }
+
+                    reconciled.Add(ToResult(
+                        expected,
+                        Iec61850DesignLiveStatus.RecoveredByAlternateDiscovery,
+                        live,
+                        null,
+                        $"Native live discovery exposed engine-owned alternate strategy {alternateMatch.Candidate.Strategy}; no MMS probe was required. {alternateMatch.Candidate.Explanation}",
+                        live.MmsReference,
+                        alternateStrategy: alternateMatch.Candidate.Strategy));
+                    continue;
+                }
+            }
+
             var identityKey = IdentityWithoutFunctionalConstraint(expected.MmsReference);
             if (observedByIdentity.TryGetValue(identityKey, out var identityMatches) && identityMatches.Length > 0)
             {
@@ -119,6 +189,19 @@ public static class Iec61850DesignLiveReconciler
                 continue;
             }
 
+            if (probeTargetCount >= maxProbeTargetCount)
+            {
+                reconciled.Add(ToResult(
+                    expected,
+                    Iec61850DesignLiveStatus.DesignOnly,
+                    null,
+                    null,
+                    $"Exact probe deferred because the reconciliation probe budget of {maxProbeTargetCount} design target(s) is exhausted; no absence conclusion was made.",
+                    probeDeferredByBudget: true));
+                continue;
+            }
+
+            probeTargetCount++;
             reconciled.Add(await ProbeExpectedPointAsync(expected, probe!, options, cancellationToken).ConfigureAwait(false));
         }
 
@@ -219,7 +302,8 @@ public static class Iec61850DesignLiveReconciler
                     alternateProbe,
                     $"Canonical target was not readable, but engine-owned alternate strategy {alternate.Strategy} resolved a readable MMS sibling.",
                     alternate.MmsReference,
-                    attempts);
+                    attempts,
+                    alternate.Strategy);
             }
 
             if (alternateProbe.Status == Iec61850ExactProbeStatus.TransportFailure)
@@ -231,7 +315,8 @@ public static class Iec61850DesignLiveReconciler
                     alternateProbe,
                     alternateProbe.Message,
                     string.Empty,
-                    attempts);
+                    attempts,
+                    alternate.Strategy);
             }
         }
 
@@ -240,8 +325,17 @@ public static class Iec61850DesignLiveReconciler
         var evidence = finalStatus == Iec61850DesignLiveStatus.Absent && attempts.Count > 1
             ? "Canonical target and every known semantic alternate returned protocol-level absence."
             : finalProbe.Message;
+        var lastAlternateStrategy = attempts.LastOrDefault(x => !x.IsCanonical)?.AlternateStrategy;
 
-        return ToResult(expected, finalStatus, null, finalProbe, evidence, string.Empty, attempts);
+        return ToResult(
+            expected,
+            finalStatus,
+            null,
+            finalProbe,
+            evidence,
+            string.Empty,
+            attempts,
+            lastAlternateStrategy);
     }
 
     private static Iec61850DesignLiveStatus ClassifyFailedProbeAttempts(
@@ -374,13 +468,16 @@ public static class Iec61850DesignLiveReconciler
         Iec61850ExactProbeEvidence? probe,
         string evidence,
         string effectiveMmsReference = "",
-        IReadOnlyList<Iec61850ProbeAttemptEvidence>? probeAttempts = null)
+        IReadOnlyList<Iec61850ProbeAttemptEvidence>? probeAttempts = null,
+        Iec61850AlternateReferenceStrategyKind? alternateStrategy = null,
+        bool probeDeferredByBudget = false)
         => new()
         {
             Reference = expected.Reference,
             MmsReference = expected.MmsReference,
             CanonicalMmsReference = expected.MmsReference,
             EffectiveMmsReference = ResolveEffectiveReference(status, expected, observed, effectiveMmsReference),
+            AlternateStrategy = alternateStrategy,
             FunctionalConstraint = expected.FunctionalConstraint,
             SclBType = expected.SclBType,
             MmsType = expected.MmsType,
@@ -394,6 +491,7 @@ public static class Iec61850DesignLiveReconciler
             ObservedFunctionalConstraint = observed?.FunctionalConstraint ?? string.Empty,
             Probe = probe,
             ProbeAttempts = probeAttempts ?? Array.Empty<Iec61850ProbeAttemptEvidence>(),
+            ProbeDeferredByBudget = probeDeferredByBudget,
             Evidence = new[] { evidence }
         };
 
@@ -411,6 +509,7 @@ public static class Iec61850DesignLiveReconciler
             Iec61850DesignLiveStatus.Exact or Iec61850DesignLiveStatus.Compatible
                 => observed?.MmsReference ?? expected.MmsReference,
             Iec61850DesignLiveStatus.RecoveredByProbe => expected.MmsReference,
+            Iec61850DesignLiveStatus.RecoveredByAlternateDiscovery => observed?.MmsReference ?? string.Empty,
             _ => string.Empty
         };
     }
@@ -470,4 +569,8 @@ public static class Iec61850DesignLiveReconciler
         public bool IsPrimaryValue { get; init; }
         public IReadOnlyList<string> DataSetReferences { get; init; } = Array.Empty<string>();
     }
+
+    private sealed record AlternateDiscoveryMatch(
+        Iec61850AlternateReferenceCandidate Candidate,
+        PointDescriptor Observed);
 }

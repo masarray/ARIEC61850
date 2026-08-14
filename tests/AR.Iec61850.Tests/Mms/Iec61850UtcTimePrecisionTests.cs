@@ -28,6 +28,18 @@ public sealed class Iec61850UtcTimePrecisionTests
     }
 
     [Fact]
+    public void EngineeringFormatter_Exposes_Five_Fractional_Digits_Without_Changing_Ticks()
+    {
+        var utc = DecodeCustomerCase();
+        var originalTicks = utc.Value.Ticks;
+
+        var display = Iec61850UtcTimeFormatter.FormatEngineeringUtcTimestamp(utc);
+
+        Assert.Equal("2026-08-13 10:00:31.20060 UTC", display);
+        Assert.Equal(originalTicks, utc.Value.Ticks);
+    }
+
+    [Fact]
     public void ReportProjector_Preserves_Customer_2006000_Fraction_End_To_End()
     {
         var utc = DecodeCustomerCase();
@@ -66,14 +78,54 @@ public sealed class Iec61850UtcTimePrecisionTests
         Assert.Contains("31.2006000 UTC", display, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void StructuredRenderer_Preserves_Full_UtcTime_Precision()
+    {
+        var utc = DecodeCustomerCase();
+        var value = MmsDataValue.Structure([
+            MmsDataValue.Boolean(true),
+            MmsDataValue.BitString(3, [0x00, 0x00]),
+            MmsDataValue.UtcTime(utc)
+        ]);
+
+        var display = MmsDataValueRenderer.ToCompactString(value, "LD0/XCBR1.Pos");
+
+        Assert.Contains("t=2026-08-13 10:00:31.2006000 UTC", display, StringComparison.Ordinal);
+        Assert.DoesNotContain("31.200 UTC", display, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportHeader_TimeOfEntry_Preserves_Full_UtcTime_Precision()
+    {
+        var utc = DecodeCustomerCase();
+        var decoded = new MmsInformationReport
+        {
+            IsSuccess = true,
+            Items =
+            [
+                new MmsInformationReportItem { Index = 0, Value = MmsDataValue.VisibleString("LD0/LLN0$BR$brcbA01") },
+                new MmsInformationReportItem { Index = 1, Value = MmsDataValue.BitString(6, [0x7B, 0x80]) },
+                new MmsInformationReportItem { Index = 2, Value = MmsDataValue.Unsigned(7) },
+                new MmsInformationReportItem { Index = 3, Value = MmsDataValue.UtcTime(utc) },
+                new MmsInformationReportItem { Index = 4, Value = MmsDataValue.VisibleString("LD0/LLN0$DataSet") },
+                new MmsInformationReportItem { Index = 5, Value = MmsDataValue.Boolean(false) },
+                new MmsInformationReportItem { Index = 6, Value = MmsDataValue.OctetString(Convert.FromHexString("0000000000000014")) },
+                new MmsInformationReportItem { Index = 7, Value = MmsDataValue.Unsigned(1) }
+            ],
+            Message = "decoded"
+        };
+
+        var header = MmsReportFrameMapper.DecodeHeader(decoded);
+
+        Assert.Contains("31.2006000 UTC", header.TimeOfEntry, StringComparison.Ordinal);
+        Assert.DoesNotContain("31.200 UTC", header.TimeOfEntry, StringComparison.Ordinal);
+    }
+
     private static Iec61850UtcTime DecodeCustomerCase()
     {
         var seconds = new DateTimeOffset(2026, 8, 13, 10, 0, 31, TimeSpan.Zero).ToUnixTimeSeconds();
         Span<byte> bytes = stackalloc byte[8];
         BinaryPrimitives.WriteUInt32BigEndian(bytes[..4], checked((uint)seconds));
-
-        // 0x335A86 / 2^24 = 0.200600028... seconds, which maps exactly
-        // to 2,006,000 .NET ticks (31.2006000) after nearest-tick conversion.
         bytes[4] = 0x33;
         bytes[5] = 0x5A;
         bytes[6] = 0x86;

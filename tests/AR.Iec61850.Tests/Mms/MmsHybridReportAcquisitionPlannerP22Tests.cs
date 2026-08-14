@@ -43,12 +43,12 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
     {
         var signal = Signal("LD0/GGIO1.Ind1.stVal", "LD0/GGIO1$ST$Ind1$stVal", "ST", "LD0/LLN0.dsA", "LD0/GGIO1.Ind1");
         var inventory = Inventory(Rcb("LD0/LLN0.RP.U01", false, "LD0/LLN0.dsA", enabled: "true"));
-        var snapshot = StaticAvailable(
-            "LD0/LLN0.RP.U01",
-            false,
-            "LD0/LLN0.dsA",
-            Member("LD0", "GGIO1$ST$Ind1", "LD0/GGIO1.Ind1", "ST"));
-        snapshot = Copy(snapshot,
+        var snapshot = Copy(
+            StaticAvailable(
+                "LD0/LLN0.RP.U01",
+                false,
+                "LD0/LLN0.dsA",
+                Member("LD0", "GGIO1$ST$Ind1", "LD0/GGIO1.Ind1", "ST")),
             availability: MmsRcbOperationalAvailability.UsedByCaller,
             enabledState: "true",
             reservationState: "true");
@@ -77,10 +77,7 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
             StaticAvailable("LD0/LLN0.BR.B01", true, "LD0/LLN0.dsA",
                 Member("LD0", "GGIO1$ST$Ind1", "LD0/GGIO1.Ind1", "ST")),
             DynamicEmpty("LD0/LLN0.RP.U02", false));
-        var directory = new MmsIedModelDirectory(
-        [
-            Point("LD0", "GGIO1", "ST", "Ind2.stVal", "GGIO1$ST$Ind2$stVal")
-        ]);
+        var directory = Directory(Point("LD0", "GGIO1", "ST", "Ind2.stVal", "GGIO1$ST$Ind2$stVal"));
 
         var plan = Build([a, b, c], inventory, availability, directory);
 
@@ -89,12 +86,31 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
         Assert.Equal(1, plan.StaticBrcbSignalCount);
         Assert.Equal(1, plan.DynamicUrcbSignalCount);
         Assert.Equal(1, plan.PollingFallbackSignalCount);
-        var dynamic = Assert.Single(plan.Segments.Where(x => x.Kind == MmsHybridAcquisitionKind.DynamicUrcb));
-        Assert.True(dynamic.RequiresWrite);
-        Assert.Equal(MmsHybridReportActivation.ConfigureDynamicDataSet, dynamic.Activation);
-        Assert.Equal("LD0/LLN0.AR_HYB_01", dynamic.ReportPlan?.DataSetReference);
-        Assert.Single(dynamic.ReportPlan?.DynamicPoints ?? Array.Empty<MmsFcResolvedPoint>());
+        var dynamicSegment = Assert.Single(plan.Segments, x => x.Kind == MmsHybridAcquisitionKind.DynamicUrcb);
+        Assert.True(dynamicSegment.RequiresWrite);
+        Assert.Equal(MmsHybridReportActivation.ConfigureDynamicDataSet, dynamicSegment.Activation);
+        Assert.Equal("LD0/LLN0.AR_HYB_01", dynamicSegment.ReportPlan?.DataSetReference);
+        Assert.Single(dynamicSegment.ReportPlan?.DynamicPoints ?? Array.Empty<MmsFcResolvedPoint>());
         Assert.Equal(1, plan.Capability.DynamicUsableCount);
+    }
+
+    [Fact]
+    public void DynamicBrcb_RequiresVerifiedEmptyDatSetAndExplicitFreeResvTms()
+    {
+        var signal = Signal("LD0/MMXU1.Hz.mag.f", "LD0/MMXU1$MX$Hz$mag$f", "MX");
+        var inventory = Inventory(Rcb("LD0/LLN0.BR.D01", true, string.Empty));
+        var availability = Availability(DynamicEmpty("LD0/LLN0.BR.D01", true));
+        var directory = Directory(Point("LD0", "MMXU1", "MX", "Hz.mag.f", "MMXU1$MX$Hz$mag$f"));
+
+        var plan = Build([signal], inventory, availability, directory);
+
+        Assert.Equal(MmsHybridAcquisitionPlanStatus.FullReportCoverage, plan.Status);
+        Assert.Equal(1, plan.DynamicBrcbSignalCount);
+        var segment = Assert.Single(plan.Segments);
+        Assert.Equal(MmsHybridAcquisitionKind.DynamicBrcb, segment.Kind);
+        Assert.True(segment.RequiresWrite);
+        Assert.Equal("0", segment.Availability?.ReservationTimeSeconds);
+        Assert.Equal(MmsRcbDataSetProbeState.ReadSucceeded, segment.Availability?.DataSetProbeState);
     }
 
     [Fact]
@@ -112,10 +128,7 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
         var unknownReservation = Copy(
             DynamicEmpty("LD0/LLN0.RP.UNKNOWN", false),
             reservationState: string.Empty);
-        var directory = new MmsIedModelDirectory(
-        [
-            Point("LD0", "GGIO1", "ST", "Ind1.stVal", "GGIO1$ST$Ind1$stVal")
-        ]);
+        var directory = Directory(Point("LD0", "GGIO1", "ST", "Ind1.stVal", "GGIO1$ST$Ind1$stVal"));
 
         var plan = Build([signal], inventory, Availability(busy, unknownReservation), directory);
 
@@ -232,8 +245,8 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
     {
         var memberships = string.IsNullOrWhiteSpace(dataSetReference)
             ? Array.Empty<Iec61850SignalDataSetMembership>()
-            : new[]
-            {
+            :
+            [
                 new Iec61850SignalDataSetMembership
                 {
                     DataSetReference = dataSetReference,
@@ -243,7 +256,7 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
                     FunctionalConstraint = fc,
                     IsPrimaryValueForMember = true
                 }
-            };
+            ];
 
         return new Iec61850SignalDescriptor
         {
@@ -267,11 +280,7 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
         return inventory;
     }
 
-    private static MmsReportControlCandidate Rcb(
-        string reference,
-        bool buffered,
-        string dataSetReference,
-        string enabled = "false")
+    private static MmsReportControlCandidate Rcb(string reference, bool buffered, string dataSetReference, string enabled = "false")
     {
         var (domain, logicalNode, name) = ParseRcbReference(reference);
         return new MmsReportControlCandidate
@@ -393,11 +402,7 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
             ProbeDiagnostics = source.ProbeDiagnostics
         };
 
-    private static MmsDataSetDirectoryMember Member(
-        string domain,
-        string item,
-        string userReference,
-        string fc)
+    private static MmsDataSetDirectoryMember Member(string domain, string item, string userReference, string fc)
         => new()
         {
             Domain = domain,
@@ -407,12 +412,7 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
             LogicalNode = item.Split('$', StringSplitOptions.RemoveEmptyEntries)[0]
         };
 
-    private static MmsFcResolvedPoint Point(
-        string domain,
-        string logicalNode,
-        string fc,
-        string dataObjectPath,
-        string item)
+    private static MmsFcResolvedPoint Point(string domain, string logicalNode, string fc, string dataObjectPath, string item)
         => new()
         {
             Domain = domain,
@@ -424,8 +424,11 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
             Confidence = 100
         };
 
+    private static MmsIedModelDirectory Directory(params MmsFcResolvedPoint[] points)
+        => new(points);
+
     private static MmsIedModelDirectory EmptyDirectory()
-        => new(Array.Empty<MmsFcResolvedPoint>());
+        => Directory();
 
     private static (string Domain, string LogicalNode, string Name) ParseRcbReference(string reference)
     {

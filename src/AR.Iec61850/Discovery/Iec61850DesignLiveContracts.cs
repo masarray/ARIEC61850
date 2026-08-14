@@ -17,7 +17,8 @@ public enum Iec61850DesignLiveStatus
     Absent,
     TransportFailure,
     UnresolvedDesign,
-    RecoveredByAlternateProbe
+    RecoveredByAlternateProbe,
+    RecoveredByAlternateDiscovery
 }
 
 public enum Iec61850ExactProbeStatus
@@ -73,50 +74,61 @@ public sealed class MmsClientSessionExactReadProbe : IIec61850ExactReadProbe
     {
         var normalized = (mmsReference ?? string.Empty).Trim();
         var slash = normalized.IndexOf('/');
+        var fc = NormalizeFc(functionalConstraint);
         if (slash <= 0 || slash >= normalized.Length - 1)
         {
             return new Iec61850ExactProbeEvidence
             {
                 Status = Iec61850ExactProbeStatus.InvalidTarget,
                 MmsReference = normalized,
-                FunctionalConstraint = NormalizeFc(functionalConstraint),
+                FunctionalConstraint = fc,
                 Message = "Exact MMS target is invalid; expected domain/item form."
             };
         }
 
-        var fc = NormalizeFc(functionalConstraint);
-        var target = new MmsObjectReference(normalized[..slash], normalized[(slash + 1)..], fc);
-        var result = await _session.ReadSingleVariableAsync(target, cancellationToken).ConfigureAwait(false);
-
-        if (result.IsSuccess)
+        if (!_session.IsMmsInitiated)
         {
             return new Iec61850ExactProbeEvidence
             {
-                Status = Iec61850ExactProbeStatus.Readable,
+                Status = Iec61850ExactProbeStatus.TransportFailure,
                 MmsReference = normalized,
                 FunctionalConstraint = fc,
-                ValueSummary = result.Value is null ? string.Empty : MmsDataValueRenderer.ToCompactString(result.Value),
-                Message = result.Message
+                Message = $"Native MMS session is not initiated; current state={_session.State}."
             };
         }
 
-        var status = !_session.IsMmsInitiated
-            ? Iec61850ExactProbeStatus.TransportFailure
-            : result.FailureCode switch
-            {
-                4 or 10 => Iec61850ExactProbeStatus.Absent,
-                5 => Iec61850ExactProbeStatus.InvalidTarget,
-                _ => Iec61850ExactProbeStatus.Unreadable
-            };
-
-        return new Iec61850ExactProbeEvidence
+        try
         {
-            Status = status,
-            MmsReference = normalized,
-            FunctionalConstraint = fc,
-            FailureCode = result.FailureCode,
-            Message = result.Message
-        };
+            var target = new MmsObjectReference(normalized[..slash], normalized[(slash + 1)..], fc);
+            var result = await _session.ReadSingleVariableAsync(target, cancellationToken).ConfigureAwait(false);
+            var status = Iec61850ExactProbeOutcomeClassifier.Classify(result, _session.IsMmsInitiated);
+
+            return new Iec61850ExactProbeEvidence
+            {
+                Status = status,
+                MmsReference = normalized,
+                FunctionalConstraint = fc,
+                FailureCode = result.FailureCode,
+                ValueSummary = result.IsSuccess && result.Value is not null
+                    ? MmsDataValueRenderer.ToCompactString(result.Value)
+                    : string.Empty,
+                Message = result.Message
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
+        {
+            return new Iec61850ExactProbeEvidence
+            {
+                Status = Iec61850ExactProbeStatus.TransportFailure,
+                MmsReference = normalized,
+                FunctionalConstraint = fc,
+                Message = $"Exact MMS probe transport/session failure: {ex.GetType().Name}: {ex.Message}"
+            };
+        }
     }
 
     private static string NormalizeFc(string? value)
@@ -135,10 +147,23 @@ public sealed class Iec61850DesignLiveReconciliationOptions
     public bool ProbeAllMissingDesignAttributes { get; init; }
 
     /// <summary>
+    /// Match engine-owned semantic sibling references in native discovery before any
+    /// network read. This avoids unnecessary probes and duplicate LiveOnly evidence.
+    /// </summary>
+    public bool MatchKnownAlternateReferencesInDiscovery { get; init; } = true;
+
+    /// <summary>
     /// Try only engine-owned, bounded semantic sibling candidates after a canonical target
     /// is not readable. Vendor/domain aliases are deliberately excluded until evidenced.
     /// </summary>
     public bool ProbeKnownAlternateReferences { get; init; } = true;
+
+    /// <summary>
+    /// Maximum number of design points that may enter exact probe processing in one
+    /// reconciliation pass. Probes remain sequential; a value of zero disables probing.
+    /// Deferred points remain DesignOnly and can never become Absent from budget exhaustion.
+    /// </summary>
+    public int MaxProbeTargetCount { get; init; } = 128;
 }
 
 public sealed class Iec61850DesignLivePointReconciliation
@@ -147,6 +172,7 @@ public sealed class Iec61850DesignLivePointReconciliation
     public string MmsReference { get; init; } = string.Empty;
     public string CanonicalMmsReference { get; init; } = string.Empty;
     public string EffectiveMmsReference { get; init; } = string.Empty;
+    public Iec61850AlternateReferenceStrategyKind? AlternateStrategy { get; init; }
     public string FunctionalConstraint { get; init; } = string.Empty;
     public string SclBType { get; init; } = string.Empty;
     public string MmsType { get; init; } = string.Empty;
@@ -160,6 +186,7 @@ public sealed class Iec61850DesignLivePointReconciliation
     public string ObservedFunctionalConstraint { get; init; } = string.Empty;
     public Iec61850ExactProbeEvidence? Probe { get; init; }
     public IReadOnlyList<Iec61850ProbeAttemptEvidence> ProbeAttempts { get; init; } = Array.Empty<Iec61850ProbeAttemptEvidence>();
+    public bool ProbeDeferredByBudget { get; init; }
     public IReadOnlyList<string> Evidence { get; init; } = Array.Empty<string>();
 }
 
@@ -172,6 +199,7 @@ public sealed class Iec61850DesignLiveCoverageDiagnostics
     public int DirectlyMatchedCount { get; init; }
     public int RecoveredByProbeCount { get; init; }
     public int RecoveredByAlternateProbeCount { get; init; }
+    public int RecoveredByAlternateDiscoveryCount { get; init; }
     public int ReadableCount { get; init; }
     public int DesignOnlyCount { get; init; }
     public int InvalidTargetCount { get; init; }
@@ -182,15 +210,18 @@ public sealed class Iec61850DesignLiveCoverageDiagnostics
     public int TypeMismatchCount { get; init; }
     public int AmbiguousCount { get; init; }
     public int UnresolvedDesignCount { get; init; }
+    public int ProbeBudgetDeferredCount { get; init; }
     public int MandatoryPrimaryDirectlyMatchedCount { get; init; }
     public int MandatoryPrimaryRecoveredByProbeCount { get; init; }
     public int MandatoryPrimaryRecoveredByAlternateProbeCount { get; init; }
+    public int MandatoryPrimaryRecoveredByAlternateDiscoveryCount { get; init; }
     public int MandatoryPrimaryReadableCount { get; init; }
     public int MandatoryPrimaryDesignOnlyCount { get; init; }
     public int MandatoryPrimaryInvalidTargetCount { get; init; }
     public int MandatoryPrimaryUnreadableCount { get; init; }
     public int MandatoryPrimaryAbsentCount { get; init; }
     public int MandatoryPrimaryTransportFailureCount { get; init; }
+    public int MandatoryPrimaryProbeBudgetDeferredCount { get; init; }
 
     public bool HasConfirmedMandatoryAbsence => MandatoryPrimaryAbsentCount > 0;
 
@@ -208,12 +239,17 @@ public sealed class Iec61850DesignLiveCoverageDiagnostics
         static int Count(IReadOnlyCollection<Iec61850DesignLivePointReconciliation> source, Iec61850DesignLiveStatus status)
             => source.Count(x => x.Status == status);
 
+        static int BudgetDeferred(IReadOnlyCollection<Iec61850DesignLivePointReconciliation> source)
+            => source.Count(x => x.ProbeDeferredByBudget);
+
         var directlyMatched = Direct(design);
         var recovered = Count(design, Iec61850DesignLiveStatus.RecoveredByProbe);
         var recoveredAlternate = Count(design, Iec61850DesignLiveStatus.RecoveredByAlternateProbe);
+        var recoveredAlternateDiscovery = Count(design, Iec61850DesignLiveStatus.RecoveredByAlternateDiscovery);
         var mandatoryDirect = Direct(primary);
         var mandatoryRecovered = Count(primary, Iec61850DesignLiveStatus.RecoveredByProbe);
         var mandatoryRecoveredAlternate = Count(primary, Iec61850DesignLiveStatus.RecoveredByAlternateProbe);
+        var mandatoryRecoveredAlternateDiscovery = Count(primary, Iec61850DesignLiveStatus.RecoveredByAlternateDiscovery);
 
         return new Iec61850DesignLiveCoverageDiagnostics
         {
@@ -224,7 +260,8 @@ public sealed class Iec61850DesignLiveCoverageDiagnostics
             DirectlyMatchedCount = directlyMatched,
             RecoveredByProbeCount = recovered,
             RecoveredByAlternateProbeCount = recoveredAlternate,
-            ReadableCount = directlyMatched + recovered + recoveredAlternate,
+            RecoveredByAlternateDiscoveryCount = recoveredAlternateDiscovery,
+            ReadableCount = directlyMatched + recovered + recoveredAlternate + recoveredAlternateDiscovery,
             DesignOnlyCount = Count(design, Iec61850DesignLiveStatus.DesignOnly),
             InvalidTargetCount = Count(design, Iec61850DesignLiveStatus.InvalidTarget),
             UnreadableCount = Count(design, Iec61850DesignLiveStatus.Unreadable),
@@ -234,15 +271,18 @@ public sealed class Iec61850DesignLiveCoverageDiagnostics
             TypeMismatchCount = Count(design, Iec61850DesignLiveStatus.TypeMismatch),
             AmbiguousCount = Count(design, Iec61850DesignLiveStatus.Ambiguous),
             UnresolvedDesignCount = Count(design, Iec61850DesignLiveStatus.UnresolvedDesign),
+            ProbeBudgetDeferredCount = BudgetDeferred(design),
             MandatoryPrimaryDirectlyMatchedCount = mandatoryDirect,
             MandatoryPrimaryRecoveredByProbeCount = mandatoryRecovered,
             MandatoryPrimaryRecoveredByAlternateProbeCount = mandatoryRecoveredAlternate,
-            MandatoryPrimaryReadableCount = mandatoryDirect + mandatoryRecovered + mandatoryRecoveredAlternate,
+            MandatoryPrimaryRecoveredByAlternateDiscoveryCount = mandatoryRecoveredAlternateDiscovery,
+            MandatoryPrimaryReadableCount = mandatoryDirect + mandatoryRecovered + mandatoryRecoveredAlternate + mandatoryRecoveredAlternateDiscovery,
             MandatoryPrimaryDesignOnlyCount = Count(primary, Iec61850DesignLiveStatus.DesignOnly),
             MandatoryPrimaryInvalidTargetCount = Count(primary, Iec61850DesignLiveStatus.InvalidTarget),
             MandatoryPrimaryUnreadableCount = Count(primary, Iec61850DesignLiveStatus.Unreadable),
             MandatoryPrimaryAbsentCount = Count(primary, Iec61850DesignLiveStatus.Absent),
-            MandatoryPrimaryTransportFailureCount = Count(primary, Iec61850DesignLiveStatus.TransportFailure)
+            MandatoryPrimaryTransportFailureCount = Count(primary, Iec61850DesignLiveStatus.TransportFailure),
+            MandatoryPrimaryProbeBudgetDeferredCount = BudgetDeferred(primary)
         };
     }
 }
@@ -258,11 +298,13 @@ public sealed class Iec61850DesignLiveReconciliationDocument
     public int DirectlyMatchedCount => Coverage.DirectlyMatchedCount;
     public int RecoveredByProbeCount => Coverage.RecoveredByProbeCount;
     public int RecoveredByAlternateProbeCount => Coverage.RecoveredByAlternateProbeCount;
+    public int RecoveredByAlternateDiscoveryCount => Coverage.RecoveredByAlternateDiscoveryCount;
     public int InvalidTargetCount => Coverage.InvalidTargetCount;
     public int UnreadableCount => Coverage.UnreadableCount;
     public int AbsentCount => Coverage.AbsentCount;
     public int TransportFailureCount => Coverage.TransportFailureCount;
     public int DesignOnlyCount => Coverage.DesignOnlyCount;
+    public int ProbeBudgetDeferredCount => Coverage.ProbeBudgetDeferredCount;
 
     public bool HasConfirmedAbsence => AbsentCount > 0;
 }

@@ -262,7 +262,7 @@ public static class MmsFileDirectoryResponseDecoder
             }
         }
 
-        var normalizedName = NormalizeFileNameComponents(fileNameComponents);
+        var normalizedName = NormalizeReturnedPath(NormalizeFileNameComponents(fileNameComponents));
         if (string.IsNullOrWhiteSpace(normalizedName))
             return null;
 

@@ -4,6 +4,13 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ## Unreleased — public wording, provenance and release assurance
 
+### Added
+
+- Added an engine-owned P2.2 hybrid report acquisition planner that combines typed signal-catalog requests with fresh RCB availability and DataSet-directory evidence.
+- Added partial static BRCB/URCB coverage planning, bounded dynamic BRCB/URCB planning for the remaining exactly resolved signals, and residual-only MMS polling fallback.
+- Added typed RCB capability diagnostics, acquisition segments, per-signal assignments, report activation intent, write requirements, warnings, and blockers.
+- Added fail-closed regression coverage for caller-owned report reuse, busy/unknown RCB rejection, explicit URCB/BRCB reservation evidence, alternate effective MMS references, and polling-disabled uncovered signals.
+
 ### Changed
 
 - Corrected website structured-data licensing to `GPL-3.0-or-later`.

@@ -77,7 +77,7 @@ public static class Iec61850FaultRecordInteroperableDownloader
                                  bufferSize: 64 * 1024,
                                  useAsync: true))
                 {
-                    var transfer = await session.DownloadFileCanonicalPathRecoveredAsync(
+                    var transfer = await session.DownloadFileObservedDirectoryIdentityRecoveredAsync(
                         file.RemotePath,
                         output,
                         new MmsFileTransferOptions

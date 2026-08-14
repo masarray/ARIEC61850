@@ -6,6 +6,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Added
 
+- Added a typed hybrid report acquisition planner that can cover requested signals with safe static BRCB/URCB plans, use explicitly free dynamic report slots for residual signals, and leave only the remaining points on MMS polling fallback without equating fallback with absence.
 - Added typed IEC 61850 UTC-Time forensic evidence with exact preserved 8-byte wire provenance, the original 24-bit fractional-second field, TimeQuality/accuracy decoding, and explicit full/engineering UTC and local-offset views.
 - Added report timestamp evidence that keeps IED data timestamps, report `TimeOfEntry`, and client `ReceivedAt` as distinct evidence sources; raw `TimeOfEntry` provenance is linked only when an exact decoded-report match exists.
 

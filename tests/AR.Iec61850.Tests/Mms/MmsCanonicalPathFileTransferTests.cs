@@ -74,10 +74,10 @@ public sealed class MmsCanonicalPathFileTransferTests
         Assert.Equal(72, service.TagNumber);
 
         var fields = BerReader.ReadChildren(service.Value);
-        var fileName = Assert.Single(fields.Where(field =>
+        var fileName = Assert.Single(fields, field =>
             field.Class == BerClass.ContextSpecific &&
             field.Constructed &&
-            field.TagNumber == 0));
+            field.TagNumber == 0);
 
         return BerReader.ReadChildren(fileName.Value)
             .Select(item =>

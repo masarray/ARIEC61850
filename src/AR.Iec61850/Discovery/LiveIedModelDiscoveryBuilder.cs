@@ -24,7 +24,7 @@ public static class LiveIedModelDiscoveryBuilder
         ArgumentNullException.ThrowIfNull(options);
 
         var primaryDirectory = discovery.IedDirectory;
-        var dataSetDirectoryMap = (dataSetDirectories ?? Array.Empty<MmsDataSetDirectoryResult>())
+        var dataSetDirectoryMap = (dataSetDirectories ?? discovery.DataSetDirectories)
             .Where(x => !string.IsNullOrWhiteSpace(x.DataSetReference))
             .GroupBy(x => x.DataSetReference, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);

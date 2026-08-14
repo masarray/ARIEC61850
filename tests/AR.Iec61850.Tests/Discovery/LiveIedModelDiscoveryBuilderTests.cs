@@ -114,7 +114,28 @@ public sealed class LiveIedModelDiscoveryBuilderTests
         var result = new MmsDiscoveryResult
         {
             IedDirectory = directory,
-            ReportInventory = new MmsReportInventory()
+            ReportInventory = new MmsReportInventory(),
+            DataSetDirectories =
+            [
+                new MmsDataSetDirectoryResult
+                {
+                    IsSuccess = true,
+                    DataSetReference = "LD0/LLN0.DataSet",
+                    Members =
+                    [
+                        new MmsDataSetDirectoryMember
+                        {
+                            Domain = "LD0",
+                            LogicalNode = "A50PTOC1",
+                            FunctionalConstraint = "ST",
+                            DataObjectPath = "Op",
+                            UserReference = "LD0/A50PTOC1.Op",
+                            MmsItemName = "A50PTOC1$ST$Op",
+                            Confidence = 100
+                        }
+                    ]
+                }
+            ]
         };
         result.ReportInventory.DataSets.Add(new MmsDataSetCandidate
         {
@@ -132,26 +153,7 @@ public sealed class LiveIedModelDiscoveryBuilderTests
             Buffered = true,
             DataSetReference = "LD0/LLN0.DataSet"
         });
-        var dataSetDirectory = new MmsDataSetDirectoryResult
-        {
-            IsSuccess = true,
-            DataSetReference = "LD0/LLN0.DataSet",
-            Members =
-            [
-                new MmsDataSetDirectoryMember
-                {
-                    Domain = "LD0",
-                    LogicalNode = "A50PTOC1",
-                    FunctionalConstraint = "ST",
-                    DataObjectPath = "Op",
-                    UserReference = "LD0/A50PTOC1.Op",
-                    MmsItemName = "A50PTOC1$ST$Op",
-                    Confidence = 100
-                }
-            ]
-        };
-
-        var document = LiveIedModelDiscoveryBuilder.Build(result, new LiveIedModelDiscoveryBuildOptions(), [dataSetDirectory]);
+        var document = LiveIedModelDiscoveryBuilder.Build(result, new LiveIedModelDiscoveryBuildOptions());
 
         Assert.Single(document.DataSets);
         Assert.Equal(1, document.DataSets[0].MemberCount);

@@ -83,7 +83,9 @@ public sealed partial class MmsClientSession : IAsyncDisposable
     public async Task<MmsDiscoveryResult> DiscoverAsync(
         bool probeReportAttributes = true,
         int maxReportAttributeProbes = 32,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool readDataSetDirectories = false,
+        int maxDataSetDirectoryReads = 64)
     {
         EnsureMmsReady();
 
@@ -100,12 +102,37 @@ public sealed partial class MmsClientSession : IAsyncDisposable
         if (probeReportAttributes)
             await EnrichReportInventoryAsync(inventory, Math.Max(0, maxReportAttributeProbes), cancellationToken).ConfigureAwait(false);
 
+        var dataSetReferences = readDataSetDirectories
+            ? inventory.DataSets
+                .Select(dataSet => dataSet.Reference)
+                .Where(reference => !string.IsNullOrWhiteSpace(reference))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(Math.Clamp(maxDataSetDirectoryReads, 0, 4096))
+                .ToArray()
+            : Array.Empty<string>();
+        var dataSetDirectories = dataSetReferences.Length == 0
+            ? Array.Empty<MmsDataSetDirectoryResult>()
+            : (await GetDataSetDirectoriesAsync(
+                    dataSetReferences,
+                    iedDirectory,
+                    cancellationToken)
+                .ConfigureAwait(false))
+                .ToArray();
+        var successfulDataSetDirectories = dataSetDirectories.Count(directory => directory.IsSuccess);
+        var discoveredDataSetMembers = dataSetDirectories
+            .Where(directory => directory.IsSuccess)
+            .Sum(directory => directory.Members.Count);
+        var dataSetDirectorySummary = readDataSetDirectories
+            ? $"dataset directories={successfulDataSetDirectories}/{dataSetDirectories.Length}, dataset members={discoveredDataSetMembers}"
+            : "dataset directories=not requested";
+
         return new MmsDiscoveryResult
         {
             Snapshot = snapshot,
             ReportInventory = inventory,
             IedDirectory = iedDirectory,
-            Summary = $"Native MMS GetNameList discovery: LD={snapshot.DomainCount}, raw variables={snapshot.RawVariableCount}, FC-points={iedDirectory.PointCount}, datasets={inventory.DataSets.Count}, RCB={inventory.ReportControls.Count} (BRCB={inventory.BufferedCount}, URCB={inventory.UnbufferedCount}). {LastDiscoveryAttemptSummary}"
+            DataSetDirectories = dataSetDirectories,
+            Summary = $"Native MMS GetNameList discovery: LD={snapshot.DomainCount}, raw variables={snapshot.RawVariableCount}, FC-points={iedDirectory.PointCount}, datasets={inventory.DataSets.Count}, {dataSetDirectorySummary}, RCB={inventory.ReportControls.Count} (BRCB={inventory.BufferedCount}, URCB={inventory.UnbufferedCount}). {LastDiscoveryAttemptSummary}"
         };
     }
 

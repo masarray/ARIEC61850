@@ -114,6 +114,27 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
     }
 
     [Fact]
+    public void DynamicResidual_CanUseRcbHostedInDifferentLogicalDevice()
+    {
+        var signal = Signal(
+            "LD_MEAS/MMXU1.Hz.mag.f",
+            "LD_MEAS/MMXU1$MX$Hz$mag$f",
+            "MX");
+        var inventory = Inventory(Rcb("LD_ADD/LLN0.RP.D01", false, string.Empty));
+        var availability = Availability(DynamicEmpty("LD_ADD/LLN0.RP.D01", false));
+        var directory = Directory(Point("LD_MEAS", "MMXU1", "MX", "Hz.mag.f", "MMXU1$MX$Hz$mag$f"));
+
+        var plan = Build([signal], inventory, availability, directory);
+
+        Assert.Equal(MmsHybridAcquisitionPlanStatus.FullReportCoverage, plan.Status);
+        Assert.Equal(1, plan.DynamicUrcbSignalCount);
+        var segment = Assert.Single(plan.Segments);
+        Assert.Equal("LD_ADD/LLN0.AR_HYB_01", segment.DataSetReference);
+        var point = Assert.Single(segment.ReportPlan?.DynamicPoints ?? Array.Empty<MmsFcResolvedPoint>());
+        Assert.Equal("LD_MEAS", point.Domain);
+    }
+
+    [Fact]
     public void BusyAndReservationUnknownDynamicRcbs_AreNeverClaimed()
     {
         var signal = Signal("LD0/GGIO1.Ind1.stVal", "LD0/GGIO1$ST$Ind1$stVal", "ST");

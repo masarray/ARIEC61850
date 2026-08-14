@@ -12,7 +12,7 @@ public static class Iec61850EngineeringProfileBuilder
         ArgumentNullException.ThrowIfNull(discovery);
 
         options ??= new Iec61850EngineeringProfileOptions();
-        var directories = (dataSetDirectories ?? Array.Empty<MmsDataSetDirectoryResult>()).ToArray();
+        var directories = (dataSetDirectories ?? discovery.DataSetDirectories).ToArray();
         var readiness = MmsReportReadinessPlanner.Build(discovery.ReportInventory);
         var diagnostics = BuildDiagnostics(discovery, directories, readiness).ToArray();
         var capabilities = BuildCapabilities(discovery, directories, readiness).ToArray();

@@ -215,15 +215,41 @@ public static class SclLiveModelProjectionBuilder
             LogicalNode = dataSet.LogicalNodePath,
             Name = dataSet.Name,
             MemberCount = dataSet.Entries.Count,
-            Members = dataSet.Entries.Select(x => new LiveIedDataSetMemberModel
+            Members = dataSet.Entries.Select(x =>
             {
-                Index = x.Index,
-                Reference = x.SignalReference,
-                FunctionalConstraint = x.Fc,
-                MmsReference = x.SignalReference,
-                Confidence = x.BType.Length > 0 || x.Cdc.Length > 0 ? LiveIedDiscoveryConfidenceLevel.Exact : LiveIedDiscoveryConfidenceLevel.Medium
+                var canonicalReference = BuildCanonicalDataSetMemberReference(dataSet, x);
+                return new LiveIedDataSetMemberModel
+                {
+                    Index = x.Index,
+                    Reference = canonicalReference,
+                    FunctionalConstraint = x.Fc,
+                    MmsReference = canonicalReference,
+                    Confidence = x.BType.Length > 0 || x.Cdc.Length > 0 ? LiveIedDiscoveryConfidenceLevel.Exact : LiveIedDiscoveryConfidenceLevel.Medium
+                };
             }).ToArray()
         };
+
+    private static string BuildCanonicalDataSetMemberReference(SclDataSet dataSet, SclDataSetEntry entry)
+    {
+        var iedName = FirstNonEmpty(entry.IedName, dataSet.IedName).Trim();
+        var ldInst = FirstNonEmpty(entry.LdInst, dataSet.LdInst).Trim();
+        var logicalNode = BuildLnName(entry.Prefix, entry.LnClass, entry.LnInst);
+        var doName = (entry.DoName ?? string.Empty).Trim();
+        var daName = (entry.DaName ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(iedName) ||
+            string.IsNullOrWhiteSpace(ldInst) ||
+            string.IsNullOrWhiteSpace(logicalNode) ||
+            string.IsNullOrWhiteSpace(doName))
+        {
+            return entry.SignalReference;
+        }
+
+        var objectReference = string.Concat(iedName, ldInst, "/", logicalNode, ".", doName);
+        return string.IsNullOrWhiteSpace(daName)
+            ? objectReference
+            : string.Concat(objectReference, ".", daName);
+    }
 
     private static LiveIedReportControlModel ToLiveReportControl(SclReportControl report)
         => new()

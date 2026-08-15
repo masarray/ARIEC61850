@@ -5,8 +5,9 @@ namespace AR.Iec61850.Discovery;
 ///
 /// A DataSet member is protocol evidence even when the IED exposes it only as an FCD
 /// (DataObject-level member) and attribute-level type information is not available yet.
-/// Resolved primary-value descriptors are preferred. Any remaining DataSet member is
-/// preserved as an unresolved mandatory descriptor instead of being silently dropped.
+/// The inventory is deliberately member-centric: one static DataSet member produces one
+/// mandatory selector descriptor. A unique resolved primary DataAttribute is attached as
+/// runtime binding metadata; it never replaces the original DataSet member identity.
 /// </summary>
 public static class Iec61850DataSetSignalInventoryProjection
 {
@@ -17,37 +18,122 @@ public static class Iec61850DataSetSignalInventoryProjection
         ArgumentNullException.ThrowIfNull(design);
 
         var catalog = Iec61850SignalCatalogBuilder.Build(design, reconciliation);
-        var result = catalog.GetMandatoryPrimarySignals().ToList();
-        var coveredMembers = result
-            .SelectMany(signal => signal.DataSetMemberships)
-            .Select(MembershipKey)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var primaryByMember = catalog.GetMandatoryPrimarySignals()
+            .SelectMany(signal => signal.DataSetMemberships
+                .Where(membership => membership.IsPrimaryValueForMember)
+                .Select(membership => new
+                {
+                    Key = MembershipKey(membership),
+                    Signal = signal
+                }))
+            .GroupBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.Signal).Distinct().ToArray(),
+                StringComparer.OrdinalIgnoreCase);
 
-        foreach (var dataSet in design.DataSets
-                     .OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase))
+        var result = new List<Iec61850SignalDescriptor>();
+        foreach (var dataSet in design.DataSets.OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase))
         {
             foreach (var member in dataSet.Members.OrderBy(x => x.Index))
             {
                 var key = MembershipKey(dataSet.Reference, member.Index);
-                if (coveredMembers.Contains(key))
+                if (primaryByMember.TryGetValue(key, out var candidates) && candidates.Length == 1)
+                {
+                    result.Add(ProjectResolvedMemberDescriptor(candidates[0], dataSet, member));
                     continue;
+                }
 
-                result.Add(BuildUnresolvedMemberDescriptor(design, dataSet, member));
-                coveredMembers.Add(key);
+                var reason = candidates is { Length: > 1 }
+                    ? $"Static DataSet member {dataSet.Reference}[{member.Index}] has {candidates.Length} primary-value candidates; the member identity is preserved without guessing a runtime leaf."
+                    : $"Static DataSet member {dataSet.Reference}[{member.Index}] has no unique primary DataAttribute; the member identity is preserved in the signal inventory.";
+                result.Add(BuildUnresolvedMemberDescriptor(design, dataSet, member, reason));
             }
         }
 
-        return result
-            .OrderBy(signal => signal.DataSetMemberships.FirstOrDefault()?.DataSetReference, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(signal => signal.DataSetMemberships.FirstOrDefault()?.MemberIndex ?? int.MaxValue)
-            .ThenBy(SortReference, StringComparer.OrdinalIgnoreCase)
+        return result.ToArray();
+    }
+
+    private static Iec61850SignalDescriptor ProjectResolvedMemberDescriptor(
+        Iec61850SignalDescriptor source,
+        LiveIedDataSetModel dataSet,
+        LiveIedDataSetMemberModel member)
+    {
+        var memberReference = NormalizeReference(member.Reference);
+        var sourceMembership = source.DataSetMemberships.FirstOrDefault(membership =>
+            string.Equals(
+                MembershipKey(membership),
+                MembershipKey(dataSet.Reference, member.Index),
+                StringComparison.OrdinalIgnoreCase));
+        var functionalConstraint = (member.FunctionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
+        var membership = new Iec61850SignalDataSetMembership
+        {
+            DataSetReference = dataSet.Reference,
+            MemberIndex = member.Index,
+            OriginalMemberReference = member.Reference,
+            CanonicalMemberReference = memberReference,
+            FunctionalConstraint = FirstNonEmpty(sourceMembership?.FunctionalConstraint, functionalConstraint),
+            Cdc = FirstNonEmpty(sourceMembership?.Cdc, source.Cdc),
+            ResolutionStatus = sourceMembership?.ResolutionStatus ?? LiveIedDataSetMemberResolutionStatus.Unresolved,
+            IsPrimaryValueForMember = true
+        };
+        var reports = source.ReportMemberships
+            .Where(report => ReferenceEquals(report.DataSetReference, dataSet.Reference))
             .ToArray();
+        var evidence = source.Evidence
+            .Concat(new[]
+            {
+                new Iec61850SignalEvidence
+                {
+                    Kind = Iec61850SignalEvidenceKind.DataSetSemanticBinding,
+                    SourceReference = memberReference,
+                    Message = $"Static DataSet member {dataSet.Reference}[{member.Index}] keeps its original FCD/FCDA identity; runtime primary binding is '{FirstNonEmpty(source.PrimaryValueReference, source.DesignReference)}'."
+                }
+            })
+            .ToArray();
+
+        return new Iec61850SignalDescriptor
+        {
+            DesignReference = source.DesignReference,
+            ObservedReference = source.ObservedReference,
+            CanonicalMmsReference = source.CanonicalMmsReference,
+            EffectiveMmsReference = source.EffectiveMmsReference,
+            ObservedMmsReference = source.ObservedMmsReference,
+            FunctionalConstraint = FirstNonEmpty(source.FunctionalConstraint, functionalConstraint),
+            Cdc = source.Cdc,
+            SclBType = source.SclBType,
+            MmsType = source.MmsType,
+            MmsDomain = source.MmsDomain,
+            LogicalDevice = source.LogicalDevice,
+            LogicalNode = source.LogicalNode,
+            LogicalNodeClass = source.LogicalNodeClass,
+            DataObject = source.DataObject,
+            DataObjectReference = source.DataObjectReference,
+            DataAttributePath = source.DataAttributePath,
+            SemanticRole = source.SemanticRole,
+            PrimaryValueReference = FirstNonEmpty(source.PrimaryValueReference, source.DesignReference),
+            PrimaryValueMmsReference = FirstNonEmpty(source.PrimaryValueMmsReference, source.CanonicalMmsReference),
+            QualityReference = source.QualityReference,
+            QualityMmsReference = source.QualityMmsReference,
+            TimestampReference = source.TimestampReference,
+            TimestampMmsReference = source.TimestampMmsReference,
+            DataSetMemberships = new[] { membership },
+            ReportMemberships = reports,
+            IsStaticDataSetMandatory = true,
+            IsOperationalCandidate = source.IsOperationalCandidate,
+            IsEngineeringOnly = false,
+            ResolutionStatus = source.ResolutionStatus,
+            LiveStatus = source.LiveStatus,
+            AlternateStrategy = source.AlternateStrategy,
+            Evidence = evidence
+        };
     }
 
     private static Iec61850SignalDescriptor BuildUnresolvedMemberDescriptor(
         LiveIedModelDiscoveryDocument design,
         LiveIedDataSetModel dataSet,
-        LiveIedDataSetMemberModel member)
+        LiveIedDataSetMemberModel member,
+        string? evidenceMessage = null)
     {
         var memberReference = NormalizeReference(member.Reference);
         var context = FindDataObjectContext(design, memberReference);
@@ -59,7 +145,7 @@ public static class Iec61850DataSetSignalInventoryProjection
         {
             DataSetReference = dataSet.Reference,
             MemberIndex = member.Index,
-            OriginalMemberReference = memberReference,
+            OriginalMemberReference = member.Reference,
             CanonicalMemberReference = memberReference,
             FunctionalConstraint = functionalConstraint,
             Cdc = context?.DataObject.InferredCdc ?? string.Empty,
@@ -110,7 +196,7 @@ public static class Iec61850DataSetSignalInventoryProjection
                 {
                     Kind = Iec61850SignalEvidenceKind.DataSetSemanticBinding,
                     SourceReference = memberReference,
-                    Message = $"Static DataSet member {dataSet.Reference}[{member.Index}] is preserved in the signal inventory although no unique primary DataAttribute has been resolved yet."
+                    Message = evidenceMessage ?? $"Static DataSet member {dataSet.Reference}[{member.Index}] is preserved in the signal inventory although no unique primary DataAttribute has been resolved yet."
                 }
             }
         };
@@ -200,13 +286,6 @@ public static class Iec61850DataSetSignalInventoryProjection
         var secondDot = reference.IndexOf('.', firstDot + 1);
         return secondDot < 0 ? reference : reference[..secondDot];
     }
-
-    private static string SortReference(Iec61850SignalDescriptor signal)
-        => FirstNonEmpty(
-            signal.DesignReference,
-            signal.CanonicalMmsReference,
-            signal.EffectiveMmsReference,
-            signal.ObservedReference);
 
     private static string MembershipKey(Iec61850SignalDataSetMembership membership)
         => MembershipKey(membership.DataSetReference, membership.MemberIndex);

@@ -43,7 +43,7 @@ public sealed class MmsReportValueProjectorTests
         Assert.Empty(projection.Warnings);
         Assert.Contains(projection.Updates, x => x.Reference == "LD0/A50PTOC1.Str.general" && x.Value == "true" && x.Quality == "good");
         Assert.Contains(projection.Updates, x => x.Reference == "LD0/A50PTOC1.Str.phsA" && x.Value == "true" && x.Timestamp.Contains("2026-06-13", StringComparison.Ordinal));
-        Assert.DoesNotContain(projection.Updates, x => x.Value.StartsWith("Struct(", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projection.Updates, x => x.Value.StartsWith("Structure(", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public sealed class MmsReportValueProjectorTests
         var update = Assert.Single(projection.Updates);
 
         Assert.Equal("LD0/MMXU1.CustomValue", update.Reference);
-        Assert.StartsWith("Struct(", update.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("Structure(", update.Value, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(projection.Warnings, warning => warning.Contains("REPORT_RAW_STRUCT", StringComparison.OrdinalIgnoreCase));
         Assert.False(update.IsProjectedChild);
         Assert.Equal("direct", update.ProjectionStatus);

@@ -187,7 +187,7 @@ public sealed class MmsReportValueProjectorTests
         var update = Assert.Single(projection.Updates);
 
         Assert.Equal("LD0/MMXU1.CustomValue", update.Reference);
-        Assert.StartsWith("Struct(", update.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.True(update.Value.StartsWith("Struct(", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(projection.Warnings, warning => warning.Contains("REPORT_RAW_STRUCT", StringComparison.OrdinalIgnoreCase));
         Assert.False(update.IsProjectedChild);
         Assert.Equal("direct", update.ProjectionStatus);

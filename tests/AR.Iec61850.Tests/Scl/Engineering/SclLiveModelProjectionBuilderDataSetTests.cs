@@ -18,8 +18,8 @@ public sealed class SclLiveModelProjectionBuilderDataSetTests
         Assert.Equal("AA1C1F13R4ADD/GGIO6.CBOpnd", objectLevel.Reference);
         Assert.Equal("AA1C1F13R4ADD/GGIO6.CBOpnd", objectLevel.MmsReference);
         Assert.Equal("ST", objectLevel.FunctionalConstraint);
-        Assert.DoesNotContain("[ST]", objectLevel.Reference, StringComparison.Ordinal);
-        Assert.DoesNotEndWith(".stVal", objectLevel.Reference, StringComparison.Ordinal);
+        Assert.DoesNotContain("[ST]", objectLevel.Reference);
+        Assert.False(objectLevel.Reference.EndsWith(".stVal", StringComparison.Ordinal));
 
         var explicitLeaf = dataSet.Members[1];
         Assert.Equal("AA1C1F13R4ADD/GGIO6.Other.stVal", explicitLeaf.Reference);

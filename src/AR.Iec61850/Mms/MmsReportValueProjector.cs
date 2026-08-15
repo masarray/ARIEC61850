@@ -233,7 +233,7 @@ public static class MmsReportValueProjector
         }
 
         var display = DisplayScalar(reference, value);
-        if (display.StartsWith("Struct(", StringComparison.OrdinalIgnoreCase) || display.StartsWith("Array(", StringComparison.OrdinalIgnoreCase))
+        if (display.StartsWith("Structure(", StringComparison.OrdinalIgnoreCase) || display.StartsWith("Array(", StringComparison.OrdinalIgnoreCase))
             warnings.Add($"REPORT_RAW_STRUCT: {reference} was not recognized by the report value projector; showing compact raw summary.");
 
         yield return new MmsReportProjectedSignalCandidate

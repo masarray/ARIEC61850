@@ -233,7 +233,7 @@ public static class MmsReportValueProjector
         }
 
         var display = DisplayScalar(reference, value);
-        if (display.StartsWith("Struct(", StringComparison.OrdinalIgnoreCase) || display.StartsWith("Array(", StringComparison.OrdinalIgnoreCase))
+        if (display.StartsWith("Structure(", StringComparison.OrdinalIgnoreCase) || display.StartsWith("Array(", StringComparison.OrdinalIgnoreCase))
             warnings.Add($"REPORT_RAW_STRUCT: {reference} was not recognized by the report value projector; showing compact raw summary.");
 
         yield return new MmsReportProjectedSignalCandidate
@@ -312,6 +312,13 @@ public static class MmsReportValueProjector
             }
         }
 
+        // SPS-style status DataObjects are commonly reported as one MMS structure
+        // {stVal BOOLEAN, q Quality, t Timestamp}.  Project only this unambiguous
+        // Boolean shape so measurement structures such as {mag, q, t} remain raw
+        // until schema/type evidence can identify their primary leaf safely.
+        if (TryProjectBooleanStatusStruct(reference, fc, value, reason, receivedAt, out projected))
+            return true;
+
         if (leafName is "A" or "PHV" or "PPV" or "W" or "VAR" or "VA" or "PF")
         {
             var phaseUpdates = ProjectPhaseMeasurement(reference, fc, value, reason, receivedAt).ToArray();
@@ -323,6 +330,52 @@ public static class MmsReportValueProjector
         }
 
         return false;
+    }
+
+    private static bool TryProjectBooleanStatusStruct(
+        string reference,
+        string fc,
+        MmsDataValue value,
+        string reason,
+        DateTimeOffset receivedAt,
+        out IReadOnlyList<MmsReportProjectedSignalCandidate> projected)
+    {
+        projected = Array.Empty<MmsReportProjectedSignalCandidate>();
+        if (value.Children.Count is < 2 or > 3 || value.Children[0].Kind != MmsDataKind.Boolean)
+            return false;
+
+        var quality = Iec61850QualityDecoder.Decode(value.Children[1]);
+        if (!quality.IsDecoded)
+            return false;
+
+        var timestamp = "-";
+        if (value.Children.Count == 3)
+        {
+            var decodedTimestamp = Iec61850TimestampDecoder.Decode(value.Children[2]);
+            if (!decodedTimestamp.IsDecoded)
+                return false;
+            timestamp = decodedTimestamp.DisplayTime;
+        }
+
+        var stValReference = Normalize(reference).EndsWith(".stVal", StringComparison.OrdinalIgnoreCase)
+            ? reference
+            : Combine(reference, "stVal");
+        projected = new[]
+        {
+            new MmsReportProjectedSignalCandidate
+            {
+                Reference = stValReference,
+                FunctionalConstraint = string.IsNullOrWhiteSpace(fc) ? "ST" : fc,
+                Value = DisplayScalar(stValReference, value.Children[0]),
+                Quality = quality.Validity,
+                Timestamp = timestamp,
+                Reason = reason,
+                UpdatedAt = receivedAt,
+                IsProjectedChild = true,
+                ProjectionStatus = "projected-boolean-status"
+            }
+        };
+        return true;
     }
 
     private static IEnumerable<MmsReportProjectedSignalCandidate> ProjectPhaseMeasurement(string reference, string fc, MmsDataValue value, string reason, DateTimeOffset receivedAt)

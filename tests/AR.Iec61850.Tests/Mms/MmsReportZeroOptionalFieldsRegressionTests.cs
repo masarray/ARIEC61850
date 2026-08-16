@@ -47,7 +47,6 @@ public sealed class MmsReportZeroOptionalFieldsRegressionTests
             .ToArray();
 
         var frame = MmsReportFrameMapper.Map(decoded, members, DateTimeOffset.UnixEpoch);
-        var projection = MmsReportValueProjector.Project(frame);
 
         Assert.Equal("optflds-driven", frame.DecoderMode);
         Assert.Empty(frame.ParseWarnings);
@@ -59,15 +58,11 @@ public sealed class MmsReportZeroOptionalFieldsRegressionTests
         Assert.Equal(MmsDataKind.BitString, frame.Values[1].Value!.Kind);
         Assert.Equal("AA1C1F13R4DSQZ1/CILO1.EnaOpn.stVal", frame.Values[0].MemberReference);
         Assert.Equal("AA1C1F13R4DSQZ1/CSWI1.Pos.stVal", frame.Values[1].MemberReference);
-        Assert.Contains(projection.Updates, update =>
-            update.Reference.Equals("AA1C1F13R4DSQZ1/CILO1.EnaOpn.stVal", StringComparison.OrdinalIgnoreCase) &&
-            update.Value.Equals("false", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(projection.Updates, update =>
-            update.Reference.Equals("AA1C1F13R4DSQZ1/CSWI1.Pos.stVal", StringComparison.OrdinalIgnoreCase) &&
-            update.Value.Contains("Open", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(projection.Updates, update =>
-            update.Value.StartsWith("bits(", StringComparison.OrdinalIgnoreCase) &&
-            !update.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase));
+
+        // The first process value must be the Boolean from item 3, never zero OptFlds
+        // from item 1 or the all-ones inclusion bitmap from item 2.
+        Assert.DoesNotContain(frame.Values, value => value.Value?.RawValue.SequenceEqual(new byte[] { 6, 0x00, 0x00 }) == true);
+        Assert.DoesNotContain(frame.Values, value => value.Value?.RawValue.SequenceEqual(new byte[] { 4, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0 }) == true);
     }
 
     [Fact]

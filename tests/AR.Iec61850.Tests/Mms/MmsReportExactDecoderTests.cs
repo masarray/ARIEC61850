@@ -46,6 +46,6 @@ public sealed class MmsReportExactDecoderTests
         Assert.Equal("0000000000000014", frame.Header.EntryIdHex);
         Assert.Equal([0, 1], frame.IncludedDataSetIndexes);
         Assert.Equal(2, frame.Values.Count);
-        Assert.All(frame.Values, value => Assert.Equal(["application-trigger"], value.ReasonForInclusion));
+        Assert.All(frame.Values, value => Assert.Equal(["general-interrogation"], value.ReasonForInclusion));
     }
 }

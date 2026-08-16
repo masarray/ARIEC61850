@@ -308,27 +308,28 @@ public static class MmsReportFrameMapper
         ArgumentNullException.ThrowIfNull(decoded);
         members ??= Array.Empty<MmsDataSetDirectoryMember>();
 
-        var values = TryMapIec61850ReportValues(decoded.Items, members, out var mapped)
-            ? mapped.Values
-            : decoded.Items.Select(item => new MmsReportValue
+        var isMapped = TryMapIec61850ReportValues(decoded.Items, members, out var mapped);
+        var values = isMapped ? mapped.Values : Array.Empty<MmsReportValue>();
+        var parseWarnings = isMapped
+            ? mapped.ParseWarnings
+            : new[]
             {
-                Index = item.Index,
-                Member = item.Index >= 0 && item.Index < members.Count ? members[item.Index] : null,
-                Value = item.Value,
-                FailureCode = item.FailureCode
-            }).ToArray();
+                "REPORT_FRAME_REJECTED: IEC 61850 report metadata/value mapping failed; raw AccessResults were quarantined and were not exposed as process values."
+            };
 
         return new MmsReportFrame
         {
             ReceivedAt = receivedAt,
-            Header = mapped.Header,
+            Header = isMapped ? mapped.Header : DecodeHeader(decoded),
             Values = values,
             RawAccessResultCount = decoded.Items.Count,
             InclusionBitstringItemIndex = mapped.InclusionBitstringItemIndex,
             IncludedDataSetIndexes = mapped.IncludedDataSetIndexes,
-            DecoderMode = mapped.DecoderMode,
-            ParseWarnings = mapped.ParseWarnings,
-            Message = mapped.Message ?? decoded.Message,
+            DecoderMode = isMapped ? mapped.DecoderMode : "rejected-unmapped",
+            ParseWarnings = parseWarnings,
+            Message = isMapped
+                ? mapped.Message ?? decoded.Message
+                : $"IEC 61850 InformationReport rejected for process-value projection: rawAccessResults={decoded.Items.Count}; raw report metadata was quarantined. {decoded.Message}",
             ResponseHexPreview = decoded.ResponseHexPreview
         };
     }
@@ -449,6 +450,13 @@ public static class MmsReportFrameMapper
         if (TryMapOptFldsDrivenReportValues(items, members, out mapping))
             return true;
 
+        // A canonical IEC 61850 report envelope starts with RptID + OptFlds.
+        // If strict OptFlds-driven mapping rejects that frame, never reinterpret
+        // another bit-string as inclusion: doing so can publish OptFlds/inclusion/
+        // reason metadata as process values. Quarantine the frame instead.
+        if (items.Count >= 2 && IsTextValue(items[0].Value) && items[1].Value?.Kind == MmsDataKind.BitString)
+            return false;
+
         for (var index = 5; index < items.Count; index++)
         {
             var item = items[index];
@@ -519,9 +527,10 @@ public static class MmsReportFrameMapper
         if (cursor >= items.Count || items[cursor].Value?.Kind != MmsDataKind.BitString)
             return false;
 
+        // OptFlds is mandatory report framing, but all optional bits may legally
+        // be zero. Zero OptFlds therefore still means the next item is inclusion;
+        // rejecting it here used to fall through to raw AccessResult projection.
         var optionalFields = DecodeOptionalFields(items[cursor].Value!);
-        if (optionalFields.Names.Count == 0 && optionalFields.SetBitIndexes.Count == 0)
-            return false;
 
         cursor++;
         ulong? sequenceNumber = null;
@@ -860,7 +869,9 @@ public static class MmsReportFrameMapper
         var unusedBits = bitString.RawValue[0];
         var dataBytes = bitString.RawValue.Skip(1).ToArray();
         var totalBits = dataBytes.Length * 8 - unusedBits;
-        if (totalBits < memberCount)
+        // Inclusion is defined over the complete DataSet. Exact length prevents a
+        // process/quality/reason bit-string from being mistaken for inclusion.
+        if (totalBits != memberCount)
             return false;
 
         var included = new List<int>();
@@ -955,12 +966,13 @@ public static class MmsReportFrameMapper
     private static string ReasonForInclusionName(int bitIndex)
         => bitIndex switch
         {
-            0 => "data-change",
-            1 => "quality-change",
-            2 => "data-update",
-            3 => "integrity",
-            4 => "general-interrogation",
-            5 => "application-trigger",
+            0 => "reserved",
+            1 => "data-change",
+            2 => "quality-change",
+            3 => "data-update",
+            4 => "integrity",
+            5 => "general-interrogation",
+            6 => "application-trigger",
             _ => $"bit-{bitIndex}"
         };
 

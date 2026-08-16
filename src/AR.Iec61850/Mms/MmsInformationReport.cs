@@ -51,15 +51,16 @@ public static class MmsInformationReportDecoder
                 return Fail("MMS Unconfirmed-PDU has no informationReport service node [0].", hex);
 
             var variableReferences = DecodeVariableReferences(info).ToArray();
-            var accessResults = DecodeInformationReportAccessResults(info).ToArray();
+            var wireAccessResults = DecodeInformationReportAccessResults(info).ToArray();
+            var accessResults = NormalizeIec61850ReportAccessResultOrder(wireAccessResults);
 
             return new MmsInformationReport
             {
-                IsSuccess = accessResults.Length > 0,
+                IsSuccess = accessResults.Count > 0,
                 VariableReferences = variableReferences,
                 Items = accessResults,
-                Message = accessResults.Length > 0
-                    ? $"MMS InformationReport decoded {accessResults.Length} access result(s) and {variableReferences.Length} variable reference(s)."
+                Message = accessResults.Count > 0
+                    ? $"MMS InformationReport decoded {accessResults.Count} access result(s) and {variableReferences.Length} variable reference(s)."
                     : "MMS InformationReport was decoded, but no access results were found.",
                 ResponseHexPreview = hex
             };
@@ -68,6 +69,104 @@ public static class MmsInformationReportDecoder
         {
             return Fail($"MMS InformationReport decode failed: {ex.GetType().Name}: {ex.Message}", hex);
         }
+    }
+
+    // IEC 61850 reports place optional DataRef entries immediately after the
+    // inclusion bit-string and BEFORE the process values.  MmsReportFrameMapper
+    // historically consumes its normalized Items as inclusion -> values -> DataRef
+    // -> reason.  Normalize only the unambiguous DataRef report shape here so a
+    // VisibleString DataRef can never shift process values and make a reason/quality
+    // bit-string appear as the reported process value.
+    private static IReadOnlyList<MmsInformationReportItem> NormalizeIec61850ReportAccessResultOrder(
+        IReadOnlyList<MmsInformationReportItem> items)
+    {
+        if (items.Count < 4 || !IsText(items[0].Value) || items[1].Value?.Kind != MmsDataKind.BitString)
+            return items;
+
+        var optFlds = items[1].Value!;
+        if (!IsBitSet(optFlds, 5)) // data-reference
+            return items;
+
+        var cursor = 2;
+        if (IsBitSet(optFlds, 1)) cursor++; // SqNum
+        if (IsBitSet(optFlds, 2)) cursor++; // TimeOfEntry
+        if (IsBitSet(optFlds, 4)) cursor++; // DatSet
+        if (IsBitSet(optFlds, 6)) cursor++; // BufOvfl
+        if (IsBitSet(optFlds, 7)) cursor++; // EntryID
+        if (IsBitSet(optFlds, 8)) cursor++; // ConfRev
+        if (IsBitSet(optFlds, 9)) cursor += 2; // SubSqNum + MoreSegmentsFollow
+
+        if (cursor >= items.Count || items[cursor].Value?.Kind != MmsDataKind.BitString)
+            return items;
+
+        var includedCount = CountSetBits(items[cursor].Value!);
+        if (includedCount <= 0)
+            return items;
+
+        var dataRefStart = cursor + 1;
+        var valueStart = dataRefStart + includedCount;
+        var valueEnd = valueStart + includedCount;
+        if (valueEnd > items.Count)
+            return items;
+
+        for (var i = 0; i < includedCount; i++)
+        {
+            if (!IsText(items[dataRefStart + i].Value))
+                return items;
+        }
+
+        var normalized = new List<MmsInformationReportItem>(items.Count);
+        for (var i = 0; i <= cursor; i++)
+            normalized.Add(items[i]);
+        for (var i = valueStart; i < valueEnd; i++)
+            normalized.Add(items[i]);
+        for (var i = dataRefStart; i < valueStart; i++)
+            normalized.Add(items[i]);
+        for (var i = valueEnd; i < items.Count; i++)
+            normalized.Add(items[i]);
+
+        return normalized
+            .Select((item, index) => new MmsInformationReportItem
+            {
+                Index = index,
+                Value = item.Value,
+                FailureCode = item.FailureCode
+            })
+            .ToArray();
+    }
+
+    private static bool IsText(MmsDataValue? value)
+        => value?.Kind is MmsDataKind.VisibleString or MmsDataKind.MmsString;
+
+    private static bool IsBitSet(MmsDataValue bitString, int bitIndex)
+    {
+        if (bitString.Kind != MmsDataKind.BitString || bitString.RawValue.Count < 2 || bitIndex < 0)
+            return false;
+
+        var unused = bitString.RawValue[0];
+        var bytes = bitString.RawValue.Skip(1).ToArray();
+        var totalBits = bytes.Length * 8 - unused;
+        if (bitIndex >= totalBits)
+            return false;
+
+        return ((bytes[bitIndex / 8] >> (7 - (bitIndex % 8))) & 0x01) != 0;
+    }
+
+    private static int CountSetBits(MmsDataValue bitString)
+    {
+        if (bitString.Kind != MmsDataKind.BitString || bitString.RawValue.Count < 2)
+            return 0;
+
+        var unused = bitString.RawValue[0];
+        var bytes = bitString.RawValue.Skip(1).ToArray();
+        var totalBits = bytes.Length * 8 - unused;
+        var count = 0;
+        for (var bit = 0; bit < totalBits; bit++)
+        {
+            if (((bytes[bit / 8] >> (7 - (bit % 8))) & 0x01) != 0)
+                count++;
+        }
+        return count;
     }
 
     private static IEnumerable<string> DecodeVariableReferences(BerTlv informationReport)
@@ -158,7 +257,7 @@ public static class MmsInformationReportDecoder
         // }
         //
         // Both variableAccessSpecification.listOfVariable and listOfAccessResult can
-        // use tag [0].  The access-result list is the trailing service field, so take
+        // use tag [0]. The access-result list is the trailing service field, so take
         // the last constructed [0] child instead of recursively decoding object-name
         // metadata as reported values.
         var list = children.LastOrDefault(x =>

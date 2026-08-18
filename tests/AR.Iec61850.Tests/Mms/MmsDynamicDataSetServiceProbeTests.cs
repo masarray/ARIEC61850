@@ -51,6 +51,21 @@ public sealed class MmsDynamicDataSetServiceProbeTests
     }
 
     [Fact]
+    public void ProbePolicy_DynamicPlanWithoutDataSetReference_IsNotProbed()
+    {
+        var plan = new MmsReportSubscriptionPlan
+        {
+            Mode = MmsReportSubscriptionPlanMode.DynamicDataSet,
+            Status = MmsReportSubscriptionPlanStatus.ReadyRequiresWrite,
+            ReportControl = BuildUrcb(),
+            DataSetReference = string.Empty,
+            DynamicPoints = [BuildPoint()]
+        };
+
+        Assert.False(MmsDynamicDataSetProbePolicy.ShouldProbe(plan));
+    }
+
+    [Fact]
     public void SingleMemberDefineRequest_IsDeterministicAndCarriesExactNames()
     {
         var member = new MmsObjectReference("LD0", "GGIO1$ST$Ind1$stVal", "ST");

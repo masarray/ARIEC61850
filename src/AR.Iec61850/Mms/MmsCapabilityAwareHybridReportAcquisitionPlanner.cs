@@ -5,8 +5,8 @@ namespace AR.Iec61850.Mms;
 
 /// <summary>
 /// Capability-aware orchestration around the stable static -> dynamic -> polling planner.
-/// The lower-level planner remains deterministic; this layer controls which RCBs are safe
-/// to expose to it for the current MMS association.
+/// Static RCB coverage keeps the stable planner's original fresh-availability semantics;
+/// association capability qualification is an additional guard only for dynamic mutation.
 /// </summary>
 public sealed class MmsCapabilityAwareHybridReportAcquisitionPlan
 {
@@ -44,9 +44,20 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
             negotiatedCapabilities,
             options);
 
-        var eligibleReferences = capability.ReportControls
-            .Where(control => control.IsStaticWriteCandidate || control.IsDynamicWriteAttemptCandidate)
-            .Select(control => Normalize(control.Reference))
+        // P6.1 stability rule:
+        // Do not place the P3 capability wrapper in front of the stable static planner.
+        // A populated DataSet discovered with an exact fresh directory is static protocol
+        // evidence and must remain visible to MmsHybridReportAcquisitionPlanner, which owns
+        // the established static-usability checks. Capability qualification is retained for
+        // empty RCB slots because those require a new DataSet plus RCB writes.
+        var configuredStaticReferences = availability.ReportControls
+            .Where(HasConfiguredStaticDataSetEvidence)
+            .Select(snapshot => Normalize(snapshot.Reference));
+        var qualifiedDynamicReferences = capability.ReportControls
+            .Where(control => control.IsDynamicWriteAttemptCandidate)
+            .Select(control => Normalize(control.Reference));
+        var eligibleReferences = configuredStaticReferences
+            .Concat(qualifiedDynamicReferences)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var restrictedAvailability = new MmsRcbAvailabilityResult
@@ -83,6 +94,12 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
         };
     }
 
+    private static bool HasConfiguredStaticDataSetEvidence(MmsRcbAvailabilitySnapshot snapshot)
+        => snapshot.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded &&
+           snapshot.DataSetDirectorySuccess &&
+           snapshot.DataSetMembers.Count > 0 &&
+           !string.IsNullOrWhiteSpace(snapshot.DataSetReference);
+
     private static void RestoreFreshAttributeEvidence(
         MmsHybridReportAcquisitionPlan plan,
         MmsRcbAvailabilityResult availability)
@@ -114,7 +131,9 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
                 .ToList();
             candidate.ProbeDiagnostics.Clear();
             candidate.ProbeDiagnostics.AddRange(snapshot.ProbeDiagnostics);
-            candidate.Status = "P3 capability-qualified fresh availability snapshot";
+            candidate.Status = segment.Kind is MmsHybridAcquisitionKind.StaticBrcb or MmsHybridAcquisitionKind.StaticUrcb
+                ? "P6.1 baseline-static fresh availability snapshot"
+                : "P6.1 capability-qualified dynamic fresh availability snapshot";
         }
     }
 

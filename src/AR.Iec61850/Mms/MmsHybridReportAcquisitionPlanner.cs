@@ -636,11 +636,14 @@ public static class MmsHybridReportAcquisitionPlanner
         Iec61850SignalDescriptor signal,
         MmsIedModelDirectory liveDirectory)
     {
+        var allowPrimaryValueFallback = signal.SemanticRole == Iec61850DataAttributeSemanticRole.PrimaryValue;
+
         foreach (var reference in new[]
                  {
                      signal.EffectiveMmsReference,
                      signal.ObservedMmsReference,
-                     signal.CanonicalMmsReference
+                     signal.CanonicalMmsReference,
+                     allowPrimaryValueFallback ? signal.PrimaryValueMmsReference : string.Empty
                  })
         {
             if (string.IsNullOrWhiteSpace(reference))
@@ -649,7 +652,12 @@ public static class MmsHybridReportAcquisitionPlanner
                 return point;
         }
 
-        foreach (var reference in new[] { signal.ObservedReference, signal.DesignReference })
+        foreach (var reference in new[]
+                 {
+                     signal.ObservedReference,
+                     signal.DesignReference,
+                     allowPrimaryValueFallback ? signal.PrimaryValueReference : string.Empty
+                 })
         {
             if (string.IsNullOrWhiteSpace(reference))
                 continue;

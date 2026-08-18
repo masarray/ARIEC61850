@@ -49,9 +49,16 @@ public sealed class MmsDynamicDataSetProbeResult
 
     public bool DynamicMutationAttempted => DefineEvidence.Attempted;
     public bool CleanupAttempted => DeleteEvidence.Attempted;
-    public bool CleanupSucceeded => !CleanupAttempted || DeleteEvidence.IsSuccess;
+    // If Define succeeded, the temporary NamedVariableList may exist on the server.
+    // Cleanup is therefore successful only when Delete was actually attempted and accepted.
+    // A failed Define needs no cleanup because the list was never proven created.
+    public bool CleanupSucceeded => !DefineEvidence.IsSuccess || (CleanupAttempted && DeleteEvidence.IsSuccess);
+    // If verification was attempted but Delete could not even be issued, the association
+    // was lost between Define and cleanup. Do not report that path as association-survived.
     public bool AssociationSurvived => DefineEvidence.StateAfter == MmsAssociationState.MmsInitiated &&
-                                       (!DeleteEvidence.Attempted || DeleteEvidence.StateAfter == MmsAssociationState.MmsInitiated);
+                                       (DeleteEvidence.Attempted
+                                           ? DeleteEvidence.StateAfter == MmsAssociationState.MmsInitiated
+                                           : !DirectoryAttempted);
 
     public string Summary => IsSuccess
         ? $"single-member NVL probe succeeded for {DataSetReference}; member={MemberReference}; define/verify/delete all completed on one MMS association."

@@ -56,6 +56,7 @@ public sealed class MmsRcbAvailabilitySnapshot
     public MmsRcbOperationalAvailability Availability { get; init; }
     public MmsRcbAvailabilityConfidence Confidence { get; init; } = MmsRcbAvailabilityConfidence.Unknown;
     public string Reason { get; init; } = string.Empty;
+    public IReadOnlyList<string> Attributes { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> ProbeDiagnostics { get; init; } = Array.Empty<string>();
 
     public bool IsSelectable => Availability is MmsRcbOperationalAvailability.Available or MmsRcbOperationalAvailability.UsedByCaller;
@@ -169,8 +170,6 @@ public static class MmsRcbAvailabilityEvaluator
         }
         else if (enabled == false && candidate.Buffered && directorySuccess && memberCount > 0)
         {
-            // Some Edition 1 BRCBs expose RptEna but do not expose Owner/ResvTms.
-            // Do not convert the missing reservation evidence into a green Available state.
             availability = MmsRcbOperationalAvailability.Unknown;
             confidence = MmsRcbAvailabilityConfidence.Reduced;
             reason = "RptEna is false and the DataSet is populated, but this BRCB does not expose enough reservation evidence to prove availability.";
@@ -212,6 +211,7 @@ public static class MmsRcbAvailabilityEvaluator
             Availability = availability,
             Confidence = confidence,
             Reason = reason,
+            Attributes = candidate.Attributes.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             ProbeDiagnostics = candidate.ProbeDiagnostics.ToArray()
         };
     }

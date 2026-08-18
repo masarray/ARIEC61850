@@ -13,7 +13,9 @@ public sealed class AcseMmsInitiateResult
     public static AcseMmsInitiateResult Parse(ReadOnlyMemory<byte> response, string profileName = "")
     {
         var span = response.Span;
-        var preview = HexDump.ToCompactString(span);
+        // Keep enough bounded response evidence for the association-capability decoder.
+        // Typical IEC 61850 InitiateResponse frames are far smaller than this limit.
+        var preview = HexDump.ToCompactString(span, maxBytes: 4096);
         var prefix = string.IsNullOrWhiteSpace(profileName) ? string.Empty : $"[{profileName}] ";
 
         if (span.Length == 0)

@@ -38,4 +38,12 @@ public sealed partial class MmsClientSession
             }
         }
     }
+
+    public MmsReportAssociationCapability EvaluateReportAssociationCapability(
+        MmsRcbAvailabilityResult availability,
+        MmsHybridReportAcquisitionOptions? options = null)
+        => MmsReportAssociationCapabilityEvaluator.Evaluate(
+            availability,
+            LastNegotiatedCapabilities,
+            options);
 }

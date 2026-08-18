@@ -21,7 +21,13 @@ public sealed class MmsDynamicAttemptBeforePollingP4Tests
     [Fact]
     public void ExplicitlyUnsupportedDefineService_ExplainsWhyPollingMayBeFinalWithoutWriteAttempt()
     {
-        var negotiated = SupportedDynamicServices() with { SupportsDefineNamedVariableList = false };
+        var negotiated = new AcseMmsNegotiatedCapabilities
+        {
+            IsDecoded = true,
+            SupportsWrite = true,
+            SupportsDefineNamedVariableList = false,
+            SupportsDeleteNamedVariableList = true
+        };
         var result = Build(negotiated, DynamicEmpty());
 
         var evidence = Assert.Single(MmsHybridDynamicAttemptEvidenceBuilder.Build(result, Options()));

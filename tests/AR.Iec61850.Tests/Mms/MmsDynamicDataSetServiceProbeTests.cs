@@ -66,6 +66,53 @@ public sealed class MmsDynamicDataSetServiceProbeTests
     }
 
     [Fact]
+    public void ProbeResult_DefineFailed_NeedsNoCleanup()
+    {
+        var result = new MmsDynamicDataSetProbeResult
+        {
+            DirectoryAttempted = false,
+            DefineEvidence = new MmsDynamicDataSetProbeServiceEvidence
+            {
+                Attempted = true,
+                IsSuccess = false,
+                StateBefore = MmsAssociationState.MmsInitiated,
+                StateAfter = MmsAssociationState.MmsInitiateFailed
+            }
+        };
+
+        Assert.False(result.CleanupAttempted);
+        Assert.True(result.CleanupSucceeded);
+        Assert.False(result.AssociationSurvived);
+    }
+
+    [Fact]
+    public void ProbeResult_DefineSucceededButVerificationLostAssociation_FailsCleanupClosed()
+    {
+        var result = new MmsDynamicDataSetProbeResult
+        {
+            DirectoryAttempted = true,
+            DefineEvidence = new MmsDynamicDataSetProbeServiceEvidence
+            {
+                Attempted = true,
+                IsSuccess = true,
+                StateBefore = MmsAssociationState.MmsInitiated,
+                StateAfter = MmsAssociationState.MmsInitiated
+            },
+            DeleteEvidence = new MmsDynamicDataSetProbeServiceEvidence
+            {
+                Attempted = false,
+                IsSuccess = false,
+                StateBefore = MmsAssociationState.MmsInitiateFailed,
+                StateAfter = MmsAssociationState.MmsInitiateFailed
+            }
+        };
+
+        Assert.False(result.CleanupAttempted);
+        Assert.False(result.CleanupSucceeded);
+        Assert.False(result.AssociationSurvived);
+    }
+
+    [Fact]
     public void SingleMemberDefineRequest_IsDeterministicAndCarriesExactNames()
     {
         var member = new MmsObjectReference("LD0", "GGIO1$ST$Ind1$stVal", "ST");

@@ -155,7 +155,7 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
             candidate.ProbeDiagnostics.Clear();
             candidate.ProbeDiagnostics.AddRange(snapshot.ProbeDiagnostics);
             candidate.Status = segment.Kind is MmsHybridAcquisitionKind.StaticBrcb or MmsHybridAcquisitionKind.StaticUrcb
-                ? "P6.2-B baseline-static fresh availability snapshot"
+                ? "P6.1 baseline-static fresh availability snapshot"
                 : "P6.2-B capability-qualified dynamic fresh availability snapshot";
         }
     }

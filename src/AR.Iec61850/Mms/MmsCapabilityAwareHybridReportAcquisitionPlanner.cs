@@ -96,7 +96,9 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
         {
             AcquisitionPlan = plan,
             AssociationCapability = capability,
-            AutomaticDynamicActivationQuarantined = options.AllowDynamicBrcb || options.AllowDynamicUrcb
+            AutomaticDynamicActivationQuarantined =
+                capability.MayAttemptDynamicReports &&
+                (options.AllowDynamicBrcb || options.AllowDynamicUrcb)
         };
     }
 

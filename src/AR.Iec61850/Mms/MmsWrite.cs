@@ -7,6 +7,7 @@ public sealed class MmsWriteAccessResult
 {
     public bool IsSuccess { get; init; }
     public int? FailureCode { get; init; }
+    public string FailureName { get; init; } = string.Empty;
     public string Message { get; init; } = string.Empty;
 }
 
@@ -48,6 +49,23 @@ public static class MmsWriteRequest
 
 public static class MmsWriteResponseDecoder
 {
+    private static readonly IReadOnlyDictionary<int, string> DataAccessErrors = new Dictionary<int, string>
+    {
+        [0] = "object-invalidated",
+        [1] = "hardware-fault",
+        [2] = "temporarily-unavailable",
+        [3] = "object-access-denied",
+        [4] = "object-undefined",
+        [5] = "invalid-address",
+        [6] = "type-unsupported",
+        [7] = "type-inconsistent",
+        [8] = "object-attribute-inconsistent",
+        [9] = "object-access-unsupported",
+        [10] = "object-non-existent",
+        [11] = "object-value-invalid",
+        [12] = "unknown"
+    };
+
     public static MmsWriteResult Decode(ReadOnlyMemory<byte> presentationPayload, int expectedInvokeId)
     {
         var hex = HexDump.ToCompactString(presentationPayload.Span);
@@ -85,13 +103,21 @@ public static class MmsWriteResponseDecoder
 
             var accessResults = DecodeAccessResults(service).ToArray();
             var success = accessResults.Length > 0 && accessResults.All(x => x.IsSuccess);
+            var failures = accessResults
+                .Select((result, index) => (result, index))
+                .Where(item => !item.result.IsSuccess)
+                .Select(item => $"item[{item.index}]={item.result.Message}")
+                .ToArray();
+
             return new MmsWriteResult
             {
                 IsSuccess = success,
                 AccessResults = accessResults,
                 Message = success
                     ? $"MMS Confirmed-Write succeeded for {accessResults.Length} item(s)."
-                    : $"MMS Confirmed-Write returned {accessResults.Count(x => !x.IsSuccess)} failure(s).",
+                    : failures.Length > 0
+                        ? $"MMS Confirmed-Write rejected: {string.Join(", ", failures)}."
+                        : "MMS Confirmed-Write returned a failure without a decodable DataAccessError.",
                 ResponseHexPreview = hex
             };
         }
@@ -100,6 +126,11 @@ public static class MmsWriteResponseDecoder
             return Fail($"MMS write response decode failed: {ex.GetType().Name}: {ex.Message}", hex);
         }
     }
+
+    public static string NameDataAccessError(int code)
+        => DataAccessErrors.TryGetValue(code, out var name)
+            ? name
+            : $"data-access-error-{code}";
 
     private static IEnumerable<MmsWriteAccessResult> DecodeAccessResults(BerTlv service)
     {
@@ -120,11 +151,18 @@ public static class MmsWriteResponseDecoder
             if (child.EncodedTag == 0x80 || (child.Class == BerClass.ContextSpecific && child.TagNumber == 0))
             {
                 var code = BerReader.ReadUnsignedInteger(child);
+                var failureCode = code.HasValue ? checked((int)code.Value) : (int?)null;
+                var failureName = failureCode.HasValue
+                    ? NameDataAccessError(failureCode.Value)
+                    : "undecodable-data-access-error";
                 yield return new MmsWriteAccessResult
                 {
                     IsSuccess = false,
-                    FailureCode = code.HasValue ? (int)code.Value : null,
-                    Message = code.HasValue ? $"failure code {code.Value}" : "failure"
+                    FailureCode = failureCode,
+                    FailureName = failureName,
+                    Message = failureCode.HasValue
+                        ? $"{failureName} ({failureCode.Value})"
+                        : failureName
                 };
             }
         }

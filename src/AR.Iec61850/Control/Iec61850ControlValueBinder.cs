@@ -78,8 +78,18 @@ internal static class Iec61850ControlValueBinder
                 throw new InvalidOperationException($"Invalid MMS bit-string encoding at {path}.");
 
             var actualBits = checked((encoded.Length - 1) * 8 - unusedBits);
-            if (actualBits != specification.Size.Value)
+            if (specification.SizeConstraintKind == MmsTypeSizeConstraintKind.Maximum)
+            {
+                if (actualBits > specification.Size.Value)
+                    throw new InvalidOperationException($"MMS bit-string size mismatch at {path}: maximum {specification.Size.Value} bits, received {actualBits}.");
+            }
+            else if (actualBits != specification.Size.Value)
+            {
+                // Existing manually constructed specifications have SizeConstraintKind=None;
+                // preserve their historical exact-width behavior. Live decoded positive
+                // constraints are marked Fixed and follow the same rule.
                 throw new InvalidOperationException($"MMS bit-string size mismatch at {path}: expected {specification.Size.Value} bits, received {actualBits}.");
+            }
         }
 
         if (expected == "octet-string" && specification.Size is > 0 && value.RawValue.Count > specification.Size.Value)

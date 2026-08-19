@@ -234,6 +234,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             return Unsupported(Iec61850ControlAction.Operate, "The live Oper type does not expose operTm; time-activated operation is unsupported.");
 
         var stopwatch = Stopwatch.StartNew();
+        IReadOnlyList<Iec61850ControlWireStep> precedingWireSteps = Array.Empty<Iec61850ControlWireStep>();
         if (Descriptor.RequiresSelect && _activeSequence == null)
         {
             var expiredContext = _expiredSequence;
@@ -249,6 +250,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
                 : await SelectCoreAsync(request, cancellationToken).ConfigureAwait(false);
             if (!select.IsSuccess)
                 return select;
+            precedingWireSteps = select.WireSteps;
         }
         else if (!Descriptor.RequiresSelect)
         {
@@ -291,12 +293,23 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             if (!write.IsSuccess)
             {
                 var applicationError = await WaitForApplicationErrorAsync(_options.ApplicationErrorGracePeriod, cancellationToken, reports).ConfigureAwait(false);
-                return FromWriteFailure(Iec61850ControlAction.Operate, write, applicationError, context, stopwatch.Elapsed);
+                return FromWriteFailure(
+                    Iec61850ControlAction.Operate,
+                    write,
+                    applicationError,
+                    context,
+                    stopwatch.Elapsed,
+                    precedingWireSteps);
             }
 
             operateRequestAccepted = true;
             if (!Descriptor.IsEnhanced)
-                return Accepted(Iec61850ControlAction.Operate, context, stopwatch.Elapsed, "Operate service accepted (normal-security completion boundary).");
+                return Accepted(
+                    Iec61850ControlAction.Operate,
+                    context,
+                    stopwatch.Elapsed,
+                    "Operate service accepted (normal-security completion boundary).",
+                    precedingWireSteps);
 
             var remaining = deadline - DateTimeOffset.UtcNow;
             var termination = remaining > TimeSpan.Zero
@@ -316,7 +329,10 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
                     ResponseHex = _transport.LastResponseHex,
                     ControlNumber = context.ControlNumber,
                     SequenceTimestamp = context.TimestampUtc,
-                    Elapsed = stopwatch.Elapsed
+                    Elapsed = stopwatch.Elapsed,
+                    WireSteps = AppendWireSteps(
+                        precedingWireSteps,
+                        BuildWireStep(Iec61850ControlAction.Operate, requestAccepted: true, "Operate accepted; CommandTermination timed out."))
                 };
             }
 
@@ -336,7 +352,13 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
                 ResponseHex = termination.ResponseHex,
                 ControlNumber = context.ControlNumber,
                 SequenceTimestamp = context.TimestampUtc,
-                Elapsed = stopwatch.Elapsed
+                Elapsed = stopwatch.Elapsed,
+                WireSteps = AppendWireSteps(
+                    precedingWireSteps,
+                    BuildWireStep(
+                        Iec61850ControlAction.Operate,
+                        requestAccepted: true,
+                        termination.Positive ? "Operate accepted; positive CommandTermination received." : "Operate accepted; negative CommandTermination received."))
             };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -687,7 +709,8 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
         Iec61850ControlAction action,
         Iec61850ControlSequenceContext context,
         TimeSpan elapsed,
-        string diagnostic)
+        string diagnostic,
+        IReadOnlyList<Iec61850ControlWireStep>? precedingWireSteps = null)
         => new()
         {
             Action = action,
@@ -698,7 +721,10 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             ControlNumber = context.ControlNumber,
             SequenceTimestamp = context.TimestampUtc,
             Elapsed = elapsed,
-            Diagnostics = new[] { diagnostic }
+            Diagnostics = new[] { diagnostic },
+            WireSteps = AppendWireSteps(
+                precedingWireSteps,
+                BuildWireStep(action, requestAccepted: true, diagnostic))
         };
 
     private Iec61850ControlActionResult FromWriteFailure(
@@ -706,7 +732,8 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
         MmsWriteResult write,
         Iec61850CommandTermination? appError,
         Iec61850ControlSequenceContext context,
-        TimeSpan elapsed)
+        TimeSpan elapsed,
+        IReadOnlyList<Iec61850ControlWireStep>? precedingWireSteps = null)
         => new()
         {
             Action = action,
@@ -720,7 +747,10 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             ResponseHex = appError?.ResponseHex ?? write.ResponseHexPreview,
             ControlNumber = context.ControlNumber,
             SequenceTimestamp = context.TimestampUtc,
-            Elapsed = elapsed
+            Elapsed = elapsed,
+            WireSteps = AppendWireSteps(
+                precedingWireSteps,
+                BuildWireStep(action, requestAccepted: false, write.Message))
         };
 
     private Iec61850ControlActionResult FromApplicationRejection(
@@ -746,8 +776,45 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             ResponseHex = appError.ResponseHex,
             ControlNumber = context.ControlNumber,
             SequenceTimestamp = context.TimestampUtc,
-            Elapsed = elapsed
+            Elapsed = elapsed,
+            WireSteps = AppendWireSteps(
+                null,
+                BuildWireStep(action, requestAccepted: true, clientMessage))
         };
+
+    private Iec61850ControlWireStep BuildWireStep(
+        Iec61850ControlAction action,
+        bool requestAccepted,
+        string detail)
+    {
+        var reference = action switch
+        {
+            Iec61850ControlAction.Select => Descriptor.References.Sbo,
+            Iec61850ControlAction.SelectWithValue => Descriptor.References.SboWithValue,
+            Iec61850ControlAction.Operate => Descriptor.References.Oper,
+            Iec61850ControlAction.Cancel => Descriptor.References.Cancel,
+            _ => Descriptor.References.Oper
+        };
+
+        return new Iec61850ControlWireStep
+        {
+            Action = action,
+            Reference = $"{reference.Domain}/{reference.Item}",
+            RequestAccepted = requestAccepted,
+            RequestHex = _transport.LastRequestHex,
+            ResponseHex = _transport.LastResponseHex,
+            Detail = detail
+        };
+    }
+
+    private static IReadOnlyList<Iec61850ControlWireStep> AppendWireSteps(
+        IReadOnlyList<Iec61850ControlWireStep>? preceding,
+        Iec61850ControlWireStep current)
+    {
+        if (preceding == null || preceding.Count == 0)
+            return new[] { current };
+        return preceding.Concat(new[] { current }).ToArray();
+    }
 
     private static Iec61850ControlActionResult SelectionTimedOut(
         Iec61850ControlSequenceContext context,

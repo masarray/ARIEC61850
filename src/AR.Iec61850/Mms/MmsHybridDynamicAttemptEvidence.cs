@@ -54,14 +54,19 @@ public static class MmsHybridDynamicAttemptEvidenceBuilder
         options ??= new MmsHybridReportAcquisitionOptions();
 
         return plan.AcquisitionPlan.Assignments
-            .Select(assignment => BuildOne(assignment, plan.AssociationCapability, options))
+            .Select(assignment => BuildOne(
+                assignment,
+                plan.AssociationCapability,
+                options,
+                plan.AutomaticDynamicActivationQuarantined))
             .ToArray();
     }
 
     private static MmsHybridSignalAttemptEvidence BuildOne(
         MmsHybridSignalAssignment assignment,
         MmsReportAssociationCapability capability,
-        MmsHybridReportAcquisitionOptions options)
+        MmsHybridReportAcquisitionOptions options,
+        bool automaticDynamicActivationQuarantined)
     {
         if (assignment.Kind is MmsHybridAcquisitionKind.StaticBrcb or MmsHybridAcquisitionKind.StaticUrcb)
         {
@@ -90,14 +95,19 @@ public static class MmsHybridDynamicAttemptEvidenceBuilder
                 assignment.Reason);
         }
 
-        var reason = ClassifyPollingReason(capability, options);
+        var reason = automaticDynamicActivationQuarantined
+            ? MmsHybridPollingFallbackReason.DynamicDisabledByPolicy
+            : ClassifyPollingReason(capability, options);
+        var prefix = automaticDynamicActivationQuarantined
+            ? "P6.2-B quarantines automatic full dynamic DataSet activation on the production monitoring association after physical field evidence that a successful one-member NVL probation does not guarantee association survival."
+            : Describe(reason);
         return Evidence(
             assignment,
             MmsHybridDynamicAttemptDisposition.Skipped,
             reason,
             string.IsNullOrWhiteSpace(assignment.Reason)
-                ? Describe(reason)
-                : $"{Describe(reason)} {assignment.Reason}");
+                ? prefix
+                : $"{prefix} {assignment.Reason}");
     }
 
     private static MmsHybridPollingFallbackReason ClassifyPollingReason(

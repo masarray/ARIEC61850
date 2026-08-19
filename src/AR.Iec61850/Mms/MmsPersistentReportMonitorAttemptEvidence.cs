@@ -12,6 +12,9 @@ public enum MmsReportActivationFailureReason
 {
     None,
     InvalidPlan,
+    DynamicDataSetProbeDefineFailed,
+    DynamicDataSetProbeVerificationFailed,
+    DynamicDataSetProbeDeleteFailed,
     DynamicDataSetDefineFailed,
     DynamicDataSetBindFailed,
     TriggerOptionsUnavailable,
@@ -25,6 +28,8 @@ public enum MmsReportActivationFailureReason
 /// P4 runtime evidence around persistent-report activation. For a dynamic plan,
 /// DynamicAttempted is true only when the engine actually issued at least one dynamic
 /// configuration service/write to the IED. Failed mutated attempts are rolled back best-effort.
+/// P6.2 adds a single-member Define/GetAttributes/Delete probation before the full dynamic
+/// DataSet is created so vendor/service failures are isolated before any RCB is mutated.
 /// </summary>
 public sealed class MmsPersistentReportMonitorAttemptResult
 {
@@ -55,12 +60,53 @@ public sealed partial class MmsClientSession
         var isDynamic = plan.Mode == MmsReportSubscriptionPlanMode.DynamicDataSet;
         var originalDataSetReference = plan.ReportControl?.DataSetReference ?? string.Empty;
 
+        MmsDynamicDataSetProbeResult? probe = null;
+        if (isDynamic && MmsDynamicDataSetProbePolicy.ShouldProbe(plan))
+        {
+            probe = await ProbeDynamicDataSetServiceAsync(
+                plan.DataSetReference,
+                plan.DynamicPoints[0].ToObjectReference(),
+                directory,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!probe.IsSuccess)
+            {
+                var failedStart = new MmsPersistentReportMonitorStartResult
+                {
+                    IsSuccess = false,
+                    Message = $"P6.2 dynamic DataSet service probation failed before RCB mutation. {probe.Summary}",
+                    WriteSteps = probe.WriteSteps,
+                    Warnings = probe.EvidenceLines
+                };
+
+                return new MmsPersistentReportMonitorAttemptResult
+                {
+                    StartResult = failedStart,
+                    DynamicAttemptState = probe.DynamicMutationAttempted
+                        ? MmsDynamicReportAttemptState.AttemptedFailed
+                        : MmsDynamicReportAttemptState.NotAttempted,
+                    FailureReason = MmsDynamicDataSetProbePolicy.FailureReason(probe.FailureStage),
+                    CleanupAttempted = probe.CleanupAttempted,
+                    CleanupSucceeded = probe.CleanupSucceeded,
+                    CleanupSteps = probe.WriteSteps
+                        .Where(step => step.Attribute.Equals("Probe.DeleteNamedVariableList", StringComparison.OrdinalIgnoreCase))
+                        .ToArray(),
+                    CleanupWarnings = probe.CleanupSucceeded
+                        ? Array.Empty<string>()
+                        : ["P6.2 single-member DataSet probe cleanup failed. Fresh association/NamedVariableList evidence is required before another automatic dynamic attempt."]
+                };
+            }
+        }
+
         var start = await StartPersistentReportMonitorAsync(
             plan,
             triggerGeneralInterrogation,
             deleteDynamicDataSetOnStop,
             directory,
             cancellationToken).ConfigureAwait(false);
+
+        if (probe is not null)
+            start = MergeProbeEvidence(start, probe);
 
         if (!isDynamic)
         {
@@ -74,7 +120,7 @@ public sealed partial class MmsClientSession
 
         var dynamicAttempted = start.WriteSteps.Any(step =>
             step.Attempted &&
-            (step.Attribute.Equals("DefineNamedVariableList", StringComparison.OrdinalIgnoreCase) ||
+            (step.Attribute.Contains("DefineNamedVariableList", StringComparison.OrdinalIgnoreCase) ||
              step.Attribute.Equals("DatSet", StringComparison.OrdinalIgnoreCase) ||
              step.Attribute.Equals("TrgOps", StringComparison.OrdinalIgnoreCase) ||
              step.Attribute.Equals("RptEna", StringComparison.OrdinalIgnoreCase)));
@@ -108,6 +154,9 @@ public sealed partial class MmsClientSession
         {
             var enabled = SuccessfulStep(start.WriteSteps, "RptEna");
             var reserved = SuccessfulStep(start.WriteSteps, "Resv") || SuccessfulStep(start.WriteSteps, "ResvTms");
+            // Probe.DefineNamedVariableList is deliberately excluded here: a successful
+            // probe is deleted before full activation. Only the full DataSet definition
+            // may need failed-start cleanup below.
             var dataSetDefined = SuccessfulStep(start.WriteSteps, "DefineNamedVariableList");
             var dataSetBound = SuccessfulStep(start.WriteSteps, "DatSet");
 
@@ -191,6 +240,24 @@ public sealed partial class MmsClientSession
         };
     }
 
+    private static MmsPersistentReportMonitorStartResult MergeProbeEvidence(
+        MmsPersistentReportMonitorStartResult start,
+        MmsDynamicDataSetProbeResult probe)
+        => new()
+        {
+            IsSuccess = start.IsSuccess,
+            Message = start.IsSuccess
+                ? start.Message
+                : $"{start.Message} P6.2 probation had already succeeded: {probe.Summary}",
+            Session = start.Session,
+            WriteSteps = probe.WriteSteps.Concat(start.WriteSteps).ToArray(),
+            Warnings = start.IsSuccess
+                ? start.Warnings
+                : probe.EvidenceLines.Concat(start.Warnings).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            RcbSnapshots = start.RcbSnapshots,
+            DataSetSnapshots = start.DataSetSnapshots
+        };
+
     private static bool SuccessfulStep(IEnumerable<MmsReportAttributeWriteStep> steps, string attribute)
         => steps.Any(step =>
             step.Attempted &&
@@ -202,6 +269,12 @@ public sealed partial class MmsClientSession
         var failed = result.WriteSteps.LastOrDefault(step => step.Attempted && !step.IsSuccess);
         if (failed is not null)
         {
+            if (failed.Attribute.Equals("Probe.DefineNamedVariableList", StringComparison.OrdinalIgnoreCase))
+                return MmsReportActivationFailureReason.DynamicDataSetProbeDefineFailed;
+            if (failed.Attribute.Equals("Probe.GetNamedVariableListAttributes", StringComparison.OrdinalIgnoreCase))
+                return MmsReportActivationFailureReason.DynamicDataSetProbeVerificationFailed;
+            if (failed.Attribute.Equals("Probe.DeleteNamedVariableList", StringComparison.OrdinalIgnoreCase))
+                return MmsReportActivationFailureReason.DynamicDataSetProbeDeleteFailed;
             if (failed.Attribute.Equals("DefineNamedVariableList", StringComparison.OrdinalIgnoreCase))
                 return MmsReportActivationFailureReason.DynamicDataSetDefineFailed;
             if (failed.Attribute.Equals("DatSet", StringComparison.OrdinalIgnoreCase))

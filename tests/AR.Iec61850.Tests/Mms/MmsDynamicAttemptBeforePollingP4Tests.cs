@@ -7,15 +7,21 @@ namespace AR.Iec61850.Tests.Mms;
 public sealed class MmsDynamicAttemptBeforePollingP4Tests
 {
     [Fact]
-    public void CapabilityQualifiedDynamicPlan_RequiresRuntimeAttemptBeforeFinalPolling()
+    public void CapabilityQualifiedDynamicPlan_IsExplicitlyQuarantinedBeforeFinalPolling()
     {
         var result = Build(SupportedDynamicServices(), DynamicEmpty());
 
+        Assert.True(result.AssociationCapability.MayAttemptDynamicReports);
+        Assert.True(result.AutomaticDynamicActivationQuarantined);
+
         var evidence = Assert.Single(MmsHybridDynamicAttemptEvidenceBuilder.Build(result, Options()));
-        Assert.Equal(MmsHybridAcquisitionKind.DynamicUrcb, evidence.PlannedKind);
-        Assert.Equal(MmsHybridDynamicAttemptDisposition.Planned, evidence.DynamicAttemptDisposition);
-        Assert.True(evidence.DynamicAttemptRequired);
-        Assert.Equal(MmsHybridPollingFallbackReason.None, evidence.PollingFallbackReason);
+        Assert.Equal(MmsHybridAcquisitionKind.MmsPollingFallback, evidence.PlannedKind);
+        Assert.Equal(MmsHybridDynamicAttemptDisposition.Skipped, evidence.DynamicAttemptDisposition);
+        Assert.False(evidence.DynamicAttemptRequired);
+        Assert.Equal(MmsHybridPollingFallbackReason.DynamicDisabledByPolicy, evidence.PollingFallbackReason);
+        Assert.True(evidence.IsExplainablePollingFallback);
+        Assert.Contains("P6.2-B", evidence.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("association survival", evidence.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -30,6 +36,7 @@ public sealed class MmsDynamicAttemptBeforePollingP4Tests
         };
         var result = Build(negotiated, DynamicEmpty());
 
+        Assert.False(result.AutomaticDynamicActivationQuarantined);
         var evidence = Assert.Single(MmsHybridDynamicAttemptEvidenceBuilder.Build(result, Options()));
         Assert.Equal(MmsHybridAcquisitionKind.MmsPollingFallback, evidence.PlannedKind);
         Assert.Equal(MmsHybridDynamicAttemptDisposition.Skipped, evidence.DynamicAttemptDisposition);
@@ -42,6 +49,7 @@ public sealed class MmsDynamicAttemptBeforePollingP4Tests
     {
         var result = Build(SupportedDynamicServices(), DynamicEmpty(includeTriggerOptions: false));
 
+        Assert.False(result.AutomaticDynamicActivationQuarantined);
         var evidence = Assert.Single(MmsHybridDynamicAttemptEvidenceBuilder.Build(result, Options()));
         Assert.Equal(MmsHybridAcquisitionKind.MmsPollingFallback, evidence.PlannedKind);
         Assert.Equal(MmsHybridDynamicAttemptDisposition.Skipped, evidence.DynamicAttemptDisposition);

@@ -73,8 +73,12 @@ public sealed class MmsDynamicDataSetQualificationCoordinatorTests
         Assert.DoesNotContain(calls, batch => batch.Length == 16);
 
         // The first half of the failed 8-member batch equals the already-proven milestone-4
-        // prefix and must not be probed again. Only the failing side is narrowed.
-        Assert.Equal(1, calls.Count(batch => batch.Length == 4));
+        // prefix and must not be probed again. The right-side 4-member batch is a distinct
+        // exact set and must be probed because it contains the failing member.
+        var provenPrefix = candidates.Take(4).Select(ToReference).ToArray();
+        var failingHalf = candidates.Skip(4).Take(4).Select(ToReference).ToArray();
+        Assert.Equal(1, calls.Count(batch => batch.SequenceEqual(provenPrefix, StringComparer.OrdinalIgnoreCase)));
+        Assert.Equal(1, calls.Count(batch => batch.SequenceEqual(failingHalf, StringComparer.OrdinalIgnoreCase)));
         Assert.Contains(badReference, result.Assessment.IsolatedRejectedMembers);
         Assert.False(result.RequiresFreshAssociation);
     }

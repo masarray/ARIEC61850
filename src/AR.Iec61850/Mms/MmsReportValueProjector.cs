@@ -284,8 +284,6 @@ public static class MmsReportValueProjector
 
         if (leafName is "POS" && value.Children.Count >= 3)
         {
-            // DPC/DPS Pos commonly reports stVal, q, t for DataSet-level object values.  Some relays include origin/ctlNum
-            // before stVal; prefer the last Dbpos-looking scalar before q/t only if schema is not available.
             var qIndex = FindQualityIndex(value.Children);
             var tIndex = FindTimestampIndex(value.Children);
             if (qIndex >= 1)
@@ -312,11 +310,15 @@ public static class MmsReportValueProjector
             }
         }
 
-        // SPS-style status DataObjects are commonly reported as one MMS structure
-        // {stVal BOOLEAN, q Quality, t Timestamp}.  Project only this unambiguous
-        // Boolean shape so measurement structures such as {mag, q, t} remain raw
-        // until schema/type evidence can identify their primary leaf safely.
         if (TryProjectBooleanStatusStruct(reference, fc, value, reason, receivedAt, out projected))
+            return true;
+
+        // P6.2-B: physical SIPROTEC evidence showed MX FCD reports with exactly two
+        // process-value carriers followed by q and t. IEC CDC MV/CMV uses this shape for
+        // instantaneous and filtered values. Project both deterministic process leaves;
+        // the consumer then binds only the exact selected leaf. Never choose one child by
+        // position as "the" value, and never apply this rule unless q/t prove the shape.
+        if (TryProjectMeasurementPairStruct(reference, fc, value, reason, receivedAt, out projected))
             return true;
 
         if (leafName is "A" or "PHV" or "PPV" or "W" or "VAR" or "VA" or "PF")
@@ -377,6 +379,100 @@ public static class MmsReportValueProjector
         };
         return true;
     }
+
+    private static bool TryProjectMeasurementPairStruct(
+        string reference,
+        string fc,
+        MmsDataValue value,
+        string reason,
+        DateTimeOffset receivedAt,
+        out IReadOnlyList<MmsReportProjectedSignalCandidate> projected)
+    {
+        projected = Array.Empty<MmsReportProjectedSignalCandidate>();
+        if (value.Children.Count != 4)
+            return false;
+
+        var q = Iec61850QualityDecoder.Decode(value.Children[2]);
+        var t = Iec61850TimestampDecoder.Decode(value.Children[3]);
+        if (!q.IsDecoded || !t.IsDecoded)
+            return false;
+
+        if (!TryUnwrapSingleScalar(value.Children[0], out var first, out var firstDepth) ||
+            !TryUnwrapSingleScalar(value.Children[1], out var second, out var secondDepth))
+            return false;
+
+        if (!IsMeasurementScalar(first) || !IsMeasurementScalar(second) || firstDepth != secondDepth)
+            return false;
+
+        string firstPath;
+        string secondPath;
+        if (firstDepth == 1)
+        {
+            firstPath = "instMag.f";
+            secondPath = "mag.f";
+        }
+        else if (firstDepth == 2)
+        {
+            firstPath = "instCVal.mag.f";
+            secondPath = "cVal.mag.f";
+        }
+        else
+        {
+            return false;
+        }
+
+        var effectiveFc = string.IsNullOrWhiteSpace(fc) ? "MX" : fc;
+        projected =
+        [
+            new MmsReportProjectedSignalCandidate
+            {
+                Reference = Combine(reference, firstPath),
+                FunctionalConstraint = effectiveFc,
+                Value = DisplayScalar(Combine(reference, firstPath), first),
+                Quality = q.Validity,
+                Timestamp = t.DisplayTime,
+                Reason = reason,
+                UpdatedAt = receivedAt,
+                IsProjectedChild = true,
+                ProjectionStatus = "projected-mx-pair"
+            },
+            new MmsReportProjectedSignalCandidate
+            {
+                Reference = Combine(reference, secondPath),
+                FunctionalConstraint = effectiveFc,
+                Value = DisplayScalar(Combine(reference, secondPath), second),
+                Quality = q.Validity,
+                Timestamp = t.DisplayTime,
+                Reason = reason,
+                UpdatedAt = receivedAt,
+                IsProjectedChild = true,
+                ProjectionStatus = "projected-mx-pair"
+            }
+        ];
+        return true;
+    }
+
+    private static bool TryUnwrapSingleScalar(
+        MmsDataValue value,
+        out MmsDataValue scalar,
+        out int depth)
+    {
+        scalar = value;
+        depth = 0;
+        while (scalar.Kind is MmsDataKind.Structure or MmsDataKind.Array)
+        {
+            if (scalar.Children.Count != 1)
+                return false;
+            scalar = scalar.Children[0];
+            depth++;
+            if (depth > 3)
+                return false;
+        }
+        return true;
+    }
+
+    private static bool IsMeasurementScalar(MmsDataValue value)
+        => value.Kind is MmsDataKind.Integer or MmsDataKind.Unsigned or MmsDataKind.FloatingPoint;
 
     private static IEnumerable<MmsReportProjectedSignalCandidate> ProjectPhaseMeasurement(string reference, string fc, MmsDataValue value, string reason, DateTimeOffset receivedAt)
     {
@@ -523,7 +619,7 @@ public static class MmsReportValueProjector
     private static string BaseDataObjectReference(string reference)
     {
         var text = reference.Trim();
-        foreach (var suffix in new[] { ".stVal", ".general", ".dirGeneral", ".phsA", ".dirPhsA", ".phsB", ".dirPhsB", ".phsC", ".dirPhsC", ".mag.f", ".cVal.mag.f", ".instCVal.mag.f" })
+        foreach (var suffix in new[] { ".stVal", ".general", ".dirGeneral", ".phsA", ".dirPhsA", ".phsB", ".dirPhsB", ".phsC", ".dirPhsC", ".mag.f", ".instMag.f", ".cVal.mag.f", ".instCVal.mag.f" })
         {
             if (text.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 return text[..^suffix.Length];

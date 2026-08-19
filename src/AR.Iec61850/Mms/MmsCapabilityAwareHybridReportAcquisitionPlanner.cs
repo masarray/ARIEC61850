@@ -12,6 +12,7 @@ public sealed class MmsCapabilityAwareHybridReportAcquisitionPlan
 {
     public MmsHybridReportAcquisitionPlan AcquisitionPlan { get; init; } = new();
     public MmsReportAssociationCapability AssociationCapability { get; init; } = new();
+    public bool AutomaticDynamicActivationQuarantined { get; init; }
 
     public string Summary => $"{AcquisitionPlan.Summary} {AssociationCapability.Summary}";
     public IReadOnlyList<string> Warnings => AcquisitionPlan.Warnings
@@ -94,7 +95,8 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
         return new MmsCapabilityAwareHybridReportAcquisitionPlan
         {
             AcquisitionPlan = plan,
-            AssociationCapability = capability
+            AssociationCapability = capability,
+            AutomaticDynamicActivationQuarantined = options.AllowDynamicBrcb || options.AllowDynamicUrcb
         };
     }
 

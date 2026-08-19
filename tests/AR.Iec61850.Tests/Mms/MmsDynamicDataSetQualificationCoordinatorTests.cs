@@ -134,7 +134,7 @@ public sealed class MmsDynamicDataSetQualificationCoordinatorTests
     }
 
     [Fact]
-    public void MismatchedLadderAndProbeSafetyLimits_AreRejectedBeforeExecution()
+    public async Task MismatchedLadderAndProbeSafetyLimits_AreRejectedBeforeExecution()
     {
         var options = new MmsDynamicDataSetQualificationCoordinatorOptions
         {
@@ -150,7 +150,7 @@ public sealed class MmsDynamicDataSetQualificationCoordinatorTests
             }
         };
 
-        Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<ArgumentException>(() =>
             MmsDynamicDataSetQualificationCoordinator.RunAsync(
                 BuildMembers(8),
                 (members, _) => Task.FromResult(SuccessProbe(members)),

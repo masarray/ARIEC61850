@@ -352,7 +352,7 @@ public sealed partial class MmsClientSession
             $"G2.1 NVL QUALIFY VERIFY: success={directoryVerified}; dataset={dataSetReference}; " +
             $"expectedCount={memberReferences.Length}; returnedCount={returnedMemberReferences.Length}; " +
             $"expectedMembers={FormatMembers(memberReferences)}; returnedMembers={FormatMembers(returnedMemberReferences)}; " +
-            $"result={directoryResult.Message}; responseHEX={TextOrNone(directoryResult.ResponseHexPreview)}");
+            $"result={directoryResult.Message}; responseHEX={QualificationTextOrNone(directoryResult.ResponseHexPreview)}");
 
         var delete = IsMmsInitiated
             ? await SendQualificationDeleteAsync(
@@ -639,13 +639,13 @@ public sealed partial class MmsClientSession
     {
         lines.Add($"G2.1 NVL QUALIFY {label}: {serviceEvidence.Summary}");
         lines.Add($"G2.1 NVL QUALIFY {label} members={FormatMembers(serviceEvidence.MemberReferences)}");
-        lines.Add($"G2.1 NVL QUALIFY {label} requestHEX={TextOrNone(serviceEvidence.RequestHex)}");
-        lines.Add($"G2.1 NVL QUALIFY {label} responseHEX={TextOrNone(serviceEvidence.ResponseHex)}");
+        lines.Add($"G2.1 NVL QUALIFY {label} requestHEX={QualificationTextOrNone(serviceEvidence.RequestHex)}");
+        lines.Add($"G2.1 NVL QUALIFY {label} responseHEX={QualificationTextOrNone(serviceEvidence.ResponseHex)}");
     }
 
     private static string FormatMembers(IReadOnlyList<string> members)
         => members.Count == 0 ? "<none>" : string.Join(" | ", members);
 
-    private static string TextOrNone(string? value)
+    private static string QualificationTextOrNone(string? value)
         => string.IsNullOrWhiteSpace(value) ? "<none>" : value.Trim();
 }

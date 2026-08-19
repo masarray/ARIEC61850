@@ -43,4 +43,8 @@ public sealed class G11MmsWriteAccessErrorTests
     [InlineData(12, "unknown")]
     public void StandardMmsDataAccessErrors_HaveExplicitNames(int code, string expected)
         => Assert.Equal(expected, MmsWriteResponseDecoder.NameDataAccessError(code));
+
+    [Fact]
+    public void VendorSpecificUnknownAccessError_RemainsNumericallyVisible()
+        => Assert.Equal("data-access-error-99", MmsWriteResponseDecoder.NameDataAccessError(99));
 }

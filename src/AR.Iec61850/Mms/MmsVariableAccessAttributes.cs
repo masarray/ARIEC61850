@@ -3,12 +3,26 @@ using AR.Iec61850.Diagnostics;
 
 namespace AR.Iec61850.Mms;
 
+public enum MmsTypeSizeConstraintKind
+{
+    None,
+    Fixed,
+    Maximum
+}
+
 public sealed class MmsTypeSpecificationNode
 {
     public string Name { get; init; } = string.Empty;
     public string MmsType { get; init; } = string.Empty;
     public string SclBType { get; init; } = string.Empty;
+    /// <summary>
+    /// Fixed size or maximum variable size, depending on <see cref="SizeConstraintKind"/>.
+    /// Negative MMS TypeSpecification size values are represented by their absolute maximum.
+    /// </summary>
     public int? Size { get; init; }
+    public MmsTypeSizeConstraintKind SizeConstraintKind { get; init; }
+    public int? RawSizeConstraint { get; init; }
+    public bool IsVariableLength => SizeConstraintKind == MmsTypeSizeConstraintKind.Maximum;
     public string Detail { get; init; } = string.Empty;
     public IReadOnlyList<MmsTypeSpecificationNode> Children { get; init; } = Array.Empty<MmsTypeSpecificationNode>();
 
@@ -396,6 +410,8 @@ public static class MmsVariableAccessAttributesResponseDecoder
                 MmsType = type.MmsType,
                 SclBType = type.SclBType,
                 Size = type.Size,
+                SizeConstraintKind = type.SizeConstraintKind,
+                RawSizeConstraint = type.RawSizeConstraint,
                 Detail = type.Detail,
                 Children = type.Children
             };
@@ -438,29 +454,54 @@ public static class MmsVariableAccessAttributesResponseDecoder
     }
 
     private static MmsTypeSpecificationNode Basic(string componentName, string mmsType, string sclBType, BerTlv tlv)
-        => new()
+    {
+        var constraint = DecodeSizeConstraint(tlv);
+        return new MmsTypeSpecificationNode
         {
             Name = componentName,
             MmsType = mmsType,
             SclBType = sclBType,
-            Size = TryReadSize(tlv),
-            Detail = FormatDetail(tlv)
+            Size = constraint.Size,
+            SizeConstraintKind = constraint.Kind,
+            RawSizeConstraint = constraint.Raw,
+            Detail = FormatDetail(constraint)
         };
+    }
 
-    private static int? TryReadSize(BerTlv tlv)
+    private static MmsTypeSizeConstraint DecodeSizeConstraint(BerTlv tlv)
     {
         if (tlv.Value.IsEmpty || tlv.Value.Length > 4)
-            return null;
+            return default;
 
-        var parsed = BerReader.ReadUnsignedInteger(tlv);
-        return parsed.HasValue && parsed.Value <= int.MaxValue ? (int)parsed.Value : null;
+        // MMS TypeSpecification primitive size fields are signed Integer32 values.
+        // A negative value denotes variable length with the absolute value as the
+        // maximum. Reading these bytes as unsigned turns -2 (FE) into 254 and breaks
+        // IEC 61850 Check, which is semantically a two-bit BIT STRING.
+        var parsed = BerReader.ReadSignedInteger(tlv);
+        if (!parsed.HasValue || parsed.Value < int.MinValue || parsed.Value > int.MaxValue)
+            return default;
+
+        var raw = (int)parsed.Value;
+        if (raw == int.MinValue)
+            return new MmsTypeSizeConstraint(null, MmsTypeSizeConstraintKind.None, raw);
+
+        return raw < 0
+            ? new MmsTypeSizeConstraint(Math.Abs(raw), MmsTypeSizeConstraintKind.Maximum, raw)
+            : new MmsTypeSizeConstraint(raw, MmsTypeSizeConstraintKind.Fixed, raw);
     }
 
-    private static string FormatDetail(BerTlv tlv)
-    {
-        var size = TryReadSize(tlv);
-        return size.HasValue ? $"size={size.Value}" : string.Empty;
-    }
+    private static string FormatDetail(MmsTypeSizeConstraint constraint)
+        => constraint.Kind switch
+        {
+            MmsTypeSizeConstraintKind.Fixed when constraint.Size.HasValue => $"size={constraint.Size.Value}; fixed",
+            MmsTypeSizeConstraintKind.Maximum when constraint.Size.HasValue => $"max={constraint.Size.Value}; variable",
+            _ => string.Empty
+        };
+
+    private readonly record struct MmsTypeSizeConstraint(
+        int? Size,
+        MmsTypeSizeConstraintKind Kind,
+        int? Raw);
 
     private static MmsVariableAccessAttributesResult Fail(MmsObjectReference reference, string message, string hex)
         => new()

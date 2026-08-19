@@ -299,6 +299,11 @@ public sealed class SmartControlStackTests
         Assert.Equal(2, transport.Writes.Count);
         Assert.EndsWith("$SBOw", transport.Writes[0].Reference.Item, StringComparison.Ordinal);
         Assert.EndsWith("$Oper", transport.Writes[1].Reference.Item, StringComparison.Ordinal);
+        Assert.Equal(2, result.WireSteps.Count);
+        Assert.Equal(Iec61850ControlAction.SelectWithValue, result.WireSteps[0].Action);
+        Assert.EndsWith("$SBOw", result.WireSteps[0].Reference, StringComparison.Ordinal);
+        Assert.Equal(Iec61850ControlAction.Operate, result.WireSteps[1].Action);
+        Assert.EndsWith("$Oper", result.WireSteps[1].Reference, StringComparison.Ordinal);
     }
 
     [Fact]

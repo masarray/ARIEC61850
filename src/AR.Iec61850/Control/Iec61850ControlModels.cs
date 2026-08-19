@@ -194,6 +194,16 @@ public sealed class Iec61850ControlStatusResult
     public DateTimeOffset ReadAtUtc { get; init; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class Iec61850ControlWireStep
+{
+    public Iec61850ControlAction Action { get; init; }
+    public string Reference { get; init; } = string.Empty;
+    public bool RequestAccepted { get; init; }
+    public string RequestHex { get; init; } = string.Empty;
+    public string ResponseHex { get; init; } = string.Empty;
+    public string Detail { get; init; } = string.Empty;
+}
+
 public sealed class Iec61850ControlActionResult
 {
     public Iec61850ControlAction Action { get; init; }
@@ -211,6 +221,12 @@ public sealed class Iec61850ControlActionResult
     public DateTimeOffset? SequenceTimestamp { get; init; }
     public TimeSpan Elapsed { get; init; }
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+    /// <summary>
+    /// Ordered wire-service evidence for the complete control transaction. For an
+    /// auto-selected SBO sequence this contains the Select/SBOw step before Operate,
+    /// rather than exposing only the last request on the association.
+    /// </summary>
+    public IReadOnlyList<Iec61850ControlWireStep> WireSteps { get; init; } = Array.Empty<Iec61850ControlWireStep>();
 
     public bool IsSuccess => RequestAccepted &&
         CompletionState is Iec61850ControlCompletionState.Accepted or Iec61850ControlCompletionState.PositiveTermination;

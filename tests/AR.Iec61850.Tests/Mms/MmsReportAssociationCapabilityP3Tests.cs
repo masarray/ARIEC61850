@@ -39,7 +39,7 @@ public sealed class MmsReportAssociationCapabilityP3Tests
         Assert.Equal(1, result.AssociationCapability.DynamicUrcbSlotCount);
         var control = Assert.Single(result.AssociationCapability.ReportControls);
         Assert.True(control.IsDynamicWriteAttemptCandidate);
-        Assert.Equal(MmsCapabilityEvidenceState.Advertised, control.TriggerOptionsAccess);
+        Assert.Equal(MmsCapabilityEvidenceState.Exposed, control.TriggerOptionsAccess);
 
         // P6.2-B physical field evidence proved that one-member service capability does
         // not make an automatic full DataSet safe on the production association.

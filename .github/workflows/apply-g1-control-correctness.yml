@@ -1,0 +1,41 @@
+name: Apply G1 control correctness patch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - fix/p6-2-b-stability-projection
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'fix/g1-control-correctness'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply deterministic G1 patch
+        run: python scripts/apply-g1-control-correctness.py
+      - name: Remove one-shot staging files
+        run: |
+          rm scripts/apply-g1-control-correctness.py
+          rm .github/workflows/apply-g1-control-correctness.yml
+      - name: Commit materialized source
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git commit -m 'fix(control): decode MMS size constraints with signed semantics'
+          git push origin HEAD:${{ github.head_ref }}

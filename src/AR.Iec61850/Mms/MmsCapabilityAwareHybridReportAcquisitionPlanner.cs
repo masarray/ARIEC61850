@@ -48,23 +48,26 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
         // Do not place the P3 capability wrapper in front of the stable static planner.
         // A populated DataSet discovered with an exact fresh directory is static protocol
         // evidence and must remain visible to MmsHybridReportAcquisitionPlanner, which owns
-        // the established static-usability checks. Capability qualification is retained for
-        // empty RCB slots because those require a new DataSet plus RCB writes.
+        // the established static-usability checks.
+        //
+        // P6.2-B field-stability rule:
+        // The single-member Define/GetAttributes/Delete probation proved that an association
+        // can support the NamedVariableList service while a later full dynamic DataSet still
+        // aborts that same association. Therefore advertised capability or a successful
+        // one-member probation is not sufficient permission for automatic full dynamic
+        // activation on the production monitoring association. Keep the dynamic primitive
+        // available for explicit diagnostics, but automatic acquisition is static -> polling
+        // until staged multi-member interoperability has been proven independently.
         var configuredStaticReferences = availability.ReportControls
             .Where(HasConfiguredStaticDataSetEvidence)
-            .Select(snapshot => Normalize(snapshot.Reference));
-        var qualifiedDynamicReferences = capability.ReportControls
-            .Where(control => control.IsDynamicWriteAttemptCandidate)
-            .Select(control => Normalize(control.Reference));
-        var eligibleReferences = configuredStaticReferences
-            .Concat(qualifiedDynamicReferences)
+            .Select(snapshot => Normalize(snapshot.Reference))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var restrictedAvailability = new MmsRcbAvailabilityResult
         {
             CheckedAtUtc = availability.CheckedAtUtc,
             ReportControls = availability.ReportControls
-                .Where(snapshot => eligibleReferences.Contains(Normalize(snapshot.Reference)))
+                .Where(snapshot => configuredStaticReferences.Contains(Normalize(snapshot.Reference)))
                 .ToArray(),
             Warnings = availability.Warnings
                 .Concat(capability.Warnings)
@@ -75,15 +78,16 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
         var restrictedInventory = new MmsReportInventory();
         restrictedInventory.DataSets.AddRange(inventory.DataSets);
         restrictedInventory.ReportControls.AddRange(inventory.ReportControls
-            .Where(candidate => eligibleReferences.Contains(Normalize(candidate.Reference))));
+            .Where(candidate => configuredStaticReferences.Contains(Normalize(candidate.Reference))));
 
+        var automaticOptions = AutomaticMonitoringOptions(options);
         var plan = MmsHybridReportAcquisitionPlanner.Build(
             catalog,
             requestedSignals,
             restrictedInventory,
             restrictedAvailability,
             liveDirectory,
-            options);
+            automaticOptions);
 
         RestoreFreshAttributeEvidence(plan, availability);
 
@@ -93,6 +97,25 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
             AssociationCapability = capability
         };
     }
+
+    private static MmsHybridReportAcquisitionOptions AutomaticMonitoringOptions(
+        MmsHybridReportAcquisitionOptions source)
+        => new()
+        {
+            MaxStaticReportPlans = source.MaxStaticReportPlans,
+            MaxDynamicReportPlans = source.MaxDynamicReportPlans,
+            MaxDynamicMembersPerReport = source.MaxDynamicMembersPerReport,
+            RequireExactAvailabilityEvidence = source.RequireExactAvailabilityEvidence,
+            AllowCallerOwnedReports = source.AllowCallerOwnedReports,
+            AllowStaticBrcb = source.AllowStaticBrcb,
+            AllowStaticUrcb = source.AllowStaticUrcb,
+            // P6.2-B: automatic full dynamic DataSet activation is quarantined after
+            // physical evidence that a successful single-member NVL probation does not
+            // guarantee association survival for the full member set.
+            AllowDynamicBrcb = false,
+            AllowDynamicUrcb = false,
+            AllowPollingFallback = source.AllowPollingFallback
+        };
 
     private static bool HasConfiguredStaticDataSetEvidence(MmsRcbAvailabilitySnapshot snapshot)
         => snapshot.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded &&
@@ -132,8 +155,8 @@ public static class MmsCapabilityAwareHybridReportAcquisitionPlanner
             candidate.ProbeDiagnostics.Clear();
             candidate.ProbeDiagnostics.AddRange(snapshot.ProbeDiagnostics);
             candidate.Status = segment.Kind is MmsHybridAcquisitionKind.StaticBrcb or MmsHybridAcquisitionKind.StaticUrcb
-                ? "P6.1 baseline-static fresh availability snapshot"
-                : "P6.1 capability-qualified dynamic fresh availability snapshot";
+                ? "P6.2-B baseline-static fresh availability snapshot"
+                : "P6.2-B capability-qualified dynamic fresh availability snapshot";
         }
     }
 

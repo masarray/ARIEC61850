@@ -24,7 +24,7 @@ public sealed class MmsReportAssociationCapabilityP3Tests
     }
 
     [Fact]
-    public void ExactFreeUrcb_WithRequiredFieldEvidence_BecomesDynamicCandidateAndKeepsTrgOpsEvidence()
+    public void ExactFreeUrcb_WithRequiredFieldEvidence_RemainsCapabilityCandidateButAutomaticMonitoringPolls()
     {
         var signal = Signal();
         var inventory = Inventory(Rcb());
@@ -33,18 +33,21 @@ public sealed class MmsReportAssociationCapabilityP3Tests
 
         var result = Build(signal, inventory, availability, negotiated);
 
+        // P3 capability interpretation remains intact: the association exposes enough
+        // evidence for an explicit diagnostic/staged dynamic attempt.
         Assert.True(result.AssociationCapability.MayAttemptDynamicReports);
         Assert.Equal(1, result.AssociationCapability.DynamicUrcbSlotCount);
-        Assert.Equal(MmsHybridAcquisitionPlanStatus.FullReportCoverage, result.AcquisitionPlan.Status);
-        Assert.Equal(1, result.AcquisitionPlan.DynamicUrcbSignalCount);
-        Assert.Equal(0, result.AcquisitionPlan.PollingFallbackSignalCount);
+        var control = Assert.Single(result.AssociationCapability.ReportControls);
+        Assert.True(control.IsDynamicWriteAttemptCandidate);
+        Assert.Equal(MmsCapabilityEvidenceState.Advertised, control.TriggerOptionsAccess);
 
+        // P6.2-B physical field evidence proved that one-member service capability does
+        // not make an automatic full DataSet safe on the production association.
+        Assert.Equal(MmsHybridAcquisitionPlanStatus.PollingOnly, result.AcquisitionPlan.Status);
+        Assert.Equal(0, result.AcquisitionPlan.DynamicUrcbSignalCount);
+        Assert.Equal(1, result.AcquisitionPlan.PollingFallbackSignalCount);
         var segment = Assert.Single(result.AcquisitionPlan.Segments);
-        Assert.Equal(MmsHybridAcquisitionKind.DynamicUrcb, segment.Kind);
-        Assert.NotNull(segment.ReportPlan?.ReportControl);
-        Assert.Contains("TrgOps", segment.ReportPlan!.ReportControl!.Attributes, StringComparer.OrdinalIgnoreCase);
-        Assert.Contains("DatSet", segment.ReportPlan.ReportControl.Attributes, StringComparer.OrdinalIgnoreCase);
-        Assert.Contains("RptEna", segment.ReportPlan.ReportControl.Attributes, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(MmsHybridAcquisitionKind.MmsPollingFallback, segment.Kind);
     }
 
     [Fact]

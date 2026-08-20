@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Sockets;
 
 namespace AR.Iec61850.Osi;
@@ -9,6 +10,18 @@ public sealed class TpktClient : IAsyncDisposable
 
     public bool IsConnected => _tcpClient?.Connected == true;
     public bool HasDataAvailable => _stream?.DataAvailable == true;
+    public string LocalAddress
+    {
+        get
+        {
+            var address = (_tcpClient?.Client.LocalEndPoint as IPEndPoint)?.Address;
+            if (address is null)
+                return string.Empty;
+            if (address.IsIPv4MappedToIPv6)
+                address = address.MapToIPv4();
+            return address.ToString();
+        }
+    }
 
     public async Task ConnectAsync(string host, int port, TimeSpan timeout, CancellationToken cancellationToken)
     {

@@ -86,17 +86,6 @@ public sealed partial class MmsClientSession
             };
         }
 
-        if (!reportControl.Attributes.Contains("TrgOps", StringComparer.OrdinalIgnoreCase) ||
-            !reportControl.Attributes.Contains("OptFlds", StringComparer.OrdinalIgnoreCase))
-        {
-            return new MmsDynamicRcbCommissioningFieldPrepareResult
-            {
-                IsSuccess = false,
-                CleanupSucceeded = true,
-                Message = "Selected URCB does not expose both TrgOps and OptFlds; no commissioning field was changed."
-            };
-        }
-
         if (!MmsReportControlFieldCodec.TryEncodeTriggerOptions(triggerOptions, out var desiredTriggerOptions) ||
             !MmsReportControlFieldCodec.TryEncodeOptionalFields(optionalFields, out var desiredOptionalFields))
         {
@@ -108,6 +97,10 @@ public sealed partial class MmsClientSession
             };
         }
 
+        // Do not trust GetNameList attribute advertisement as a write gate. Some IEDs
+        // expose the base RCB and child attributes inconsistently. Exact direct-read of
+        // both original fields is a stronger prerequisite because it also captures the
+        // byte-exact values needed for rollback.
         var originalTriggerRead = await ReadReportControlFieldValueAsync(reportControl, "TrgOps", cancellationToken).ConfigureAwait(false);
         var originalOptionalRead = await ReadReportControlFieldValueAsync(reportControl, "OptFlds", cancellationToken).ConfigureAwait(false);
         if (!originalTriggerRead.IsSuccess || originalTriggerRead.Value?.Kind != MmsDataKind.BitString ||
@@ -162,6 +155,13 @@ public sealed partial class MmsClientSession
 
             reportControl.TriggerOptions = triggerOptions;
             reportControl.OptionalFields = optionalFields;
+
+            // Successful direct write + exact readback proves these child attributes are
+            // usable in this association even if discovery did not advertise them.
+            if (!reportControl.Attributes.Contains("TrgOps", StringComparer.OrdinalIgnoreCase))
+                reportControl.Attributes.Add("TrgOps");
+            if (!reportControl.Attributes.Contains("OptFlds", StringComparer.OrdinalIgnoreCase))
+                reportControl.Attributes.Add("OptFlds");
 
             return new MmsDynamicRcbCommissioningFieldPrepareResult
             {

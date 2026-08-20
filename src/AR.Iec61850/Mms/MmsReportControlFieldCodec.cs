@@ -1,8 +1,10 @@
 namespace AR.Iec61850.Mms;
 
 /// <summary>
-/// Encodes and decodes IEC 61850 RCB bit-string fields from engineer-readable names
-/// and from the canonical renderer form, for example <c>bits(08, unused=2)</c>.
+/// Encodes and decodes IEC 61850 RCB bit-string fields from engineer-readable names,
+/// the canonical renderer form (for example <c>bits(08, unused=2)</c>), and the
+/// exact MMS display form emitted by <see cref="MmsDataCodec.ToDisplayString"/>
+/// (for example <c>0204</c>, where the first octet is the BER bit-string unused-bit count).
 /// Bit indexes follow IEC 61850-7-2 ordering (MSB first in the MMS bit-string).
 /// </summary>
 public static class MmsReportControlFieldCodec
@@ -134,7 +136,8 @@ public static class MmsReportControlFieldCodec
                 enabled[bit] = true;
         }
 
-        if (TryParseRenderedBitString(text, out var bytes))
+        if (TryParseRenderedBitString(text, out var bytes) ||
+            TryParseExactMmsDisplayBitString(text, bitCount, out bytes))
         {
             for (var bit = 0; bit < bitCount; bit++)
             {
@@ -171,6 +174,44 @@ public static class MmsReportControlFieldCodec
         {
             bytes = Convert.FromHexString(hex);
             return bytes.Length > 0;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Parses the exact display form produced by MmsDataCodec for a BitString.
+    /// The first octet is the BER unused-bit count and the remaining octets are
+    /// the bit-string payload. This is intentionally strict so an arbitrary
+    /// decimal-looking token is never reinterpreted as report-control flags.
+    /// </summary>
+    private static bool TryParseExactMmsDisplayBitString(string? text, int bitCount, out byte[] bytes)
+    {
+        bytes = Array.Empty<byte>();
+        var source = (text ?? string.Empty)
+            .Replace("0x", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Trim();
+
+        var expectedPayloadBytes = (bitCount + 7) / 8;
+        var expectedHexLength = (expectedPayloadBytes + 1) * 2;
+        if (source.Length != expectedHexLength || (source.Length & 1) != 0 || !source.All(Uri.IsHexDigit))
+            return false;
+
+        try
+        {
+            var raw = Convert.FromHexString(source);
+            if (raw.Length != expectedPayloadBytes + 1)
+                return false;
+
+            var expectedUnusedBits = checked((byte)(expectedPayloadBytes * 8 - bitCount));
+            if (raw[0] != expectedUnusedBits)
+                return false;
+
+            bytes = raw[1..];
+            return bytes.Length == expectedPayloadBytes;
         }
         catch (FormatException)
         {

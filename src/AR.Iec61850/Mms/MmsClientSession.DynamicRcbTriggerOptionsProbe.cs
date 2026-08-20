@@ -102,7 +102,7 @@ public sealed partial class MmsClientSession
                 if (readback.IsSuccess && readback.Value is not null)
                     requestedComparison = MmsReportControlFieldCodec.CompareTriggerOptions(requested, readback.Value);
 
-                evidence.Add(ComparisonEvidence(
+                evidence.Add(ProbeComparisonEvidence(
                     "P0 TrgOps requested readback",
                     readback.IsSuccess,
                     requestedComparison,
@@ -134,7 +134,7 @@ public sealed partial class MmsClientSession
                                    restoreRead.IsSuccess &&
                                    restoreComparison?.IsSemanticMatch == true;
 
-                evidence.Add(ComparisonEvidence(
+                evidence.Add(ProbeComparisonEvidence(
                     "P0 TrgOps restore readback",
                     restoreRead.IsSuccess,
                     restoreComparison,
@@ -172,7 +172,7 @@ public sealed partial class MmsClientSession
         };
     }
 
-    private static string ComparisonEvidence(
+    private static string ProbeComparisonEvidence(
         string label,
         bool readSuccess,
         MmsReportBitStringComparison? comparison,

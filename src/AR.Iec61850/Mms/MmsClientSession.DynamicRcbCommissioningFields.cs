@@ -1,9 +1,10 @@
 namespace AR.Iec61850.Mms;
 
 /// <summary>
-/// Exact temporary lease over mutable URCB proof fields used only by explicit
-/// commissioning. The original MMS values are retained byte-for-byte so they
-/// can be restored after the proof attempt.
+/// Transactional temporary lease over mutable URCB proof fields used only by explicit
+/// commissioning. Original MMS values are retained byte-for-byte for restore writes,
+/// while proof equality follows the IEC significant BIT STRING bits and keeps raw BER
+/// differences as evidence instead of treating vendor padding as process semantics.
 /// </summary>
 public sealed class MmsDynamicRcbCommissioningFieldLease
 {
@@ -97,10 +98,8 @@ public sealed partial class MmsClientSession
             };
         }
 
-        // Do not trust GetNameList attribute advertisement as a write gate. Some IEDs
-        // expose the base RCB and child attributes inconsistently. Exact direct-read of
-        // both original fields is a stronger prerequisite because it also captures the
-        // byte-exact values needed for rollback.
+        // Do not trust GetNameList child advertisement as a write gate. Exact direct reads
+        // capture the actual original MMS values that will be written back during cleanup.
         var originalTriggerRead = await ReadReportControlFieldValueAsync(reportControl, "TrgOps", cancellationToken).ConfigureAwait(false);
         var originalOptionalRead = await ReadReportControlFieldValueAsync(reportControl, "OptFlds", cancellationToken).ConfigureAwait(false);
         if (!originalTriggerRead.IsSuccess || originalTriggerRead.Value?.Kind != MmsDataKind.BitString ||
@@ -112,7 +111,7 @@ public sealed partial class MmsClientSession
             {
                 IsSuccess = false,
                 CleanupSucceeded = true,
-                Message = "Original TrgOps/OptFlds could not be captured as exact MMS BitString values. No commissioning field was changed.",
+                Message = "Original TrgOps/OptFlds could not be captured as MMS BitString values. No commissioning field was changed.",
                 Evidence = evidence
             };
         }
@@ -136,10 +135,17 @@ public sealed partial class MmsClientSession
                 return await FailPrepareAndRollbackAsync(lease, writes, evidence, "Temporary TrgOps write failed.").ConfigureAwait(false);
 
             var triggerReadback = await ReadReportControlFieldValueAsync(reportControl, "TrgOps", cancellationToken).ConfigureAwait(false);
-            var triggerExact = triggerReadback.IsSuccess && triggerReadback.Value is not null && ExactMmsValueEquals(triggerReadback.Value, desiredTriggerOptions);
-            evidence.Add($"temporary TrgOps readback: success={triggerReadback.IsSuccess}; exact={triggerExact}; value={RenderValue(triggerReadback.Value)}; result={triggerReadback.Message}");
-            if (!triggerExact)
-                return await FailPrepareAndRollbackAsync(lease, writes, evidence, "Temporary TrgOps readback was not exact.").ConfigureAwait(false);
+            var triggerComparison = triggerReadback.IsSuccess && triggerReadback.Value is not null
+                ? MmsReportControlFieldCodec.CompareTriggerOptions(desiredTriggerOptions, triggerReadback.Value)
+                : null;
+            evidence.Add(ComparisonEvidence(
+                "temporary TrgOps readback",
+                triggerReadback.IsSuccess,
+                triggerComparison,
+                RenderValue(triggerReadback.Value),
+                triggerReadback.Message));
+            if (triggerComparison?.IsSemanticMatch != true)
+                return await FailPrepareAndRollbackAsync(lease, writes, evidence, "Temporary TrgOps significant-bit readback was not equal.").ConfigureAwait(false);
 
             var optionalWrite = await WriteReportAttributeAsync(reportControl, "OptFlds", desiredOptionalFields, cancellationToken).ConfigureAwait(false);
             lease.OptionalFieldsTouched = true;
@@ -148,16 +154,23 @@ public sealed partial class MmsClientSession
                 return await FailPrepareAndRollbackAsync(lease, writes, evidence, "Temporary OptFlds write failed.").ConfigureAwait(false);
 
             var optionalReadback = await ReadReportControlFieldValueAsync(reportControl, "OptFlds", cancellationToken).ConfigureAwait(false);
-            var optionalExact = optionalReadback.IsSuccess && optionalReadback.Value is not null && ExactMmsValueEquals(optionalReadback.Value, desiredOptionalFields);
-            evidence.Add($"temporary OptFlds readback: success={optionalReadback.IsSuccess}; exact={optionalExact}; value={RenderValue(optionalReadback.Value)}; result={optionalReadback.Message}");
-            if (!optionalExact)
-                return await FailPrepareAndRollbackAsync(lease, writes, evidence, "Temporary OptFlds readback was not exact.").ConfigureAwait(false);
+            var optionalComparison = optionalReadback.IsSuccess && optionalReadback.Value is not null
+                ? MmsReportControlFieldCodec.CompareOptionalFields(desiredOptionalFields, optionalReadback.Value)
+                : null;
+            evidence.Add(ComparisonEvidence(
+                "temporary OptFlds readback",
+                optionalReadback.IsSuccess,
+                optionalComparison,
+                RenderValue(optionalReadback.Value),
+                optionalReadback.Message));
+            if (optionalComparison?.IsSemanticMatch != true)
+                return await FailPrepareAndRollbackAsync(lease, writes, evidence, "Temporary OptFlds significant-bit readback was not equal.").ConfigureAwait(false);
 
             reportControl.TriggerOptions = triggerOptions;
             reportControl.OptionalFields = optionalFields;
 
-            // Successful direct write + exact readback proves these child attributes are
-            // usable in this association even if discovery did not advertise them.
+            // Successful direct write + significant-bit readback proves these child
+            // attributes usable in this association even if discovery omitted them.
             if (!reportControl.Attributes.Contains("TrgOps", StringComparer.OrdinalIgnoreCase))
                 reportControl.Attributes.Add("TrgOps");
             if (!reportControl.Attributes.Contains("OptFlds", StringComparer.OrdinalIgnoreCase))
@@ -170,7 +183,7 @@ public sealed partial class MmsClientSession
                 Lease = lease,
                 WriteSteps = writes,
                 Evidence = evidence,
-                Message = "Temporary G2.4 TrgOps/OptFlds lease established with exact readback. Caller must restore the lease after the report proof attempt."
+                Message = "Temporary G2.4 TrgOps/OptFlds lease established with IEC significant-bit readback. Raw BER evidence is retained; caller must restore the lease after the proof attempt."
             };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
@@ -181,10 +194,9 @@ public sealed partial class MmsClientSession
     }
 
     /// <summary>
-    /// Restores exact original TrgOps/OptFlds values captured by
-    /// PrepareDynamicRcbCommissioningFieldsAsync. The caller should stop/disable
-    /// the RCB first. Success requires write success and exact readback of every
-    /// field that was touched.
+    /// Restores the original TrgOps/OptFlds MMS values captured by preparation.
+    /// The original raw values are written back; success requires the significant IEC
+    /// bits to match on readback. Raw padding differences are preserved in evidence.
     /// </summary>
     public async Task<MmsDynamicRcbCommissioningFieldRestoreResult> RestoreDynamicRcbCommissioningFieldsAsync(
         MmsDynamicRcbCommissioningFieldLease lease,
@@ -206,9 +218,7 @@ public sealed partial class MmsClientSession
         var evidence = new List<string>();
         var success = true;
 
-        // Restore OptFlds first, then TrgOps. RptEna is expected to be false before
-        // this method is called, so no report can be emitted with a half-restored
-        // proof configuration.
+        // Restore OptFlds first, then TrgOps. RptEna is expected false before this call.
         if (lease.OptionalFieldsTouched)
         {
             var restoreOptional = await TryWriteReportAttributeForCleanupAsync(
@@ -220,9 +230,16 @@ public sealed partial class MmsClientSession
             success &= restoreOptional.IsSuccess;
 
             var readback = await ReadReportControlFieldValueAsync(lease.ReportControl, "OptFlds", CancellationToken.None).ConfigureAwait(false);
-            var exact = readback.IsSuccess && readback.Value is not null && ExactMmsValueEquals(readback.Value, lease.OriginalOptionalFields);
-            evidence.Add($"restore OptFlds readback: write={restoreOptional.IsSuccess}; read={readback.IsSuccess}; exact={exact}; value={RenderValue(readback.Value)}; expected={lease.OriginalOptionalFieldsText}");
-            success &= exact;
+            var comparison = readback.IsSuccess && readback.Value is not null
+                ? MmsReportControlFieldCodec.CompareOptionalFields(lease.OriginalOptionalFields, readback.Value)
+                : null;
+            evidence.Add(ComparisonEvidence(
+                "restore OptFlds readback",
+                readback.IsSuccess,
+                comparison,
+                RenderValue(readback.Value),
+                $"write={restoreOptional.IsSuccess}; expected={lease.OriginalOptionalFieldsText}; {readback.Message}"));
+            success &= comparison?.IsSemanticMatch == true;
         }
 
         if (lease.TriggerOptionsTouched)
@@ -236,9 +253,16 @@ public sealed partial class MmsClientSession
             success &= restoreTrigger.IsSuccess;
 
             var readback = await ReadReportControlFieldValueAsync(lease.ReportControl, "TrgOps", CancellationToken.None).ConfigureAwait(false);
-            var exact = readback.IsSuccess && readback.Value is not null && ExactMmsValueEquals(readback.Value, lease.OriginalTriggerOptions);
-            evidence.Add($"restore TrgOps readback: write={restoreTrigger.IsSuccess}; read={readback.IsSuccess}; exact={exact}; value={RenderValue(readback.Value)}; expected={lease.OriginalTriggerOptionsText}");
-            success &= exact;
+            var comparison = readback.IsSuccess && readback.Value is not null
+                ? MmsReportControlFieldCodec.CompareTriggerOptions(lease.OriginalTriggerOptions, readback.Value)
+                : null;
+            evidence.Add(ComparisonEvidence(
+                "restore TrgOps readback",
+                readback.IsSuccess,
+                comparison,
+                RenderValue(readback.Value),
+                $"write={restoreTrigger.IsSuccess}; expected={lease.OriginalTriggerOptionsText}; {readback.Message}"));
+            success &= comparison?.IsSemanticMatch == true;
         }
 
         if (success)
@@ -254,8 +278,8 @@ public sealed partial class MmsClientSession
             WriteSteps = writes,
             Evidence = evidence,
             Message = success
-                ? "Temporary G2.4 TrgOps/OptFlds lease restored with exact MMS readback."
-                : "Temporary G2.4 TrgOps/OptFlds restore was not fully proven; treat the RCB as requiring fresh manual/read-only inspection before retry."
+                ? "Temporary G2.4 TrgOps/OptFlds lease restored with IEC significant-bit readback; raw BER evidence retained."
+                : "Temporary G2.4 TrgOps/OptFlds restore was not fully proven; treat the RCB as requiring fresh read-only inspection before retry."
         };
     }
 
@@ -308,8 +332,18 @@ public sealed partial class MmsClientSession
         return await ReadSingleVariableAsync(reference, cancellationToken).ConfigureAwait(false);
     }
 
-    private static bool ExactMmsValueEquals(MmsDataValue left, MmsDataValue right)
-        => left.Kind == right.Kind && MmsDataCodec.Encode(left).AsSpan().SequenceEqual(MmsDataCodec.Encode(right));
+    private static string ComparisonEvidence(
+        string label,
+        bool readSuccess,
+        MmsReportBitStringComparison? comparison,
+        string actualRaw,
+        string message)
+    {
+        if (comparison is null)
+            return $"{label}: read={readSuccess}; semanticExact=False; rawExact=False; paddingOnlyDiff=False; value={actualRaw}; result={message}";
+
+        return $"{label}: read={readSuccess}; semanticExact={comparison.IsSemanticMatch}; rawExact={comparison.IsRawExact}; paddingOnlyDiff={comparison.PaddingOnlyDifference}; expected={comparison.ExpectedHex}; actual={comparison.ActualHex}; result={message}";
+    }
 
     private static string RenderValue(MmsDataValue? value)
         => value is null ? "-" : MmsDataCodec.ToDisplayString(value);

@@ -61,7 +61,9 @@ public sealed class LiveIedSclRcbOptionFidelityTests
                     Buffered = false,
                     DataSetReference = "OCR7SJ8Application/LLN0.DataSet",
                     ConfRev = "1",
-                    TriggerOptions = "bits(08, unused=2)",
+                    // IEC 61850 TrgOps bit 0 is reserved; bit 5 is GI. For the six-bit
+                    // MMS BIT STRING the canonical GI-only raw payload is 0x04.
+                    TriggerOptions = "bits(04, unused=2)",
                     OptionalFields = "bits(0200, unused=6)"
                 }
             ]

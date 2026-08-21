@@ -5,14 +5,14 @@ namespace AR.Iec61850.Tests.Mms;
 public sealed class MmsReportControlFieldCodecTests
 {
     [Fact]
-    public void TriggerOptions_Encodes_Dchg_Qchg_Dupd_Integrity_And_Gi()
+    public void TriggerOptions_Encodes_Dchg_Qchg_Dupd_Integrity_And_Gi_After_Reserved_Bit()
     {
         Assert.True(MmsReportControlFieldCodec.TryEncodeTriggerOptions(
             "dchg qchg dupd integrity GI",
             out var value));
 
         Assert.Equal(MmsDataKind.BitString, value.Kind);
-        Assert.Equal(new byte[] { 2, 0xF8 }, value.RawValue);
+        Assert.Equal(new byte[] { 2, 0x7C }, value.RawValue);
     }
 
     [Fact]
@@ -29,14 +29,26 @@ public sealed class MmsReportControlFieldCodecTests
     [Fact]
     public void TriggerOptions_Decodes_Gi_Only_From_Live_Rendered_BitString()
     {
-        var flags = MmsReportControlFieldCodec.DecodeTriggerOptions("bits(08, unused=2)");
+        var flags = MmsReportControlFieldCodec.DecodeTriggerOptions("bits(04, unused=2)");
 
+        Assert.False(flags.Reserved);
         Assert.False(flags.DataChange);
         Assert.False(flags.QualityChange);
         Assert.False(flags.DataUpdate);
         Assert.False(flags.Integrity);
         Assert.True(flags.GeneralInterrogation);
         Assert.False(flags.ApplicationTrigger);
+    }
+
+    [Fact]
+    public void TriggerOptions_Decodes_ReservedPlusIntegrity_Without_Mislabeling_DchgOrGi()
+    {
+        var flags = MmsReportControlFieldCodec.DecodeTriggerOptions("bits(88, unused=2)");
+
+        Assert.True(flags.Reserved);
+        Assert.False(flags.DataChange);
+        Assert.True(flags.Integrity);
+        Assert.False(flags.GeneralInterrogation);
     }
 
     [Fact]

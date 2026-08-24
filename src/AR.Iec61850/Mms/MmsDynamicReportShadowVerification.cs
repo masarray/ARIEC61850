@@ -131,14 +131,17 @@ public static class MmsDynamicReportShadowVerificationPolicy
 
             var previousSequence = originalReportOrder[index - 1].SequenceNumber;
             var currentSequence = originalReportOrder[index].SequenceNumber;
-            if (previousSequence.HasValue && currentSequence.HasValue && currentSequence.Value <= previousSequence.Value)
+            // Multiple included DataSet members from one InformationReport legitimately
+            // share the same sequence number. Only sequence regression is invalid here;
+            // same-sequence/same-index duplication is rejected separately below.
+            if (previousSequence.HasValue && currentSequence.HasValue && currentSequence.Value < previousSequence.Value)
             {
                 reportOrderPassed = false;
                 break;
             }
         }
         if (!reportOrderPassed)
-            failures.Add("Report receive/sequence order is not strictly monotonic inside the bounded shadow window.");
+            failures.Add("Report receive/sequence order regressed inside the bounded shadow window.");
 
         var duplicateKeys = evidence.ReportObservations
             .Where(observation => observation.SequenceNumber.HasValue)

@@ -7,6 +7,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 ### Added
 
 - Added a typed hybrid report acquisition planner that can cover requested signals with safe static BRCB/URCB plans, use explicitly free dynamic report slots for residual signals, and leave only the remaining points on MMS polling fallback without equating fallback with absence.
+- Added the G2.6 production dynamic-report consumer: an optional typed production-planning context can authorize automatic dynamic planning only from an identity-compatible `ProductionEligible` profile, with exact proven InformationReport RCB/member scope and fail-closed fallback for unproven points.
 - Added typed IEC 61850 UTC-Time forensic evidence with exact preserved 8-byte wire provenance, the original 24-bit fractional-second field, TimeQuality/accuracy decoding, and explicit full/engineering UTC and local-offset views.
 - Added report timestamp evidence that keeps IED data timestamps, report `TimeOfEntry`, and client `ReceivedAt` as distinct evidence sources; raw `TimeOfEntry` provenance is linked only when an exact decoded-report match exists.
 
@@ -14,6 +15,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 - Native MMS discovery can now carry bounded, ordered DataSet-directory results in its typed result, allowing live-model, engineering-profile, and readiness builders to consume the same member evidence without application-side reconstruction.
 - Hybrid dynamic reporting can host a temporary DataSet in a verified-free RCB Logical Device while its members reference live points in other Logical Devices, matching the MMS named-variable-list model used by Siemens auxiliary RCB pools.
+- Production automatic dynamic planning remains P6.2-B quarantined for callers without a valid production context; even when authorized, the first G2.6 consumer is limited to the exact report-proven RCB, report-proven members, one dynamic group, and fresh live availability.
 - Preserved full seven-digit UTC-Time precision through the shared MMS scalar/structured renderer and retained exact decoded UTC-Time bytes for byte-exact re-encoding; synthetic UTC-Time values remain explicitly without wire provenance.
 - Corrected website structured-data licensing to `GPL-3.0-or-later`.
 - Replaced stale active-license wording and milestone journals with current evidence and future-only roadmap documents.

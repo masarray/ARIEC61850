@@ -52,7 +52,9 @@ public sealed class MmsG26ProductionDynamicConsumerTests
         Assert.Equal(0, result.AcquisitionPlan.PollingFallbackSignalCount);
         Assert.Equal(MmsHybridAcquisitionPlanStatus.FullReportCoverage, result.AcquisitionPlan.Status);
 
-        var segment = Assert.Single(result.AcquisitionPlan.Segments.Where(x => x.Kind == MmsHybridAcquisitionKind.DynamicUrcb));
+        var segment = Assert.Single(
+            result.AcquisitionPlan.Segments,
+            x => x.Kind == MmsHybridAcquisitionKind.DynamicUrcb);
         Assert.Equal(ProvenRcbReference, segment.ReportControlReference);
         Assert.Equal(
             [Member(1), Member(2)],
@@ -74,7 +76,9 @@ public sealed class MmsG26ProductionDynamicConsumerTests
         Assert.Equal(1, result.AcquisitionPlan.PollingFallbackSignalCount);
         Assert.Equal(MmsHybridAcquisitionPlanStatus.HybridReportAndPolling, result.AcquisitionPlan.Status);
 
-        var dynamic = Assert.Single(result.AcquisitionPlan.Segments.Where(x => x.Kind == MmsHybridAcquisitionKind.DynamicUrcb));
+        var dynamic = Assert.Single(
+            result.AcquisitionPlan.Segments,
+            x => x.Kind == MmsHybridAcquisitionKind.DynamicUrcb);
         Assert.Single(dynamic.ReportPlan!.DynamicPoints);
         Assert.Equal(Member(1), dynamic.ReportPlan.DynamicPoints[0].MmsReference);
         Assert.DoesNotContain(dynamic.ReportPlan.DynamicPoints, point =>

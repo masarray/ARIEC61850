@@ -241,13 +241,14 @@ public static class MmsGuardedDynamicReportLegacySubsetRuntimePlanner
             negotiatedCapabilities,
             options);
         var dynamicIntent = options.AllowDynamicBrcb || options.AllowDynamicUrcb;
+        var compatibilityReason = string.Empty;
 
         var authorized = dynamicIntent &&
                          capability.MayAttemptDynamicReports &&
                          MmsGuardedDynamicReportLegacySubsetCompatibilityPolicy.TryValidate(
                              sourceContext,
                              evidence,
-                             out var compatibilityReason);
+                             out compatibilityReason);
 
         if (!dynamicIntent)
             compatibilityReason = "Dynamic BRCB/URCB acquisition is disabled by planner policy.";

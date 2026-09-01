@@ -17,8 +17,9 @@ public sealed class MmsSemanticReportValueProjectorTests
         Assert.Null(binding.PrimaryValue);
 
         // Physical bench evidence included phsB.cVal.mag.f = 40.04636.
-        // Keep that exact value here so the report fan-out regression stays tied to the
-        // field failure that exposed REPORT_RAW_STRUCT for the whole ThdA member.
+        // Keep that exact floating-point input here so the report fan-out regression stays tied
+        // to the field failure that exposed REPORT_RAW_STRUCT. The public display renderer has
+        // an established three-decimal contract, which is asserted below independently of routing.
         var frame = BuildFrame(
             objectReference,
             dataSetReference,
@@ -37,9 +38,9 @@ public sealed class MmsSemanticReportValueProjectorTests
         var phaseC = Assert.Single(projection.Updates, update =>
             update.Reference.Equals(objectReference + ".phsC.cVal.mag.f", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Equal("19.97612", phaseA.Value);
-        Assert.Equal("40.04636", phaseB.Value);
-        Assert.Equal("60.02344", phaseC.Value);
+        Assert.Equal("19.976", phaseA.Value);
+        Assert.Equal("40.046", phaseB.Value);
+        Assert.Equal("60.023", phaseC.Value);
         Assert.All(new[] { phaseA, phaseB, phaseC }, update =>
         {
             Assert.True(update.IsProjectedChild);

@@ -29,9 +29,6 @@ public sealed class MmsG26FieldCapabilityDynamicRuntimeTests
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         Assert.Equal(5, dynamicMembers.Count);
         Assert.Contains(Member(5), dynamicMembers);
-
-        // The physical witness contains only members 1-2. Member 5 becoming dynamic is the
-        // regression proof that P1.6 treats Q0/A3 as capability evidence rather than scope.
         Assert.DoesNotContain(Member(5), Evidence().MemberReferences);
         Assert.Contains("field-capability", plan.ProductionDynamicAuthorizationReason, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ProductionEligible", plan.ProductionDynamicAuthorizationReason, StringComparison.OrdinalIgnoreCase);
@@ -67,15 +64,7 @@ public sealed class MmsG26FieldCapabilityDynamicRuntimeTests
     public void FreshAvailabilityBoundsRuntime_OnlyVerifiedFreeSlotsAreUsed()
     {
         var signals = Enumerable.Range(1, 5).Select(Signal).ToArray();
-        var availability = DynamicAvailability(1, 2);
-        availability.ReportControls[1] = availability.ReportControls[1] with
-        {
-            Availability = MmsRcbOperationalAvailability.InUse,
-            EnabledState = "true",
-            Reason = "busy fixture"
-        };
-
-        var plan = BuildPlan(signals, Evidence(), availability, maxMembers: 3);
+        var plan = BuildPlan(signals, Evidence(), BusySecondDynamicAvailability(), maxMembers: 3);
 
         Assert.False(plan.AutomaticDynamicActivationQuarantined);
         Assert.Equal(3, plan.AcquisitionPlan.DynamicUrcbSignalCount);
@@ -147,11 +136,7 @@ public sealed class MmsG26FieldCapabilityDynamicRuntimeTests
     }
 
     private static MmsDynamicReportGuardedRuntimePlanningContext LegacyContext()
-        => new()
-        {
-            Profile = BuildLegacyProfile(),
-            CurrentIdentity = Identity()
-        };
+        => new() { Profile = BuildLegacyProfile(), CurrentIdentity = Identity() };
 
     private static MmsDynamicReportLegacyDataChangeCompatibilityEvidence Evidence()
         => new()
@@ -290,30 +275,40 @@ public sealed class MmsG26FieldCapabilityDynamicRuntimeTests
         => new()
         {
             CheckedAtUtc = Time(10),
-            ReportControls = indexes.Select(index => new MmsRcbAvailabilitySnapshot
-            {
-                Reference = DynamicRcb(index),
-                Domain = "LD0",
-                LogicalNode = "LLN0",
-                Name = $"Unbuffer{index:00}",
-                Mode = "URCB",
-                Buffered = false,
-                DataSetReference = string.Empty,
-                DataSetProbeState = MmsRcbDataSetProbeState.ReadSucceeded,
-                ReportId = $"Unbuffer{index:00}",
-                ConfRev = "1",
-                EnabledState = "false",
-                ReservationState = "false",
-                TriggerOptions = "dchg",
-                DataSetDirectoryRead = false,
-                DataSetDirectorySuccess = false,
-                DataSetMemberCount = 0,
-                DataSetMembers = Array.Empty<MmsDataSetDirectoryMember>(),
-                Availability = MmsRcbOperationalAvailability.NoDataSet,
-                Confidence = MmsRcbAvailabilityConfidence.Exact,
-                Reason = "P1.6 exact empty URCB fixture",
-                Attributes = ["DatSet", "RptEna", "TrgOps", "Resv"]
-            }).ToList()
+            ReportControls = indexes.Select(index => DynamicSnapshot(index, busy: false)).ToArray()
+        };
+
+    private static MmsRcbAvailabilityResult BusySecondDynamicAvailability()
+        => new()
+        {
+            CheckedAtUtc = Time(10),
+            ReportControls = [DynamicSnapshot(1, busy: false), DynamicSnapshot(2, busy: true)]
+        };
+
+    private static MmsRcbAvailabilitySnapshot DynamicSnapshot(int index, bool busy)
+        => new()
+        {
+            Reference = DynamicRcb(index),
+            Domain = "LD0",
+            LogicalNode = "LLN0",
+            Name = $"Unbuffer{index:00}",
+            Mode = "URCB",
+            Buffered = false,
+            DataSetReference = string.Empty,
+            DataSetProbeState = MmsRcbDataSetProbeState.ReadSucceeded,
+            ReportId = $"Unbuffer{index:00}",
+            ConfRev = "1",
+            EnabledState = busy ? "true" : "false",
+            ReservationState = "false",
+            TriggerOptions = "dchg",
+            DataSetDirectoryRead = false,
+            DataSetDirectorySuccess = false,
+            DataSetMemberCount = 0,
+            DataSetMembers = Array.Empty<MmsDataSetDirectoryMember>(),
+            Availability = busy ? MmsRcbOperationalAvailability.InUse : MmsRcbOperationalAvailability.NoDataSet,
+            Confidence = MmsRcbAvailabilityConfidence.Exact,
+            Reason = busy ? "busy fixture" : "P1.6 exact empty URCB fixture",
+            Attributes = ["DatSet", "RptEna", "TrgOps", "Resv"]
         };
 
     private static MmsIedModelDirectory Directory(params int[] indexes)

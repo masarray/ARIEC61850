@@ -38,10 +38,10 @@ public static class Iec61850DataSetSignalInventoryProjection
                 }
 
                 var reason = binding is null
-                    ? $"Static DataSet member {dataSet.Reference}[{member.Index}] has no semantic binding; the member identity is preserved in the signal inventory."
+                    ? $"Static DataSet member {dataSet.Reference}[{member.Index}] has no semantic binding; the member identity is preserved without guessing a runtime leaf."
                     : binding.ResolutionStatus == LiveIedDataSetMemberResolutionStatus.Ambiguous
                         ? $"Static DataSet member {dataSet.Reference}[{member.Index}] has ambiguous primary-value semantics; the member identity is preserved without guessing a runtime leaf."
-                        : $"Static DataSet member {dataSet.Reference}[{member.Index}] has no unique primary DataAttribute; the member identity is preserved in the signal inventory.";
+                        : $"Static DataSet member {dataSet.Reference}[{member.Index}] has no unique primary DataAttribute; the member identity is preserved without guessing a runtime leaf.";
                 result.Add(BuildUnresolvedMemberDescriptor(design, dataSet, member, reason));
             }
         }
@@ -217,7 +217,7 @@ public static class Iec61850DataSetSignalInventoryProjection
                 {
                     Kind = Iec61850SignalEvidenceKind.DataSetSemanticBinding,
                     SourceReference = memberReference,
-                    Message = evidenceMessage ?? $"Static DataSet member {dataSet.Reference}[{member.Index}] is preserved in the signal inventory although no unique primary DataAttribute has been resolved yet."
+                    Message = evidenceMessage ?? $"Static DataSet member {dataSet.Reference}[{member.Index}] is preserved in the signal inventory although no unique primary DataAttribute has been resolved yet, without guessing a runtime leaf."
                 }
             }
         };

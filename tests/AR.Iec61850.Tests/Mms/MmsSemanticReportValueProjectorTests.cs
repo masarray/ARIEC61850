@@ -30,12 +30,12 @@ public sealed class MmsSemanticReportValueProjectorTests
             frame,
             MmsReportSemanticProjectionContext.Create(model));
 
-        var phaseA = Assert.Single(projection.Updates.Where(update =>
-            update.Reference.Equals(objectReference + ".phsA.cVal.mag.f", StringComparison.OrdinalIgnoreCase)));
-        var phaseB = Assert.Single(projection.Updates.Where(update =>
-            update.Reference.Equals(objectReference + ".phsB.cVal.mag.f", StringComparison.OrdinalIgnoreCase)));
-        var phaseC = Assert.Single(projection.Updates.Where(update =>
-            update.Reference.Equals(objectReference + ".phsC.cVal.mag.f", StringComparison.OrdinalIgnoreCase)));
+        var phaseA = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".phsA.cVal.mag.f", StringComparison.OrdinalIgnoreCase));
+        var phaseB = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".phsB.cVal.mag.f", StringComparison.OrdinalIgnoreCase));
+        var phaseC = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".phsC.cVal.mag.f", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal("19.97612", phaseA.Value);
         Assert.Equal("40.04636", phaseB.Value);

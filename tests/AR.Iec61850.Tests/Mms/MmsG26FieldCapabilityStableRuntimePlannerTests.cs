@@ -24,8 +24,8 @@ public sealed class MmsG26FieldCapabilityStableRuntimePlannerTests
         Assert.NotEqual(fullFirst, fullSecond);
         Assert.Equal(fullSecond, isolated);
         Assert.StartsWith("LD0/LLN0.AR_HYB_", fullSecond, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotEndWith("_01", fullSecond, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotEndWith("_02", fullSecond, StringComparison.OrdinalIgnoreCase);
+        Assert.False(fullSecond.EndsWith("_01", StringComparison.OrdinalIgnoreCase));
+        Assert.False(fullSecond.EndsWith("_02", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

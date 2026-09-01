@@ -16,6 +16,9 @@ public sealed class MmsSemanticReportValueProjectorTests
         Assert.Equal(LiveIedDataSetMemberResolutionStatus.Ambiguous, binding.ResolutionStatus);
         Assert.Null(binding.PrimaryValue);
 
+        // Physical F02 bench evidence from IEDScout included phsB.cVal.mag.f = 40.04636.
+        // Keep that exact value here so the report fan-out regression stays tied to the
+        // field failure that exposed REPORT_RAW_STRUCT for the whole ThdA member.
         var frame = BuildFrame(
             objectReference,
             dataSetReference,

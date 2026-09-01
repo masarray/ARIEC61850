@@ -17,36 +17,31 @@ public static class Iec61850DataSetSignalInventoryProjection
     {
         ArgumentNullException.ThrowIfNull(design);
 
+        var semanticBindings = Iec61850DataSetSemanticBindingResolver.Resolve(design);
         var catalog = Iec61850SignalCatalogBuilder.Build(design, reconciliation);
-        var primaryByMember = catalog.GetMandatoryPrimarySignals()
-            .SelectMany(signal => signal.DataSetMemberships
-                .Where(membership => membership.IsPrimaryValueForMember)
-                .Select(membership => new
-                {
-                    Key = MembershipKey(membership),
-                    Signal = signal
-                }))
-            .GroupBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Select(item => item.Signal).Distinct().ToArray(),
-                StringComparer.OrdinalIgnoreCase);
-
         var result = new List<Iec61850SignalDescriptor>();
+
         foreach (var dataSet in design.DataSets.OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase))
         {
             foreach (var member in dataSet.Members.OrderBy(x => x.Index))
             {
-                var key = MembershipKey(dataSet.Reference, member.Index);
-                if (primaryByMember.TryGetValue(key, out var candidates) && candidates.Length == 1)
+                var binding = semanticBindings.Find(dataSet.Reference, member.Index);
+                var primary = binding?.PrimaryValue;
+                if (primary is not null)
                 {
-                    result.Add(ProjectResolvedMemberDescriptor(candidates[0], dataSet, member));
-                    continue;
+                    var source = FindCatalogSignal(catalog, primary);
+                    if (source is not null)
+                    {
+                        result.Add(ProjectResolvedMemberDescriptor(source, dataSet, member, binding!));
+                        continue;
+                    }
                 }
 
-                var reason = candidates is { Length: > 1 }
-                    ? $"Static DataSet member {dataSet.Reference}[{member.Index}] has {candidates.Length} primary-value candidates; the member identity is preserved without guessing a runtime leaf."
-                    : $"Static DataSet member {dataSet.Reference}[{member.Index}] has no unique primary DataAttribute; the member identity is preserved in the signal inventory.";
+                var reason = binding is null
+                    ? $"Static DataSet member {dataSet.Reference}[{member.Index}] has no semantic binding; the member identity is preserved in the signal inventory."
+                    : binding.ResolutionStatus == LiveIedDataSetMemberResolutionStatus.Ambiguous
+                        ? $"Static DataSet member {dataSet.Reference}[{member.Index}] has ambiguous primary-value semantics; the member identity is preserved without guessing a runtime leaf."
+                        : $"Static DataSet member {dataSet.Reference}[{member.Index}] has no unique primary DataAttribute; the member identity is preserved in the signal inventory.";
                 result.Add(BuildUnresolvedMemberDescriptor(design, dataSet, member, reason));
             }
         }
@@ -54,17 +49,28 @@ public static class Iec61850DataSetSignalInventoryProjection
         return result.ToArray();
     }
 
+    private static Iec61850SignalDescriptor? FindCatalogSignal(
+        Iec61850SignalCatalogDocument catalog,
+        LiveIedResolvedDataSetAttributeModel primary)
+    {
+        if (!string.IsNullOrWhiteSpace(primary.MmsReference))
+        {
+            var byMms = catalog.FindByCanonicalMmsReference(primary.MmsReference);
+            if (byMms is not null)
+                return byMms;
+        }
+
+        return catalog.Signals.FirstOrDefault(signal =>
+            ReferenceEquals(signal.DesignReference, primary.Reference));
+    }
+
     private static Iec61850SignalDescriptor ProjectResolvedMemberDescriptor(
         Iec61850SignalDescriptor source,
         LiveIedDataSetModel dataSet,
-        LiveIedDataSetMemberModel member)
+        LiveIedDataSetMemberModel member,
+        LiveIedDataSetMemberSemanticBinding binding)
     {
         var memberReference = NormalizeReference(member.Reference);
-        var sourceMembership = source.DataSetMemberships.FirstOrDefault(membership =>
-            string.Equals(
-                MembershipKey(membership),
-                MembershipKey(dataSet.Reference, member.Index),
-                StringComparison.OrdinalIgnoreCase));
         var functionalConstraint = (member.FunctionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
         var membership = new Iec61850SignalDataSetMembership
         {
@@ -72,14 +78,18 @@ public static class Iec61850DataSetSignalInventoryProjection
             MemberIndex = member.Index,
             OriginalMemberReference = member.Reference,
             CanonicalMemberReference = memberReference,
-            FunctionalConstraint = FirstNonEmpty(sourceMembership?.FunctionalConstraint, functionalConstraint),
-            Cdc = FirstNonEmpty(sourceMembership?.Cdc, source.Cdc),
-            ResolutionStatus = sourceMembership?.ResolutionStatus ?? LiveIedDataSetMemberResolutionStatus.Unresolved,
+            FunctionalConstraint = FirstNonEmpty(binding.FunctionalConstraint, source.FunctionalConstraint, functionalConstraint),
+            Cdc = FirstNonEmpty(binding.Cdc, source.Cdc),
+            ResolutionStatus = binding.ResolutionStatus,
             IsPrimaryValueForMember = true
         };
         var reports = source.ReportMemberships
             .Where(report => ReferenceEquals(report.DataSetReference, dataSet.Reference))
             .ToArray();
+        if (reports.Length == 0)
+        {
+            reports = designReports(dataSet, source).ToArray();
+        }
         var evidence = source.Evidence
             .Concat(new[]
             {
@@ -87,7 +97,7 @@ public static class Iec61850DataSetSignalInventoryProjection
                 {
                     Kind = Iec61850SignalEvidenceKind.DataSetSemanticBinding,
                     SourceReference = memberReference,
-                    Message = $"Static DataSet member {dataSet.Reference}[{member.Index}] keeps its original FCD/FCDA identity; runtime primary binding is '{FirstNonEmpty(source.PrimaryValueReference, source.DesignReference)}'."
+                    Message = $"Static DataSet member {dataSet.Reference}[{member.Index}] keeps its original FCD/FCDA identity; runtime primary binding is '{binding.PrimaryValueReference}'. {string.Join(" ", binding.Evidence)}"
                 }
             })
             .ToArray();
@@ -100,7 +110,7 @@ public static class Iec61850DataSetSignalInventoryProjection
             EffectiveMmsReference = source.EffectiveMmsReference,
             ObservedMmsReference = source.ObservedMmsReference,
             FunctionalConstraint = FirstNonEmpty(source.FunctionalConstraint, functionalConstraint),
-            Cdc = source.Cdc,
+            Cdc = FirstNonEmpty(binding.Cdc, source.Cdc),
             SclBType = source.SclBType,
             MmsType = source.MmsType,
             MmsDomain = source.MmsDomain,
@@ -110,9 +120,9 @@ public static class Iec61850DataSetSignalInventoryProjection
             DataObject = source.DataObject,
             DataObjectReference = source.DataObjectReference,
             DataAttributePath = source.DataAttributePath,
-            SemanticRole = source.SemanticRole,
-            PrimaryValueReference = FirstNonEmpty(source.PrimaryValueReference, source.DesignReference),
-            PrimaryValueMmsReference = FirstNonEmpty(source.PrimaryValueMmsReference, source.CanonicalMmsReference),
+            SemanticRole = Iec61850DataAttributeSemanticRole.PrimaryValue,
+            PrimaryValueReference = binding.PrimaryValueReference,
+            PrimaryValueMmsReference = binding.PrimaryValueMmsReference,
             QualityReference = source.QualityReference,
             QualityMmsReference = source.QualityMmsReference,
             TimestampReference = source.TimestampReference,
@@ -120,13 +130,24 @@ public static class Iec61850DataSetSignalInventoryProjection
             DataSetMemberships = new[] { membership },
             ReportMemberships = reports,
             IsStaticDataSetMandatory = true,
-            IsOperationalCandidate = source.IsOperationalCandidate,
+            IsOperationalCandidate = true,
             IsEngineeringOnly = false,
             ResolutionStatus = source.ResolutionStatus,
             LiveStatus = source.LiveStatus,
             AlternateStrategy = source.AlternateStrategy,
             Evidence = evidence
         };
+
+        static IEnumerable<Iec61850SignalReportMembership> designReports(
+            LiveIedDataSetModel dataSet,
+            Iec61850SignalDescriptor source)
+        {
+            // Source catalog normally already carries report membership. Keep the helper
+            // deliberately empty when it does not; the unresolved path remains responsible
+            // for design-only report projection. This avoids fabricating report authority.
+            return source.ReportMemberships.Where(report =>
+                string.Equals(report.DataSetReference, dataSet.Reference, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     private static Iec61850SignalDescriptor BuildUnresolvedMemberDescriptor(
@@ -286,12 +307,6 @@ public static class Iec61850DataSetSignalInventoryProjection
         var secondDot = reference.IndexOf('.', firstDot + 1);
         return secondDot < 0 ? reference : reference[..secondDot];
     }
-
-    private static string MembershipKey(Iec61850SignalDataSetMembership membership)
-        => MembershipKey(membership.DataSetReference, membership.MemberIndex);
-
-    private static string MembershipKey(string dataSetReference, int memberIndex)
-        => $"{NormalizeReference(dataSetReference)}\u001f{memberIndex}";
 
     private static bool ReferenceEquals(string? left, string? right)
         => string.Equals(NormalizeReference(left), NormalizeReference(right), StringComparison.OrdinalIgnoreCase);

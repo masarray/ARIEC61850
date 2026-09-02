@@ -56,6 +56,41 @@ public sealed class MmsSemanticReportValueProjectorTests
     }
 
     [Fact]
+    public void Sparse_Report_Value_Index_Drift_Still_Uses_Exact_Static_Member_Reference()
+    {
+        const string objectReference = "AA1E1F02R2VI3p1_THDHarmonics/I_MHAI1.ThdA";
+        const string dataSetReference = "AA1E1F02R2Application/LLN0.Analog";
+        var model = BuildThreePhaseModel(objectReference, dataSetReference);
+
+        // The static DataSet member index in the model is 0. A sparse InformationReport may
+        // expose a decoder-side value position that differs from that static member index.
+        // Exact IEC member identity must remain sufficient and must not be rejected solely
+        // because the transient report value index is different.
+        var frame = BuildFrame(
+            objectReference,
+            dataSetReference,
+            reportValueIndex: 17,
+            PhaseValue(19.97612),
+            PhaseValue(40.04636),
+            PhaseValue(60.02344));
+
+        var projection = MmsSemanticReportValueProjector.Project(
+            frame,
+            MmsReportSemanticProjectionContext.Create(model));
+
+        Assert.Contains(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".phsA.cVal.mag.f", StringComparison.OrdinalIgnoreCase)
+            && update.ProjectionStatus.Equals("semantic-structured-leaf", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".phsB.cVal.mag.f", StringComparison.OrdinalIgnoreCase)
+            && update.Value == "40.046");
+        Assert.Contains(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".phsC.cVal.mag.f", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projection.Warnings, warning =>
+            warning.StartsWith("REPORT_SEMANTIC_FALLBACK:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Schema_Mismatch_Fails_Closed_And_Preserves_Raw_Projection()
     {
         const string objectReference = "AA1E1F02R2VI3p1_THDHarmonics/I_MHAI1.ThdA";
@@ -173,6 +208,13 @@ public sealed class MmsSemanticReportValueProjectorTests
         string memberReference,
         string dataSetReference,
         params MmsDataValue[] phases)
+        => BuildFrame(memberReference, dataSetReference, 0, phases);
+
+    private static MmsReportFrame BuildFrame(
+        string memberReference,
+        string dataSetReference,
+        int reportValueIndex,
+        params MmsDataValue[] phases)
         => new()
         {
             ReceivedAt = new DateTimeOffset(2026, 9, 1, 8, 0, 0, TimeSpan.Zero),
@@ -181,7 +223,7 @@ public sealed class MmsSemanticReportValueProjectorTests
             {
                 new MmsReportValue
                 {
-                    Index = 0,
+                    Index = reportValueIndex,
                     Member = new MmsDataSetDirectoryMember
                     {
                         UserReference = memberReference,

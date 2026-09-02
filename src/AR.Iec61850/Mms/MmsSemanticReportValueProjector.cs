@@ -136,23 +136,42 @@ public sealed class MmsReportSemanticProjectionContext
         var memberReference = NormalizeReference(reportValue.MemberReference);
         var normalizedDataSet = NormalizeDataSetReference(dataSetReference);
 
-        var exact = _members
+        // InformationReport values can be sparse. In that case the decoder-side value index
+        // is not a safe substitute for the authoritative static DataSet member index. When the
+        // report carries an exact member reference, that engineering identity is stronger than
+        // the transient value position and must be resolved independently of reportValue.Index.
+        // Keep this fail-closed: duplicate static memberships with the same reference do not
+        // collapse unless the DataSet identity makes the reference unique.
+        if (!string.IsNullOrWhiteSpace(memberReference))
+        {
+            var byExactReference = _members
+                .Where(candidate => string.Equals(
+                    candidate.MemberReference,
+                    memberReference,
+                    StringComparison.OrdinalIgnoreCase))
+                .Where(candidate => string.IsNullOrWhiteSpace(normalizedDataSet)
+                    || string.Equals(
+                        NormalizeDataSetReference(candidate.DataSetReference),
+                        normalizedDataSet,
+                        StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+            return byExactReference.Length == 1 ? byExactReference[0] : null;
+        }
+
+        // Some report encodings omit the member reference. Only then is the static DataSet
+        // index used, and only when it identifies exactly one member in the supplied DataSet
+        // scope (or globally when OptFlds omitted the DataSet reference as well).
+        var byIndex = _members
             .Where(candidate => candidate.Index == reportValue.Index)
             .Where(candidate => string.IsNullOrWhiteSpace(normalizedDataSet)
-                || string.Equals(NormalizeDataSetReference(candidate.DataSetReference), normalizedDataSet, StringComparison.OrdinalIgnoreCase))
-            .Where(candidate => string.IsNullOrWhiteSpace(memberReference)
-                || string.Equals(candidate.MemberReference, memberReference, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(
+                    NormalizeDataSetReference(candidate.DataSetReference),
+                    normalizedDataSet,
+                    StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        if (exact.Length == 1)
-            return exact[0];
 
-        // DatSet can be omitted by OptFlds. Fall back only when index + exact static
-        // member reference is unique across the entire design model.
-        var byIdentity = _members
-            .Where(candidate => candidate.Index == reportValue.Index)
-            .Where(candidate => string.Equals(candidate.MemberReference, memberReference, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-        return byIdentity.Length == 1 ? byIdentity[0] : null;
+        return byIndex.Length == 1 ? byIndex[0] : null;
     }
 
     private static bool TryFlatten(

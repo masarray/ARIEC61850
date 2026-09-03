@@ -60,27 +60,39 @@ public sealed class MmsDynamicDataSetQualificationRecoveryTests
     }
 
     [Fact]
-    public void ClosedRecovery_RequiresNamespaceAndDirectoryAbsenceAndHealthyAssociation()
+    public void ClosedRecovery_RequiresCompletedDirectoryAbsenceCheckAndHealthyAssociation()
     {
         Assert.True(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: false,
             directoryReadable: false,
+            directoryInspectionCompleted: true,
             associationHealthy: true,
             out var passReason), passReason);
 
         Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
+            namePresent: false,
+            directoryReadable: false,
+            directoryInspectionCompleted: false,
+            associationHealthy: true,
+            out var unprovenReason));
+        Assert.Contains("not proven", unprovenReason, StringComparison.OrdinalIgnoreCase);
+
+        Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: true,
             directoryReadable: false,
+            directoryInspectionCompleted: true,
             associationHealthy: true,
             out _));
         Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: false,
             directoryReadable: true,
+            directoryInspectionCompleted: true,
             associationHealthy: true,
             out _));
         Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: false,
             directoryReadable: false,
+            directoryInspectionCompleted: true,
             associationHealthy: false,
             out _));
     }

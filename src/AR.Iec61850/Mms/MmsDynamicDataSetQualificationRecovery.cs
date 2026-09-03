@@ -3,9 +3,9 @@ namespace AR.Iec61850.Mms;
 /// <summary>
 /// Typed evidence from a fresh-association recovery of one exact G2.3 temporary
 /// NamedVariableList. Recovery is intentionally narrower than qualification itself:
-/// it may delete only when a fresh directory proves that the surviving list contains
-/// the exact ordered members from the failed current-run attempt. A name match alone
-/// never authorizes mutation.
+/// it may delete only when a fresh readable directory proves that the surviving list
+/// contains the exact ordered members from the failed current-run attempt. A name match
+/// alone never authorizes mutation, and an inspection exception never proves absence.
 /// </summary>
 public sealed class MmsDynamicDataSetQualificationRecoveryResult
 {
@@ -13,13 +13,17 @@ public sealed class MmsDynamicDataSetQualificationRecoveryResult
     public string DataSetReference { get; init; } = string.Empty;
     public IReadOnlyList<string> ExpectedMemberReferences { get; init; } = Array.Empty<string>();
     public bool NamePresentBefore { get; init; }
+    public bool NamespaceAbsenceProvenBefore { get; init; }
     public bool DirectoryReadableBefore { get; init; }
+    public bool DirectoryAbsenceProvenBefore { get; init; }
     public IReadOnlyList<string> ObservedMemberReferencesBefore { get; init; } = Array.Empty<string>();
     public bool ExactMembersVerifiedBeforeDelete { get; init; }
     public bool DeleteAttempted { get; init; }
     public MmsDeleteNamedVariableListResult? DeleteResult { get; init; }
     public bool NamePresentAfter { get; init; }
+    public bool NamespaceAbsenceProvenAfter { get; init; }
     public bool DirectoryReadableAfter { get; init; }
+    public bool DirectoryAbsenceProvenAfter { get; init; }
     public bool AssociationHealthy { get; init; }
     public string Failure { get; init; } = string.Empty;
     public string Summary { get; init; } = string.Empty;
@@ -65,7 +69,7 @@ public static class MmsDynamicDataSetQualificationRecoveryPolicy
 
         if (!namePresent && !directoryReadable)
         {
-            reason = "No surviving qualification residue is visible; no delete is required.";
+            reason = "No readable surviving qualification residue is available for exact delete proof.";
             return false;
         }
 
@@ -93,7 +97,9 @@ public static class MmsDynamicDataSetQualificationRecoveryPolicy
 
     public static bool IsRecoveryClosed(
         bool namePresent,
+        bool namespaceAbsenceProven,
         bool directoryReadable,
+        bool directoryAbsenceProven,
         bool associationHealthy,
         out string reason)
     {
@@ -109,13 +115,25 @@ public static class MmsDynamicDataSetQualificationRecoveryPolicy
             return false;
         }
 
+        if (!namespaceAbsenceProven)
+        {
+            reason = "Temporary qualification DataSet namespace absence was not proven; missing/failed discovery is not absence evidence.";
+            return false;
+        }
+
         if (directoryReadable)
         {
             reason = "Temporary qualification DataSet still has a readable directory on the fresh association.";
             return false;
         }
 
-        reason = "Fresh-association qualification cleanup is closed: temporary DataSet absent by namespace and direct directory, association healthy.";
+        if (!directoryAbsenceProven)
+        {
+            reason = "Temporary qualification DataSet direct-directory absence was not proven; an exception is not absence evidence.";
+            return false;
+        }
+
+        reason = "Fresh-association qualification cleanup is closed: temporary DataSet absent by fresh namespace and completed direct-directory checks, association healthy.";
         return true;
     }
 
@@ -127,11 +145,11 @@ public sealed partial class MmsClientSession
 {
     /// <summary>
     /// Recovers only the exact temporary NamedVariableList from a failed G2.3 attempt.
-    /// The caller must invoke this on a newly established MMS association. If the list is
-    /// already absent the operation is read-only. If it survives, DeleteNamedVariableList
-    /// is allowed only after fresh directory readback exactly matches the failed attempt's
-    /// ordered member sequence. Closure is then re-proven by fresh namespace + direct
-    /// directory absence while the association remains healthy.
+    /// Invoke this on a newly established MMS association. If the list is already absent,
+    /// the operation is read-only. If it survives, DeleteNamedVariableList is allowed only
+    /// after fresh directory readback exactly matches the failed attempt's ordered member
+    /// sequence. Closure is then re-proven by successful namespace discovery, a completed
+    /// direct-directory absence check, and a healthy association.
     /// </summary>
     public async Task<MmsDynamicDataSetQualificationRecoveryResult> RecoverDynamicDataSetQualificationResidueAsync(
         string dataSetReference,
@@ -149,33 +167,25 @@ public sealed partial class MmsClientSession
             throw new ArgumentException("Fresh qualification recovery member references cannot contain duplicates.", nameof(expectedMemberReferences));
 
         var expected = expectedMemberReferences.Select(reference => reference.Trim()).ToArray();
-        var evidence = new List<string>();
-        evidence.Add($"G2.3 fresh recovery target: dataset={dataSetReference}; expectedMembers={expected.Length}; mutationPolicy=exact-current-run-residue-only");
+        var evidence = new List<string>
+        {
+            $"G2.3 fresh recovery target: dataset={dataSetReference}; expectedMembers={expected.Length}; mutationPolicy=exact-current-run-residue-only"
+        };
 
         var before = await InspectQualificationResidueAsync(dataSetReference, cancellationToken).ConfigureAwait(false);
         evidence.AddRange(before.EvidenceLines.Select(line => "G2.3 fresh recovery BEFORE: " + line));
 
         var initiallyClosed = MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             before.NamePresent,
+            before.NamespaceAbsenceProven,
             before.DirectoryReadable,
+            before.DirectoryAbsenceProven,
             IsMmsInitiated,
             out var initialClosureReason);
         evidence.Add("G2.3 fresh recovery initial closure: " + initialClosureReason);
         if (initiallyClosed)
-        {
-            return new MmsDynamicDataSetQualificationRecoveryResult
-            {
-                IsSuccess = true,
-                DataSetReference = dataSetReference,
-                ExpectedMemberReferences = expected,
-                NamePresentBefore = before.NamePresent,
-                DirectoryReadableBefore = before.DirectoryReadable,
-                ObservedMemberReferencesBefore = before.MemberReferences,
-                AssociationHealthy = IsMmsInitiated,
-                Summary = "G2.3 fresh recovery PASS: the temporary qualification DataSet was already absent on the fresh association; no delete mutation was required.",
-                EvidenceLines = evidence
-            };
-        }
+            return BuildResult(true, dataSetReference, expected, before, null, false, false, null, IsMmsInitiated,
+                "G2.3 fresh recovery PASS: the temporary qualification DataSet was already proven absent on the fresh association; no delete mutation was required.", evidence);
 
         var mayDelete = MmsDynamicDataSetQualificationRecoveryPolicy.CanDeleteExactResidue(
             before.NamePresent,
@@ -186,21 +196,8 @@ public sealed partial class MmsClientSession
             out var deleteReason);
         evidence.Add("G2.3 fresh recovery delete gate: " + deleteReason);
         if (!mayDelete)
-        {
-            return new MmsDynamicDataSetQualificationRecoveryResult
-            {
-                DataSetReference = dataSetReference,
-                ExpectedMemberReferences = expected,
-                NamePresentBefore = before.NamePresent,
-                DirectoryReadableBefore = before.DirectoryReadable,
-                ObservedMemberReferencesBefore = before.MemberReferences,
-                ExactMembersVerifiedBeforeDelete = false,
-                AssociationHealthy = IsMmsInitiated,
-                Failure = deleteReason,
-                Summary = "G2.3 fresh recovery failed closed before delete. " + deleteReason,
-                EvidenceLines = evidence
-            };
-        }
+            return BuildResult(false, dataSetReference, expected, before, null, false, false, deleteReason, IsMmsInitiated,
+                "G2.3 fresh recovery failed closed before delete. " + deleteReason, evidence);
 
         var delete = await SendQualificationRecoveryDeleteAsync(dataSetReference, cancellationToken).ConfigureAwait(false);
         evidence.Add($"G2.3 fresh recovery DELETE: attempted=true; success={delete.IsSuccess}; matched={delete.NumberMatched?.ToString() ?? "?"}; deleted={delete.NumberDeleted?.ToString() ?? "?"}; association={State}; result={delete.Message}");
@@ -209,52 +206,36 @@ public sealed partial class MmsClientSession
             var failure = !delete.IsSuccess
                 ? "Exact temporary qualification DataSet delete was not accepted."
                 : "MMS association was not healthy after exact temporary qualification DataSet delete.";
-            return new MmsDynamicDataSetQualificationRecoveryResult
-            {
-                DataSetReference = dataSetReference,
-                ExpectedMemberReferences = expected,
-                NamePresentBefore = before.NamePresent,
-                DirectoryReadableBefore = before.DirectoryReadable,
-                ObservedMemberReferencesBefore = before.MemberReferences,
-                ExactMembersVerifiedBeforeDelete = true,
-                DeleteAttempted = true,
-                DeleteResult = delete,
-                AssociationHealthy = IsMmsInitiated,
-                Failure = failure,
-                Summary = "G2.3 fresh recovery failed closed after targeted delete. " + failure,
-                EvidenceLines = evidence
-            };
+            return BuildResult(false, dataSetReference, expected, before, null, true, true, failure, IsMmsInitiated,
+                "G2.3 fresh recovery failed closed after targeted delete. " + failure, evidence, delete);
         }
 
         var after = await InspectQualificationResidueAsync(dataSetReference, cancellationToken).ConfigureAwait(false);
         evidence.AddRange(after.EvidenceLines.Select(line => "G2.3 fresh recovery AFTER: " + line));
         var closed = MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             after.NamePresent,
+            after.NamespaceAbsenceProven,
             after.DirectoryReadable,
+            after.DirectoryAbsenceProven,
             IsMmsInitiated,
             out var closureReason);
         evidence.Add("G2.3 fresh recovery final closure: " + closureReason);
 
-        return new MmsDynamicDataSetQualificationRecoveryResult
-        {
-            IsSuccess = closed,
-            DataSetReference = dataSetReference,
-            ExpectedMemberReferences = expected,
-            NamePresentBefore = before.NamePresent,
-            DirectoryReadableBefore = before.DirectoryReadable,
-            ObservedMemberReferencesBefore = before.MemberReferences,
-            ExactMembersVerifiedBeforeDelete = true,
-            DeleteAttempted = true,
-            DeleteResult = delete,
-            NamePresentAfter = after.NamePresent,
-            DirectoryReadableAfter = after.DirectoryReadable,
-            AssociationHealthy = IsMmsInitiated,
-            Failure = closed ? string.Empty : closureReason,
-            Summary = closed
-                ? "G2.3 fresh recovery PASS: exact current-run qualification residue was deleted and fresh namespace + direct directory absence were proven on a healthy association."
+        return BuildResult(
+            closed,
+            dataSetReference,
+            expected,
+            before,
+            after,
+            true,
+            true,
+            closed ? null : closureReason,
+            IsMmsInitiated,
+            closed
+                ? "G2.3 fresh recovery PASS: exact current-run qualification residue was deleted and fresh namespace + direct-directory absence were proven on a healthy association."
                 : "G2.3 fresh recovery did not prove complete cleanup closure after exact targeted delete. " + closureReason,
-            EvidenceLines = evidence
-        };
+            evidence,
+            delete);
     }
 
     private async Task<QualificationResidueInspection> InspectQualificationResidueAsync(
@@ -278,8 +259,8 @@ public sealed partial class MmsClientSession
             return new QualificationResidueInspection { EvidenceLines = evidence };
         }
 
-        var namePresent = QualificationDataSetNamePresent(discovery.Snapshot, dataSetReference, out var namespaceReason);
-        evidence.Add("namespace: " + namespaceReason);
+        var namespaceState = InspectQualificationDataSetNamespace(discovery.Snapshot, dataSetReference);
+        evidence.Add("namespace: " + namespaceState.Reason);
 
         MmsDataSetDirectoryResult directory;
         try
@@ -288,23 +269,27 @@ public sealed partial class MmsClientSession
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
         {
-            evidence.Add($"direct directory exception={ex.GetType().Name}: {ex.Message}; association={State}");
+            evidence.Add($"direct directory exception={ex.GetType().Name}: {ex.Message}; association={State}; absenceProven=false");
             return new QualificationResidueInspection
             {
-                NamePresent = namePresent,
+                NamePresent = namespaceState.Present,
+                NamespaceAbsenceProven = namespaceState.AbsenceProven,
                 EvidenceLines = evidence
             };
         }
 
         var members = directory.Members.Select(member => member.MmsReference).ToArray();
-        evidence.Add($"direct directory: readable={directory.IsSuccess}; members={members.Length}; association={State}; result={directory.Message}");
+        var directoryAbsenceProven = !directory.IsSuccess;
+        evidence.Add($"direct directory: completed=true; readable={directory.IsSuccess}; absenceProven={directoryAbsenceProven}; members={members.Length}; association={State}; result={directory.Message}");
         if (directory.IsSuccess)
             evidence.Add("direct directory members: " + string.Join(" | ", members));
 
         return new QualificationResidueInspection
         {
-            NamePresent = namePresent,
+            NamePresent = namespaceState.Present,
+            NamespaceAbsenceProven = namespaceState.AbsenceProven,
             DirectoryReadable = directory.IsSuccess,
+            DirectoryAbsenceProven = directoryAbsenceProven,
             MemberReferences = members,
             EvidenceLines = evidence
         };
@@ -333,33 +318,85 @@ public sealed partial class MmsClientSession
         }
     }
 
-    private static bool QualificationDataSetNamePresent(
+    private static QualificationNamespaceState InspectQualificationDataSetNamespace(
         MmsDiscoverySnapshot snapshot,
-        string dataSetReference,
-        out string reason)
+        string dataSetReference)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         var (domain, itemName) = MmsDataSetDirectoryRequest.ParseDataSetReference(dataSetReference);
         var normalizedItem = itemName.Trim().Replace('.', '$');
         if (!snapshot.DomainVariableLists.TryGetValue(domain, out var names))
         {
-            reason = $"domain {domain} is absent from NamedVariableList discovery; absence cannot be proven by namespace alone.";
-            return false;
+            return new QualificationNamespaceState
+            {
+                Present = false,
+                AbsenceProven = false,
+                Reason = $"domain {domain} is absent from NamedVariableList discovery; namespace absence is not proven."
+            };
         }
 
         var present = names.Any(name =>
             (name ?? string.Empty).Trim().Replace('.', '$').Equals(normalizedItem, StringComparison.OrdinalIgnoreCase));
-        reason = present
-            ? $"temporary qualification DataSet is advertised: domain={domain}; item={normalizedItem}."
-            : $"temporary qualification DataSet is absent from NamedVariableList discovery: domain={domain}; item={normalizedItem}; advertisedLists={names.Count}.";
-        return present;
+        return new QualificationNamespaceState
+        {
+            Present = present,
+            AbsenceProven = !present,
+            Reason = present
+                ? $"temporary qualification DataSet is advertised: domain={domain}; item={normalizedItem}."
+                : $"temporary qualification DataSet absence is proven by NamedVariableList discovery: domain={domain}; item={normalizedItem}; advertisedLists={names.Count}."
+        };
     }
+
+    private static MmsDynamicDataSetQualificationRecoveryResult BuildResult(
+        bool success,
+        string dataSetReference,
+        IReadOnlyList<string> expected,
+        QualificationResidueInspection before,
+        QualificationResidueInspection? after,
+        bool exactMembers,
+        bool deleteAttempted,
+        string? failure,
+        bool associationHealthy,
+        string summary,
+        IReadOnlyList<string> evidence,
+        MmsDeleteNamedVariableListResult? delete = null)
+        => new()
+        {
+            IsSuccess = success,
+            DataSetReference = dataSetReference,
+            ExpectedMemberReferences = expected.ToArray(),
+            NamePresentBefore = before.NamePresent,
+            NamespaceAbsenceProvenBefore = before.NamespaceAbsenceProven,
+            DirectoryReadableBefore = before.DirectoryReadable,
+            DirectoryAbsenceProvenBefore = before.DirectoryAbsenceProven,
+            ObservedMemberReferencesBefore = before.MemberReferences.ToArray(),
+            ExactMembersVerifiedBeforeDelete = exactMembers,
+            DeleteAttempted = deleteAttempted,
+            DeleteResult = delete,
+            NamePresentAfter = after?.NamePresent ?? false,
+            NamespaceAbsenceProvenAfter = after?.NamespaceAbsenceProven ?? false,
+            DirectoryReadableAfter = after?.DirectoryReadable ?? false,
+            DirectoryAbsenceProvenAfter = after?.DirectoryAbsenceProven ?? false,
+            AssociationHealthy = associationHealthy,
+            Failure = failure ?? string.Empty,
+            Summary = summary,
+            EvidenceLines = evidence.ToArray()
+        };
 
     private sealed class QualificationResidueInspection
     {
         public bool NamePresent { get; init; }
+        public bool NamespaceAbsenceProven { get; init; }
         public bool DirectoryReadable { get; init; }
+        public bool DirectoryAbsenceProven { get; init; }
         public IReadOnlyList<string> MemberReferences { get; init; } = Array.Empty<string>();
         public IReadOnlyList<string> EvidenceLines { get; init; } = Array.Empty<string>();
+    }
+
+    private sealed class QualificationNamespaceState
+    {
+        public bool Present { get; init; }
+        public bool AbsenceProven { get; init; }
+        public string Reason { get; init; } = string.Empty;
     }
 }

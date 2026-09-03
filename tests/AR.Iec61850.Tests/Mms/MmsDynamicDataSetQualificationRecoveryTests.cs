@@ -60,39 +60,53 @@ public sealed class MmsDynamicDataSetQualificationRecoveryTests
     }
 
     [Fact]
-    public void ClosedRecovery_RequiresCompletedDirectoryAbsenceCheckAndHealthyAssociation()
+    public void ClosedRecovery_RequiresBothAbsenceProofsAndHealthyAssociation()
     {
         Assert.True(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: false,
+            namespaceAbsenceProven: true,
             directoryReadable: false,
-            directoryInspectionCompleted: true,
+            directoryAbsenceProven: true,
             associationHealthy: true,
             out var passReason), passReason);
 
         Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: false,
+            namespaceAbsenceProven: false,
             directoryReadable: false,
-            directoryInspectionCompleted: false,
+            directoryAbsenceProven: true,
             associationHealthy: true,
-            out var unprovenReason));
-        Assert.Contains("not proven", unprovenReason, StringComparison.OrdinalIgnoreCase);
+            out var namespaceReason));
+        Assert.Contains("namespace absence was not proven", namespaceReason, StringComparison.OrdinalIgnoreCase);
+
+        Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
+            namePresent: false,
+            namespaceAbsenceProven: true,
+            directoryReadable: false,
+            directoryAbsenceProven: false,
+            associationHealthy: true,
+            out var directoryReason));
+        Assert.Contains("direct-directory absence was not proven", directoryReason, StringComparison.OrdinalIgnoreCase);
 
         Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: true,
+            namespaceAbsenceProven: false,
             directoryReadable: false,
-            directoryInspectionCompleted: true,
+            directoryAbsenceProven: true,
             associationHealthy: true,
             out _));
         Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: false,
+            namespaceAbsenceProven: true,
             directoryReadable: true,
-            directoryInspectionCompleted: true,
+            directoryAbsenceProven: false,
             associationHealthy: true,
             out _));
         Assert.False(MmsDynamicDataSetQualificationRecoveryPolicy.IsRecoveryClosed(
             namePresent: false,
+            namespaceAbsenceProven: true,
             directoryReadable: false,
-            directoryInspectionCompleted: true,
+            directoryAbsenceProven: true,
             associationHealthy: false,
             out _));
     }

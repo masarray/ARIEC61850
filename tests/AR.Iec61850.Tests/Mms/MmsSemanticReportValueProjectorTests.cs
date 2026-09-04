@@ -91,6 +91,43 @@ public sealed class MmsSemanticReportValueProjectorTests
     }
 
     [Fact]
+    public void Exact_Static_Schema_Overrides_Generic_InstMagMag_Heuristic()
+    {
+        const string objectReference = "AA1E1F06R4VI3p1_OperationalValues/PPRE_MMXU1.TotPF";
+        const string dataSetReference = "AA1E1F06R4Application/LLN0.Analog";
+        var model = BuildMeasurementPairModel(objectReference, dataSetReference);
+        var frame = BuildFrame(
+            objectReference,
+            dataSetReference,
+            MmsDataValue.FloatingPoint(0.125),
+            MmsDataValue.FloatingPoint(0.25));
+
+        // The generic projector recognizes a two-float structure as an instMag/mag pair.
+        // Static DataSet semantic authority must still win so exact schema leaf identities
+        // (including .f) reach ARSAS instead of heuristic aliases.
+        var baseline = MmsReportValueProjector.Project(frame);
+        Assert.Contains(baseline.Updates, update =>
+            update.ProjectionStatus.Equals("measurement-pair(instMag/mag)", StringComparison.OrdinalIgnoreCase));
+
+        var projection = MmsSemanticReportValueProjector.Project(
+            frame,
+            MmsReportSemanticProjectionContext.Create(model));
+
+        var instant = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".instMag.f", StringComparison.OrdinalIgnoreCase));
+        var magnitude = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".mag.f", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("semantic-structured-leaf", instant.ProjectionStatus);
+        Assert.Equal("semantic-structured-leaf", magnitude.ProjectionStatus);
+        Assert.DoesNotContain(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".instMag", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".mag", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(projection.Warnings, warning =>
+            warning.StartsWith("REPORT_SEMANTIC_STRUCT:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Schema_Mismatch_Fails_Closed_And_Preserves_Raw_Projection()
     {
         const string objectReference = "AA1E1F02R2VI3p1_THDHarmonics/I_MHAI1.ThdA";
@@ -128,6 +165,27 @@ public sealed class MmsSemanticReportValueProjectorTests
             Attribute(objectReference + ".phsB.cVal.mag.f", "phsB.cVal.mag.f"),
             Attribute(objectReference + ".phsC.cVal.mag.f", "phsC.cVal.mag.f")
         };
+        return BuildModel(objectReference, dataSetReference, "WYE", attributes);
+    }
+
+    private static LiveIedModelDiscoveryDocument BuildMeasurementPairModel(
+        string objectReference,
+        string dataSetReference)
+    {
+        var attributes = new[]
+        {
+            Attribute(objectReference + ".instMag.f", "instMag.f"),
+            Attribute(objectReference + ".mag.f", "mag.f")
+        };
+        return BuildModel(objectReference, dataSetReference, "MV", attributes);
+    }
+
+    private static LiveIedModelDiscoveryDocument BuildModel(
+        string objectReference,
+        string dataSetReference,
+        string cdc,
+        IReadOnlyList<LiveIedDataAttributeModel> attributes)
+    {
         var slash = objectReference.IndexOf('/');
         var domain = objectReference[..slash];
         var logicalPath = objectReference[(slash + 1)..];
@@ -138,7 +196,7 @@ public sealed class MmsSemanticReportValueProjectorTests
         return new LiveIedModelDiscoveryDocument
         {
             Source = "SclWorkspace",
-            IedName = "AA1E1F02R2",
+            IedName = "AA1E1F06R4",
             LogicalDevices = new[]
             {
                 new LiveIedLogicalDeviceModel
@@ -149,7 +207,7 @@ public sealed class MmsSemanticReportValueProjectorTests
                         new LiveIedLogicalNodeModel
                         {
                             Name = logicalNode,
-                            LnClass = "MHAI",
+                            LnClass = logicalNode.Contains("MHAI", StringComparison.OrdinalIgnoreCase) ? "MHAI" : "MMXU",
                             LnInst = "1",
                             DataObjects = new[]
                             {
@@ -157,7 +215,7 @@ public sealed class MmsSemanticReportValueProjectorTests
                                 {
                                     Reference = objectReference,
                                     Name = dataObjectName,
-                                    InferredCdc = "WYE",
+                                    InferredCdc = cdc,
                                     Attributes = attributes
                                 }
                             }
@@ -170,7 +228,7 @@ public sealed class MmsSemanticReportValueProjectorTests
                 new LiveIedDataSetModel
                 {
                     Reference = dataSetReference,
-                    Domain = "AA1E1F02R2Application",
+                    Domain = dataSetReference.Split('/')[0],
                     LogicalNode = "LLN0",
                     Name = "Analog",
                     MemberCount = 1,
@@ -181,7 +239,7 @@ public sealed class MmsSemanticReportValueProjectorTests
                             Index = 0,
                             Reference = objectReference,
                             FunctionalConstraint = "MX",
-                            MmsReference = "AA1E1F02R2VI3p1_THDHarmonics/I_MHAI1$MX$ThdA",
+                            MmsReference = objectReference.Replace('.', '$'),
                             Confidence = LiveIedDiscoveryConfidenceLevel.Exact
                         }
                     }

@@ -281,8 +281,9 @@ public sealed class MmsReportSemanticProjectionContext
 }
 
 /// <summary>
-/// Backward-compatible overlay for structures that the established report projector
-/// intentionally leaves raw. Existing known CDC projections remain untouched.
+/// Model-backed overlay for structured report members. Exact static DataSet/SCL schema is
+/// authoritative when it can expand the structure safely; the established generic projector
+/// remains the fail-closed fallback when no unique semantic schema matches.
 /// </summary>
 public static class MmsSemanticReportValueProjector
 {
@@ -305,12 +306,19 @@ public static class MmsSemanticReportValueProjector
 
             var parentReference = reportValue.MemberReference;
             var rawPrefix = $"REPORT_RAW_STRUCT: {parentReference} ";
-            if (!baseline.Warnings.Any(warning => warning.StartsWith(rawPrefix, StringComparison.OrdinalIgnoreCase)))
-                continue;
+            var baselineWasRaw = baseline.Warnings.Any(warning =>
+                warning.StartsWith(rawPrefix, StringComparison.OrdinalIgnoreCase));
 
+            // Static DataSet identity + exact SCL/live schema is stronger evidence than a
+            // generic shape heuristic. Try semantic expansion first for every structured
+            // member, including structures the baseline recognizes as instMag/mag pairs.
+            // If the exact schema cannot prove the mapping, preserve baseline behavior.
             if (!context.TryExpand(frame.Header.DataSetReference, reportValue, out var expanded, out var expansionReason))
             {
-                semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {parentReference} remained raw; {expansionReason}. Exact scalar MMS fallback remains eligible.");
+                if (baselineWasRaw)
+                {
+                    semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {parentReference} remained raw; {expansionReason}. Exact scalar MMS fallback remains eligible.");
+                }
                 continue;
             }
 
@@ -325,7 +333,10 @@ public static class MmsSemanticReportValueProjector
             var projected = MmsReportValueProjector.Project(synthetic);
             if (projected.Updates.Count == 0 || projected.Warnings.Any(warning => warning.StartsWith("REPORT_RAW_STRUCT:", StringComparison.OrdinalIgnoreCase)))
             {
-                semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {parentReference} expansion was not publishable; baseline raw projection was preserved.");
+                if (baselineWasRaw)
+                {
+                    semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {parentReference} expansion was not publishable; baseline raw projection was preserved.");
+                }
                 continue;
             }
 
@@ -347,7 +358,7 @@ public static class MmsSemanticReportValueProjector
                 IsProjectedChild = true,
                 ProjectionStatus = "semantic-structured-leaf"
             }));
-            semanticWarnings.Add($"REPORT_SEMANTIC_STRUCT: {parentReference} {expansionReason}; static DataSet membership identity was preserved.");
+            semanticWarnings.Add($"REPORT_SEMANTIC_STRUCT: {parentReference} {expansionReason}; exact static DataSet schema overrode generic structured-value heuristics.");
         }
 
         if (replacementParents.Count == 0)
@@ -360,15 +371,20 @@ public static class MmsSemanticReportValueProjector
         }
 
         var updates = baseline.Updates
-            .Where(update => !replacementParents.Contains(Normalize(update.Reference)))
+            .Where(update => !replacementParents.Any(parent => IsInside(Normalize(update.Reference), parent)))
             .Concat(semanticUpdates)
             .GroupBy(update => Normalize(update.Reference) + "|" + update.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.Last())
-            .OrderBy(update => update.Reference, StringComparer.OrdinalIgnoreCase)
+            // q/t companions are intentionally delivered before scalar values. Consumers can
+            // therefore attach report-native quality/timestamp to semantic value leaves without
+            // inventing defaults or issuing a separate MMS read.
+            .OrderBy(update => CompanionPriority(update.Reference))
+            .ThenBy(update => update.Reference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         var warnings = baseline.Warnings
-            .Where(warning => !replacementParents.Any(parent => warning.StartsWith($"REPORT_RAW_STRUCT: {parent} ", StringComparison.OrdinalIgnoreCase)))
+            .Where(warning => !replacementParents.Any(parent =>
+                warning.StartsWith($"REPORT_RAW_STRUCT: {parent} ", StringComparison.OrdinalIgnoreCase)))
             .Concat(semanticWarnings)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -379,6 +395,21 @@ public static class MmsSemanticReportValueProjector
             Warnings = warnings
         };
     }
+
+    private static int CompanionPriority(string reference)
+    {
+        var normalized = Normalize(reference);
+        return normalized.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ||
+               normalized.EndsWith(".t", StringComparison.OrdinalIgnoreCase)
+            ? 0
+            : 1;
+    }
+
+    private static bool IsInside(string reference, string parent)
+        => string.Equals(reference, parent, StringComparison.OrdinalIgnoreCase) ||
+           (!string.IsNullOrWhiteSpace(reference) &&
+            !string.IsNullOrWhiteSpace(parent) &&
+            reference.StartsWith(parent + ".", StringComparison.OrdinalIgnoreCase));
 
     private static string Normalize(string value)
         => string.IsNullOrWhiteSpace(value)

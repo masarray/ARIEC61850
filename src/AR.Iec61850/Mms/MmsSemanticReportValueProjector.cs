@@ -85,8 +85,22 @@ public sealed class MmsReportSemanticProjectionContext
         MmsReportValue reportValue,
         out IReadOnlyList<MmsReportValue> expanded,
         out string reason)
+        => TryExpand(
+            dataSetReference,
+            reportValue,
+            out expanded,
+            out _,
+            out reason);
+
+    internal bool TryExpand(
+        string dataSetReference,
+        MmsReportValue reportValue,
+        out IReadOnlyList<MmsReportValue> expanded,
+        out string resolvedMemberReference,
+        out string reason)
     {
         expanded = Array.Empty<MmsReportValue>();
+        resolvedMemberReference = string.Empty;
         reason = string.Empty;
 
         if (reportValue.Value is null || reportValue.Value.Kind is not (MmsDataKind.Structure or MmsDataKind.Array))
@@ -127,6 +141,7 @@ public sealed class MmsReportSemanticProjectionContext
                 ReasonForInclusion = reportValue.ReasonForInclusion
             })
             .ToArray();
+        resolvedMemberReference = schema.MemberReference;
         reason = $"expanded {schema.MemberReference} into {expanded.Count} scalar semantic descendant(s)";
         return true;
     }
@@ -295,17 +310,18 @@ public static class MmsSemanticReportValueProjector
         ArgumentNullException.ThrowIfNull(context);
 
         var baseline = MmsReportValueProjector.Project(frame);
-        var replacementParents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var semanticReplacementPositions = new HashSet<int>();
         var semanticUpdates = new List<MmsReportSignalUpdate>();
         var semanticWarnings = new List<string>();
 
-        foreach (var reportValue in frame.Values)
+        for (var valuePosition = 0; valuePosition < frame.Values.Count; valuePosition++)
         {
+            var reportValue = frame.Values[valuePosition];
             if (reportValue.Value is null || reportValue.Value.Kind is not (MmsDataKind.Structure or MmsDataKind.Array))
                 continue;
 
-            var parentReference = reportValue.MemberReference;
-            var rawPrefix = $"REPORT_RAW_STRUCT: {parentReference} ";
+            var reportedMemberReference = reportValue.MemberReference;
+            var rawPrefix = $"REPORT_RAW_STRUCT: {reportedMemberReference} ";
             var baselineWasRaw = baseline.Warnings.Any(warning =>
                 warning.StartsWith(rawPrefix, StringComparison.OrdinalIgnoreCase));
 
@@ -313,11 +329,16 @@ public static class MmsSemanticReportValueProjector
             // generic shape heuristic. Try semantic expansion first for every structured
             // member, including structures the baseline recognizes as instMag/mag pairs.
             // If the exact schema cannot prove the mapping, preserve baseline behavior.
-            if (!context.TryExpand(frame.Header.DataSetReference, reportValue, out var expanded, out var expansionReason))
+            if (!context.TryExpand(
+                    frame.Header.DataSetReference,
+                    reportValue,
+                    out var expanded,
+                    out var resolvedMemberReference,
+                    out var expansionReason))
             {
                 if (baselineWasRaw)
                 {
-                    semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {parentReference} remained raw; {expansionReason}. Exact scalar MMS fallback remains eligible.");
+                    semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {reportedMemberReference} remained raw; {expansionReason}. Exact scalar MMS fallback remains eligible.");
                 }
                 continue;
             }
@@ -335,12 +356,18 @@ public static class MmsSemanticReportValueProjector
             {
                 if (baselineWasRaw)
                 {
-                    semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {parentReference} expansion was not publishable; baseline raw projection was preserved.");
+                    semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {reportedMemberReference} expansion was not publishable; baseline raw projection was preserved.");
                 }
                 continue;
             }
 
-            replacementParents.Add(Normalize(parentReference));
+            // Replace the generic projection by report-value position, not by a guessed parent
+            // reference. Some valid InformationReports omit member identity and are resolved
+            // only by the exact static DataSet + member index. In that case the generic
+            // projector can emit unrooted heuristic leaves, so descendant-name filtering is
+            // neither sufficient nor safe. A successful semantic projection owns this report
+            // value completely; generic projection remains available only for other values.
+            semanticReplacementPositions.Add(valuePosition);
             semanticUpdates.AddRange(projected.Updates.Select(update => new MmsReportSignalUpdate
             {
                 Reference = update.Reference,
@@ -358,10 +385,10 @@ public static class MmsSemanticReportValueProjector
                 IsProjectedChild = true,
                 ProjectionStatus = "semantic-structured-leaf"
             }));
-            semanticWarnings.Add($"REPORT_SEMANTIC_STRUCT: {parentReference} {expansionReason}; exact static DataSet schema overrode generic structured-value heuristics.");
+            semanticWarnings.Add($"REPORT_SEMANTIC_STRUCT: {resolvedMemberReference} {expansionReason}; exact static DataSet schema overrode generic structured-value heuristics.");
         }
 
-        if (replacementParents.Count == 0)
+        if (semanticReplacementPositions.Count == 0)
         {
             return new MmsReportValueProjection
             {
@@ -370,8 +397,23 @@ public static class MmsSemanticReportValueProjector
             };
         }
 
-        var updates = baseline.Updates
-            .Where(update => !replacementParents.Any(parent => IsInside(Normalize(update.Reference), parent)))
+        // Re-project only report values that were not replaced semantically. This preserves
+        // normal generic scalar/companion behavior for unrelated members while guaranteeing
+        // that no heuristic output from a successfully resolved structured member survives,
+        // even when the wire report omitted MemberReference entirely.
+        var retainedFrame = new MmsReportFrame
+        {
+            ReceivedAt = frame.ReceivedAt,
+            Header = frame.Header,
+            Values = frame.Values
+                .Where((_, index) => !semanticReplacementPositions.Contains(index))
+                .ToArray(),
+            DecoderMode = frame.DecoderMode,
+            Message = frame.Message
+        };
+        var retainedBaseline = MmsReportValueProjector.Project(retainedFrame);
+
+        var updates = retainedBaseline.Updates
             .Concat(semanticUpdates)
             .GroupBy(update => Normalize(update.Reference) + "|" + update.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.Last())
@@ -382,9 +424,7 @@ public static class MmsSemanticReportValueProjector
             .ThenBy(update => update.Reference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var warnings = baseline.Warnings
-            .Where(warning => !replacementParents.Any(parent =>
-                warning.StartsWith($"REPORT_RAW_STRUCT: {parent} ", StringComparison.OrdinalIgnoreCase)))
+        var warnings = retainedBaseline.Warnings
             .Concat(semanticWarnings)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -404,12 +444,6 @@ public static class MmsSemanticReportValueProjector
             ? 0
             : 1;
     }
-
-    private static bool IsInside(string reference, string parent)
-        => string.Equals(reference, parent, StringComparison.OrdinalIgnoreCase) ||
-           (!string.IsNullOrWhiteSpace(reference) &&
-            !string.IsNullOrWhiteSpace(parent) &&
-            reference.StartsWith(parent + ".", StringComparison.OrdinalIgnoreCase));
 
     private static string Normalize(string value)
         => string.IsNullOrWhiteSpace(value)

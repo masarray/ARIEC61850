@@ -16,10 +16,6 @@ public sealed class MmsSemanticReportValueProjectorTests
         Assert.Equal(LiveIedDataSetMemberResolutionStatus.Ambiguous, binding.ResolutionStatus);
         Assert.Null(binding.PrimaryValue);
 
-        // Physical bench evidence included phsB.cVal.mag.f = 40.04636.
-        // Keep that exact floating-point input here so the report fan-out regression stays tied
-        // to the field failure that exposed REPORT_RAW_STRUCT. The public display renderer has
-        // an established three-decimal contract, which is asserted below independently of routing.
         var frame = BuildFrame(
             objectReference,
             dataSetReference,
@@ -62,10 +58,6 @@ public sealed class MmsSemanticReportValueProjectorTests
         const string dataSetReference = "AA1E1F02R2Application/LLN0.Analog";
         var model = BuildThreePhaseModel(objectReference, dataSetReference);
 
-        // The static DataSet member index in the model is 0. A sparse InformationReport may
-        // expose a decoder-side value position that differs from that static member index.
-        // Exact IEC member identity must remain sufficient and must not be rejected solely
-        // because the transient report value index is different.
         var frame = BuildFrame(
             objectReference,
             dataSetReference,
@@ -88,6 +80,92 @@ public sealed class MmsSemanticReportValueProjectorTests
             update.Reference.Equals(objectReference + ".phsC.cVal.mag.f", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(projection.Warnings, warning =>
             warning.StartsWith("REPORT_SEMANTIC_FALLBACK:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Exact_Static_Schema_Overrides_Generic_InstMagMag_Heuristic()
+    {
+        const string objectReference = "AA1E1F06R4VI3p1_OperationalValues/PPRE_MMXU1.TotPF";
+        const string dataSetReference = "AA1E1F06R4Application/LLN0.Analog";
+        var timestamp = new DateTimeOffset(2026, 9, 4, 13, 20, 51, TimeSpan.Zero);
+        var model = BuildMeasurementPairModel(objectReference, dataSetReference);
+        var frame = BuildFrame(
+            objectReference,
+            dataSetReference,
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(0.125) }),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(0.25) }),
+            MmsDataValue.BitString(3, new byte[] { 0x00, 0x00 }),
+            MmsDataValue.UtcTime(new Iec61850UtcTime(timestamp, 0)));
+
+        // The generic projector can correctly recognize the wire shape as an MX pair.
+        // Static DataSet semantic authority must still win so exact schema leaf identity,
+        // including the final .f and the report-native q/t, reaches the consumer.
+        var baseline = MmsReportValueProjector.Project(frame);
+        Assert.Contains(baseline.Updates, update =>
+            update.ProjectionStatus.Equals("projected-mx-pair", StringComparison.OrdinalIgnoreCase));
+
+        var projection = MmsSemanticReportValueProjector.Project(
+            frame,
+            MmsReportSemanticProjectionContext.Create(model));
+
+        var instant = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".instMag.f", StringComparison.OrdinalIgnoreCase));
+        var magnitude = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".mag.f", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("semantic-structured-leaf", instant.ProjectionStatus);
+        Assert.Equal("semantic-structured-leaf", magnitude.ProjectionStatus);
+        Assert.Equal("good", magnitude.Quality);
+        Assert.True(magnitude.HasQuality);
+        Assert.True(magnitude.HasTimestamp);
+        Assert.Contains("2026-09-04", magnitude.Timestamp, StringComparison.Ordinal);
+        Assert.DoesNotContain(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".instMag", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".mag", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(projection.Warnings, warning =>
+            warning.StartsWith("REPORT_SEMANTIC_STRUCT:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Missing_MemberReference_Uses_Static_DataSet_Index_Without_Leaking_Generic_Heuristic()
+    {
+        const string objectReference = "AA1E1F06R4VI3p1_OperationalValues/PPRE_MMXU1.TotPF";
+        const string dataSetReference = "AA1E1F06R4Application/LLN0.Analog";
+        var timestamp = new DateTimeOffset(2026, 9, 4, 13, 20, 51, TimeSpan.Zero);
+        var model = BuildMeasurementPairModel(objectReference, dataSetReference);
+        var frame = BuildFrame(
+            string.Empty,
+            dataSetReference,
+            reportValueIndex: 0,
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(0.125) }),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(0.25) }),
+            MmsDataValue.BitString(3, new byte[] { 0x00, 0x00 }),
+            MmsDataValue.UtcTime(new Iec61850UtcTime(timestamp, 0)));
+
+        // With no MemberReference, the generic projector has wire-shape evidence but no
+        // authoritative engineering parent. It can therefore emit unrooted MX-pair leaves.
+        var baseline = MmsReportValueProjector.Project(frame);
+        Assert.Contains(baseline.Updates, update =>
+            update.ProjectionStatus.Equals("projected-mx-pair", StringComparison.OrdinalIgnoreCase));
+
+        var projection = MmsSemanticReportValueProjector.Project(
+            frame,
+            MmsReportSemanticProjectionContext.Create(model));
+
+        var instant = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".instMag.f", StringComparison.OrdinalIgnoreCase));
+        var magnitude = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".mag.f", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("semantic-structured-leaf", instant.ProjectionStatus);
+        Assert.Equal("semantic-structured-leaf", magnitude.ProjectionStatus);
+        Assert.DoesNotContain(projection.Updates, update =>
+            update.ProjectionStatus.Equals("projected-mx-pair", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projection.Updates, update =>
+            update.Reference.Equals("instMag.f", StringComparison.OrdinalIgnoreCase)
+            || update.Reference.Equals("mag.f", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(projection.Warnings, warning =>
+            warning.StartsWith("REPORT_SEMANTIC_STRUCT:", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains(objectReference, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -128,6 +206,29 @@ public sealed class MmsSemanticReportValueProjectorTests
             Attribute(objectReference + ".phsB.cVal.mag.f", "phsB.cVal.mag.f"),
             Attribute(objectReference + ".phsC.cVal.mag.f", "phsC.cVal.mag.f")
         };
+        return BuildModel(objectReference, dataSetReference, "WYE", attributes);
+    }
+
+    private static LiveIedModelDiscoveryDocument BuildMeasurementPairModel(
+        string objectReference,
+        string dataSetReference)
+    {
+        var attributes = new[]
+        {
+            Attribute(objectReference + ".instMag.f", "instMag.f"),
+            Attribute(objectReference + ".mag.f", "mag.f"),
+            Attribute(objectReference + ".q", "q", "Quality", "bit-string"),
+            Attribute(objectReference + ".t", "t", "Timestamp", "utc-time")
+        };
+        return BuildModel(objectReference, dataSetReference, "MV", attributes);
+    }
+
+    private static LiveIedModelDiscoveryDocument BuildModel(
+        string objectReference,
+        string dataSetReference,
+        string cdc,
+        IReadOnlyList<LiveIedDataAttributeModel> attributes)
+    {
         var slash = objectReference.IndexOf('/');
         var domain = objectReference[..slash];
         var logicalPath = objectReference[(slash + 1)..];
@@ -138,7 +239,7 @@ public sealed class MmsSemanticReportValueProjectorTests
         return new LiveIedModelDiscoveryDocument
         {
             Source = "SclWorkspace",
-            IedName = "AA1E1F02R2",
+            IedName = "AA1E1F06R4",
             LogicalDevices = new[]
             {
                 new LiveIedLogicalDeviceModel
@@ -149,7 +250,7 @@ public sealed class MmsSemanticReportValueProjectorTests
                         new LiveIedLogicalNodeModel
                         {
                             Name = logicalNode,
-                            LnClass = "MHAI",
+                            LnClass = logicalNode.Contains("MHAI", StringComparison.OrdinalIgnoreCase) ? "MHAI" : "MMXU",
                             LnInst = "1",
                             DataObjects = new[]
                             {
@@ -157,7 +258,7 @@ public sealed class MmsSemanticReportValueProjectorTests
                                 {
                                     Reference = objectReference,
                                     Name = dataObjectName,
-                                    InferredCdc = "WYE",
+                                    InferredCdc = cdc,
                                     Attributes = attributes
                                 }
                             }
@@ -170,7 +271,7 @@ public sealed class MmsSemanticReportValueProjectorTests
                 new LiveIedDataSetModel
                 {
                     Reference = dataSetReference,
-                    Domain = "AA1E1F02R2Application",
+                    Domain = dataSetReference.Split('/')[0],
                     LogicalNode = "LLN0",
                     Name = "Analog",
                     MemberCount = 1,
@@ -181,7 +282,7 @@ public sealed class MmsSemanticReportValueProjectorTests
                             Index = 0,
                             Reference = objectReference,
                             FunctionalConstraint = "MX",
-                            MmsReference = "AA1E1F02R2VI3p1_THDHarmonics/I_MHAI1$MX$ThdA",
+                            MmsReference = objectReference.Replace('.', '$'),
                             Confidence = LiveIedDiscoveryConfidenceLevel.Exact
                         }
                     }
@@ -190,15 +291,19 @@ public sealed class MmsSemanticReportValueProjectorTests
         };
     }
 
-    private static LiveIedDataAttributeModel Attribute(string reference, string path)
+    private static LiveIedDataAttributeModel Attribute(
+        string reference,
+        string path,
+        string sclBType = "FLOAT32",
+        string mmsType = "floating-point")
         => new()
         {
             ObjectReference = reference,
             AttributePath = path,
             FunctionalConstraint = "MX",
             MmsReference = reference.Replace('.', '$'),
-            SclBType = "FLOAT32",
-            MmsType = "floating-point",
+            SclBType = sclBType,
+            MmsType = mmsType,
             Source = "SCL.DataTypeTemplates",
             TypeSource = "SCL.DataTypeTemplates",
             TypeConfidence = LiveIedDiscoveryConfidenceLevel.Exact

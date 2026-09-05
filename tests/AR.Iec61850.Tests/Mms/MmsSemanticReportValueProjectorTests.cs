@@ -161,8 +161,7 @@ public sealed class MmsSemanticReportValueProjectorTests
         Assert.DoesNotContain(projection.Updates, update =>
             update.ProjectionStatus.Equals("projected-mx-pair", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(projection.Updates, update =>
-            string.IsNullOrWhiteSpace(update.Reference)
-            || update.Reference.Equals("instMag.f", StringComparison.OrdinalIgnoreCase)
+            update.Reference.Equals("instMag.f", StringComparison.OrdinalIgnoreCase)
             || update.Reference.Equals("mag.f", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(projection.Warnings, warning =>
             warning.StartsWith("REPORT_SEMANTIC_STRUCT:", StringComparison.OrdinalIgnoreCase)

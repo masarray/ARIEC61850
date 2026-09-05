@@ -127,6 +127,49 @@ public sealed class MmsSemanticReportValueProjectorTests
     }
 
     [Fact]
+    public void Missing_MemberReference_Uses_Static_DataSet_Index_Without_Leaking_Generic_Heuristic()
+    {
+        const string objectReference = "AA1E1F06R4VI3p1_OperationalValues/PPRE_MMXU1.TotPF";
+        const string dataSetReference = "AA1E1F06R4Application/LLN0.Analog";
+        var timestamp = new DateTimeOffset(2026, 9, 4, 13, 20, 51, TimeSpan.Zero);
+        var model = BuildMeasurementPairModel(objectReference, dataSetReference);
+        var frame = BuildFrame(
+            string.Empty,
+            dataSetReference,
+            reportValueIndex: 0,
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(0.125) }),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(0.25) }),
+            MmsDataValue.BitString(3, new byte[] { 0x00, 0x00 }),
+            MmsDataValue.UtcTime(new Iec61850UtcTime(timestamp, 0)));
+
+        // With no MemberReference, the generic projector has wire-shape evidence but no
+        // authoritative engineering parent. It can therefore emit unrooted MX-pair leaves.
+        var baseline = MmsReportValueProjector.Project(frame);
+        Assert.Contains(baseline.Updates, update =>
+            update.ProjectionStatus.Equals("projected-mx-pair", StringComparison.OrdinalIgnoreCase));
+
+        var projection = MmsSemanticReportValueProjector.Project(
+            frame,
+            MmsReportSemanticProjectionContext.Create(model));
+
+        var instant = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".instMag.f", StringComparison.OrdinalIgnoreCase));
+        var magnitude = Assert.Single(projection.Updates, update =>
+            update.Reference.Equals(objectReference + ".mag.f", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("semantic-structured-leaf", instant.ProjectionStatus);
+        Assert.Equal("semantic-structured-leaf", magnitude.ProjectionStatus);
+        Assert.DoesNotContain(projection.Updates, update =>
+            update.ProjectionStatus.Equals("projected-mx-pair", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projection.Updates, update =>
+            string.IsNullOrWhiteSpace(update.Reference)
+            || update.Reference.Equals("instMag.f", StringComparison.OrdinalIgnoreCase)
+            || update.Reference.Equals("mag.f", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(projection.Warnings, warning =>
+            warning.StartsWith("REPORT_SEMANTIC_STRUCT:", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains(objectReference, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Schema_Mismatch_Fails_Closed_And_Preserves_Raw_Projection()
     {
         const string objectReference = "AA1E1F02R2VI3p1_THDHarmonics/I_MHAI1.ThdA";

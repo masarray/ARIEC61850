@@ -98,12 +98,22 @@ public sealed partial class MmsClientSession
             }
         }
 
-        var start = await StartPersistentReportMonitorAsync(
-            plan,
-            triggerGeneralInterrogation,
-            deleteDynamicDataSetOnStop,
-            directory,
-            cancellationToken).ConfigureAwait(false);
+        // Static DataSet monitoring has a stricter startup contract than the legacy generic
+        // path: the InformationReport receiver must be registered before RptEna or GI can make
+        // the IED emit a report. Dynamic activation retains its existing mutation/rollback path.
+        var start = isDynamic
+            ? await StartPersistentReportMonitorAsync(
+                plan,
+                triggerGeneralInterrogation,
+                deleteDynamicDataSetOnStop,
+                directory,
+                cancellationToken).ConfigureAwait(false)
+            : await StartStaticPersistentReportMonitorReceiverFirstAsync(
+                plan,
+                triggerGeneralInterrogation,
+                deleteDynamicDataSetOnStop,
+                directory,
+                cancellationToken).ConfigureAwait(false);
 
         if (probe is not null)
             start = MergeProbeEvidence(start, probe);

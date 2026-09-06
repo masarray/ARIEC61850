@@ -10,9 +10,7 @@ public sealed class LegacySasSclExportOptions
     public string IedName { get; init; } = string.Empty;
     public string AccessPointName { get; init; } = string.Empty;
     public SclSchemaProfile SchemaProfile { get; init; } = SclSchemaProfile.Edition1V16;
-    // Backward-compatible single-selection entry point.
     public SclReportControlSelection SelectedReportControl { get; init; } = new(string.Empty);
-    // Preferred P0 entry point: retain every selected ReportControl/DataSet pair.
     public IReadOnlyList<SclReportControlSelection> SelectedReportControls { get; init; }
         = Array.Empty<SclReportControlSelection>();
     public bool RemoveUnreferencedDataSets { get; init; }
@@ -51,7 +49,6 @@ public sealed record LegacySasSclExportResult
     public string IedName { get; init; } = string.Empty;
     public string AccessPointName { get; init; } = string.Empty;
     public string SclSchema { get; init; } = string.Empty;
-    // Legacy aggregate fields remain populated for existing callers.
     public string RetainedReportControlReference { get; init; } = string.Empty;
     public string RetainedDataSetName { get; init; } = string.Empty;
     public int RetainedDataSetMemberCount { get; init; }
@@ -98,8 +95,6 @@ public static class LegacySasSclExporter
                 IedName = normalized.SelectedIedName,
                 AccessPointName = options.AccessPointName,
                 SelectedReportControls = selections,
-                // Preserve the already field-proven exact single-RCB collapse contract.
-                // Multi-select only relaxes this guard when the operator actually chose >1 RCB.
                 RequireExactlyOneReportControl = selections.Count == 1,
                 RemoveUnreferencedDataSets = options.RemoveUnreferencedDataSets,
                 CollapseIndexedSelectionToSingleInstance = true
@@ -107,6 +102,7 @@ public static class LegacySasSclExporter
             sourceName);
 
         var document = new XDocument(filtered.Document);
+        ApplyExactRuntimeReportControlIdentities(document, selections);
         var root = document.Root ?? throw new InvalidDataException("Filtered SCL document has no root element.");
         var schema = SclSchemaProfiles.Get(options.SchemaProfile);
         ApplySchemaProfile(root, schema);
@@ -189,6 +185,46 @@ public static class LegacySasSclExporter
         File.WriteAllText(reportPath, JsonSerializer.Serialize(written, JsonOptions), new UTF8Encoding(false));
         File.WriteAllText(summaryPath, BuildMarkdown(written), new UTF8Encoding(false));
         return written;
+    }
+
+    private static void ApplyExactRuntimeReportControlIdentities(
+        XDocument document,
+        IReadOnlyList<SclReportControlSelection> selections)
+    {
+        var retained = document.Descendants(Scl + "ReportControl").ToArray();
+        foreach (var selection in selections.Where(item => !string.IsNullOrWhiteSpace(item.ExportName)))
+        {
+            var exactRuntimeName = selection.ExportName.Trim();
+            var sourceName = SourceNameFromSelectionKey(selection.SelectionKey);
+            var matches = retained.Where(element =>
+                    string.Equals((string?)element.Attribute("name"), exactRuntimeName, StringComparison.Ordinal) ||
+                    (!string.IsNullOrWhiteSpace(sourceName) &&
+                     string.Equals((string?)element.Attribute("name"), sourceName, StringComparison.Ordinal)))
+                .Distinct()
+                .ToArray();
+            if (matches.Length != 1)
+                throw new InvalidDataException($"Exact runtime RCB normalization could not uniquely map '{exactRuntimeName}'; found {matches.Length} retained candidate(s).");
+
+            var reportControl = matches[0];
+            reportControl.SetAttributeValue("name", exactRuntimeName);
+            reportControl.SetAttributeValue("indexed", "false");
+            foreach (var rptEnabled in reportControl.Elements(Scl + "RptEnabled").ToArray())
+                rptEnabled.Remove();
+        }
+    }
+
+    private static string SourceNameFromSelectionKey(string selectionKey)
+    {
+        var normalized = (selectionKey ?? string.Empty).Trim();
+        if (normalized.Length == 0)
+            return string.Empty;
+        var pipe = normalized.LastIndexOf('|');
+        if (pipe >= 0 && pipe + 1 < normalized.Length)
+            return normalized[(pipe + 1)..];
+        var slash = normalized.LastIndexOf('/');
+        if (slash >= 0 && slash + 1 < normalized.Length)
+            return normalized[(slash + 1)..];
+        return string.Empty;
     }
 
     private static SclReportControlSelection FindSelection(

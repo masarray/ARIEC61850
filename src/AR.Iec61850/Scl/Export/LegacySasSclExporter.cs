@@ -98,7 +98,9 @@ public static class LegacySasSclExporter
                 IedName = normalized.SelectedIedName,
                 AccessPointName = options.AccessPointName,
                 SelectedReportControls = selections,
-                RequireExactlyOneReportControl = false,
+                // Preserve the already field-proven exact single-RCB collapse contract.
+                // Multi-select only relaxes this guard when the operator actually chose >1 RCB.
+                RequireExactlyOneReportControl = selections.Count == 1,
                 RemoveUnreferencedDataSets = options.RemoveUnreferencedDataSets,
                 CollapseIndexedSelectionToSingleInstance = true
             },

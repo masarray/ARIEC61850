@@ -210,3 +210,32 @@ Every meaningful patch reports:
 6. the next lowest-risk step.
 
 Never claim completion from a happy-path demonstration alone.
+
+## 14. Result-oriented failure handling and asynchronous diagnostics
+
+Exceptions must not be the normal control-flow mechanism for expected protocol, parser, state-machine, timing, or interoperability outcomes.
+
+Expected/recoverable conditions such as malformed length, unsupported tag/value, negative service response, timeout, cancellation, disconnect, partial response, invoke-ID mismatch, occupied RCB, unavailable optional capability, or SCL/model ambiguity should return an explicit typed result/status where practical.
+
+For C# prefer stable domain-specific Result/Try contracts, nullable/optional outcomes only when failure detail is unnecessary, and `TryParse`-style APIs for routine decode/validation. Do not create a different ad-hoc Result class for every codec or service; keep a coherent error taxonomy per protocol layer/domain.
+
+Exceptions from sockets, streams, XML, OS, .NET, or third-party infrastructure may still occur. Catch them at the nearest meaningful transport/file/application boundary and convert them to structured protocol/application failures. Do not scatter broad `try/catch` inside byte-processing loops and do not silently swallow errors.
+
+Latency-sensitive GOOSE/SV, receive/decode, and other high-frequency paths must not synchronously format/write diagnostic messages for routine failures. Emit only compact machine-readable diagnostic events/counters and defer human-readable formatting/persistence/UI publication to a bounded background diagnostic consumer.
+
+Diagnostic queues/channels must be bounded and have an explicit overload policy. Repeated identical failures must be aggregated, deduplicated, or rate-limited rather than producing unbounded logs or UI updates. A slow or failed diagnostic sink must never block protocol processing, corrupt association state, delay time-sensitive publishing, or become application failure.
+
+For timing-critical paths, prefer fixed/compact error codes plus small numeric context over heap-heavy exception/string construction. Preserve the exact negative/failure semantics needed by tests and engineering evidence.
+
+Protocol failure containment follows:
+
+```text
+untrusted input / remote outcome
+-> validate
+-> typed decode/service Result
+-> explicit state transition or safe rejection
+-> optional compact diagnostic event
+-> continue/terminate according to protocol contract
+```
+
+Never use repeated thrown exceptions plus retry delays as a substitute for an explicit state machine or failure model.

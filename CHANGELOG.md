@@ -6,11 +6,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Added
 
-- Added the shared Step-4 initial FC-root Read path for both live-discovery and SCL-assisted workflows: ordered `LN$FC` targets are batched at no more than 10 MMS variables per Confirmed-Read, executed strictly one request at a time, decoded as ordered per-target AccessResults, and projected back to SCL leaves only when nested structure cardinality is exact.
-- Added opt-in SCL-assisted live MMS association and domain-only validation: an exact typed COTP/ACSE plan can now open one MMS association, query only `GetNameList(Domain,VMD)`, reconcile expected SCL logical-device domains against live evidence, preserve extra online domains diagnostically, and keep full discovery/write/control/report behavior out of this path.
-- Added typed, side-effect-free SCL-assisted MMS association planning: ConnectedAP addressing can now be converted into parameterized COTP and ISO Session/Presentation/ACSE/MMS Initiate request bytes with explicit local/calling identity, fail-closed remote/called validation, and golden-byte compatibility coverage; live runtime selection remains a later step.
 - Added a typed hybrid report acquisition planner that can cover requested signals with safe static BRCB/URCB plans, use explicitly free dynamic report slots for residual signals, and leave only the remaining points on MMS polling fallback without equating fallback with absence.
-- Added the G2.6 production dynamic-report consumer: an optional typed production-planning context can authorize automatic dynamic planning only from an identity-compatible `ProductionEligible` profile, with exact proven InformationReport RCB/member scope and fail-closed fallback for unproven points.
 - Added typed IEC 61850 UTC-Time forensic evidence with exact preserved 8-byte wire provenance, the original 24-bit fractional-second field, TimeQuality/accuracy decoding, and explicit full/engineering UTC and local-offset views.
 - Added report timestamp evidence that keeps IED data timestamps, report `TimeOfEntry`, and client `ReceivedAt` as distinct evidence sources; raw `TimeOfEntry` provenance is linked only when an exact decoded-report match exists.
 
@@ -18,7 +14,6 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 - Native MMS discovery can now carry bounded, ordered DataSet-directory results in its typed result, allowing live-model, engineering-profile, and readiness builders to consume the same member evidence without application-side reconstruction.
 - Hybrid dynamic reporting can host a temporary DataSet in a verified-free RCB Logical Device while its members reference live points in other Logical Devices, matching the MMS named-variable-list model used by Siemens auxiliary RCB pools.
-- Production automatic dynamic planning remains P6.2-B quarantined for callers without a valid production context; even when authorized, the first G2.6 consumer is limited to the exact report-proven RCB, report-proven members, one dynamic group, and fresh live availability.
 - Preserved full seven-digit UTC-Time precision through the shared MMS scalar/structured renderer and retained exact decoded UTC-Time bytes for byte-exact re-encoding; synthetic UTC-Time values remain explicitly without wire provenance.
 - Corrected website structured-data licensing to `GPL-3.0-or-later`.
 - Replaced stale active-license wording and milestone journals with current evidence and future-only roadmap documents.
@@ -31,7 +26,6 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Fixed
 
-- Hardened the SCL-assisted Step-3 runtime so the configured timeout bounds TCP/COTP/ACSE/MMS plus Domain/VMD inventory, MMS domain identifiers are reconciled case-sensitively, and malformed SCL returns typed validation evidence instead of leaking XML parser exceptions.
 - Live-model discovery no longer drops DataSet members when callers request DataSet-directory reads through `MmsClientSession.DiscoverAsync`.
 - Dynamic hybrid planning no longer rejects a verified-free RCB solely because the RCB and requested signal belong to different MMS domains.
 

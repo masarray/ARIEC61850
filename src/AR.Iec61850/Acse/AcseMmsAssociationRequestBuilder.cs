@@ -23,11 +23,6 @@ public sealed class AcseMmsAssociationRequestParameters
     public MmsInitiateRequestParameters Initiate { get; init; } = new();
 }
 
-/// <summary>
-/// Pure encoder for the IEC 61850 ISO Session/Presentation/ACSE/MMS initiate request.
-/// It has no socket or association side effects. The existing runtime static profile
-/// remains untouched until a later integration step.
-/// </summary>
 public static class AcseMmsAssociationRequestBuilder
 {
     private static readonly byte[] PresentationContextDefinitions =
@@ -102,56 +97,39 @@ public static class AcseMmsAssociationRequestBuilder
         if (endpoint.SessionSelector.Length is < 1 or > 16)
             throw new ArgumentOutOfRangeException(name, "Session selector must contain 1 to 16 byte(s).");
         ValidateObjectIdentifier(endpoint.ApTitle, name);
-        if (endpoint.AeQualifier < 0)
-            throw new ArgumentOutOfRangeException(name, "AE qualifier cannot be negative.");
+        if (endpoint.AeQualifier is < 0 or > 65535)
+            throw new ArgumentOutOfRangeException(name, "AE qualifier must be between 0 and 65535.");
     }
 
     private static void ValidateInitiate(MmsInitiateRequestParameters initiate)
     {
         ArgumentNullException.ThrowIfNull(initiate);
-        if (initiate.LocalDetailCalling <= 0)
-            throw new ArgumentOutOfRangeException(nameof(initiate.LocalDetailCalling));
-        if (initiate.MaxOutstandingCalling <= 0)
-            throw new ArgumentOutOfRangeException(nameof(initiate.MaxOutstandingCalling));
-        if (initiate.MaxOutstandingCalled <= 0)
-            throw new ArgumentOutOfRangeException(nameof(initiate.MaxOutstandingCalled));
-        if (initiate.NestingLevel <= 0)
-            throw new ArgumentOutOfRangeException(nameof(initiate.NestingLevel));
+        if (initiate.LocalDetailCalling <= 0) throw new ArgumentOutOfRangeException(nameof(initiate.LocalDetailCalling));
+        if (initiate.MaxOutstandingCalling <= 0) throw new ArgumentOutOfRangeException(nameof(initiate.MaxOutstandingCalling));
+        if (initiate.MaxOutstandingCalled <= 0) throw new ArgumentOutOfRangeException(nameof(initiate.MaxOutstandingCalled));
+        if (initiate.NestingLevel <= 0) throw new ArgumentOutOfRangeException(nameof(initiate.NestingLevel));
     }
 
-    private static byte[] SessionParameter(byte code, byte[] value)
-        => Combine([code], EncodeSessionLength(value.Length), value);
+    private static byte[] SessionParameter(byte code, byte[] value) => Combine([code], EncodeSessionLength(value.Length), value);
 
     private static byte[] EncodeSessionLength(int length)
     {
-        if (length < 0)
-            throw new ArgumentOutOfRangeException(nameof(length));
-        if (length <= 254)
-            return [(byte)length];
-        if (length <= ushort.MaxValue)
-            return [0xFF, (byte)(length >> 8), (byte)length];
+        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length));
+        if (length <= 254) return [(byte)length];
+        if (length <= ushort.MaxValue) return [0xFF, (byte)(length >> 8), (byte)length];
         throw new ArgumentOutOfRangeException(nameof(length), "ISO Session parameter exceeds 65535 byte(s).");
     }
 
-    private static byte[] Tlv(byte tag, byte[] value)
-        => Combine([tag], EncodeBerLength(value.Length), value);
+    private static byte[] Tlv(byte tag, byte[] value) => Combine([tag], EncodeBerLength(value.Length), value);
 
     private static byte[] EncodeBerLength(int length)
     {
-        if (length < 0)
-            throw new ArgumentOutOfRangeException(nameof(length));
-        if (length < 0x80)
-            return [(byte)length];
-
+        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length));
+        if (length < 0x80) return [(byte)length];
         Span<byte> scratch = stackalloc byte[4];
         var value = (uint)length;
         var index = scratch.Length;
-        while (value > 0)
-        {
-            scratch[--index] = (byte)value;
-            value >>= 8;
-        }
-
+        while (value > 0) { scratch[--index] = (byte)value; value >>= 8; }
         var count = scratch.Length - index;
         var result = new byte[count + 1];
         result[0] = (byte)(0x80 | count);
@@ -161,22 +139,13 @@ public static class AcseMmsAssociationRequestBuilder
 
     private static byte[] EncodeUnsignedInteger(int value)
     {
-        if (value < 0)
-            throw new ArgumentOutOfRangeException(nameof(value));
-        if (value == 0)
-            return [0x00];
-
+        if (value < 0) throw new ArgumentOutOfRangeException(nameof(value));
+        if (value == 0) return [0x00];
         Span<byte> scratch = stackalloc byte[5];
         var unsigned = (uint)value;
         var index = scratch.Length;
-        while (unsigned > 0)
-        {
-            scratch[--index] = (byte)unsigned;
-            unsigned >>= 8;
-        }
-
-        if ((scratch[index] & 0x80) != 0)
-            scratch[--index] = 0x00;
+        while (unsigned > 0) { scratch[--index] = (byte)unsigned; unsigned >>= 8; }
+        if ((scratch[index] & 0x80) != 0) scratch[--index] = 0x00;
         return scratch[index..].ToArray();
     }
 
@@ -185,20 +154,16 @@ public static class AcseMmsAssociationRequestBuilder
         ValidateObjectIdentifier(arcs, nameof(arcs));
         var result = new List<byte>();
         AppendBase128(result, ((ulong)arcs[0] * 40UL) + arcs[1]);
-        for (var i = 2; i < arcs.Count; i++)
-            AppendBase128(result, arcs[i]);
+        for (var i = 2; i < arcs.Count; i++) AppendBase128(result, arcs[i]);
         return result.ToArray();
     }
 
     private static void ValidateObjectIdentifier(IReadOnlyList<uint> arcs, string name)
     {
         ArgumentNullException.ThrowIfNull(arcs, name);
-        if (arcs.Count < 2)
-            throw new ArgumentException("AP-title OID requires at least two arcs.", name);
-        if (arcs[0] > 2)
-            throw new ArgumentException("AP-title OID first arc must be 0, 1, or 2.", name);
-        if (arcs[0] < 2 && arcs[1] > 39)
-            throw new ArgumentException("AP-title OID second arc must be <= 39 when first arc is 0 or 1.", name);
+        if (arcs.Count < 2) throw new ArgumentException("AP-title OID requires at least two arcs.", name);
+        if (arcs[0] > 2) throw new ArgumentException("AP-title OID first arc must be 0, 1, or 2.", name);
+        if (arcs[0] < 2 && arcs[1] > 39) throw new ArgumentException("AP-title OID second arc must be <= 39 when first arc is 0 or 1.", name);
     }
 
     private static void AppendBase128(ICollection<byte> output, ulong value)
@@ -207,14 +172,8 @@ public static class AcseMmsAssociationRequestBuilder
         var index = scratch.Length;
         scratch[--index] = (byte)(value & 0x7F);
         value >>= 7;
-        while (value > 0)
-        {
-            scratch[--index] = (byte)(0x80 | (value & 0x7F));
-            value >>= 7;
-        }
-
-        for (; index < scratch.Length; index++)
-            output.Add(scratch[index]);
+        while (value > 0) { scratch[--index] = (byte)(0x80 | (value & 0x7F)); value >>= 7; }
+        for (; index < scratch.Length; index++) output.Add(scratch[index]);
     }
 
     private static byte[] Combine(params byte[][] parts)
@@ -222,11 +181,7 @@ public static class AcseMmsAssociationRequestBuilder
         var length = parts.Sum(part => part.Length);
         var result = new byte[length];
         var offset = 0;
-        foreach (var part in parts)
-        {
-            part.CopyTo(result, offset);
-            offset += part.Length;
-        }
+        foreach (var part in parts) { part.CopyTo(result, offset); offset += part.Length; }
         return result;
     }
 }

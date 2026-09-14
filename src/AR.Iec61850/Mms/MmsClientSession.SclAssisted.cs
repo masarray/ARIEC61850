@@ -54,13 +54,16 @@ public sealed partial class MmsClientSession
 
         var associationSucceeded = false;
         var profileName = $"SCL:{plan.IedName}/{plan.AccessPointName}";
+        using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        operationTimeout.CancelAfter(_lastTimeout);
+        var operationToken = operationTimeout.Token;
 
         try
         {
-            await _tpkt.ConnectAsync(_lastHost, _lastPort, _lastTimeout, cancellationToken).ConfigureAwait(false);
+            await _tpkt.ConnectAsync(_lastHost, _lastPort, _lastTimeout, operationToken).ConfigureAwait(false);
             State = MmsAssociationState.TcpConnected;
 
-            await _cotp.ConnectAsync(plan.Cotp, cancellationToken).ConfigureAwait(false);
+            await _cotp.ConnectAsync(plan.Cotp, operationToken).ConfigureAwait(false);
             State = MmsAssociationState.CotpConnected;
             LastHandshakeMessage = $"{profileName}: {_cotp.LastConnectionConfirm?.Message ?? "COTP connection confirmed."}";
 
@@ -69,7 +72,7 @@ public sealed partial class MmsClientSession
                 "Exact SCL-assisted MMS association plan.",
                 plan.SessionPresentationAcseMmsRequest.ToArray());
 
-            var association = await TryInitiateMmsAssociationAsync(associationProfile, cancellationToken).ConfigureAwait(false);
+            var association = await TryInitiateMmsAssociationAsync(associationProfile, operationToken).ConfigureAwait(false);
             LastAssociationAttempts =
             [
                 new AcseAssociationAttempt
@@ -105,7 +108,7 @@ public sealed partial class MmsClientSession
             var domainInventory = await GetNameListPagedAsync(
                     MmsGetNameListObjectClass.Domain,
                     domainId: null,
-                    cancellationToken: cancellationToken)
+                    cancellationToken: operationToken)
                 .ConfigureAwait(false);
 
             if (!domainInventory.IsSuccess)
@@ -134,6 +137,22 @@ public sealed partial class MmsClientSession
                 domainInventorySucceeded: true,
                 reconciliation,
                 LastHandshakeMessage);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && operationTimeout.IsCancellationRequested)
+        {
+            var phase = associationSucceeded ? "Domain/VMD inventory" : "TCP/COTP/ACSE/MMS association";
+            var message = $"{profileName}: {phase} timed out after {_lastTimeout.TotalMilliseconds:0} ms.";
+            LastHandshakeMessage = message;
+            await ResetTransportAsync().ConfigureAwait(false);
+            State = MmsAssociationState.MmsInitiateFailed;
+
+            return BuildSclAssistedResult(
+                SclAssistedMmsOnlineStatus.TimedOut,
+                plan,
+                associationSucceeded,
+                domainInventorySucceeded: false,
+                domains: null,
+                message);
         }
         catch (OperationCanceledException)
         {

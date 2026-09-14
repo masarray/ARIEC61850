@@ -242,10 +242,12 @@ public static class InitialFcReadPlanner
         string functionalConstraint)
     {
         var leaves = dataObject.Attributes
-            .Where(attribute => string.Equals(
-                NormalizeFc(attribute.FunctionalConstraint),
-                functionalConstraint,
-                StringComparison.Ordinal))
+            .Where(attribute =>
+                string.Equals(
+                    NormalizeFc(attribute.FunctionalConstraint),
+                    functionalConstraint,
+                    StringComparison.Ordinal) &&
+                !string.Equals(attribute.SclBType, "Struct", StringComparison.OrdinalIgnoreCase))
             .Select(attribute => new InitialFcReadLeafBinding
             {
                 Reference = attribute.ObjectReference,

@@ -37,7 +37,7 @@ public static class SclInitialFcReadDesignBuilder
         {
             return Fail(iedName, accessPointName, $"SCL XML is malformed: {ex.Message}");
         }
-        catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException or InvalidOperationException)
         {
             return Fail(iedName, accessPointName, $"SCL initial FC-read design could not be projected: {ex.GetType().Name}: {ex.Message}");
         }
@@ -79,7 +79,27 @@ public static class SclInitialFcReadDesignBuilder
                 : explicitLdName;
         }
 
-        var projected = SclLiveModelProjectionBuilder.Build(document, "SCL");
+        // SclLiveModelProjectionBuilder historically scans every AccessPoint below an IED.
+        // Build from a private clone containing only the selected IED/AP so an unrelated AP
+        // with the same LDevice@inst can never contribute the Step-4 value shape.
+        var scopedDocument = new XDocument(document);
+        var scopedRoot = scopedDocument.Root!;
+        foreach (var otherIed in scopedRoot.Elements().Where(element => Is(element, "IED")).ToArray())
+        {
+            if (!string.Equals(Attr(otherIed, "name"), iedName, StringComparison.Ordinal))
+            {
+                otherIed.Remove();
+                continue;
+            }
+
+            foreach (var otherAp in otherIed.Elements().Where(element => Is(element, "AccessPoint")).ToArray())
+            {
+                if (!string.Equals(Attr(otherAp, "name"), accessPointName, StringComparison.Ordinal))
+                    otherAp.Remove();
+            }
+        }
+
+        var projected = SclLiveModelProjectionBuilder.Build(scopedDocument, "SCL");
         var logicalDevices = new List<LiveIedLogicalDeviceModel>();
         var warnings = new List<string>(inventory.Warnings);
 

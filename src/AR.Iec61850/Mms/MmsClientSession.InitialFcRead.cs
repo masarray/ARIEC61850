@@ -6,6 +6,7 @@ public enum InitialFcReadExecutionStatus
 {
     InvalidPlan,
     SessionNotReady,
+    TimedOut,
     Completed,
     Partial,
     TransportFailure
@@ -23,6 +24,7 @@ public sealed class InitialFcReadExecutionResult
 {
     public InitialFcReadExecutionStatus Status { get; init; }
     public InitialFcReadPlan Plan { get; init; } = new();
+    public TimeSpan PerBatchTimeout { get; init; }
     public IReadOnlyList<InitialFcReadBatchExecution> Batches { get; init; } = Array.Empty<InitialFcReadBatchExecution>();
     public string Message { get; init; } = string.Empty;
     public int SuccessfulTargetCount => Batches.Sum(batch => batch.Read.Results.Count(result => result.IsSuccess));
@@ -33,17 +35,30 @@ public sealed class InitialFcReadExecutionResult
 
 public sealed partial class MmsClientSession
 {
+    public Task<InitialFcReadExecutionResult> ExecuteInitialFcReadPlanAsync(
+        InitialFcReadPlan plan,
+        CancellationToken cancellationToken = default)
+        => ExecuteInitialFcReadPlanAsync(plan, _lastTimeout, cancellationToken);
+
     /// <summary>
     /// Executes an already-built initial FC-root Read plan. Batches are sent strictly
     /// sequentially: one confirmed request is registered and completed before the next
-    /// batch is sent. This method never performs discovery, GVAA, writes, controls,
-    /// report enable, or dynamic DataSet operations.
+    /// batch is sent. Each in-flight batch has an explicit deadline. This method never
+    /// performs discovery, GVAA, writes, controls, report enable, or dynamic DataSet
+    /// operations.
     /// </summary>
     public async Task<InitialFcReadExecutionResult> ExecuteInitialFcReadPlanAsync(
         InitialFcReadPlan plan,
+        TimeSpan perBatchTimeout,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
+
+        var effectiveTimeout = perBatchTimeout > TimeSpan.Zero
+            ? perBatchTimeout
+            : _lastTimeout > TimeSpan.Zero
+                ? _lastTimeout
+                : TimeSpan.FromSeconds(5);
 
         var validationError = ValidateInitialFcReadPlan(plan);
         if (!string.IsNullOrWhiteSpace(validationError))
@@ -52,6 +67,7 @@ public sealed partial class MmsClientSession
             {
                 Status = InitialFcReadExecutionStatus.InvalidPlan,
                 Plan = plan,
+                PerBatchTimeout = effectiveTimeout,
                 Message = validationError
             };
         }
@@ -62,6 +78,7 @@ public sealed partial class MmsClientSession
             {
                 Status = InitialFcReadExecutionStatus.SessionNotReady,
                 Plan = plan,
+                PerBatchTimeout = effectiveTimeout,
                 Message = $"Initial FC-root Read requires an initiated MMS association; current state={State}."
             };
         }
@@ -78,32 +95,51 @@ public sealed partial class MmsClientSession
                 MmsReadPayloadProfile.PresentationDataValues);
             LastReadRequestHex = HexDump.ToCompactString(request);
 
+            using var batchDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            batchDeadline.CancelAfter(effectiveTimeout);
+            var batchToken = batchDeadline.Token;
+
             MmsReadBatchResult read;
             try
             {
-                var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
+                var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, batchToken).ConfigureAwait(false);
                 read = MmsReadBatchCodec.DecodeResponse(response, references, invokeId);
                 LastReadResponseHex = read.ResponseHexPreview;
             }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && batchDeadline.IsCancellationRequested)
+            {
+                var message = $"Initial FC-root Read batch {batch.Index} timed out after {effectiveTimeout.TotalMilliseconds:0} ms.";
+                read = BuildFailedInitialFcBatch(references, message);
+                executions.Add(new InitialFcReadBatchExecution
+                {
+                    BatchIndex = batch.Index,
+                    Targets = batch.Targets,
+                    Read = read
+                });
+
+                // A confirmed request may already be on the wire. Reset the association so
+                // a late response cannot become stale evidence for a later operation.
+                await MarkProtocolFaultAsync().ConfigureAwait(false);
+                return new InitialFcReadExecutionResult
+                {
+                    Status = InitialFcReadExecutionStatus.TimedOut,
+                    Plan = plan,
+                    PerBatchTimeout = effectiveTimeout,
+                    Batches = executions,
+                    Message = message
+                };
+            }
             catch (OperationCanceledException)
             {
+                // Cancellation after the request has entered the confirmed-operation path
+                // is contained by closing the association before the cancellation escapes.
+                await MarkProtocolFaultAsync().ConfigureAwait(false);
                 throw;
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
             {
                 var message = $"Initial FC-root Read batch {batch.Index} transport/session failure: {ex.GetType().Name}: {ex.Message}";
-                read = new MmsReadBatchResult
-                {
-                    Results = references.Select(reference => new MmsReadAccessResult
-                    {
-                        Reference = reference,
-                        IsSuccess = false,
-                        Message = message
-                    }).ToArray(),
-                    Message = message,
-                    ResponseHexPreview = LastReadResponseHex
-                };
-
+                read = BuildFailedInitialFcBatch(references, message);
                 executions.Add(new InitialFcReadBatchExecution
                 {
                     BatchIndex = batch.Index,
@@ -116,6 +152,7 @@ public sealed partial class MmsClientSession
                 {
                     Status = InitialFcReadExecutionStatus.TransportFailure,
                     Plan = plan,
+                    PerBatchTimeout = effectiveTimeout,
                     Batches = executions,
                     Message = message
                 };
@@ -151,10 +188,25 @@ public sealed partial class MmsClientSession
         {
             Status = status,
             Plan = plan,
+            PerBatchTimeout = effectiveTimeout,
             Batches = executions,
             Message = $"Initial FC-root Read execution: batches={executions.Count}/{plan.Batches.Count}, successfulTargets={executions.Sum(batch => batch.Read.Results.Count(result => result.IsSuccess))}, failedTargets={failedTargets}, projectedLeaves={executions.Sum(batch => batch.Projections.Sum(projection => projection.Leaves.Count))}, projectionErrors={projectionErrors}."
         };
     }
+
+    private static MmsReadBatchResult BuildFailedInitialFcBatch(
+        IReadOnlyList<MmsObjectReference> references,
+        string message)
+        => new()
+        {
+            Results = references.Select(reference => new MmsReadAccessResult
+            {
+                Reference = reference,
+                IsSuccess = false,
+                Message = message
+            }).ToArray(),
+            Message = message
+        };
 
     private static string ValidateInitialFcReadPlan(InitialFcReadPlan plan)
     {

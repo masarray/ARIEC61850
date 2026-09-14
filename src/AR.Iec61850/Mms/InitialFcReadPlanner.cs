@@ -278,7 +278,7 @@ public sealed class InitialFcProjectedLeaf
     public string AttributePath { get; init; } = string.Empty;
     public string FunctionalConstraint { get; init; } = string.Empty;
     public string SclBType { get; init; } = string.Empty;
-    public MmsDataValue Value { get; init; } = new();
+    public MmsDataValue Value { get; init; } = null!;
 }
 
 public sealed class InitialFcValueProjectionResult

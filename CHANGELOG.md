@@ -6,6 +6,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Added
 
+- Added typed, side-effect-free SCL-assisted MMS association planning: ConnectedAP addressing can now be converted into parameterized COTP and ISO Session/Presentation/ACSE/MMS Initiate request bytes with explicit local/calling identity, fail-closed remote/called validation, and golden-byte compatibility coverage; live runtime selection remains a later step.
 - Added a typed hybrid report acquisition planner that can cover requested signals with safe static BRCB/URCB plans, use explicitly free dynamic report slots for residual signals, and leave only the remaining points on MMS polling fallback without equating fallback with absence.
 - Added the G2.6 production dynamic-report consumer: an optional typed production-planning context can authorize automatic dynamic planning only from an identity-compatible `ProductionEligible` profile, with exact proven InformationReport RCB/member scope and fail-closed fallback for unproven points.
 - Added typed IEC 61850 UTC-Time forensic evidence with exact preserved 8-byte wire provenance, the original 24-bit fractional-second field, TimeQuality/accuracy decoding, and explicit full/engineering UTC and local-offset views.

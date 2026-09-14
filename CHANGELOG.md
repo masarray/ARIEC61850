@@ -6,6 +6,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Added
 
+- Added the shared Step-4 initial FC-root Read path for both live-discovery and SCL-assisted workflows: ordered `LN$FC` targets are batched at no more than 10 MMS variables per Confirmed-Read, executed strictly one request at a time, decoded as ordered per-target AccessResults, and projected back to SCL leaves only when nested structure cardinality is exact.
 - Added opt-in SCL-assisted live MMS association and domain-only validation: an exact typed COTP/ACSE plan can now open one MMS association, query only `GetNameList(Domain,VMD)`, reconcile expected SCL logical-device domains against live evidence, preserve extra online domains diagnostically, and keep full discovery/write/control/report behavior out of this path.
 - Added typed, side-effect-free SCL-assisted MMS association planning: ConnectedAP addressing can now be converted into parameterized COTP and ISO Session/Presentation/ACSE/MMS Initiate request bytes with explicit local/calling identity, fail-closed remote/called validation, and golden-byte compatibility coverage; live runtime selection remains a later step.
 - Added a typed hybrid report acquisition planner that can cover requested signals with safe static BRCB/URCB plans, use explicitly free dynamic report slots for residual signals, and leave only the remaining points on MMS polling fallback without equating fallback with absence.

@@ -1,0 +1,64 @@
+name: SCL Trial Convergence CI
+
+on:
+  push:
+    branches: [ trial/scl-assisted-convergence ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build and test canonical field-trial convergence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact trial branch
+        shell: bash
+        run: |
+          git clone --quiet --depth 1 --branch trial/scl-assisted-convergence "https://github.com/$GITHUB_REPOSITORY.git" source
+          echo "TRIAL_HEAD=$(git -C source rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "TRIAL_TREE=$(git -C source rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
+
+      - name: Verify source, provenance, wording and license boundaries
+        shell: pwsh
+        run: ./source/scripts/verify-source-clean.ps1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore ./source/ARIEC61850.sln
+
+      - name: Build
+        run: dotnet build ./source/ARIEC61850.sln -c Release --no-restore
+
+      - name: Test
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/test-results -Force | Out-Null
+          dotnet test ./source/ARIEC61850.sln `
+            -c Release `
+            --no-build `
+            --verbosity normal `
+            --logger "trx;LogFileName=ARIEC61850.SclTrial.Tests.trx" `
+            --results-directory artifacts/test-results 2>&1 |
+            Tee-Object -FilePath artifacts/test-results/dotnet-test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Record exact convergence identity
+        if: always()
+        shell: bash
+        run: |
+          printf 'head=%s\ntree=%s\nbaseline=%s\n' "$TRIAL_HEAD" "$TRIAL_TREE" "11ab2304482600c19ba979f4fc9021ddb46b9af9" > artifacts/test-results/convergence-identity.txt
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: scl-trial-convergence-diagnostics
+          path: artifacts/test-results
+          if-no-files-found: warn
+          retention-days: 14

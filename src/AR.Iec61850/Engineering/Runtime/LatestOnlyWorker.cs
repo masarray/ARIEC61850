@@ -5,6 +5,7 @@ public readonly record struct LatestOnlyWorkerStatistics(
     long Processed,
     long Coalesced,
     long Faulted,
+    long TimedOut,
     bool IsAccepting,
     bool HasPending);
 
@@ -20,6 +21,7 @@ public sealed class LatestOnlyWorker<T> : IAsyncDisposable
     private readonly SemaphoreSlim _signal = new(0, 1);
     private readonly Func<T, CancellationToken, ValueTask> _handler;
     private readonly Action<Exception>? _onFault;
+    private readonly TimeSpan _handlerTimeout;
     private readonly Task _workerTask;
 
     private T _pending = default!;
@@ -30,13 +32,31 @@ public sealed class LatestOnlyWorker<T> : IAsyncDisposable
     private long _processed;
     private long _coalesced;
     private long _faulted;
+    private long _timedOut;
     private int _disposeStarted;
 
     public LatestOnlyWorker(
         Func<T, CancellationToken, ValueTask> handler,
         Action<Exception>? onFault = null)
+        : this(handler, Timeout.InfiniteTimeSpan, onFault)
     {
+    }
+
+    /// <summary>
+    /// Creates a latest-only worker with an optional cooperative execution deadline.
+    /// Handlers must observe the supplied cancellation token for the deadline to bound
+    /// execution. No thread abort or detached orphan task is used.
+    /// </summary>
+    public LatestOnlyWorker(
+        Func<T, CancellationToken, ValueTask> handler,
+        TimeSpan handlerTimeout,
+        Action<Exception>? onFault = null)
+    {
+        if (handlerTimeout != Timeout.InfiniteTimeSpan && handlerTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(handlerTimeout), "Handler timeout must be positive or Timeout.InfiniteTimeSpan.");
+
         _handler = handler ?? throw new ArgumentNullException(nameof(handler));
+        _handlerTimeout = handlerTimeout;
         _onFault = onFault;
         _workerTask = Task.Run(RunAsync);
     }
@@ -85,6 +105,7 @@ public sealed class LatestOnlyWorker<T> : IAsyncDisposable
                 _processed,
                 _coalesced,
                 _faulted,
+                _timedOut,
                 _accepting,
                 _hasPending);
         }
@@ -161,31 +182,37 @@ public sealed class LatestOnlyWorker<T> : IAsyncDisposable
             if (!hasItem)
                 continue;
 
+            CancellationTokenSource? handlerDeadline = null;
             try
             {
-                await _handler(item, CancellationToken.None).ConfigureAwait(false);
+                var handlerToken = CancellationToken.None;
+                if (_handlerTimeout != Timeout.InfiniteTimeSpan)
+                {
+                    handlerDeadline = new CancellationTokenSource(_handlerTimeout);
+                    handlerToken = handlerDeadline.Token;
+                }
+
+                await _handler(item, handlerToken).ConfigureAwait(false);
                 lock (_gate)
                     _processed++;
+            }
+            catch (OperationCanceledException) when (handlerDeadline?.IsCancellationRequested == true)
+            {
+                var timeout = new TimeoutException($"Latest-only worker handler exceeded the cooperative deadline of {_handlerTimeout.TotalMilliseconds:0} ms.");
+                lock (_gate)
+                    _timedOut++;
+                NotifyFault(timeout);
             }
             catch (Exception ex)
             {
                 lock (_gate)
                     _faulted++;
-
-                if (_onFault is not null)
-                {
-                    try
-                    {
-                        _onFault(ex);
-                    }
-                    catch
-                    {
-                        // Diagnostic callbacks must never terminate the worker.
-                    }
-                }
+                NotifyFault(ex);
             }
             finally
             {
+                handlerDeadline?.Dispose();
+
                 // Drop the local reference before the next wait so a large processed
                 // snapshot cannot be retained solely by this worker frame.
                 item = default!;
@@ -196,6 +223,21 @@ public sealed class LatestOnlyWorker<T> : IAsyncDisposable
                 if (!_accepting && !_hasPending)
                     return;
             }
+        }
+    }
+
+    private void NotifyFault(Exception exception)
+    {
+        if (_onFault is null)
+            return;
+
+        try
+        {
+            _onFault(exception);
+        }
+        catch
+        {
+            // Diagnostic callbacks must never terminate the worker.
         }
     }
 }

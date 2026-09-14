@@ -74,9 +74,28 @@ public static class SclInitialFcReadDesignBuilder
             if (string.IsNullOrWhiteSpace(inst))
                 continue;
 
-            domainByInst[inst] = string.IsNullOrWhiteSpace(explicitLdName)
+            var exactDomain = string.IsNullOrWhiteSpace(explicitLdName)
                 ? iedName + inst
                 : explicitLdName;
+            if (domainByInst.TryGetValue(inst, out var existingDomain))
+            {
+                if (!string.Equals(existingDomain, exactDomain, StringComparison.Ordinal))
+                {
+                    return new SclInitialFcReadDesign
+                    {
+                        DomainInventory = inventory,
+                        Errors = new[]
+                        {
+                            $"Selected SCL Server declares LDevice inst '{inst}' more than once with conflicting MMS domains '{existingDomain}' and '{exactDomain}'."
+                        },
+                        Warnings = inventory.Warnings.ToArray()
+                    };
+                }
+
+                continue;
+            }
+
+            domainByInst.Add(inst, exactDomain);
         }
 
         // SclLiveModelProjectionBuilder historically scans every AccessPoint below an IED.

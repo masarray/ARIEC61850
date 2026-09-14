@@ -23,11 +23,15 @@ public sealed class CotpClient
         LastConnectionConfirm = null;
     }
 
-    public async Task ConnectAsync(CancellationToken cancellationToken)
+    public Task ConnectAsync(CancellationToken cancellationToken)
+        => ConnectAsync(new CotpConnectParameters(), cancellationToken);
+
+    public async Task ConnectAsync(CotpConnectParameters parameters, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(parameters);
         Reset();
 
-        await _tpkt.SendTpktAsync(CotpConnectRequest.BuildDefault(), cancellationToken).ConfigureAwait(false);
+        await _tpkt.SendTpktAsync(CotpConnectRequest.Build(parameters), cancellationToken).ConfigureAwait(false);
         var response = await _tpkt.ReceiveTpktAsync(cancellationToken).ConfigureAwait(false);
         var confirm = CotpConnectionConfirm.Parse(response);
         LastConnectionConfirm = confirm;

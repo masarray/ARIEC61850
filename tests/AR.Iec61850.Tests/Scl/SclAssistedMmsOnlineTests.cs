@@ -61,6 +61,19 @@ public sealed class SclAssistedMmsOnlineTests
     }
 
     [Fact]
+    public void DomainInventoryReader_Returns_Typed_Error_For_Malformed_Xml()
+    {
+        var inventory = SclMmsDomainInventoryReader.Read(
+            "<SCL><IED name=\"IED01\"></SCL>",
+            "IED01",
+            "AP1");
+
+        Assert.False(inventory.IsSuccess);
+        Assert.Empty(inventory.ExpectedDomains);
+        Assert.Contains(inventory.Errors, error => error.Contains("malformed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void DomainReconciliation_Missing_Expected_Domain_Is_Incompatible_And_Extra_Is_Preserved()
     {
         var result = SclMmsDomainReconciler.Reconcile(
@@ -79,12 +92,26 @@ public sealed class SclAssistedMmsOnlineTests
     {
         var result = SclMmsDomainReconciler.Reconcile(
             new[] { "IED01LD0" },
-            new[] { "VENDOR_EXTRA", "ied01ld0" });
+            new[] { "VENDOR_EXTRA", "IED01LD0" });
 
         Assert.True(result.IsCompatible);
         Assert.False(result.IsExactMatch);
         Assert.Empty(result.MissingExpectedDomains);
         Assert.Equal(new[] { "VENDOR_EXTRA" }, result.ExtraObservedDomains);
+    }
+
+    [Fact]
+    public void DomainReconciliation_Case_Mismatch_Remains_Missing_And_Extra_Evidence()
+    {
+        var result = SclMmsDomainReconciler.Reconcile(
+            new[] { "IED01LD0" },
+            new[] { "ied01ld0" });
+
+        Assert.False(result.IsCompatible);
+        Assert.False(result.IsExactMatch);
+        Assert.Empty(result.MatchedDomains);
+        Assert.Equal(new[] { "IED01LD0" }, result.MissingExpectedDomains);
+        Assert.Equal(new[] { "ied01ld0" }, result.ExtraObservedDomains);
     }
 
     [Fact]

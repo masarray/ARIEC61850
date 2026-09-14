@@ -42,6 +42,7 @@ public sealed class LatestOnlyWorkerTests
         Assert.Equal(2, completed.Processed);
         Assert.Equal(2, completed.Coalesced);
         Assert.Equal(0, completed.Faulted);
+        Assert.Equal(0, completed.TimedOut);
         Assert.False(completed.IsAccepting);
         Assert.False(completed.HasPending);
     }
@@ -79,7 +80,48 @@ public sealed class LatestOnlyWorkerTests
         Assert.Equal(2, statistics.Published);
         Assert.Equal(1, statistics.Processed);
         Assert.Equal(1, statistics.Faulted);
+        Assert.Equal(0, statistics.TimedOut);
         Assert.Equal(1, Volatile.Read(ref faultCallbacks));
+    }
+
+    [Fact]
+    public async Task Cooperative_Handler_Deadline_Is_Contained_And_Worker_Continues()
+    {
+        var timedOutStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondProcessed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timeoutCallbacks = 0;
+
+        await using var worker = new LatestOnlyWorker<int>(
+            async (value, cancellationToken) =>
+            {
+                if (value == 1)
+                {
+                    timedOutStarted.TrySetResult(true);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+
+                if (value == 2)
+                    secondProcessed.TrySetResult(true);
+            },
+            TimeSpan.FromMilliseconds(100),
+            exception =>
+            {
+                if (exception is TimeoutException)
+                    Interlocked.Increment(ref timeoutCallbacks);
+            });
+
+        Assert.True(worker.TryPublish(1));
+        await timedOutStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(worker.TryPublish(2));
+        await secondProcessed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await worker.StopAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+
+        var statistics = worker.GetStatistics();
+        Assert.Equal(2, statistics.Published);
+        Assert.Equal(1, statistics.Processed);
+        Assert.Equal(0, statistics.Faulted);
+        Assert.Equal(1, statistics.TimedOut);
+        Assert.Equal(1, Volatile.Read(ref timeoutCallbacks));
     }
 
     [Fact]

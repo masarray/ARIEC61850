@@ -30,6 +30,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Fixed
 
+- Hardened the SCL-assisted Step-3 runtime so the configured timeout bounds TCP/COTP/ACSE/MMS plus Domain/VMD inventory, MMS domain identifiers are reconciled case-sensitively, and malformed SCL returns typed validation evidence instead of leaking XML parser exceptions.
 - Live-model discovery no longer drops DataSet members when callers request DataSet-directory reads through `MmsClientSession.DiscoverAsync`.
 - Dynamic hybrid planning no longer rejects a verified-free RCB solely because the RCB and requested signal belong to different MMS domains.
 

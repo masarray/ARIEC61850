@@ -1,3 +1,4 @@
+using System.Xml;
 using System.Xml.Linq;
 
 namespace AR.Iec61850.Scl;
@@ -21,12 +22,31 @@ public static class SclMmsDomainInventoryReader
     public static SclMmsDomainInventory Read(string xml, string iedName, string accessPointName)
     {
         if (string.IsNullOrWhiteSpace(xml))
-            throw new ArgumentException("SCL XML is empty.", nameof(xml));
+        {
+            return Build(
+                iedName,
+                accessPointName,
+                Array.Empty<string>(),
+                new[] { "SCL XML is empty." },
+                Array.Empty<string>());
+        }
 
-        return Read(
-            XDocument.Parse(xml, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo),
-            iedName,
-            accessPointName);
+        try
+        {
+            return Read(
+                XDocument.Parse(xml, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo),
+                iedName,
+                accessPointName);
+        }
+        catch (XmlException ex)
+        {
+            return Build(
+                iedName,
+                accessPointName,
+                Array.Empty<string>(),
+                new[] { $"SCL XML is malformed: {ex.Message}" },
+                Array.Empty<string>());
+        }
     }
 
     public static SclMmsDomainInventory Read(XDocument document, string iedName, string accessPointName)
@@ -78,7 +98,7 @@ public static class SclMmsDomainInventoryReader
             return Build(canonicalIedName, accessPointName, domains, errors, warnings);
         }
 
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var logicalDevice in server.Elements().Where(element => Is(element, "LDevice")))
         {
             var inst = Attr(logicalDevice, "inst");
@@ -143,8 +163,9 @@ public sealed class SclMmsDomainReconciliation
     public IReadOnlyList<string> ExtraObservedDomains { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// Compatible means every expected SCL domain exists online. Extra online domains are
-    /// preserved as evidence and do not silently mutate or invalidate the SCL design model.
+    /// Compatible means every expected SCL domain exists online with the exact MMS identifier.
+    /// Extra online domains are preserved as evidence and do not silently mutate or invalidate
+    /// the SCL design model.
     /// </summary>
     public bool IsCompatible => ExpectedDomains.Count > 0 && MissingExpectedDomains.Count == 0;
     public bool IsExactMatch => IsCompatible && ExtraObservedDomains.Count == 0;
@@ -163,8 +184,8 @@ public static class SclMmsDomainReconciler
 
         var expected = Normalize(expectedDomains);
         var observed = Normalize(observedDomains);
-        var expectedSet = new HashSet<string>(expected, StringComparer.OrdinalIgnoreCase);
-        var observedSet = new HashSet<string>(observed, StringComparer.OrdinalIgnoreCase);
+        var expectedSet = new HashSet<string>(expected, StringComparer.Ordinal);
+        var observedSet = new HashSet<string>(observed, StringComparer.Ordinal);
 
         return new SclMmsDomainReconciliation
         {
@@ -180,14 +201,15 @@ public static class SclMmsDomainReconciler
         => domains
             .Where(domain => !string.IsNullOrWhiteSpace(domain))
             .Select(domain => domain.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(domain => domain, StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(domain => domain, StringComparer.Ordinal)
             .ToArray();
 }
 
 public enum SclAssistedMmsOnlineStatus
 {
     InvalidPlan,
+    TimedOut,
     AssociationFailed,
     DomainInventoryFailed,
     DomainMismatch,

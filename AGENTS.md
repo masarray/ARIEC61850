@@ -239,3 +239,42 @@ untrusted input / remote outcome
 ```
 
 Never use repeated thrown exceptions plus retry delays as a substitute for an explicit state machine or failure model.
+
+## 15. Mandatory canonical IEC 61850 model / SCL contract
+
+Before changing **live discovery, Open SCL, SCL-assisted connect, IED-name resolution, DataSet/RCB model reconstruction, SCL type synthesis, Save SCL, or Edition conversion**, read [`AI_READ_FIRST.md`](AI_READ_FIRST.md), [`SCL_EXPORT.md`](SCL_EXPORT.md), [`docs/SCL_IMPORT_NORMALIZATION_PROFILE.md`](docs/SCL_IMPORT_NORMALIZATION_PROFILE.md), and [`docs/SCL_EXPORT_RECONSTRUCTION_PROFILE.md`](docs/SCL_EXPORT_RECONSTRUCTION_PROFILE.md).
+
+The non-negotiable architecture is:
+
+```text
+LIVE MMS DISCOVERY --------+
+                            |
+                            v
+                     CANONICAL IED MODEL
+                            ^
+                            |
+OPEN SCL -> typed normalize-+
+                            |
+                            v
+                  SHARED EDITION EXPORTERS
+```
+
+Rules:
+- There is **one semantic source of truth**. Do not create separate discovered-IED and opened-SCL semantic trees, caches, resolvers, or exporters.
+- Live discovery and Open SCL are different **ingress adapters** into the same canonical IEC 61850 semantics.
+- Open SCL is a typed semantic import. The XML DOM/tree is source evidence, not the engine source of truth.
+- Save SCL is a local projection of the canonical model. Switching target edition must not perform hidden rediscovery or require a live connection.
+- Use typed source-edition import profiles and target-edition export profiles. Never scatter schema conversion logic through discovery/runtime code and never use blind XML string replacement.
+- For offline Open SCL, `IED@name` is authoritative for that file. For live discovery, identity is evidence-scored. SCL-assisted connection must cross-check file identity against live domains and expose mismatches instead of silently renaming.
+- Keep file-declared configuration separate from current live runtime evidence such as values, RCB ownership, EntryID, runtime-added DataSets, association state, and validation status.
+- Preserve DataSet member order and semantic references exactly.
+- `Unknown`, `NotRepresentableInSourceProfile`, and `KnownFalse` are distinct. Never coerce absent/unrepresentable semantics to false/default without independent justification.
+- Original SCL type IDs, Header/history, descriptions, topology, and private extensions are provenance/source evidence. They may be preserved as aliases/evidence, but they are not a second canonical semantic model.
+- Discovery-derived type IDs are deterministic synthetic identities unless independently known; never claim they are recovered original vendor identifiers.
+- A worker/task may improve responsiveness, parse/serialize off-thread, report progress, or validate asynchronously. Correctness must be deterministic from the same evidence without depending on worker behavior.
+- Same-edition normalized round trip is accepted by **semantic idempotence**, not byte equality. Cross-edition round trip compares the representable semantic subset and reports any loss explicitly.
+- Existing provenance, reporting qualification, and `ProductionEligible` rules remain stronger than conversion convenience or external wire parity.
+
+This section refines the earlier online rule: live MMS remains authoritative for **current online state**, while Open SCL is authoritative for its **declared offline engineering model**. They converge into one canonical structure but retain distinct provenance and runtime overlays.
+
+If a patch cannot explain how it preserves this single-model contract, stop and redesign before coding.

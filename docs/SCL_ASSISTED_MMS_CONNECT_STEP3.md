@@ -1,6 +1,6 @@
 # SCL-assisted MMS connect — Step 3
 
-Status: **implemented + deterministic unit coverage; live IED interoperability not yet validated**.
+Status: **implemented with deterministic tests included; live IED interoperability not yet validated**.
 
 Step 3 is the first opt-in runtime slice for the SCL-assisted connect path. It deliberately stays smaller than full live discovery.
 
@@ -90,4 +90,4 @@ dotnet test .\ARIEC61850.sln -c Release --no-build
 .\scripts\verify-source-clean.cmd
 ```
 
-Live IEC 61850 IED validation is intentionally a later evidence gate. Until that happens, Step 3 must not be described as field-validated or universally interoperable.
+The claim may advance from **implemented** to **unit tested** only when those checks pass for the exact Step-3 head commit. Live IEC 61850 IED validation is intentionally a later evidence gate. Until that happens, Step 3 must not be described as field-validated or universally interoperable.

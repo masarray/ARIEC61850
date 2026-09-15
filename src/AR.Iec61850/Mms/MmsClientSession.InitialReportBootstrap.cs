@@ -4,6 +4,7 @@ public enum MmsInitialReportBootstrapState
 {
     StartFailed,
     MonitoringWithoutGiCapability,
+    GiWriteFailedMonitoring,
     GiRequestedAwaitingInitialReport,
     InitialValuesReceived
 }
@@ -54,9 +55,9 @@ public sealed partial class MmsClientSession
         var start = await StartPersistentReportMonitorAsync(
             plan,
             triggerGeneralInterrogation: false,
-            deleteDynamicDataSetOnStop,
-            directory,
-            cancellationToken).ConfigureAwait(false);
+            deleteDynamicDataSetOnStop: deleteDynamicDataSetOnStop,
+            directory: directory,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (!start.IsSuccess || start.Session == null)
         {
@@ -80,7 +81,7 @@ public sealed partial class MmsClientSession
             pollReferences: null,
             pollInterval: null,
             triggerGeneralInterrogation: giCapabilityObserved,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var hasInitialValues = initialReceive.Reports.Any(report => report.Values.Count > 0);
         var giSucceeded = initialReceive.WriteSteps.Any(step =>
@@ -90,7 +91,9 @@ public sealed partial class MmsClientSession
             ? MmsInitialReportBootstrapState.InitialValuesReceived
             : !giCapabilityObserved
                 ? MmsInitialReportBootstrapState.MonitoringWithoutGiCapability
-                : MmsInitialReportBootstrapState.GiRequestedAwaitingInitialReport;
+                : !giSucceeded
+                    ? MmsInitialReportBootstrapState.GiWriteFailedMonitoring
+                    : MmsInitialReportBootstrapState.GiRequestedAwaitingInitialReport;
 
         var message = state switch
         {
@@ -100,7 +103,7 @@ public sealed partial class MmsClientSession
                 $"Persistent RCB monitor is active and {initialReceive.Reports.Count} report(s) with initial values were received during bootstrap.",
             MmsInitialReportBootstrapState.MonitoringWithoutGiCapability =>
                 "Persistent RCB monitor is active, but the live RCB directory did not prove a GI attribute. No blind GI write was attempted; waiting for spontaneous/integrity reporting.",
-            _ when !giSucceeded =>
+            MmsInitialReportBootstrapState.GiWriteFailedMonitoring =>
                 "Persistent RCB monitor is active, but the initial GI write did not succeed. Waiting for spontaneous/integrity reporting.",
             _ =>
                 "Persistent RCB monitor is active and GI was requested, but no mapped initial-value report arrived within the bootstrap window."

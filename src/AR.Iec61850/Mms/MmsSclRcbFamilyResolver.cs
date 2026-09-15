@@ -27,9 +27,10 @@ public sealed class MmsSclRcbFamilyResolution
 /// instances observed from the live MMS directory.
 ///
 /// The resolver never fabricates indexed RCB names. For indexed SCL controls it
-/// accepts only live names that preserve the declared domain/LN/FC/name and add
-/// a non-empty decimal suffix to the declared control-block name. This supports
-/// vendor index widths such as 1, 01, or 001 without hard-coding a vendor rule.
+/// accepts only live names that preserve the declared domain/LN/FC/name and may
+/// add a non-empty decimal suffix to the declared control-block name. This
+/// supports live index widths such as 1, 01, or 001 without hard-coding a
+/// vendor rule. IEC 61850 object identity is compared case-sensitively.
 /// </summary>
 public static class MmsSclRcbFamilyResolver
 {
@@ -59,23 +60,11 @@ public static class MmsSclRcbFamilyResolver
             .ToArray();
 
         var exact = live
-            .Where(item => string.Equals(item.Identity!.Name, declared.Name, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.Equals(item.Identity!.Name, declared.Name, StringComparison.Ordinal))
             .Select(item => item.Candidate)
-            .DistinctBy(candidate => candidate.Reference, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(candidate => candidate.Reference, StringComparer.OrdinalIgnoreCase)
+            .DistinctBy(candidate => candidate.Reference, StringComparer.Ordinal)
+            .OrderBy(candidate => candidate.Reference, StringComparer.Ordinal)
             .ToArray();
-
-        if (exact.Length > 0)
-        {
-            return new MmsSclRcbFamilyResolution
-            {
-                DeclaredReference = reportControl.ControlBlockReference,
-                Indexed = reportControl.Indexed,
-                Kind = MmsSclRcbFamilyResolutionKind.ExactLiveInstance,
-                Candidates = exact,
-                Message = $"SCL ReportControl '{reportControl.ControlBlockReference}' matched {exact.Length} exact live RCB instance(s)."
-            };
-        }
 
         if (!reportControl.Indexed)
         {
@@ -83,26 +72,47 @@ public static class MmsSclRcbFamilyResolver
             {
                 DeclaredReference = reportControl.ControlBlockReference,
                 Indexed = false,
-                Kind = MmsSclRcbFamilyResolutionKind.None,
-                Message = $"Non-indexed SCL ReportControl '{reportControl.ControlBlockReference}' has no exact live RCB instance. Family expansion is not permitted."
+                Kind = exact.Length == 0 ? MmsSclRcbFamilyResolutionKind.None : MmsSclRcbFamilyResolutionKind.ExactLiveInstance,
+                Candidates = exact,
+                Message = exact.Length == 0
+                    ? $"Non-indexed SCL ReportControl '{reportControl.ControlBlockReference}' has no exact live RCB instance. Family expansion is not permitted."
+                    : $"Non-indexed SCL ReportControl '{reportControl.ControlBlockReference}' matched {exact.Length} exact live RCB instance(s)."
             };
         }
 
-        var family = live
+        var indexed = live
             .Where(item => HasDecimalInstanceSuffix(declared.Name, item.Identity!.Name))
-            .Select(item => item.Candidate)
-            .DistinctBy(candidate => candidate.Reference, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(candidate => candidate.Reference, StringComparer.OrdinalIgnoreCase)
+            .Select(item => item.Candidate);
+
+        var family = exact
+            .Concat(indexed)
+            .DistinctBy(candidate => candidate.Reference, StringComparer.Ordinal)
+            .OrderBy(candidate => candidate.Reference, StringComparer.Ordinal)
             .ToArray();
+
+        if (family.Length == 0)
+        {
+            return new MmsSclRcbFamilyResolution
+            {
+                DeclaredReference = reportControl.ControlBlockReference,
+                Indexed = true,
+                Kind = MmsSclRcbFamilyResolutionKind.None,
+                Message = $"Indexed SCL ReportControl family '{reportControl.ControlBlockReference}' has no concrete live MMS RCB instance. No indexed name was synthesized."
+            };
+        }
+
+        var kind = indexed.Any() || exact.Length > 1
+            ? MmsSclRcbFamilyResolutionKind.IndexedFamily
+            : MmsSclRcbFamilyResolutionKind.ExactLiveInstance;
 
         return new MmsSclRcbFamilyResolution
         {
             DeclaredReference = reportControl.ControlBlockReference,
             Indexed = true,
-            Kind = family.Length == 0 ? MmsSclRcbFamilyResolutionKind.None : MmsSclRcbFamilyResolutionKind.IndexedFamily,
+            Kind = kind,
             Candidates = family,
-            Message = family.Length == 0
-                ? $"Indexed SCL ReportControl family '{reportControl.ControlBlockReference}' has no concrete live MMS RCB instance. No indexed name was synthesized."
+            Message = kind == MmsSclRcbFamilyResolutionKind.ExactLiveInstance
+                ? $"Indexed SCL ReportControl '{reportControl.ControlBlockReference}' currently exposes one exact concrete live RCB instance."
                 : $"Indexed SCL ReportControl family '{reportControl.ControlBlockReference}' resolved to {family.Length} concrete live MMS RCB instance(s)."
         };
     }
@@ -165,14 +175,14 @@ public static class MmsSclRcbFamilyResolver
     }
 
     private static bool SameContainer(RcbIdentity left, RcbIdentity right)
-        => string.Equals(left.Domain, right.Domain, StringComparison.OrdinalIgnoreCase) &&
-           string.Equals(left.LogicalNode, right.LogicalNode, StringComparison.OrdinalIgnoreCase) &&
-           string.Equals(left.FunctionalConstraint, right.FunctionalConstraint, StringComparison.OrdinalIgnoreCase);
+        => string.Equals(left.Domain, right.Domain, StringComparison.Ordinal) &&
+           string.Equals(left.LogicalNode, right.LogicalNode, StringComparison.Ordinal) &&
+           string.Equals(left.FunctionalConstraint, right.FunctionalConstraint, StringComparison.Ordinal);
 
     private static bool HasDecimalInstanceSuffix(string declaredName, string liveName)
     {
         if (liveName.Length <= declaredName.Length ||
-            !liveName.StartsWith(declaredName, StringComparison.OrdinalIgnoreCase))
+            !liveName.StartsWith(declaredName, StringComparison.Ordinal))
             return false;
 
         var suffix = liveName.AsSpan(declaredName.Length);

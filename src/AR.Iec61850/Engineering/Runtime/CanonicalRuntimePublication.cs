@@ -47,6 +47,7 @@ public sealed class CanonicalRuntimeSnapshotPublisher : ICanonicalRuntimeSource,
 
     public CanonicalRuntimePublishedSnapshot? Current => Volatile.Read(ref _current);
     public LatestOnlyWorkerStatistics Statistics => _worker.GetStatistics();
+    internal long LatestAcceptedRequestVersion => Volatile.Read(ref _latestAcceptedRequestVersion);
 
     public bool TryPublish(CanonicalIedModel model)
     {
@@ -138,6 +139,7 @@ public static class CanonicalRuntimeIngressPublication
     {
         public object Sync { get; } = new();
         public WeakReference<LiveIedModelDiscoveryDocument>? Document { get; set; }
+        public long RequestVersion { get; set; }
     }
 
     private static readonly ConditionalWeakTable<CanonicalRuntimeSnapshotPublisher, LiveIngressPendingState> LiveIngressPending = new();
@@ -152,12 +154,15 @@ public static class CanonicalRuntimeIngressPublication
         // Application readiness checks may run while a large canonical model is still
         // being compacted/indexed. Re-projecting the exact same discovery object on every
         // timer tick would continuously supersede that in-flight publication and could
-        // starve a very large model. Coalesce only the same discovery object while Current
-        // is intentionally null; a different discovery object is always a real replacement.
+        // starve a very large model. Coalesce only when this same discovery object still
+        // corresponds to the publisher's latest accepted request; a direct/new publish
+        // advances the request version and therefore cannot be hidden by stale ingress state.
         var pending = LiveIngressPending.GetOrCreateValue(publisher);
         lock (pending.Sync)
         {
             if (publisher.Current is null &&
+                pending.RequestVersion == publisher.LatestAcceptedRequestVersion &&
+                pending.RequestVersion != 0 &&
                 pending.Document is not null &&
                 pending.Document.TryGetTarget(out var existing) &&
                 ReferenceEquals(existing, discovery))
@@ -166,12 +171,23 @@ public static class CanonicalRuntimeIngressPublication
             }
 
             if (publisher.Current is not null)
+            {
                 pending.Document = null;
+                pending.RequestVersion = 0;
+            }
 
             pending.Document = new WeakReference<LiveIedModelDiscoveryDocument>(discovery);
             var accepted = publisher.TryPublish(CanonicalLiveModelAdapter.FromLiveDiscovery(discovery));
-            if (!accepted)
+            if (accepted)
+            {
+                pending.RequestVersion = publisher.LatestAcceptedRequestVersion;
+            }
+            else
+            {
                 pending.Document = null;
+                pending.RequestVersion = 0;
+            }
+
             return accepted;
         }
     }

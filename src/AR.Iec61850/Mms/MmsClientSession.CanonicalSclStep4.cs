@@ -1,5 +1,7 @@
+using System.Xml.Linq;
 using AR.Iec61850.Engineering.Canonical;
 using AR.Iec61850.Scl;
+using AR.Iec61850.Scl.Engineering;
 
 namespace AR.Iec61850.Mms;
 
@@ -122,6 +124,86 @@ public sealed class CanonicalSclStep4ExecutionResult
 
 public sealed partial class MmsClientSession
 {
+    /// <summary>
+    /// Active SCL-document Step-4 entry point. Open SCL is imported directly into the
+    /// canonical model and then executed through the canonical planner; the legacy SCL
+    /// live-model projection is not part of this orchestration path.
+    /// </summary>
+    public Task<CanonicalSclStep4ExecutionResult> ConnectAndExecuteSclAssistedStep4Async(
+        SclAssistedMmsAssociationPlan associationPlan,
+        XDocument sclDocument,
+        CancellationToken cancellationToken = default)
+        => ConnectAndExecuteSclAssistedStep4Async(
+            associationPlan,
+            sclDocument,
+            TimeSpan.FromSeconds(5),
+            cancellationToken);
+
+    public async Task<CanonicalSclStep4ExecutionResult> ConnectAndExecuteSclAssistedStep4Async(
+        SclAssistedMmsAssociationPlan associationPlan,
+        XDocument sclDocument,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(associationPlan);
+        ArgumentNullException.ThrowIfNull(sclDocument);
+
+        var import = SclCanonicalImporter.Import(
+            sclDocument,
+            new SclCanonicalImportOptions
+            {
+                IedName = associationPlan.IedName,
+                AccessPointName = associationPlan.AccessPointName
+            });
+
+        if (!import.IsSuccess || import.Model is null)
+            return BuildCanonicalImportFailure(associationPlan, import);
+
+        return await ConnectAndExecuteCanonicalSclStep4Async(
+                associationPlan,
+                import.Model,
+                timeout,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public Task<CanonicalSclStep4ExecutionResult> ConnectAndExecuteSclAssistedStep4Async(
+        SclAssistedMmsAssociationPlan associationPlan,
+        string sclFilePath,
+        CancellationToken cancellationToken = default)
+        => ConnectAndExecuteSclAssistedStep4Async(
+            associationPlan,
+            sclFilePath,
+            TimeSpan.FromSeconds(5),
+            cancellationToken);
+
+    public async Task<CanonicalSclStep4ExecutionResult> ConnectAndExecuteSclAssistedStep4Async(
+        SclAssistedMmsAssociationPlan associationPlan,
+        string sclFilePath,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(associationPlan);
+
+        var import = SclCanonicalImporter.Load(
+            sclFilePath,
+            new SclCanonicalImportOptions
+            {
+                IedName = associationPlan.IedName,
+                AccessPointName = associationPlan.AccessPointName
+            });
+
+        if (!import.IsSuccess || import.Model is null)
+            return BuildCanonicalImportFailure(associationPlan, import);
+
+        return await ConnectAndExecuteCanonicalSclStep4Async(
+                associationPlan,
+                import.Model,
+                timeout,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public Task<CanonicalSclStep4ExecutionResult> ConnectAndExecuteCanonicalSclStep4Async(
         SclAssistedMmsAssociationPlan associationPlan,
         CanonicalIedModel canonicalModel,
@@ -245,6 +327,41 @@ public sealed partial class MmsClientSession
             online,
             initialRead,
             $"Canonical SCL Step-4: online={online.Status}, initialRead={initialRead.Status}. {initialRead.Message}");
+    }
+
+    private CanonicalSclStep4ExecutionResult BuildCanonicalImportFailure(
+        SclAssistedMmsAssociationPlan associationPlan,
+        SclCanonicalImportResult import)
+    {
+        var errors = import.Errors.Length > 0
+            ? import.Errors
+            : new[] { $"Canonical SCL import failed with status {import.Status}." };
+        var design = new CanonicalSclStep4Design
+        {
+            DomainInventory = new SclMmsDomainInventory
+            {
+                IedName = associationPlan.IedName,
+                AccessPointName = associationPlan.AccessPointName,
+                Errors = errors,
+                Warnings = import.Warnings
+            },
+            ReadPlan = new InitialFcReadPlan
+            {
+                MaximumVariableReferencesPerRead = MmsReadBatchCodec.MaximumVariableReferencesPerRead,
+                MaximumOutstandingReads = 1,
+                Errors = errors,
+                Warnings = import.Warnings
+            },
+            Errors = errors,
+            Warnings = import.Warnings
+        };
+
+        return BuildCanonicalStep4Result(
+            CanonicalSclStep4ExecutionStatus.InvalidCanonicalModel,
+            design,
+            null,
+            null,
+            "Canonical SCL import failed: " + string.Join(" | ", errors));
     }
 
     private CanonicalSclStep4ExecutionResult BuildCanonicalStep4Result(

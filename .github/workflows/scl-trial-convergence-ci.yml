@@ -11,7 +11,7 @@ permissions:
 jobs:
   build-test:
     name: Build and test canonical field-trial convergence
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout exact trial branch
         shell: bash
@@ -19,6 +19,7 @@ jobs:
           git clone --quiet --depth 1 --branch trial/scl-assisted-convergence "https://github.com/$GITHUB_REPOSITORY.git" source
           echo "TRIAL_HEAD=$(git -C source rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "TRIAL_TREE=$(git -C source rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
+          mkdir -p artifacts/test-results
 
       - name: Verify source, provenance, wording and license boundaries
         shell: pwsh
@@ -38,7 +39,6 @@ jobs:
       - name: Test
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path artifacts/test-results -Force | Out-Null
           dotnet test ./source/ARIEC61850.sln `
             -c Release `
             --no-build `
@@ -52,6 +52,7 @@ jobs:
         if: always()
         shell: bash
         run: |
+          mkdir -p artifacts/test-results
           printf 'head=%s\ntree=%s\nbaseline=%s\n' "$TRIAL_HEAD" "$TRIAL_TREE" "11ab2304482600c19ba979f4fc9021ddb46b9af9" > artifacts/test-results/convergence-identity.txt
 
       - name: Upload diagnostics

@@ -1,4 +1,3 @@
-using System.Globalization;
 using AR.Iec61850.Mms;
 using AR.Iec61850.SampledValues.Profiles;
 
@@ -224,7 +223,8 @@ public static class SvSclBoundMeasurementProjector
         var errors = context.Validate();
         if (errors.Count > 0)
         {
-            diagnostics.AddRange(errors.Select(error => $"Measurement context rejected: {error}"));
+            foreach (var error in errors)
+                diagnostics.Add($"Measurement context rejected: {error}");
             return null;
         }
 

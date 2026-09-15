@@ -26,22 +26,23 @@ public sealed class MmsSclReportSubscriptionPlannerTests
     }
 
     [Fact]
-    public void BuildStaticPlan_SelectsFreeConcreteUrcbFromIndexedSclFamily()
+    public void BuildStaticPlan_SelectsExplicitUrcbFamilyWithoutRequiringFallbackPolicy()
     {
         var inventory = new MmsReportInventory();
-        inventory.ReportControls.Add(CreateUnbufferedCandidate("Unbuffer01", enabled: "false", reserved: "false"));
+        inventory.ReportControls.Add(CreateUnbufferedCandidate("Unbuffer01", enabled: "true", reserved: "true"));
+        inventory.ReportControls.Add(CreateUnbufferedCandidate("Unbuffer02", enabled: "false", reserved: "false"));
 
         var result = MmsSclReportSubscriptionPlanner.BuildStaticPlan(
             inventory,
             [CreateDataSetDirectory("LD0/LLN0.Analog")],
-            CreateSclReportControl("Unbuffer", buffered: false, "LD0/LLN0.Analog"),
-            allowUrCbFallback: true);
+            CreateSclReportControl("Unbuffer", buffered: false, "LD0/LLN0.Analog"));
 
         Assert.True(result.RcbResolution.IsSuccess);
+        Assert.Equal(MmsSclRcbFamilyResolutionKind.IndexedFamily, result.RcbResolution.Kind);
         Assert.True(result.Plan.IsReady);
         Assert.NotNull(result.Plan.ReportControl);
         Assert.False(result.Plan.ReportControl!.Buffered);
-        Assert.Equal("LD0/LLN0.RP.Unbuffer01", result.Plan.ReportControl.Reference);
+        Assert.Equal("LD0/LLN0.RP.Unbuffer02", result.Plan.ReportControl.Reference);
         Assert.Contains("Resv", result.Plan.ReportControl.Attributes);
         Assert.Contains("GI", result.Plan.ReportControl.Attributes);
         Assert.Contains(result.Plan.Steps, step => step.Contains("Resv=true", StringComparison.OrdinalIgnoreCase));

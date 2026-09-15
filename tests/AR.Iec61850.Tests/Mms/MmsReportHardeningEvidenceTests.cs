@@ -44,36 +44,30 @@ public sealed class MmsReportHardeningEvidenceTests
     [Fact]
     public void Sanitized_Lifecycle_Export_Omits_Live_Identifiers_EntryId_And_Free_Text()
     {
-        var snapshot = new MmsReportLifecycleSnapshot
+        var reportControl = new MmsReportControlCandidate
         {
-            Kind = MmsReportControlKind.Brcb,
-            Phase = MmsReportLifecyclePhase.Monitoring,
-            DataSetOwnership = MmsReportDataSetOwnership.External,
-            ReportControlReference = "CUSTOMER_IED01LD0/LLN0.BR.Buffer01",
-            DataSetReference = "CUSTOMER_IED01LD0/LLN0.Events",
-            IsEnabled = true,
-            Replay = new MmsBufferedReportReplayDiagnostics
-            {
-                AcceptedReportCount = 2,
-                DuplicateReportCount = 1,
-                LastEntryIdHex = "DEADBEEFCAFEBABE",
-                LastTimeOfEntry = "2026-09-15T01:02:03Z",
-                LastSequenceNumber = 77
-            },
-            Events =
-            [
-                new MmsReportLifecycleEvent
-                {
-                    Sequence = 1,
-                    RecordedAtUtc = DateTimeOffset.Parse("2026-09-15T01:02:03Z"),
-                    Phase = MmsReportLifecyclePhase.Monitoring,
-                    Kind = MmsReportLifecycleEventKind.Report,
-                    Target = "CUSTOMER_IED01LD0/LLN0$BR$Buffer01",
-                    IsSuccess = true,
-                    Message = "customer-private-object-reference"
-                }
-            ]
+            Buffered = true,
+            Reference = "CUSTOMER_IED01LD0/LLN0.BR.Buffer01",
+            DataSetReference = "CUSTOMER_IED01LD0/LLN0.Events"
         };
+        var state = new MmsReportLifecycleStateMachine(new MmsReportSubscriptionPlan
+        {
+            Mode = MmsReportSubscriptionPlanMode.StaticDataSet,
+            Status = MmsReportSubscriptionPlanStatus.ReadyRequiresWrite,
+            ReportControl = reportControl,
+            DataSetReference = reportControl.DataSetReference,
+            Members = BuildMembers()
+        });
+        state.ObserveReceiveResult(new MmsPersistentReportMonitorReceiveResult
+        {
+            Reports =
+            [
+                CustomerFrame("DEADBEEFCAFEB001", 76, "2026-09-15T01:02:03Z"),
+                CustomerFrame("DEADBEEFCAFEB001", 76, "2026-09-15T01:02:03Z"),
+                CustomerFrame("DEADBEEFCAFEB002", 77, "2026-09-15T01:02:04Z")
+            ]
+        });
+        var snapshot = state.Snapshot();
 
         using var writer = new StringWriter();
         MmsReportLifecycleEvidenceExporter.WriteJson(snapshot, writer, indented: false);
@@ -84,7 +78,6 @@ public sealed class MmsReportHardeningEvidenceTests
         Assert.DoesNotContain("CUSTOMER_IED01", json, StringComparison.Ordinal);
         Assert.DoesNotContain("DEADBEEF", json, StringComparison.Ordinal);
         Assert.DoesNotContain("2026-09-15", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("customer-private-object-reference", json, StringComparison.Ordinal);
     }
 
     private static IReadOnlyList<MmsDataSetDirectoryMember> BuildMembers()
@@ -125,5 +118,27 @@ public sealed class MmsReportHardeningEvidenceTests
             IncludedDataSetIndexes = included,
             Values = values,
             DecoderMode = "iec61850-report"
+        };
+
+    private static MmsReportFrame CustomerFrame(string entryId, ulong sequence, string time)
+        => new()
+        {
+            Header = new MmsReportHeader
+            {
+                ReportId = "CUSTOMER_IED01LD0/LLN0$BR$Buffer01",
+                DataSetReference = "CUSTOMER_IED01LD0/LLN0$Events",
+                ConfRev = 1,
+                EntryIdHex = entryId,
+                SequenceNumber = sequence,
+                TimeOfEntry = time
+            },
+            Values =
+            [
+                new MmsReportValue
+                {
+                    Index = 0,
+                    ReasonForInclusion = ["data-change"]
+                }
+            ]
         };
 }

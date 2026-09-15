@@ -78,6 +78,51 @@ public sealed class CanonicalRuntimePublicationTests
     }
 
     [Fact]
+    public async Task Clear_Removes_Published_Runtime_And_Allows_A_Fresh_Later_Generation()
+    {
+        var model = BuildModel();
+        await using var publisher = new CanonicalRuntimeSnapshotPublisher();
+
+        Assert.True(publisher.TryPublish(model));
+        var first = await WaitForGenerationAsync(publisher, 1);
+        Assert.NotNull(first);
+
+        publisher.Clear();
+
+        Assert.Null(publisher.Current);
+        Assert.Empty(publisher.Query(new CanonicalSignalQuery { Limit = 10 }).Rows);
+
+        Assert.True(publisher.TryPublish(model));
+        var second = await WaitForGenerationAsync(publisher, 2);
+        Assert.Equal(2, second.ModelGeneration);
+        Assert.False(Assert.Single(second.Values.Query(new CanonicalSignalQuery
+        {
+            ReferencePrefix = "IED_ALD0/LLN0.Mod.stVal",
+            FunctionalConstraint = "ST",
+            Limit = 1
+        }).Rows).HasValue);
+    }
+
+    [Fact]
+    public async Task Clear_Invalidates_An_Accepted_InFlight_Publication_Request()
+    {
+        var model = BuildModel();
+        await using var publisher = new CanonicalRuntimeSnapshotPublisher();
+
+        Assert.True(publisher.TryPublish(model));
+        publisher.Clear();
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(250);
+        while (DateTime.UtcNow < deadline)
+        {
+            Assert.Null(publisher.Current);
+            await Task.Delay(10);
+        }
+
+        Assert.Null(publisher.Current);
+    }
+
+    [Fact]
     public async Task Repeated_Same_Live_Discovery_Ingress_Is_Idempotent_For_Its_Accepted_Request()
     {
         var source = BuildDocument();

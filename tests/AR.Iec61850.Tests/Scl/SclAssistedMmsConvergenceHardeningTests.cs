@@ -77,6 +77,44 @@ public sealed class SclAssistedMmsConvergenceHardeningTests
     }
 
     [Theory]
+    [InlineData("\"1,1,1,999,1\"")]
+    [InlineData("'1,1,1,999,1'")]
+    public void Quoted_Edition1_ApTitle_Is_Normalized_Before_Oid_Parsing(string apTitle)
+    {
+        var xml = $$"""
+        <SCL xmlns="http://www.iec.ch/61850/2003/SCL">
+          <Communication>
+            <SubNetwork name="StationBus" type="8-MMS">
+              <ConnectedAP iedName="IED01" apName="AP1">
+                <Address>
+                  <P type="IP">192.0.2.10</P>
+                  <P type="OSI-AP-Title">{{apTitle}}</P>
+                  <P type="OSI-AE-Qualifier">1</P>
+                  <P type="OSI-PSEL">00000001</P>
+                  <P type="OSI-SSEL">0001</P>
+                  <P type="OSI-TSEL">0001</P>
+                </Address>
+              </ConnectedAP>
+            </SubNetwork>
+          </Communication>
+        </SCL>
+        """;
+
+        var profiles = SclMmsAssociationProfileReader.Read(xml);
+        var remote = Assert.Single(profiles.AccessPoints);
+
+        Assert.Equal("1,1,1,999,1", remote.Association.ApTitle);
+        Assert.Equal(apTitle, remote.Parameters["OSI-AP-Title"]);
+
+        var plan = SclAssistedMmsAssociationPlanBuilder.BuildExact(
+            remote,
+            MmsLocalAssociationProfile.SclInteroperabilityDefault);
+
+        Assert.True(plan.IsSuccess);
+        Assert.Equal(new uint[] { 1, 1, 1, 999, 1 }, plan.Plan!.Association.Called.ApTitle);
+    }
+
+    [Theory]
     [InlineData("65536")]
     [InlineData("-1")]
     public void AeQualifier_Outside_Unsigned16_Range_Is_Rejected(string qualifier)

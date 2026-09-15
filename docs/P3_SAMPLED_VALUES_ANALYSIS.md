@@ -31,6 +31,8 @@ SvSustainedObservationSession
         `--> optional explicit SCL profile
                  `--> existing SampledValuesPayloadDecoder
                           `--> SvSclBoundMeasurementProjector
+                                   `--> SvEngineeringWindowAnalyzer
+                                            `--> SvSignalWindowAnalyzer
 ```
 
 `SvSustainedObservationSession` is deliberately downstream of the existing frame parser. It accepts an already parsed `SampledValuesFrame`, sends the frame through `SvStreamObservationManager` first, and advances sustained state only when that canonical observation path accepts the frame. Live capture and PCAP replay therefore share the same parsed-frame admission and stream-identity path. The session does not add a raw capture parser, a second SV decoder, or a second channel model.
@@ -50,6 +52,8 @@ This is an integration boundary, not a claim that the repository now contains ev
 Sample-counter continuity reuses `SvSampleCounterTracker`. P3 records continuous transitions, normal wraps, forward gaps, missing-sample counts, duplicates, and out-of-order transitions. A caller may supply a trusted/configured counter modulus; otherwise the existing tracker remains profile-neutral.
 
 A sample-counter gap means samples were not observed by this analyzer. It is evidence of an observation gap, not by itself proof of physical-network packet loss.
+
+The engineering-window layer reuses the same tracker rather than implementing a second counter algorithm. An incomplete one-cycle engineering window is discarded on a gap, duplicate, out-of-order transition, restart, channel-metadata change, or timebase/evidence change. A gap/out-of-order/restart sample may begin a new clean window; a duplicate is not counted as a new time sample.
 
 ## Timing evidence and claim boundary
 
@@ -81,18 +85,24 @@ Numeric values always retain their decoded raw value. Engineering values are emi
 
 CT/VT conversion is also explicit. An optional `SvStreamMeasurementContext` is accepted only when its validated stream key and optional `svID` match the observed stream. Primary/secondary-equivalent values are then produced through `SvMeasurementDomainResolver`; a missing, invalid, or mismatched context never causes a ratio to be guessed.
 
-## RMS and phasor primitive
+## Bounded engineering windows, RMS, and phasor
 
-`SvSignalWindowAnalyzer` provides deterministic one-cycle-window RMS and fundamental phasor calculation for an explicitly supplied numeric sample window. It intentionally accepts already mapped/scaled numbers rather than raw SV payload bytes. The caller must establish channel identity, engineering scale, and timebase from SCL or other explicit trusted context before presenting engineering-unit RMS or phasor results.
+`SvEngineeringWindowAnalyzer` is the bridge from successfully SCL-bound/scaled projected samples into the existing `SvSignalWindowAnalyzer`. It never decodes payload bytes and never manufactures engineering units. Samples whose projection remains raw-only are intentionally excluded from engineering RMS/phasor state.
 
-The fundamental estimator returns:
+The caller must provide `SvEngineeringWindowEvidence` containing a finite positive sample rate and fundamental frequency plus their provenance. `Unknown` and `ProfileInferred` provenance is rejected for these values, so the analyzer never chooses 50 Hz versus 60 Hz itself. The ratio `sampleRateHz / fundamentalFrequencyHz` must resolve to an integral one-cycle sample count within the configured tolerance and bounded maximum before any state is created.
+
+State is bounded at three dimensions: maximum streams, maximum channels per stream, and maximum samples per cycle. The default configuration is 256 streams × 32 channels × 512 samples/cycle, with an additional validation guard that rejects option combinations whose theoretical retained `double` sample buffers could exceed 64 MiB. The analyzer stores only the current incomplete cycle for each active channel; completed cycle history is not retained internally.
+
+Each channel is keyed by the SCL projection element index and guarded by exact signal reference, CDC, engineering unit, scale source, and scale confidence. A metadata change resets the partial waveform and counter state before accepting the new identity. Timebase, nominal-frequency, or counter-wrap evidence changes likewise reset partial state across that stream.
+
+`SvSignalWindowAnalyzer` remains the deterministic one-cycle-window primitive. It receives exactly one complete, continuity-clean engineering window and returns:
 
 - true window RMS;
 - fundamental RMS magnitude;
 - fundamental phase angle; and
 - sample count.
 
-No frequency, channel meaning, CT/VT ratio, or engineering unit is guessed by this primitive.
+No frequency, channel meaning, CT/VT ratio, engineering unit, or missing sample is guessed by either layer.
 
 ## Deterministic regression coverage
 
@@ -112,11 +122,18 @@ Synthetic tests cover:
 - a 10,000-frame synthetic ingestion regression that keeps the sustained registry at its configured stream bound;
 - fixed SCL-bound current/voltage projection using the existing payload decoder;
 - explicit primary-to-secondary CT/VT display conversion;
-- raw-only preservation for SCL layouts without an approved engineering-scale rule; and
-- fail-closed APPID and `confRev` mismatch handling before payload projection.
+- raw-only preservation for SCL layouts without an approved engineering-scale rule;
+- fail-closed APPID and `confRev` mismatch handling before payload projection;
+- one-cycle engineering RMS/phasor from explicitly scaled samples;
+- raw-only exclusion from engineering-window state;
+- partial-window reset after `smpCnt` gap and duplicate evidence;
+- normal counter-wrap continuity;
+- channel-metadata change reset;
+- fail-closed non-integral samples-per-cycle and inferred-frequency input; and
+- bounded engineering stream/channel registries.
 
 These are unit-test and synthetic-fixture claims only. This phase does not claim production timing accuracy, formal conformance, universal device interoperability, or operational-substation validation.
 
 ## Remaining P3 work
 
-The roadmap priority is not complete. Follow-up work should add bounded per-channel engineering windows that feed `SvSignalWindowAnalyzer` only from successfully scaled projections, connect application live-capture and PCAP replay byte sources to the established parser plus `SvSustainedObservationSession`, add sanitized real/replay validation fixtures and longer soak evidence, and expose evidence/export contracts without retaining customer or live-network identifiers.
+The per-channel engineering-window slice is now implemented, but the roadmap priority is not complete. Follow-up work should connect application live-capture and PCAP replay byte sources to the established parser plus `SvSustainedObservationSession`, carry explicit timebase/frequency evidence into `SvEngineeringWindowAnalyzer`, add sanitized real/replay validation fixtures and longer bounded soak evidence, and expose evidence/export contracts without retaining customer or live-network identifiers.

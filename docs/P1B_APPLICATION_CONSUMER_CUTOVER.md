@@ -36,6 +36,8 @@ CanonicalRuntimeSnapshotPublisher
 
 A newly accepted model publication invalidates the previously visible runtime generation immediately. A versioned publication request prevents an older model that was already being indexed from becoming visible after a newer model has been accepted. During replacement, producers therefore see either no runtime source or the newest published generation; they never bind new values to a superseded `SignalId` table.
 
+Unloading or clearing the active application model calls `CanonicalRuntimeSnapshotPublisher.Clear()`. Clear invalidates both the visible generation and every already accepted in-flight publication request, so values from the previous IED cannot remain queryable or exportable after the application shows no loaded model. A later discovery/open operation publishes a fresh generation with an empty value plane.
+
 ## Producer cutover
 
 The IED Discovery application routes these live sources through canonical runtime adapters before presentation changes:
@@ -82,7 +84,8 @@ P1B adds regression coverage for:
 - exact pinned-signal resolution against one published model/value pair;
 - hard monitor-selection bounds;
 - successful persistent-monitor fallback poll routing;
-- preservation of the last good value after failed poll evidence; and
-- fail-closed model-generation replacement so superseded runtime planes cannot accept new updates.
+- preservation of the last good value after failed poll evidence;
+- fail-closed model-generation replacement so superseded runtime planes cannot accept new updates; and
+- explicit unload invalidation so a cleared application cannot expose a stale or late-published runtime generation.
 
 These tests complement the P1 one-million-signal runtime-plane allocation guard and the existing bounded latest-only publication tests.

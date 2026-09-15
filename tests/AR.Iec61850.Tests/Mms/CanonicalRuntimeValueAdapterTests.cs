@@ -118,12 +118,14 @@ public sealed class CanonicalRuntimeValueAdapterTests
         };
 
     private static CanonicalRuntimeSignalProjection QueryOne(CanonicalRuntimeValuePlane plane, string reference)
-        => Assert.Single(plane.Query(new CanonicalSignalQuery
-        {
-            ReferencePrefix = reference,
-            FunctionalConstraint = "ST",
-            Limit = 10
-        }).Rows.Where(row => string.Equals(row.Reference, reference, StringComparison.Ordinal)));
+        => Assert.Single(
+            plane.Query(new CanonicalSignalQuery
+            {
+                ReferencePrefix = reference,
+                FunctionalConstraint = "ST",
+                Limit = 10
+            }).Rows,
+            row => string.Equals(row.Reference, reference, StringComparison.Ordinal));
 
     private static CanonicalRuntimeValuePlane BuildPlane(long modelGeneration = 1)
     {

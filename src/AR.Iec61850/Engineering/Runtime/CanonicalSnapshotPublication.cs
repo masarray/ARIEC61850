@@ -218,13 +218,15 @@ public sealed class CanonicalSnapshotPublisher : ICanonicalSnapshotSource, IAsyn
     public CanonicalSignalQueryResult Query(CanonicalSignalQuery? query = null)
     {
         var current = Current;
-        return current is null
-            ? new CanonicalSignalQueryResult
-            {
-                Offset = Math.Max(0, query?.Offset ?? 0),
-                Limit = Math.Clamp(query?.Limit is > 0 ? query.Limit : 500, 1, CanonicalSignalQueryIndex.MaximumPageSize)
-            }
-            : current.QueryIndex.Query(query, current.Generation);
+        if (current is not null)
+            return current.QueryIndex.Query(query, current.Generation);
+
+        var requestedLimit = query is { Limit: > 0 } ? query.Limit : 500;
+        return new CanonicalSignalQueryResult
+        {
+            Offset = Math.Max(0, query?.Offset ?? 0),
+            Limit = Math.Clamp(requestedLimit, 1, CanonicalSignalQueryIndex.MaximumPageSize)
+        };
     }
 
     public ValueTask StopAsync(CancellationToken cancellationToken = default)
@@ -252,8 +254,9 @@ public sealed class CanonicalSnapshotPublisher : ICanonicalSnapshotSource, IAsyn
 }
 
 /// <summary>
-/// Shared consumer facade. UI and CLI get bounded pages; exporters use the same index via
-/// explicit paging rather than materializing a second million-row object graph.
+/// Shared consumer facade. UI and CLI get bounded latest pages. Exporters pin one
+/// CanonicalPublishedSnapshot generation and page through that immutable snapshot so a
+/// newer publication cannot mix generations inside one export.
 /// </summary>
 public static class CanonicalConsumerProjection
 {
@@ -280,6 +283,51 @@ public static class CanonicalConsumerProjection
         string referencePrefix = "",
         string functionalConstraint = "")
         => Query(source, referencePrefix, functionalConstraint, offset, Math.Min(Math.Max(1, pageSize), CanonicalSignalQueryIndex.MaximumPageSize));
+
+    public static CanonicalSignalQueryResult ForExporter(
+        CanonicalPublishedSnapshot snapshot,
+        int offset,
+        int pageSize = CanonicalSignalQueryIndex.MaximumPageSize,
+        string referencePrefix = "",
+        string functionalConstraint = "")
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return snapshot.QueryIndex.Query(new CanonicalSignalQuery
+        {
+            ReferencePrefix = referencePrefix,
+            FunctionalConstraint = functionalConstraint,
+            Offset = offset,
+            Limit = Math.Min(Math.Max(1, pageSize), CanonicalSignalQueryIndex.MaximumPageSize)
+        }, snapshot.Generation);
+    }
+
+    public static IEnumerable<CanonicalSignalProjection> EnumerateForExporter(
+        CanonicalPublishedSnapshot snapshot,
+        int pageSize = CanonicalSignalQueryIndex.MaximumPageSize,
+        string referencePrefix = "",
+        string functionalConstraint = "")
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        var offset = 0;
+        while (true)
+        {
+            var page = ForExporter(
+                snapshot,
+                offset,
+                pageSize,
+                referencePrefix,
+                functionalConstraint);
+
+            foreach (var row in page.Rows)
+                yield return row;
+
+            if (!page.HasMore || page.Rows.Count == 0)
+                yield break;
+
+            offset += page.Rows.Count;
+        }
+    }
 
     private static CanonicalSignalQueryResult Query(
         ICanonicalSnapshotSource source,

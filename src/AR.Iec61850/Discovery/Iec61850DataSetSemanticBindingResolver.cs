@@ -82,6 +82,11 @@ public sealed class LiveIedDataSetSemanticBindingDocument
 /// Resolves original FCD/FCDA DataSet members to typed DataAttribute targets.
 /// Original member identity and list ordering remain protocol evidence; semantic
 /// leaves are application bindings only and never additional DataSet members.
+///
+/// Structured FCDA members are intentionally supported. A member such as A.phsA or
+/// PPV.phsAB can identify an intermediate structured component rather than a final DA.
+/// In that case only typed descendants below the exact member boundary are considered.
+/// The resolver never widens the member to sibling phases and never invents a leaf.
 /// </summary>
 public static class Iec61850DataSetSemanticBindingResolver
 {
@@ -136,11 +141,20 @@ public static class Iec61850DataSetSemanticBindingResolver
         var bestLength = objectMatches[0].Reference.Length;
         var bestMatches = objectMatches.Where(candidate => candidate.Reference.Length == bestLength).ToArray();
         if (bestMatches.Length != 1)
-            return BuildBinding(dataSet, member, string.Empty, LiveIedDataSetMemberResolutionStatus.Ambiguous, Array.Empty<LiveIedResolvedDataSetAttributeModel>(), $"Multiple DataObjects match canonical DataSet member '{reference}'.");
+        {
+            return BuildBinding(
+                dataSet,
+                member,
+                string.Empty,
+                LiveIedDataSetMemberResolutionStatus.Ambiguous,
+                Array.Empty<LiveIedResolvedDataSetAttributeModel>(),
+                $"Multiple DataObjects match canonical DataSet member '{reference}'.");
+        }
 
         var dataObject = bestMatches[0].DataObject;
+        var dataObjectReference = bestMatches[0].Reference;
         var cdc = dataObject.InferredCdc?.Trim() ?? string.Empty;
-        var isObjectLevelMember = string.Equals(reference, bestMatches[0].Reference, StringComparison.OrdinalIgnoreCase);
+        var isObjectLevelMember = string.Equals(reference, dataObjectReference, StringComparison.OrdinalIgnoreCase);
         var fcCompatibleAttributes = dataObject.Attributes
             .Where(attribute => IsFunctionalConstraintCompatible(fc, attribute.FunctionalConstraint))
             .ToArray();
@@ -148,16 +162,73 @@ public static class Iec61850DataSetSemanticBindingResolver
         if (!isObjectLevelMember)
         {
             var exact = fcCompatibleAttributes
-                .Where(attribute => string.Equals(NormalizeReference(attribute.ObjectReference), reference, StringComparison.OrdinalIgnoreCase))
+                .Where(attribute => string.Equals(
+                    NormalizeReference(attribute.ObjectReference),
+                    reference,
+                    StringComparison.OrdinalIgnoreCase))
                 .Select(attribute => ToResolvedAttribute(dataObject, attribute, fc))
                 .ToArray();
             if (exact.Length == 1)
-                return BuildBinding(dataSet, member, cdc, LiveIedDataSetMemberResolutionStatus.ExactAttribute, exact, $"Explicit DataAttribute member matched '{exact[0].Reference}'.");
+            {
+                return BuildBinding(
+                    dataSet,
+                    member,
+                    cdc,
+                    LiveIedDataSetMemberResolutionStatus.ExactAttribute,
+                    PromoteUniqueFallbackPrimary(exact),
+                    $"Explicit DataAttribute member matched '{exact[0].Reference}'.");
+            }
             if (exact.Length > 1)
-                return BuildBinding(dataSet, member, cdc, LiveIedDataSetMemberResolutionStatus.Ambiguous, exact, $"Explicit DataAttribute member '{reference}' matched more than one attribute model.");
+            {
+                return BuildBinding(
+                    dataSet,
+                    member,
+                    cdc,
+                    LiveIedDataSetMemberResolutionStatus.Ambiguous,
+                    exact,
+                    $"Explicit DataAttribute member '{reference}' matched more than one attribute model.");
+            }
+
+            // IEC 61850 FCDA may stop at an intermediate structured component. Siemens
+            // measurement DataSets commonly contain A.phsA / A.phsB / A.phsC and
+            // PPV.phsAB-style members while SCL DataTypeTemplates expose final leaves such
+            // as cVal.mag.f below those components. Restrict expansion to descendants of
+            // the exact static member boundary so no sibling phase can be captured.
+            var descendants = fcCompatibleAttributes
+                .Where(attribute => IsDescendantReference(
+                    NormalizeReference(attribute.ObjectReference),
+                    reference))
+                .Select(attribute => ToResolvedAttribute(dataObject, attribute, fc))
+                .OrderBy(attribute => SemanticOrder(attribute.SemanticRole))
+                .ThenBy(attribute => attribute.Reference, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (descendants.Length > 0)
+            {
+                return BuildExpandedBinding(
+                    document,
+                    dataSet,
+                    member,
+                    cdc,
+                    descendants,
+                    $"Structured DataSet member '{reference}' expanded only to typed descendants below the exact member boundary.");
+            }
+
             if (dataObject.Attributes.Count > 0 && fcCompatibleAttributes.Length == 0)
-                return BuildBinding(dataSet, member, cdc, LiveIedDataSetMemberResolutionStatus.FunctionalConstraintMismatch, Array.Empty<LiveIedResolvedDataSetAttributeModel>(), $"DataObject exists, but no attribute is compatible with FC={fc}.");
-            return Unresolved(dataSet, member, $"Explicit DataAttribute '{reference}' is not present in the resolved DataObject model.", cdc);
+            {
+                return BuildBinding(
+                    dataSet,
+                    member,
+                    cdc,
+                    LiveIedDataSetMemberResolutionStatus.FunctionalConstraintMismatch,
+                    Array.Empty<LiveIedResolvedDataSetAttributeModel>(),
+                    $"DataObject exists, but no attribute is compatible with FC={fc}.");
+            }
+
+            return Unresolved(
+                dataSet,
+                member,
+                $"Explicit or structured DataAttribute member '{reference}' is not present in the resolved DataObject model.",
+                cdc);
         }
 
         if (fcCompatibleAttributes.Length > 0)
@@ -167,30 +238,121 @@ public static class Iec61850DataSetSemanticBindingResolver
                 .OrderBy(attribute => SemanticOrder(attribute.SemanticRole))
                 .ThenBy(attribute => attribute.Reference, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            var primaryCount = resolved.Count(attribute => attribute.IsPrimaryValue);
-            var fromScl = IsSclProjection(document, resolved);
-            var status = primaryCount > 1
-                ? LiveIedDataSetMemberResolutionStatus.Ambiguous
-                : fromScl ? LiveIedDataSetMemberResolutionStatus.TemplateResolved : LiveIedDataSetMemberResolutionStatus.DiscoveredAttributes;
-            var evidence = fromScl
-                ? $"FCD member expanded from authoritative SCL DataTypeTemplates for CDC={cdc}."
-                : $"FCD member resolved from discovered attribute-level MMS evidence for CDC={cdc}.";
-            if (primaryCount > 1)
-                evidence += " More than one primary-value candidate was found; no primary target is selected.";
-            return BuildBinding(dataSet, member, cdc, status, resolved, evidence);
+            return BuildExpandedBinding(
+                document,
+                dataSet,
+                member,
+                cdc,
+                resolved,
+                $"DataObject-level FCD '{reference}' expanded to FC-compatible typed attributes.");
         }
 
         if (dataObject.Attributes.Count > 0)
-            return BuildBinding(dataSet, member, cdc, LiveIedDataSetMemberResolutionStatus.FunctionalConstraintMismatch, Array.Empty<LiveIedResolvedDataSetAttributeModel>(), $"DataObject has attribute evidence, but none is compatible with FC={fc}; CDC fallback is intentionally not used over conflicting typed evidence.");
+        {
+            return BuildBinding(
+                dataSet,
+                member,
+                cdc,
+                LiveIedDataSetMemberResolutionStatus.FunctionalConstraintMismatch,
+                Array.Empty<LiveIedResolvedDataSetAttributeModel>(),
+                $"DataObject has attribute evidence, but none is compatible with FC={fc}; CDC fallback is intentionally not used over conflicting typed evidence.");
+        }
 
         var fallback = BuildCdcFallback(dataObject, fc).ToArray();
         if (fallback.Length > 0)
-            return BuildBinding(dataSet, member, cdc, LiveIedDataSetMemberResolutionStatus.CdcFallback, fallback, $"No attribute-level evidence was available. Standard CDC={cdc} semantics supplied read candidates without changing the original DataSet member.");
+        {
+            return BuildBinding(
+                dataSet,
+                member,
+                cdc,
+                LiveIedDataSetMemberResolutionStatus.CdcFallback,
+                fallback,
+                $"No attribute-level evidence was available. Standard CDC={cdc} semantics supplied read candidates without changing the original DataSet member.");
+        }
 
-        return Unresolved(dataSet, member, $"DataObject '{dataObject.Reference}' has no attribute-level evidence and CDC={cdc} has no safe fallback mapping.", cdc);
+        return Unresolved(
+            dataSet,
+            member,
+            $"DataObject '{dataObject.Reference}' has no attribute-level evidence and CDC={cdc} has no safe fallback mapping.",
+            cdc);
     }
 
-    private static IEnumerable<LiveIedResolvedDataSetAttributeModel> BuildCdcFallback(LiveIedDataObjectModel dataObject, string functionalConstraint)
+    private static LiveIedDataSetMemberSemanticBinding BuildExpandedBinding(
+        LiveIedModelDiscoveryDocument document,
+        LiveIedDataSetModel dataSet,
+        LiveIedDataSetMemberModel member,
+        string cdc,
+        IReadOnlyList<LiveIedResolvedDataSetAttributeModel> attributes,
+        string evidencePrefix)
+    {
+        var resolved = PromoteUniqueFallbackPrimary(attributes);
+        var primaryCount = resolved.Count(attribute => attribute.IsPrimaryValue);
+        var fromScl = IsSclProjection(document, resolved);
+        var status = primaryCount > 1
+            ? LiveIedDataSetMemberResolutionStatus.Ambiguous
+            : fromScl
+                ? LiveIedDataSetMemberResolutionStatus.TemplateResolved
+                : LiveIedDataSetMemberResolutionStatus.DiscoveredAttributes;
+        var evidence = evidencePrefix + (fromScl
+            ? $" Authority is SCL DataTypeTemplates for CDC={cdc}."
+            : $" Authority is discovered attribute-level MMS evidence for CDC={cdc}.");
+
+        if (primaryCount > 1)
+            evidence += " More than one primary-value candidate was found; no primary target is selected.";
+        else if (primaryCount == 1)
+            evidence += $" Unique primary runtime leaf is '{resolved.Single(attribute => attribute.IsPrimaryValue).Reference}'.";
+        else
+            evidence += " No unique primary-value leaf is available; the static membership remains unresolved for scalar acquisition.";
+
+        return BuildBinding(dataSet, member, cdc, status, resolved, evidence);
+    }
+
+    /// <summary>
+    /// Prefer explicit semantic PrimaryValue roles. When a legacy/shallow typed model has
+    /// no such role, promote exactly one engine-approved primary-value-bearing attribute.
+    /// Multiple candidates remain unresolved rather than selecting by ordering.
+    /// </summary>
+    private static IReadOnlyList<LiveIedResolvedDataSetAttributeModel> PromoteUniqueFallbackPrimary(
+        IReadOnlyList<LiveIedResolvedDataSetAttributeModel> attributes)
+    {
+        if (attributes.Count(attribute => attribute.IsPrimaryValue) != 0)
+            return attributes;
+
+        var candidates = attributes
+            .Where(Iec61850ProbeValuePolicy.IsPrimaryValueBearing)
+            .ToArray();
+        if (candidates.Length != 1)
+            return attributes;
+
+        var selected = candidates[0];
+        return attributes
+            .Select(attribute => ReferenceEquals(attribute.Reference, selected.Reference)
+                ? CloneWithRole(attribute, Iec61850DataAttributeSemanticRole.PrimaryValue)
+                : attribute)
+            .ToArray();
+    }
+
+    private static LiveIedResolvedDataSetAttributeModel CloneWithRole(
+        LiveIedResolvedDataSetAttributeModel attribute,
+        Iec61850DataAttributeSemanticRole role)
+        => new()
+        {
+            Reference = attribute.Reference,
+            FunctionalConstraint = attribute.FunctionalConstraint,
+            MmsReference = attribute.MmsReference,
+            MmsItemName = attribute.MmsItemName,
+            Cdc = attribute.Cdc,
+            SclBType = attribute.SclBType,
+            MmsType = attribute.MmsType,
+            SemanticRole = role,
+            Confidence = attribute.Confidence,
+            Source = attribute.Source,
+            IsSyntheticFallback = attribute.IsSyntheticFallback
+        };
+
+    private static IEnumerable<LiveIedResolvedDataSetAttributeModel> BuildCdcFallback(
+        LiveIedDataObjectModel dataObject,
+        string functionalConstraint)
     {
         if (!string.Equals(dataObject.InferredCdc, "BCR", StringComparison.OrdinalIgnoreCase))
             yield break;
@@ -201,7 +363,12 @@ public static class Iec61850DataSetSemanticBindingResolver
         yield return BuildFallbackAttribute(dataObject, functionalConstraint, "t", "Timestamp", Iec61850DataAttributeSemanticRole.Timestamp);
     }
 
-    private static LiveIedResolvedDataSetAttributeModel BuildFallbackAttribute(LiveIedDataObjectModel dataObject, string functionalConstraint, string attributePath, string sclBType, Iec61850DataAttributeSemanticRole role)
+    private static LiveIedResolvedDataSetAttributeModel BuildFallbackAttribute(
+        LiveIedDataObjectModel dataObject,
+        string functionalConstraint,
+        string attributePath,
+        string sclBType,
+        Iec61850DataAttributeSemanticRole role)
     {
         var reference = NormalizeReference(dataObject.Reference) + "." + attributePath;
         var target = BuildMmsTarget(reference, functionalConstraint);
@@ -220,7 +387,10 @@ public static class Iec61850DataSetSemanticBindingResolver
         };
     }
 
-    private static LiveIedResolvedDataSetAttributeModel ToResolvedAttribute(LiveIedDataObjectModel dataObject, LiveIedDataAttributeModel attribute, string memberFunctionalConstraint)
+    private static LiveIedResolvedDataSetAttributeModel ToResolvedAttribute(
+        LiveIedDataObjectModel dataObject,
+        LiveIedDataAttributeModel attribute,
+        string memberFunctionalConstraint)
     {
         var reference = NormalizeReference(attribute.ObjectReference);
         var fc = NormalizeFunctionalConstraint(attribute.FunctionalConstraint);
@@ -253,24 +423,45 @@ public static class Iec61850DataSetSemanticBindingResolver
     private static Iec61850DataAttributeSemanticRole ClassifySemanticRole(string cdc, string attributePath)
     {
         var path = (attributePath ?? string.Empty).Trim().Replace('$', '.').Trim('.');
-        var leaf = path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..] : path;
-        if (string.Equals(leaf, "q", StringComparison.OrdinalIgnoreCase))
+        var lower = path.ToLowerInvariant();
+        var leaf = lower.Contains('.') ? lower[(lower.LastIndexOf('.') + 1)..] : lower;
+
+        if (leaf == "q")
             return Iec61850DataAttributeSemanticRole.Quality;
-        if (string.Equals(leaf, "t", StringComparison.OrdinalIgnoreCase))
+        if (leaf == "t")
             return Iec61850DataAttributeSemanticRole.Timestamp;
+
         if (string.Equals(cdc, "BCR", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(path, "actVal", StringComparison.OrdinalIgnoreCase))
+            if (lower == "actval")
                 return Iec61850DataAttributeSemanticRole.PrimaryValue;
-            if (string.Equals(path, "frVal", StringComparison.OrdinalIgnoreCase))
+            if (lower == "frval")
                 return Iec61850DataAttributeSemanticRole.FrozenValue;
         }
-        if (string.Equals(path, "stVal", StringComparison.OrdinalIgnoreCase))
+
+        if (lower is "stval" or "general" or "posval" or "actval")
             return Iec61850DataAttributeSemanticRole.PrimaryValue;
+
+        // Canonical engineering values are preferred over their instantaneous siblings.
+        // Alternate-reference policy can still recover cVal <-> instCVal or mag <-> instMag
+        // at live verification time without making an FCD with both representations ambiguous.
+        if (lower.EndsWith(".mag.f", StringComparison.Ordinal) &&
+            !lower.EndsWith(".instcval.mag.f", StringComparison.Ordinal) &&
+            !lower.EndsWith(".instmag.f", StringComparison.Ordinal))
+        {
+            return Iec61850DataAttributeSemanticRole.PrimaryValue;
+        }
+
         return Iec61850DataAttributeSemanticRole.Other;
     }
 
-    private static LiveIedDataSetMemberSemanticBinding BuildBinding(LiveIedDataSetModel dataSet, LiveIedDataSetMemberModel member, string cdc, LiveIedDataSetMemberResolutionStatus status, IReadOnlyList<LiveIedResolvedDataSetAttributeModel> attributes, string evidence)
+    private static LiveIedDataSetMemberSemanticBinding BuildBinding(
+        LiveIedDataSetModel dataSet,
+        LiveIedDataSetMemberModel member,
+        string cdc,
+        LiveIedDataSetMemberResolutionStatus status,
+        IReadOnlyList<LiveIedResolvedDataSetAttributeModel> attributes,
+        string evidence)
         => new()
         {
             DataSetReference = dataSet.Reference,
@@ -284,14 +475,31 @@ public static class Iec61850DataSetSemanticBindingResolver
             Evidence = new[] { evidence }
         };
 
-    private static LiveIedDataSetMemberSemanticBinding Unresolved(LiveIedDataSetModel dataSet, LiveIedDataSetMemberModel member, string evidence, string cdc = "")
-        => BuildBinding(dataSet, member, cdc, LiveIedDataSetMemberResolutionStatus.Unresolved, Array.Empty<LiveIedResolvedDataSetAttributeModel>(), evidence);
+    private static LiveIedDataSetMemberSemanticBinding Unresolved(
+        LiveIedDataSetModel dataSet,
+        LiveIedDataSetMemberModel member,
+        string evidence,
+        string cdc = "")
+        => BuildBinding(
+            dataSet,
+            member,
+            cdc,
+            LiveIedDataSetMemberResolutionStatus.Unresolved,
+            Array.Empty<LiveIedResolvedDataSetAttributeModel>(),
+            evidence);
 
-    private static bool IsSclProjection(LiveIedModelDiscoveryDocument document, IReadOnlyList<LiveIedResolvedDataSetAttributeModel> attributes)
-        => document.Source.Contains("Scl", StringComparison.OrdinalIgnoreCase) || attributes.Any(attribute => attribute.Source.Contains("SCL", StringComparison.OrdinalIgnoreCase));
+    private static bool IsSclProjection(
+        LiveIedModelDiscoveryDocument document,
+        IReadOnlyList<LiveIedResolvedDataSetAttributeModel> attributes)
+        => document.Source.Contains("Scl", StringComparison.OrdinalIgnoreCase) ||
+           attributes.Any(attribute => attribute.Source.Contains("SCL", StringComparison.OrdinalIgnoreCase));
 
     private static bool IsReferenceInsideDataObject(string memberReference, string dataObjectReference)
-        => string.Equals(memberReference, dataObjectReference, StringComparison.OrdinalIgnoreCase) || memberReference.StartsWith(dataObjectReference + ".", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(memberReference, dataObjectReference, StringComparison.OrdinalIgnoreCase) ||
+           memberReference.StartsWith(dataObjectReference + ".", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDescendantReference(string candidateReference, string memberReference)
+        => candidateReference.StartsWith(memberReference + ".", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsFunctionalConstraintCompatible(string memberFc, string attributeFc)
     {
@@ -302,7 +510,15 @@ public static class Iec61850DataSetSemanticBindingResolver
         return string.Equals(memberFc, NormalizeFunctionalConstraint(attributeFc), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static (string Reference, string ItemName) BuildMmsTarget(string userReference, string functionalConstraint)
+    private static bool ReferenceEquals(string? left, string? right)
+        => string.Equals(
+            NormalizeReference(left),
+            NormalizeReference(right),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static (string Reference, string ItemName) BuildMmsTarget(
+        string userReference,
+        string functionalConstraint)
     {
         var reference = NormalizeReference(userReference);
         var slash = reference.IndexOf('/');

@@ -52,12 +52,12 @@ public sealed class SclInitialFcReadAuthorityTests
         Assert.Equal("EXACT_APP_DOMAIN/MMXU1.TotW.mag.f", member.Reference);
 
         Assert.Equal(2, design.Model.ReportControls.Count);
-        var buffered = Assert.Single(design.Model.ReportControls.Where(report => report.Buffered));
+        var buffered = Assert.Single(design.Model.ReportControls, report => report.Buffered);
         Assert.Equal("EXACT_APP_DOMAIN/LLN0$BR$Buffer", buffered.Reference);
         Assert.Equal("EXACT_APP_DOMAIN/LLN0$Digital", buffered.DataSetReference);
         Assert.True(buffered.Indexed);
 
-        var unbuffered = Assert.Single(design.Model.ReportControls.Where(report => !report.Buffered));
+        var unbuffered = Assert.Single(design.Model.ReportControls, report => !report.Buffered);
         Assert.Equal("EXACT_APP_DOMAIN/LLN0$RP$FixedUrcb", unbuffered.Reference);
         Assert.Equal("EXACT_APP_DOMAIN/LLN0$Digital", unbuffered.DataSetReference);
         Assert.False(unbuffered.Indexed);

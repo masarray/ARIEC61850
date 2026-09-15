@@ -62,13 +62,19 @@ public static class MmsSclReportSubscriptionPlanner
         // We therefore do not pass the declarative family reference into the
         // legacy strict exact-reference filter, which would reject concrete
         // indexed instances such as Buffer01/Buffer02.
+        //
+        // allowUrCbFallback means "may a BRCB request fall back to URCB" in the
+        // legacy selector. An SCL ReportControl that is itself an URCB is not a
+        // fallback: it is the explicitly requested family, so its RP candidates
+        // must remain eligible even when cross-mode fallback is disabled.
+        var effectiveAllowUrCb = !reportControl.Buffered || allowUrCbFallback;
         var plan = MmsReportSubscriptionPlanner.BuildStaticPlan(
             scopedInventory,
             dataSetDirectories,
             preferredRcbReference: null,
             preferredDataSetReference: EmptyToNull(reportControl.DataSetReference),
             strictRcb: false,
-            allowUrCbFallback: allowUrCbFallback,
+            allowUrCbFallback: effectiveAllowUrCb,
             allowPollingFallback: allowPollingFallback,
             excludedRcbReferences: excludedRcbReferences);
 

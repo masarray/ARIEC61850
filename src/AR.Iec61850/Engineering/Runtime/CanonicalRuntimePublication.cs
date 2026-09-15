@@ -26,16 +26,19 @@ public interface ICanonicalRuntimeSource
 /// </summary>
 public sealed class CanonicalRuntimeSnapshotPublisher : ICanonicalRuntimeSource, IAsyncDisposable
 {
-    private readonly LatestOnlyWorker<CanonicalIedModel> _worker;
+    private sealed record PublicationRequest(long Version, CanonicalIedModel Model);
+
+    private readonly LatestOnlyWorker<PublicationRequest> _worker;
     private readonly object _publishSync = new();
     private CanonicalRuntimePublishedSnapshot? _current;
     private long _generation;
+    private long _latestAcceptedRequestVersion;
 
     public CanonicalRuntimeSnapshotPublisher(
         TimeSpan? processingTimeout = null,
         Action<Exception>? onFault = null)
     {
-        _worker = new LatestOnlyWorker<CanonicalIedModel>(
+        _worker = new LatestOnlyWorker<PublicationRequest>(
             PublishCoreAsync,
             processingTimeout ?? Timeout.InfiniteTimeSpan,
             onFault);
@@ -50,18 +53,23 @@ public sealed class CanonicalRuntimeSnapshotPublisher : ICanonicalRuntimeSource,
 
         // Fail closed while a replacement model generation is being built. Keeping the
         // previous value plane visible after accepting a new topology allows a fast report
-        // or poll result to bind to stale SignalIds. Once the replacement is queued,
-        // consumers therefore observe either no runtime snapshot or the new generation;
-        // they never observe the superseded generation as an eligible update target.
+        // or poll result to bind to stale SignalIds. A versioned request also prevents an
+        // already-processing, now-superseded model from becoming visible after a newer
+        // replacement has been accepted.
         lock (_publishSync)
         {
             var previous = Volatile.Read(ref _current);
+            var previousRequestVersion = Volatile.Read(ref _latestAcceptedRequestVersion);
+            var requestVersion = previousRequestVersion + 1;
+
+            Volatile.Write(ref _latestAcceptedRequestVersion, requestVersion);
             Volatile.Write(ref _current, null);
-            if (_worker.TryPublish(model))
+            if (_worker.TryPublish(new PublicationRequest(requestVersion, model)))
                 return true;
 
             // Publication was rejected because the worker is stopping. Restore the last
-            // valid generation because no replacement will be produced.
+            // valid generation and request token because no replacement will be produced.
+            Volatile.Write(ref _latestAcceptedRequestVersion, previousRequestVersion);
             Volatile.Write(ref _current, previous);
             return false;
         }
@@ -87,24 +95,35 @@ public sealed class CanonicalRuntimeSnapshotPublisher : ICanonicalRuntimeSource,
     public ValueTask DisposeAsync()
         => _worker.DisposeAsync();
 
-    private ValueTask PublishCoreAsync(CanonicalIedModel model, CancellationToken cancellationToken)
+    private ValueTask PublishCoreAsync(PublicationRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var compacted = CanonicalModelMemoryCompactor.Compact(model);
+        var compacted = CanonicalModelMemoryCompactor.Compact(request.Model);
         var index = CanonicalSignalQueryIndex.Build(compacted, cancellationToken);
-        var modelSnapshot = new CanonicalPublishedSnapshot
+
+        lock (_publishSync)
         {
-            Generation = Interlocked.Increment(ref _generation),
-            PublishedAtUtc = DateTimeOffset.UtcNow,
-            Model = compacted,
-            QueryIndex = index
-        };
-        var values = new CanonicalRuntimeValuePlane(modelSnapshot);
-        Volatile.Write(ref _current, new CanonicalRuntimePublishedSnapshot
-        {
-            ModelSnapshot = modelSnapshot,
-            Values = values
-        });
+            // The latest-only worker may already be processing request N when request N+1
+            // arrives. N is allowed to finish its expensive compaction/indexing work, but
+            // it must not become an observable runtime generation after N+1 was accepted.
+            if (request.Version != Volatile.Read(ref _latestAcceptedRequestVersion))
+                return ValueTask.CompletedTask;
+
+            var modelSnapshot = new CanonicalPublishedSnapshot
+            {
+                Generation = Interlocked.Increment(ref _generation),
+                PublishedAtUtc = DateTimeOffset.UtcNow,
+                Model = compacted,
+                QueryIndex = index
+            };
+            var values = new CanonicalRuntimeValuePlane(modelSnapshot);
+            Volatile.Write(ref _current, new CanonicalRuntimePublishedSnapshot
+            {
+                ModelSnapshot = modelSnapshot,
+                Values = values
+            });
+        }
+
         return ValueTask.CompletedTask;
     }
 }

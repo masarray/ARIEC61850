@@ -1,3 +1,4 @@
+using AR.Iec61850.SampledValues.Measurements;
 using AR.Iec61850.SampledValues.Profiles;
 
 namespace AR.Iec61850.SampledValues.Analysis;
@@ -11,11 +12,14 @@ public sealed record SvSustainedObservationResult
 {
     public SvStreamObservationSnapshot Observation { get; init; } = new();
     public SvSustainedStreamSnapshot Sustained { get; init; } = new();
+    public SvSclBoundMeasurementProjection? MeasurementProjection { get; init; }
 }
 
 /// <summary>
 /// Keeps the short-window/profile observation path and sustained analysis on one parsed-frame
-/// intake. It does not parse capture bytes, decode dataset payloads, or infer signal semantics.
+/// intake. It never parses capture bytes or invents payload semantics. When an explicit SCL
+/// publisher profile is supplied, the established SCL payload decoder may project numeric
+/// channels through the evidence-backed measurement path; otherwise payload bytes remain opaque.
 /// Live capture and PCAP replay callers therefore share the same admission and stream-identity
 /// path after successful IEC 61850-9-2 frame parsing.
 /// </summary>
@@ -42,7 +46,8 @@ public sealed class SvSustainedObservationSession
         out SvSustainedObservationResult result,
         SampledValuesPublisherProfile? profile = null,
         double? nominalFrequencyHz = null,
-        SvComparisonMode comparisonMode = SvComparisonMode.Compatible)
+        SvComparisonMode comparisonMode = SvComparisonMode.Compatible,
+        SvStreamMeasurementContext? measurementContext = null)
     {
         ArgumentNullException.ThrowIfNull(frame);
         result = new();
@@ -66,10 +71,19 @@ public sealed class SvSustainedObservationSession
         if (!_sustained.TryObserve(timestamp, frame, out var sustained))
             throw new InvalidOperationException("Sustained SV analysis rejected a frame already accepted by the canonical observation path.");
 
+        var measurementProjection = profile is null
+            ? null
+            : SvSclBoundMeasurementProjector.Project(
+                frame,
+                profile,
+                measurementContext,
+                sustained.Timing.EstimatedSampleRateHz);
+
         result = new SvSustainedObservationResult
         {
             Observation = observation,
-            Sustained = sustained
+            Sustained = sustained,
+            MeasurementProjection = measurementProjection
         };
         return true;
     }

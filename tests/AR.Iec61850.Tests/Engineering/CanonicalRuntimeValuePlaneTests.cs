@@ -170,9 +170,7 @@ public sealed class CanonicalRuntimeValuePlaneTests
         };
 
     private static CanonicalIedModel BuildModel()
-    {
-        var document = BaseDocument();
-        document.LogicalDevices[0].LogicalNodes[0].DataObjects =
+        => CanonicalLiveModelAdapter.FromLiveDiscovery(BuildDocument(
         [
             new LiveIedDataObjectModel
             {
@@ -187,14 +185,10 @@ public sealed class CanonicalRuntimeValuePlaneTests
                     Attribute("IED_ALD0/LLN0.Mod.t", "t", "Timestamp")
                 ]
             }
-        ];
-        return CanonicalLiveModelAdapter.FromLiveDiscovery(document);
-    }
+        ]));
 
     private static CanonicalIedModel BuildWideModel(int signalCount)
-    {
-        var document = BaseDocument();
-        document.LogicalDevices[0].LogicalNodes[0].DataObjects =
+        => CanonicalLiveModelAdapter.FromLiveDiscovery(BuildDocument(
         [
             new LiveIedDataObjectModel
             {
@@ -207,13 +201,11 @@ public sealed class CanonicalRuntimeValuePlaneTests
                         $"IED_ALD0/LLN0.Wide.v{index:D6}",
                         $"v{index:D6}",
                         "INT32"))
-                    .ToList()
+                    .ToArray()
             }
-        ];
-        return CanonicalLiveModelAdapter.FromLiveDiscovery(document);
-    }
+        ]));
 
-    private static LiveIedModelDiscoveryDocument BaseDocument()
+    private static LiveIedModelDiscoveryDocument BuildDocument(IReadOnlyList<LiveIedDataObjectModel> dataObjects)
         => new()
         {
             Source = "LiveMmsDiscovery",
@@ -238,7 +230,8 @@ public sealed class CanonicalRuntimeValuePlaneTests
                         new LiveIedLogicalNodeModel
                         {
                             Name = "LLN0",
-                            LnClass = "LLN0"
+                            LnClass = "LLN0",
+                            DataObjects = dataObjects
                         }
                     ]
                 }

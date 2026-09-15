@@ -50,6 +50,8 @@ public sealed partial class MmsClientSession
     /// URCB Resv=true, RptEna=true, then two whole-RCB verification Reads. BRCB
     /// ResvTms is a retry-only compatibility fallback when direct RptEna is rejected.
     /// No DataSet browsing/creation and no GI are performed unless explicitly requested.
+    /// When explicit GI is requested, GI acceptance is part of startup success so a
+    /// caller cannot report an active initial-image monitor when the GI write was rejected.
     /// </summary>
     public async Task<MmsPersistentReportMonitorStartResult> StartStaticSclReportMonitorAsync(
         MmsReportSubscriptionPlan plan,
@@ -209,8 +211,46 @@ public sealed partial class MmsClientSession
                     MmsDataValue.Boolean(true),
                     cancellationToken).ConfigureAwait(false);
                 writes.Add(gi);
+
                 if (!gi.IsSuccess)
-                    warnings.Add("Explicit GI=true request was not accepted; spontaneous/integrity reporting remains armed.");
+                {
+                    warnings.Add("Explicit GI=true request was rejected; initial-image startup failed closed.");
+                    UnregisterPersistentReportMonitor(monitor);
+
+                    writes.Add(await TryWriteReportAttributeForCleanupAsync(
+                        rcb,
+                        "RptEna",
+                        MmsDataValue.Boolean(false),
+                        CancellationToken.None).ConfigureAwait(false));
+                    enabled = false;
+                    monitor.EnabledByThisClient = false;
+
+                    if (reservationTouched)
+                    {
+                        writes.Add(rcb.Buffered
+                            ? await TryWriteReportAttributeForCleanupAsync(
+                                rcb,
+                                "ResvTms",
+                                MmsDataValue.Unsigned(0),
+                                CancellationToken.None).ConfigureAwait(false)
+                            : await TryWriteReportAttributeForCleanupAsync(
+                                rcb,
+                                "Resv",
+                                MmsDataValue.Boolean(false),
+                                CancellationToken.None).ConfigureAwait(false));
+                        reservationTouched = false;
+                        monitor.ReservationTouched = false;
+                    }
+
+                    return new MmsPersistentReportMonitorStartResult
+                    {
+                        IsSuccess = false,
+                        WriteSteps = writes,
+                        Warnings = warnings,
+                        RcbSnapshots = snapshots,
+                        Message = $"Explicit GI=true was not accepted for {rcb.Reference}; trusted-SCL initial-image monitor was not started."
+                    };
+                }
             }
 
             return new MmsPersistentReportMonitorStartResult
@@ -220,7 +260,9 @@ public sealed partial class MmsClientSession
                 WriteSteps = writes,
                 Warnings = warnings,
                 RcbSnapshots = snapshots,
-                Message = $"Trusted-SCL static report monitor armed for {rcb.Reference}; no DataSet discovery/mutation or implicit GI was performed."
+                Message = triggerGeneralInterrogation
+                    ? $"Trusted-SCL static report monitor armed for {rcb.Reference}; explicit one-shot GI=true was accepted after activation."
+                    : $"Trusted-SCL static report monitor armed for {rcb.Reference}; no DataSet discovery/mutation or GI was performed."
             };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)

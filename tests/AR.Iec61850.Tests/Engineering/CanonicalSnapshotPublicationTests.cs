@@ -60,7 +60,7 @@ public sealed class CanonicalSnapshotPublicationTests
         Assert.Equal(7, result.Generation);
         Assert.Single(result.Rows);
         Assert.True(result.HasMore);
-        Assert.StartsWith("IED_ALD0/LLN0.Mod", result.Rows[0].Reference, StringComparison.Ordinal);
+        Assert.True(result.Rows[0].Reference.StartsWith("IED_ALD0/LLN0.Mod", StringComparison.Ordinal));
         Assert.Equal("ST", result.Rows[0].FunctionalConstraint);
     }
 

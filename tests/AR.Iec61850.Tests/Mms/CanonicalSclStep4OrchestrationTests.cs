@@ -97,8 +97,8 @@ public sealed class CanonicalSclStep4OrchestrationTests
             XDocument.Parse(Scl));
 
         Assert.Equal(CanonicalSclStep4ExecutionStatus.InvalidCanonicalModel, result.Status);
-        Assert.True(result.Message.StartsWith("Canonical SCL import failed:", StringComparison.Ordinal));
-        Assert.True(result.Design.Errors.Any(error => error.Contains("MISSING_AP", StringComparison.Ordinal)));
+        Assert.StartsWith("Canonical SCL import failed:", result.Message);
+        Assert.Contains(result.Design.Errors, error => error.Contains("MISSING_AP", StringComparison.Ordinal));
         Assert.False(result.SessionRemainsOpen);
         Assert.False(session.IsTcpConnected);
     }

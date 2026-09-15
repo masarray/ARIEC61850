@@ -95,10 +95,13 @@ public sealed class MmsSclRcbFamilyResolverTests
         string name)
     {
         var scl = CreateReportControl("Buffer", indexed: true);
-        var live = CreateCandidate(name, $"{domain}/{logicalNode}.{fc}.{name}", logicalNode, fc, buffered: fc == "BR") with
-        {
-            Domain = domain
-        };
+        var live = CreateCandidate(
+            name,
+            $"{domain}/{logicalNode}.{fc}.{name}",
+            logicalNode,
+            fc,
+            buffered: fc == "BR",
+            domain: domain);
 
         var result = MmsSclRcbFamilyResolver.Resolve(scl, [live]);
 
@@ -142,10 +145,11 @@ public sealed class MmsSclRcbFamilyResolverTests
         string reference,
         string logicalNode = "LLN0",
         string fc = "BR",
-        bool buffered = true)
+        bool buffered = true,
+        string domain = "LD0")
         => new()
         {
-            Domain = "LD0",
+            Domain = domain,
             LogicalNode = logicalNode,
             FunctionalConstraint = fc,
             Name = name,

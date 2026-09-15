@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using AR.Iec61850.Ethernet;
+using AR.Iec61850.SampledValues;
 using AR.Iec61850.SampledValues.Analysis;
 using AR.Iec61850.SampledValues.Profiles;
 using AR.Iec61850.Scl;

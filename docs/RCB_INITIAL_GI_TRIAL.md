@@ -5,7 +5,7 @@ It is intentionally evidence-first: use live MMS discovery as the authority for 
 
 ## Current code-gate status
 
-PR #131 code qualification is green on exact head `fb66691d19118001008ee1e87101928067a5bd44` via .NET CI run #569. Source/provenance verification, restore, build, and tests all completed successfully.
+PR #131 code qualification was green on exact head `fb66691d19118001008ee1e87101928067a5bd44` via .NET CI run #569. Source/provenance verification, restore, build, and tests all completed successfully. Documentation-only trial-gate commits after that head must also pass CI before the trial branch is treated as frozen.
 
 The remaining merge blocker is field evidence from an authorized IED trial. Do not merge only because CI is green; verify at least one BRCB and one URCB initial-GI session plus one fail-closed negative case as described below.
 
@@ -137,6 +137,23 @@ At least one negative case should be captured before merge:
 - case-mismatched domain/LN/RCB identity -> no automatic match;
 - intended RCB is already enabled/reserved by another client -> leave it untouched or select another proven-free member of the same family;
 - DataSet member mapping is absent/ambiguous -> do not project report values against an arbitrary DataSet.
+
+## 8. Trial evidence package
+
+After each BRCB/URCB run, keep the entire evidence folder. For the review, record at minimum:
+
+- branch/head SHA used for the trial;
+- IED model/firmware identifier if available;
+- SCL edition/file used;
+- selected concrete RCB reference;
+- DataSet reference and member count;
+- whether `RptEna`, `Resv`/`ResvTms`, and `GI` were observed live;
+- ordered report-control write steps;
+- first mapped InformationReport after GI, including value count;
+- Stop/Close cleanup result;
+- one negative/fail-closed case and its reason.
+
+Do not commit raw proprietary PCAP/SCL captures to the public repository. Preserve them locally and, when a regression fixture is needed, derive project-owned synthetic vectors that contain only the protocol facts required by the test.
 
 ## Merge gate
 

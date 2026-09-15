@@ -14,6 +14,9 @@ public sealed class MmsHardenedReportMonitorReceiveResult
 {
     public MmsPersistentReportMonitorReceiveResult Operation { get; init; } = new();
     public MmsReportLifecycleSnapshot Lifecycle { get; init; } = new();
+    public IReadOnlyList<MmsReportDataSetOrderValidationResult> DataSetOrder { get; init; } = Array.Empty<MmsReportDataSetOrderValidationResult>();
+    public bool HasDataSetOrderViolations => DataSetOrder.Any(x => !x.IsValid);
+    public bool IsSemanticallyValid => !HasDataSetOrderViolations;
 }
 
 public sealed class MmsHardenedReportMonitorStopResult
@@ -87,12 +90,14 @@ public sealed partial class MmsClientSession
             pollInterval,
             triggerGeneralInterrogation,
             cancellationToken).ConfigureAwait(false);
+        var dataSetOrder = MmsReportDataSetOrderValidator.ValidateAll(operation.Reports, session.Plan.Members);
         state.ObserveReceiveResult(operation);
 
         return new MmsHardenedReportMonitorReceiveResult
         {
             Operation = operation,
-            Lifecycle = state.Snapshot()
+            Lifecycle = state.Snapshot(),
+            DataSetOrder = dataSetOrder
         };
     }
 

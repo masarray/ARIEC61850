@@ -27,6 +27,7 @@ public interface ICanonicalRuntimeSource
 public sealed class CanonicalRuntimeSnapshotPublisher : ICanonicalRuntimeSource, IAsyncDisposable
 {
     private readonly LatestOnlyWorker<CanonicalIedModel> _worker;
+    private readonly object _publishSync = new();
     private CanonicalRuntimePublishedSnapshot? _current;
     private long _generation;
 
@@ -46,7 +47,24 @@ public sealed class CanonicalRuntimeSnapshotPublisher : ICanonicalRuntimeSource,
     public bool TryPublish(CanonicalIedModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        return _worker.TryPublish(model);
+
+        // Fail closed while a replacement model generation is being built. Keeping the
+        // previous value plane visible after accepting a new topology allows a fast report
+        // or poll result to bind to stale SignalIds. Once the replacement is queued,
+        // consumers therefore observe either no runtime snapshot or the new generation;
+        // they never observe the superseded generation as an eligible update target.
+        lock (_publishSync)
+        {
+            var previous = Volatile.Read(ref _current);
+            Volatile.Write(ref _current, null);
+            if (_worker.TryPublish(model))
+                return true;
+
+            // Publication was rejected because the worker is stopping. Restore the last
+            // valid generation because no replacement will be produced.
+            Volatile.Write(ref _current, previous);
+            return false;
+        }
     }
 
     public CanonicalRuntimeQueryResult Query(CanonicalSignalQuery? query = null)

@@ -21,14 +21,16 @@ SvSustainedObservationSession
         +--> existing SvStreamObservationManager
         |        `--> profile / SCL comparison
         |
-        `--> SvSustainedStreamAnalyzer
-                 |
-                 +--> bounded stream registry
-                 +--> smpCnt continuity / missing-sample evidence
-                 +--> arrival-rate / jitter / dropout evidence
-                 +--> payload-length stability
-                 +--> smpSynch observations
-                 `--> bounded snapshots for applications / evidence export
+        +--> SvSustainedStreamAnalyzer
+        |        +--> bounded stream registry
+        |        +--> smpCnt continuity / missing-sample evidence
+        |        +--> arrival-rate / jitter / dropout evidence
+        |        +--> payload-length stability
+        |        `--> smpSynch observations
+        |
+        `--> optional explicit SCL profile
+                 `--> existing SampledValuesPayloadDecoder
+                          `--> SvSclBoundMeasurementProjector
 ```
 
 `SvSustainedObservationSession` is deliberately downstream of the existing frame parser. It accepts an already parsed `SampledValuesFrame`, sends the frame through `SvStreamObservationManager` first, and advances sustained state only when that canonical observation path accepts the frame. Live capture and PCAP replay therefore share the same parsed-frame admission and stream-identity path. The session does not add a raw capture parser, a second SV decoder, or a second channel model.
@@ -69,7 +71,15 @@ The analyzer counts observed `smpSynch` values (0, 1, 2, and other values) exact
 
 For a stable stream identity, P3 records the first ASDU payload length and marks the stream when later ASDUs change length. This complements the existing SCL-aware payload decoder and configuration comparer; it does not guess signal semantics from raw word positions.
 
-The observation session intentionally does not turn `SamplePayload` bytes into engineering channels. That remains the responsibility of the existing payload decoder plus explicit SCL/profile/measurement context. Unknown channel identity, scale, ratio, or engineering unit must remain unresolved rather than being inferred from word position.
+When no explicit `SampledValuesPublisherProfile` is supplied, `SamplePayload` remains opaque to the observation session. When a profile is supplied, `SvSclBoundMeasurementProjector` reuses that profile's existing `SampledValuesPayloadLayout` and `SampledValuesPayloadDecoder`; it does not infer a new layout from packet shape.
+
+## Evidence-backed channel projection
+
+`SvSclBoundMeasurementProjector` provides the conservative bridge from an explicitly bound SCL publisher profile into numeric channel samples. Before decoding it requires exact APPID, destination MAC, VLAN, `svID`, DataSet reference, and `confRev` compatibility. Unsupported SCL layout elements or a payload-length mismatch fail closed rather than shifting offsets and continuing with guessed semantics.
+
+Numeric values always retain their decoded raw value. Engineering values are emitted only when the existing `SvEngineeringScaleResolver` has sufficient SCL-backed evidence. The currently supported installed-base scaling rule additionally requires the exact fixed eight-value/eight-quality, 64-byte layout, four SCL-derived current channels, four SCL-derived voltage channels, and protection-rate evidence. Other valid SCL layouts remain raw-only until a separate explicit scale rule exists.
+
+CT/VT conversion is also explicit. An optional `SvStreamMeasurementContext` is accepted only when its validated stream key and optional `svID` match the observed stream. Primary/secondary-equivalent values are then produced through `SvMeasurementDomainResolver`; a missing, invalid, or mismatched context never causes a ratio to be guessed.
 
 ## RMS and phasor primitive
 
@@ -98,11 +108,15 @@ Synthetic tests cover:
 - RMS/fundamental phasor accuracy for a deterministic sine wave;
 - one-ingress coordination of observation and sustained snapshots;
 - equivalent sustained metrics for equivalent live-capture and PCAP-replay parsed frames;
-- fail-closed behavior when the canonical observation path rejects an empty-payload frame; and
-- a 10,000-frame synthetic ingestion regression that keeps the sustained registry at its configured stream bound.
+- fail-closed behavior when the canonical observation path rejects an empty-payload frame;
+- a 10,000-frame synthetic ingestion regression that keeps the sustained registry at its configured stream bound;
+- fixed SCL-bound current/voltage projection using the existing payload decoder;
+- explicit primary-to-secondary CT/VT display conversion;
+- raw-only preservation for SCL layouts without an approved engineering-scale rule; and
+- fail-closed APPID and `confRev` mismatch handling before payload projection.
 
 These are unit-test and synthetic-fixture claims only. This phase does not claim production timing accuracy, formal conformance, universal device interoperability, or operational-substation validation.
 
 ## Remaining P3 work
 
-The roadmap priority is not complete. Follow-up work should connect application live-capture and PCAP replay byte sources to the established parser plus `SvSustainedObservationSession`, project explicitly SCL-bound and engineering-scaled channel windows through the existing payload decoder into the RMS/phasor primitive, add sanitized real/replay validation fixtures and longer soak evidence, and expose evidence/export contracts without retaining customer or live-network identifiers.
+The roadmap priority is not complete. Follow-up work should add bounded per-channel engineering windows that feed `SvSignalWindowAnalyzer` only from successfully scaled projections, connect application live-capture and PCAP replay byte sources to the established parser plus `SvSustainedObservationSession`, add sanitized real/replay validation fixtures and longer soak evidence, and expose evidence/export contracts without retaining customer or live-network identifiers.

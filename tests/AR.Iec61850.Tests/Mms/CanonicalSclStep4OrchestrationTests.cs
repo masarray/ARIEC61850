@@ -81,4 +81,24 @@ public sealed class CanonicalSclStep4OrchestrationTests
         Assert.False(result.SessionRemainsOpen);
         Assert.False(session.IsTcpConnected);
     }
+
+    [Fact]
+    public async Task Scl_Document_Entrypoint_Uses_Canonical_Import_And_Fails_Closed_Before_Network()
+    {
+        await using var session = new MmsClientSession();
+        var result = await session.ConnectAndExecuteSclAssistedStep4Async(
+            new SclAssistedMmsAssociationPlan
+            {
+                IedName = "IED01",
+                AccessPointName = "MISSING_AP",
+                Host = "192.0.2.99",
+                Port = 102
+            },
+            XDocument.Parse(Scl));
+
+        Assert.Equal(CanonicalSclStep4ExecutionStatus.InvalidCanonicalModel, result.Status);
+        Assert.Contains("AccessPoint", result.Message, StringComparison.Ordinal);
+        Assert.False(result.SessionRemainsOpen);
+        Assert.False(session.IsTcpConnected);
+    }
 }

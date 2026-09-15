@@ -6,7 +6,7 @@ namespace AR.Iec61850.Tests.Mms;
 public sealed class MmsSclRcbFamilyResolverTests
 {
     [Fact]
-    public void Resolve_PrefersExactLiveInstance()
+    public void Resolve_IndexedControlKeepsExactAndConcreteIndexedSiblings()
     {
         var scl = CreateReportControl("Buffer", indexed: true);
         var live = new[]
@@ -18,9 +18,10 @@ public sealed class MmsSclRcbFamilyResolverTests
         var result = MmsSclRcbFamilyResolver.Resolve(scl, live);
 
         Assert.True(result.IsSuccess);
-        Assert.True(result.IsExact);
-        Assert.Single(result.Candidates);
-        Assert.Equal("LD0/LLN0.BR.Buffer", result.Candidates[0].Reference);
+        Assert.Equal(MmsSclRcbFamilyResolutionKind.IndexedFamily, result.Kind);
+        Assert.Equal(2, result.Candidates.Count);
+        Assert.Contains(result.Candidates, candidate => candidate.Reference == "LD0/LLN0.BR.Buffer");
+        Assert.Contains(result.Candidates, candidate => candidate.Reference == "LD0/LLN0.BR.Buffer01");
     }
 
     [Theory]
@@ -78,6 +79,28 @@ public sealed class MmsSclRcbFamilyResolverTests
         };
 
         var result = MmsSclRcbFamilyResolver.Resolve(scl, live);
+
+        Assert.False(result.IsSuccess);
+    }
+
+    [Theory]
+    [InlineData("ld0", "LLN0", "BR", "Buffer01")]
+    [InlineData("LD0", "lln0", "BR", "Buffer01")]
+    [InlineData("LD0", "LLN0", "br", "Buffer01")]
+    [InlineData("LD0", "LLN0", "BR", "buffer01")]
+    public void Resolve_IsCaseSensitiveForCanonicalObjectIdentity(
+        string domain,
+        string logicalNode,
+        string fc,
+        string name)
+    {
+        var scl = CreateReportControl("Buffer", indexed: true);
+        var live = CreateCandidate(name, $"{domain}/{logicalNode}.{fc}.{name}", logicalNode, fc, buffered: fc == "BR") with
+        {
+            Domain = domain
+        };
+
+        var result = MmsSclRcbFamilyResolver.Resolve(scl, [live]);
 
         Assert.False(result.IsSuccess);
     }

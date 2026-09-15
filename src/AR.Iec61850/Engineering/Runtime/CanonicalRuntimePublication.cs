@@ -77,6 +77,22 @@ public sealed class CanonicalRuntimeSnapshotPublisher : ICanonicalRuntimeSource,
         }
     }
 
+    /// <summary>
+    /// Invalidates the currently published runtime generation and every already accepted
+    /// in-flight publication request. This is used by application consumers when their
+    /// active IED/SCL model is unloaded so a stale value plane cannot remain queryable or
+    /// exportable after the presentation model has been cleared.
+    /// </summary>
+    public void Clear()
+    {
+        lock (_publishSync)
+        {
+            var requestVersion = Volatile.Read(ref _latestAcceptedRequestVersion) + 1;
+            Volatile.Write(ref _latestAcceptedRequestVersion, requestVersion);
+            Volatile.Write(ref _current, null);
+        }
+    }
+
     public CanonicalRuntimeQueryResult Query(CanonicalSignalQuery? query = null)
     {
         var current = Current;

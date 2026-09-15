@@ -32,6 +32,30 @@ public sealed class MmsLocalAssociationProfile
             NestingLevel = 5
         }
     };
+
+    /// <summary>
+    /// Primary local identity for a trusted-SCL association. The called-side identity
+    /// still comes exclusively from SCL. This calling-side profile reproduces the
+    /// interoperable wire contract observed for SCL-assisted IEC 61850 clients while
+    /// keeping the older runtime identity available as an explicit compatibility lane.
+    /// </summary>
+    public static MmsLocalAssociationProfile SclInteroperabilityDefault { get; } = new()
+    {
+        Name = "SclInteroperabilityDefault",
+        TransportSelector = [0x00, 0x00],
+        SessionSelector = [0x00, 0x01],
+        PresentationSelector = [0x00, 0x00, 0x00, 0x01],
+        ApTitle = [1, 1, 1, 999],
+        AeQualifier = 23,
+        TpduSizeExponent = 0x0A,
+        Initiate = new MmsInitiateRequestParameters
+        {
+            LocalDetailCalling = 65000,
+            MaxOutstandingCalling = 10,
+            MaxOutstandingCalled = 10,
+            NestingLevel = 5
+        }
+    };
 }
 
 public sealed class SclAssistedMmsAssociationPlan

@@ -97,7 +97,7 @@ public sealed class CanonicalSclStep4OrchestrationTests
             XDocument.Parse(Scl));
 
         Assert.Equal(CanonicalSclStep4ExecutionStatus.InvalidCanonicalModel, result.Status);
-        Assert.Contains("AccessPoint", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Message.Contains("AccessPoint", StringComparison.Ordinal));
         Assert.False(result.SessionRemainsOpen);
         Assert.False(session.IsTcpConnected);
     }

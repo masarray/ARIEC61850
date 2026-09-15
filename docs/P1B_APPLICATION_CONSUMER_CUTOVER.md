@@ -36,8 +36,6 @@ CanonicalRuntimeSnapshotPublisher
 
 A newly accepted model publication invalidates the previously visible runtime generation immediately. A versioned publication request prevents an older model that was already being indexed from becoming visible after a newer model has been accepted. During replacement, producers therefore see either no runtime source or the newest published generation; they never bind new values to a superseded `SignalId` table.
 
-Unloading or clearing the active application model calls `CanonicalRuntimeSnapshotPublisher.Clear()`. Clear invalidates both the visible generation and every already accepted in-flight publication request, so values from the previous IED cannot remain queryable or exportable after the application shows no loaded model. A later discovery/open operation publishes a fresh generation with an empty value plane.
-
 ## Producer cutover
 
 The IED Discovery application routes these live sources through canonical runtime adapters before presentation changes:
@@ -85,7 +83,10 @@ P1B adds regression coverage for:
 - hard monitor-selection bounds;
 - successful persistent-monitor fallback poll routing;
 - preservation of the last good value after failed poll evidence;
-- fail-closed model-generation replacement so superseded runtime planes cannot accept new updates; and
-- explicit unload invalidation so a cleared application cannot expose a stale or late-published runtime generation.
+- fail-closed model-generation replacement so superseded runtime planes cannot accept new updates;
+- explicit runtime invalidation when the active application model is cleared; and
+- in-flight publication invalidation so an unloaded model cannot reappear after background compaction completes.
 
 These tests complement the P1 one-million-signal runtime-plane allocation guard and the existing bounded latest-only publication tests.
+
+The exact final P1B head passed the repository Windows `.NET CI` before this phase was closed for stacking. The next phase is reporting hardening and is developed separately so application live-value ownership remains reviewable as one bounded change.

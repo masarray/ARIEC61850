@@ -104,16 +104,16 @@
         <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="#C5D0DD" BorderThickness="0,0,0,1">
             <DockPanel LastChildFill="False" Margin="8,6">
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <Button Style="{StaticResource ToolbarButton}" Click="OpenScl_Click">
+                    <Button Style="{StaticResource ToolbarButton}" Click="SclAwareOpenScl_Click">
                         <StackPanel><TextBlock Text="📂" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Open SCL"/></StackPanel>
                     </Button>
                     <Button Style="{StaticResource ToolbarButton}" Click="SaveScl_Click" IsEnabled="{Binding CanExport}">
                         <StackPanel><TextBlock Text="💾" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Save SCL"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource ToolbarButton}" Click="Discover_Click">
+                    <Button Style="{StaticResource ToolbarButton}" Click="SclAwareDiscover_Click">
                         <StackPanel><TextBlock Text="🔎" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Discover"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource ToolbarButton}" Click="CloseIed_Click" IsEnabled="{Binding CanClose}">
+                    <Button Style="{StaticResource ToolbarButton}" Click="SclAwareCloseIed_Click" IsEnabled="{Binding CanClose}">
                         <StackPanel><TextBlock Text="✕" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Close IED"/></StackPanel>
                     </Button>
                 </StackPanel>
@@ -128,7 +128,7 @@
                     <Button Style="{StaticResource ToolbarButton}" Click="ReadAll_Click" IsEnabled="{Binding CanReadAll}">
                         <StackPanel><TextBlock Text="📚" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="Read all"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource ToolbarButton}" Click="EnableRcb_Click" IsEnabled="{Binding CanEnableReport}">
+                    <Button Style="{StaticResource ToolbarButton}" Click="SclAwareEnableRcb_Click" IsEnabled="{Binding CanEnableReport}">
                         <StackPanel><TextBlock Text="☊" FontSize="19" HorizontalAlignment="Center"/><TextBlock Style="{StaticResource ToolbarText}" Text="{Binding EnableRcbLabel}"/></StackPanel>
                     </Button>
                     <Button Style="{StaticResource ToolbarButton}" Click="Control_Click" IsEnabled="{Binding CanControl}">
@@ -177,7 +177,6 @@
                     <TreeView Grid.Row="2" ItemsSource="{Binding ExplorerNodes}" SelectedItemChanged="ExplorerTree_SelectedItemChanged" Background="Transparent" BorderThickness="0" Foreground="White" Margin="8,0,4,8" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" />
                 </Grid>
             </Border>
-
             <GridSplitter Grid.Column="1" Width="4" Background="#9AA7B6" HorizontalAlignment="Stretch" />
 
             <Grid Grid.Column="2" Background="#F8FAFC">

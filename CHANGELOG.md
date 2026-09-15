@@ -6,6 +6,11 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Added
 
+- Added live-authoritative SCL ReportControl family reconciliation for static reporting: indexed declarative controls are matched only to concrete live MMS RCB instances in the same domain/logical-node/report-FC with decimal instance suffixes, while non-indexed controls remain exact-name only and no runtime RCB name is synthesized.
+- Added an SCL-aware static report planner that scopes the existing safe RCB selector to the reconciled live family, allowing a busy first instance to fall through to another proven-free instance without escaping to an unrelated control block.
+- Added registered-monitor initial GI bootstrap for persistent reporting: the monitor is installed before the one-shot GI request, initial mapped DataSet reports are returned explicitly, and GI is attempted only when the live RCB attribute inventory proves the field exists.
+- Added synthetic Edition 1 / Edition 2 static-report family regressions modeled from field evidence, including BRCB `Buffer`, URCB `Unbuffer`, indexed live siblings, explicit URCB reservation planning, and fail-closed behavior when no concrete live family instance exists.
+- Added a field-trial gate for BRCB/URCB initial-GI qualification, same-family contention, cleanup, and negative/fail-closed cases.
 - Added the shared Step-4 initial FC-root Read path for both live-discovery and SCL-assisted workflows: ordered `LN$FC` targets are batched at no more than 10 MMS variables per Confirmed-Read, executed strictly one request at a time, decoded as ordered per-target AccessResults, and projected back to SCL leaves only when nested structure cardinality is exact.
 - Added opt-in SCL-assisted live MMS association and domain-only validation: an exact typed COTP/ACSE plan can now open one MMS association, query only `GetNameList(Domain,VMD)`, reconcile expected SCL logical-device domains against live evidence, preserve extra online domains diagnostically, and keep full discovery/write/control/report behavior out of this path.
 - Added typed, side-effect-free SCL-assisted MMS association planning: ConnectedAP addressing can now be converted into parameterized COTP and ISO Session/Presentation/ACSE/MMS Initiate request bytes with explicit local/calling identity, fail-closed remote/called validation, and golden-byte compatibility coverage; live runtime selection remains a later step.
@@ -16,6 +21,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Changed
 
+- Defined the preferred interactive-client report startup as live RCB/DataSet discovery -> SCL-family reconciliation -> safe concrete RCB selection -> `RptEna=true` -> persistent routing registration -> one-shot GI -> initial DataSet values -> event-driven monitoring.
 - Native MMS discovery can now carry bounded, ordered DataSet-directory results in its typed result, allowing live-model, engineering-profile, and readiness builders to consume the same member evidence without application-side reconstruction.
 - Hybrid dynamic reporting can host a temporary DataSet in a verified-free RCB Logical Device while its members reference live points in other Logical Devices, matching the MMS named-variable-list model used by Siemens auxiliary RCB pools.
 - Production automatic dynamic planning remains P6.2-B quarantined for callers without a valid production context; even when authorized, the first G2.6 consumer is limited to the exact report-proven RCB, report-proven members, one dynamic group, and fresh live availability.
@@ -31,6 +37,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Fixed
 
+- Closed the persistent-monitor GI startup race in the new bootstrap path: a fast IED can no longer deliver the initial GI InformationReport before the target persistent monitor has been registered for routing.
 - Hardened the SCL-assisted Step-3 runtime so the configured timeout bounds TCP/COTP/ACSE/MMS plus Domain/VMD inventory, MMS domain identifiers are reconciled case-sensitively, and malformed SCL returns typed validation evidence instead of leaking XML parser exceptions.
 - Live-model discovery no longer drops DataSet members when callers request DataSet-directory reads through `MmsClientSession.DiscoverAsync`.
 - Dynamic hybrid planning no longer rejects a verified-free RCB solely because the RCB and requested signal belong to different MMS domains.

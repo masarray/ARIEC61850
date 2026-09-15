@@ -152,28 +152,22 @@ public static class CanonicalRuntimeIngressPublication
         ArgumentNullException.ThrowIfNull(discovery);
 
         // Application readiness checks may run while a large canonical model is still
-        // being compacted/indexed. Re-projecting the exact same discovery object on every
-        // timer tick would continuously supersede that in-flight publication and could
-        // starve a very large model. Coalesce only when this same discovery object still
-        // corresponds to the publisher's latest accepted request; a direct/new publish
-        // advances the request version and therefore cannot be hidden by stale ingress state.
+        // being compacted/indexed. Re-projecting the exact same discovery object would
+        // supersede the in-flight request and could starve a very large model. Treat the
+        // same discovery object as idempotent while it still corresponds to the latest
+        // accepted publication request, whether that request is pending or already visible.
+        // Any direct/new publish advances the publisher request version and invalidates this
+        // coalescing token, so stale ingress state can never hide a real replacement.
         var pending = LiveIngressPending.GetOrCreateValue(publisher);
         lock (pending.Sync)
         {
-            if (publisher.Current is null &&
-                pending.RequestVersion == publisher.LatestAcceptedRequestVersion &&
+            if (pending.RequestVersion == publisher.LatestAcceptedRequestVersion &&
                 pending.RequestVersion != 0 &&
                 pending.Document is not null &&
                 pending.Document.TryGetTarget(out var existing) &&
                 ReferenceEquals(existing, discovery))
             {
                 return true;
-            }
-
-            if (publisher.Current is not null)
-            {
-                pending.Document = null;
-                pending.RequestVersion = 0;
             }
 
             pending.Document = new WeakReference<LiveIedModelDiscoveryDocument>(discovery);

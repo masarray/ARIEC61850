@@ -78,6 +78,24 @@ public sealed class CanonicalRuntimePublicationTests
     }
 
     [Fact]
+    public async Task Repeated_Same_Live_Discovery_Ingress_Is_Idempotent_For_Its_Accepted_Request()
+    {
+        var source = BuildDocument();
+        await using var publisher = new CanonicalRuntimeSnapshotPublisher();
+
+        Assert.True(CanonicalRuntimeIngressPublication.TryPublishLiveDiscovery(publisher, source));
+        var first = await WaitForGenerationAsync(publisher, 1);
+        var publishedBefore = publisher.Statistics.Published;
+
+        Assert.True(CanonicalRuntimeIngressPublication.TryPublishLiveDiscovery(publisher, source));
+        await Task.Delay(50);
+
+        Assert.Same(first, publisher.Current);
+        Assert.Equal(publishedBefore, publisher.Statistics.Published);
+        Assert.Equal(1, publisher.Current?.ModelGeneration);
+    }
+
+    [Fact]
     public async Task Live_Ingress_Publishes_Only_Canonical_Model_And_Runtime_Consumer_Page()
     {
         var source = BuildDocument();

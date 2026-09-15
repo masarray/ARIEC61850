@@ -87,7 +87,11 @@ public static class SclMmsAssociationProfileReader
                     },
                     Association = new SclIsoAssociationAddress
                     {
-                        ApTitle = Get("OSI-AP-Title"),
+                        // Some Edition-1/vendor exports serialize the OID as a quoted
+                        // lexical literal (for example "1,1,1,999,1"). Preserve the raw
+                        // parameter in Parameters, but normalize the typed projection so
+                        // the ASN.1 OID parser sees the actual arcs rather than quote bytes.
+                        ApTitle = NormalizeApTitleLiteral(Get("OSI-AP-Title")),
                         AeQualifierText = aeQualifierText,
                         AeQualifier = aeQualifier,
                         PresentationSelector = Get("OSI-PSEL"),
@@ -154,6 +158,19 @@ public static class SclMmsAssociationProfileReader
         }
 
         return result;
+    }
+
+    private static string NormalizeApTitleLiteral(string value)
+    {
+        var trimmed = (value ?? string.Empty).Trim();
+        if (trimmed.Length >= 2 &&
+            ((trimmed[0] == '"' && trimmed[^1] == '"') ||
+             (trimmed[0] == '\'' && trimmed[^1] == '\'')))
+        {
+            return trimmed[1..^1].Trim();
+        }
+
+        return trimmed;
     }
 
     private static string Describe(string iedName, string accessPointName)

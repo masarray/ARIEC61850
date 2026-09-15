@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows.Threading;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Scl;
 
@@ -7,17 +8,25 @@ namespace AR.Iec61850.IedDiscovery;
 public partial class MainWindow
 {
     private readonly List<MmsPersistentReportMonitorSession> _sclAutoReportMonitors = new();
+    private string? _sclConnectionContextPath;
+    private DispatcherTimer? _sclAutoReportTimer;
+    private bool _sclAutoReceiveInProgress;
+    private bool _sclAutoWindowCloseReentry;
 
     private async Task TryStartSclAutoReportingAsync()
     {
+        var sclPath = !string.IsNullOrWhiteSpace(_sclConnectionContextPath)
+            ? _sclConnectionContextPath
+            : _openedSclPath;
+
         if (_activeSession == null || _lastDiscovery == null || !_viewModel.IsConnected ||
-            string.IsNullOrWhiteSpace(_openedSclPath) || !File.Exists(_openedSclPath))
+            string.IsNullOrWhiteSpace(sclPath) || !File.Exists(sclPath) || _sclAutoReportMonitors.Count > 0)
             return;
 
         SclDocument scl;
         try
         {
-            scl = new SclParser().Load(_openedSclPath);
+            scl = new SclParser().Load(sclPath);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
@@ -83,6 +92,9 @@ public partial class MainWindow
                     $"{selected}: GI-capability={bootstrap.GiCapabilityObserved}, GI-attempted={bootstrap.GiAttempted}, GI-success={bootstrap.GiSucceeded}, initial-reports={bootstrap.InitialReports.Count}.");
             }
 
+            // Project frames in receive order. Buffered history is therefore
+            // naturally collapsed by MonitorSignalRow to the latest value per
+            // DataSet member rather than exposed as competing initial snapshots.
             foreach (var report in item.InitialReports)
                 ApplyReportFrameToMonitor(report);
         }
@@ -91,6 +103,14 @@ public partial class MainWindow
         {
             if (_sclAutoReportMonitors.All(existing => !ReferenceEquals(existing, session)))
                 _sclAutoReportMonitors.Add(session);
+        }
+
+        if (_sclAutoReportMonitors.Count > 0)
+        {
+            // The legacy activity timer polls when it owns no single RCB session.
+            // Automatic SCL mode has its own multi-RCB event receiver below, so
+            // keep that legacy polling path gated for the lifetime of the group.
+            _monitorPollInProgress = true;
         }
 
         _viewModel.IsReportMonitorActive = _sclAutoReportMonitors.Count > 0 || _activeReportMonitor is { IsStopped: false };
@@ -146,6 +166,7 @@ public partial class MainWindow
         if (_activeSession == null || _sclAutoReportMonitors.Count == 0)
         {
             _sclAutoReportMonitors.Clear();
+            _monitorPollInProgress = false;
             _viewModel.IsReportMonitorActive = _activeReportMonitor is { IsStopped: false };
             return;
         }
@@ -170,6 +191,7 @@ public partial class MainWindow
         }
 
         _sclAutoReportMonitors.Clear();
+        _monitorPollInProgress = false;
         _viewModel.IsReportMonitorActive = _activeReportMonitor is { IsStopped: false };
     }
 
@@ -185,14 +207,15 @@ public partial class MainWindow
         _sclAutoReportMonitors.RemoveAll(monitor => monitor.IsStopped);
         if (_sclAutoReportMonitors.Count == 0)
         {
+            _monitorPollInProgress = false;
             _viewModel.IsReportMonitorActive = _activeReportMonitor is { IsStopped: false };
             return false;
         }
 
-        if (_reportReceiveInProgress)
+        if (_sclAutoReceiveInProgress)
             return true;
 
-        _reportReceiveInProgress = true;
+        _sclAutoReceiveInProgress = true;
         try
         {
             var received = 0;
@@ -226,10 +249,12 @@ public partial class MainWindow
         }
         finally
         {
-            _reportReceiveInProgress = false;
+            _sclAutoReceiveInProgress = false;
         }
 
         _sclAutoReportMonitors.RemoveAll(monitor => monitor.IsStopped);
+        if (_sclAutoReportMonitors.Count == 0)
+            _monitorPollInProgress = false;
         _viewModel.IsReportMonitorActive = _sclAutoReportMonitors.Count > 0 || _activeReportMonitor is { IsStopped: false };
         return _sclAutoReportMonitors.Count > 0;
     }

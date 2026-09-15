@@ -6,11 +6,11 @@ namespace AR.Iec61850.Tests.Scl;
 public sealed class SclStaticReportFamilyEvidenceTests
 {
     [Theory]
-    [InlineData("http://www.iec.ch/61850/2003/SCL")]
+    [InlineData("http://www.iec.ch/61850/2003/SCL", false)]
     [InlineData("http://www.iec.ch/61850/2003/SCL", true)]
     public void Parser_KeepsDeclarativeRcbBaseNames_WhileLiveResolverUsesConcreteInstances(
         string sclNamespace,
-        bool edition2Shape = false)
+        bool edition2Shape)
     {
         var document = new SclParser().Parse(BuildScl(sclNamespace, edition2Shape), edition2Shape ? "synthetic-ed2.iid" : "synthetic-ed1.icd");
 
@@ -34,9 +34,9 @@ public sealed class SclStaticReportFamilyEvidenceTests
         var urcbResolution = MmsSclRcbFamilyResolver.Resolve(urcb, live);
 
         Assert.Equal(2, brcbResolution.Candidates.Count);
-        Assert.All(brcbResolution.Candidates, candidate => Assert.StartsWith("Buffer", candidate.Name, StringComparison.Ordinal));
+        Assert.All(brcbResolution.Candidates, candidate => Assert.StartsWith("Buffer", candidate.Name));
         Assert.Equal(2, urcbResolution.Candidates.Count);
-        Assert.All(urcbResolution.Candidates, candidate => Assert.StartsWith("Unbuffer", candidate.Name, StringComparison.Ordinal));
+        Assert.All(urcbResolution.Candidates, candidate => Assert.StartsWith("Unbuffer", candidate.Name));
         Assert.DoesNotContain(brcbResolution.Candidates, candidate => candidate.Name == "Buffer");
         Assert.DoesNotContain(urcbResolution.Candidates, candidate => candidate.Name == "Unbuffer");
     }

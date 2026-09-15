@@ -45,6 +45,39 @@ public sealed class CanonicalRuntimePublicationTests
     }
 
     [Fact]
+    public async Task Accepted_Model_Replacement_Never_Leaves_Superseded_Runtime_Generation_Eligible_For_Update()
+    {
+        var model = BuildModel();
+        await using var publisher = new CanonicalRuntimeSnapshotPublisher();
+
+        Assert.True(publisher.TryPublish(model));
+        var first = await WaitForGenerationAsync(publisher, 1);
+        Assert.True(first.Values.Apply(new CanonicalRuntimeValueUpdate
+        {
+            Reference = "IED_ALD0/LLN0.Mod.stVal",
+            FunctionalConstraint = "ST",
+            Value = "old-generation",
+            Source = "poll",
+            HasValue = true
+        }).IsApplied);
+
+        Assert.True(publisher.TryPublish(model));
+        var immediatelyVisible = publisher.Current;
+
+        Assert.True(
+            immediatelyVisible is null || immediatelyVisible.ModelGeneration > first.ModelGeneration,
+            "After a replacement is accepted, consumers must observe either no runtime source or the replacement generation, never the superseded value plane.");
+
+        var second = await WaitForGenerationAsync(publisher, 2);
+        Assert.False(Assert.Single(second.Values.Query(new CanonicalSignalQuery
+        {
+            ReferencePrefix = "IED_ALD0/LLN0.Mod.stVal",
+            FunctionalConstraint = "ST",
+            Limit = 1
+        }).Rows).HasValue);
+    }
+
+    [Fact]
     public async Task Live_Ingress_Publishes_Only_Canonical_Model_And_Runtime_Consumer_Page()
     {
         var source = BuildDocument();

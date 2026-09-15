@@ -44,7 +44,7 @@ public sealed partial class MmsClientSession
     /// <summary>
     /// Starts the SCL-declared static report families that can be reconciled to
     /// concrete live MMS RCB instances. The method is intended for application
-    /// Connect flows that need an IEDScout-like initial state without polling:
+    /// Connect flows that need initial report-backed state without polling:
     /// reconcile -> refresh runtime state -> resolve DataSets -> reserve/enable
     /// -> register report routing -> one-shot GI -> initial values.
     ///

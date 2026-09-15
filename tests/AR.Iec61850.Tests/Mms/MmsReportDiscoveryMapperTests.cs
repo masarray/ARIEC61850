@@ -15,6 +15,7 @@ public class MmsReportDiscoveryMapperTests
                 [
                     "LLN0$BR$brcbA01$RptID",
                     "LLN0$BR$brcbA01$DatSet",
+                    "LLN0$BR$brcbA01$GI",
                     "LLN0$RP$urcbA01$RptID"
                 ]
             },
@@ -37,5 +38,28 @@ public class MmsReportDiscoveryMapperTests
         Assert.Empty(brcb.DataSetReference);
         Assert.Contains("RptID", brcb.Attributes);
         Assert.Contains("DatSet", brcb.Attributes);
+        Assert.Contains("GI", brcb.Attributes);
+    }
+
+    [Fact]
+    public void BuildInventory_DoesNotInventGiWhenLiveDirectoryDoesNotExposeIt()
+    {
+        var snapshot = new MmsDiscoverySnapshot
+        {
+            DomainVariables = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["IED1LD0"] =
+                [
+                    "LLN0$BR$brcbA01$RptID",
+                    "LLN0$BR$brcbA01$RptEna",
+                    "LLN0$BR$brcbA01$DatSet"
+                ]
+            }
+        };
+
+        var inventory = MmsReportDiscoveryMapper.BuildInventory(snapshot);
+        var brcb = Assert.Single(inventory.ReportControls);
+
+        Assert.DoesNotContain("GI", brcb.Attributes);
     }
 }

@@ -3,6 +3,14 @@
 This gate validates the interactive-client startup contract before PR #131 is merged.
 It is intentionally evidence-first: use live MMS discovery as the authority for concrete RCB instance names and use SCL only as declarative context.
 
+## Current code-gate status
+
+PR #131 code qualification is green on exact head `fb66691d19118001008ee1e87101928067a5bd44` via .NET CI run #569. Source/provenance verification, restore, build, and tests all completed successfully.
+
+The remaining merge blocker is field evidence from an authorized IED trial. Do not merge only because CI is green; verify at least one BRCB and one URCB initial-GI session plus one fail-closed negative case as described below.
+
+`RptEnabled@max` preservation remains a P1 diagnostics improvement. It is intentionally outside this merge-critical change because live MMS discovery is the authority for concrete online RCB instances. Future preservation of that SCL metadata must not be used to synthesize runtime names such as `Buffer01` or `Buffer02`.
+
 ## Target startup contract
 
 ```text

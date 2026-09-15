@@ -518,7 +518,7 @@ public partial class MainWindow
     private static string FindButtonLabel(Button button)
         => FindVisualChildren<TextBlock>(button)
             .Select(text => text.Text)
-            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text)) ?? string.Empty;
+            .LastOrDefault(text => !string.IsNullOrWhiteSpace(text)) ?? string.Empty;
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
     {

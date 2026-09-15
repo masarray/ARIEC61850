@@ -93,7 +93,15 @@ public static class MmsBufferedReportReconnectPlanner
     }
 
     private static string NormalizeHex(string? value)
-        => new((value ?? string.Empty).Where(Uri.IsHexDigit).Select(char.ToUpperInvariant).ToArray());
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            text = text[2..];
+        return text.Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace(":", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .ToUpperInvariant();
+    }
 
     private static bool TryDecodeHex(string hex, out byte[] bytes)
     {

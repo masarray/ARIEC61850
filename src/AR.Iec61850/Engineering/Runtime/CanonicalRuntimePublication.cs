@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Engineering.Canonical;
@@ -133,13 +134,46 @@ public sealed class CanonicalRuntimeSnapshotPublisher : ICanonicalRuntimeSource,
 /// </summary>
 public static class CanonicalRuntimeIngressPublication
 {
+    private sealed class LiveIngressPendingState
+    {
+        public object Sync { get; } = new();
+        public WeakReference<LiveIedModelDiscoveryDocument>? Document { get; set; }
+    }
+
+    private static readonly ConditionalWeakTable<CanonicalRuntimeSnapshotPublisher, LiveIngressPendingState> LiveIngressPending = new();
+
     public static bool TryPublishLiveDiscovery(
         CanonicalRuntimeSnapshotPublisher publisher,
         LiveIedModelDiscoveryDocument discovery)
     {
         ArgumentNullException.ThrowIfNull(publisher);
         ArgumentNullException.ThrowIfNull(discovery);
-        return publisher.TryPublish(CanonicalLiveModelAdapter.FromLiveDiscovery(discovery));
+
+        // Application readiness checks may run while a large canonical model is still
+        // being compacted/indexed. Re-projecting the exact same discovery object on every
+        // timer tick would continuously supersede that in-flight publication and could
+        // starve a very large model. Coalesce only the same discovery object while Current
+        // is intentionally null; a different discovery object is always a real replacement.
+        var pending = LiveIngressPending.GetOrCreateValue(publisher);
+        lock (pending.Sync)
+        {
+            if (publisher.Current is null &&
+                pending.Document is not null &&
+                pending.Document.TryGetTarget(out var existing) &&
+                ReferenceEquals(existing, discovery))
+            {
+                return true;
+            }
+
+            if (publisher.Current is not null)
+                pending.Document = null;
+
+            pending.Document = new WeakReference<LiveIedModelDiscoveryDocument>(discovery);
+            var accepted = publisher.TryPublish(CanonicalLiveModelAdapter.FromLiveDiscovery(discovery));
+            if (!accepted)
+                pending.Document = null;
+            return accepted;
+        }
     }
 
     public static bool TryPublishScl(

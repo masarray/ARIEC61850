@@ -158,7 +158,7 @@ public static class CanonicalRuntimeIngressPublication
         // accepted publication request, whether that request is pending or already visible.
         // Any direct/new publish advances the publisher request version and invalidates this
         // coalescing token, so stale ingress state can never hide a real replacement.
-        var pending = LiveIngressPending.GetOrCreateValue(publisher);
+        var pending = LiveIngressPending.GetValue(publisher, static _ => new LiveIngressPendingState());
         lock (pending.Sync)
         {
             if (pending.RequestVersion == publisher.LatestAcceptedRequestVersion &&

@@ -132,13 +132,19 @@ At least one negative case should be captured before merge:
 
 ## Merge gate
 
-PR #131 is a merge candidate only when:
+The code side of PR #131 is merge-candidate quality when:
 
 - .NET CI is green on the exact PR head;
 - synthetic Ed.1/Ed.2 family-resolution regressions are green;
+- BRCB and URCB family-planning regressions are green;
 - live GI capability discovery regressions are green;
+- no runtime RCB instance is synthesized from SCL metadata.
+
+The field side is complete only when:
+
 - at least one authorized BRCB and one URCB initial-GI run satisfy the evidence above;
 - no periodic-GI dependency is needed to populate the initial client values;
-- cleanup is verified after Stop/Close.
+- cleanup is verified after Stop/Close;
+- at least one fail-closed negative case is observed or reproduced safely.
 
-Keep the PR Draft while field evidence is still pending.
+Keep the PR Draft while field evidence is still pending. `RptEnabled@max` preservation is useful future diagnostics metadata, but it is deliberately not a merge blocker and must never become authority for synthesizing runtime RCB names.

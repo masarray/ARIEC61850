@@ -13,6 +13,8 @@ public sealed record SvSustainedObservationResult
     public SvStreamObservationSnapshot Observation { get; init; } = new();
     public SvSustainedStreamSnapshot Sustained { get; init; } = new();
     public SvSclBoundMeasurementProjection? MeasurementProjection { get; init; }
+    public IReadOnlyList<SvEngineeringWindowResult> EngineeringWindows { get; init; } = Array.Empty<SvEngineeringWindowResult>();
+    public string? EngineeringWindowDiagnostic { get; init; }
 }
 
 /// <summary>
@@ -27,17 +29,22 @@ public sealed class SvSustainedObservationSession
 {
     private readonly SvStreamObservationManager _observations;
     private readonly SvSustainedStreamAnalyzer _sustained;
+    private readonly SvEngineeringWindowAnalyzer _engineeringWindows;
 
     public SvSustainedObservationSession(
         SvStreamObservationManager? observations = null,
-        SvSustainedStreamAnalyzer? sustained = null)
+        SvSustainedStreamAnalyzer? sustained = null,
+        SvEngineeringWindowAnalyzer? engineeringWindows = null)
     {
         _observations = observations ?? new SvStreamObservationManager();
         _sustained = sustained ?? new SvSustainedStreamAnalyzer();
+        _engineeringWindows = engineeringWindows ?? new SvEngineeringWindowAnalyzer();
     }
 
     public int ObservationStreamCount => _observations.Count;
     public int SustainedStreamCount => _sustained.Count;
+    public int EngineeringWindowStreamCount => _engineeringWindows.ActiveStreamCount;
+    public int EngineeringWindowChannelCount => _engineeringWindows.ActiveChannelCount;
 
     public bool TryObserve(
         DateTimeOffset timestamp,
@@ -47,7 +54,8 @@ public sealed class SvSustainedObservationSession
         SampledValuesPublisherProfile? profile = null,
         double? nominalFrequencyHz = null,
         SvComparisonMode comparisonMode = SvComparisonMode.Compatible,
-        SvStreamMeasurementContext? measurementContext = null)
+        SvStreamMeasurementContext? measurementContext = null,
+        SvEngineeringWindowEvidence? engineeringWindowEvidence = null)
     {
         ArgumentNullException.ThrowIfNull(frame);
         result = new();
@@ -79,11 +87,36 @@ public sealed class SvSustainedObservationSession
                 measurementContext,
                 sustained.Timing.EstimatedSampleRateHz);
 
+        IReadOnlyList<SvEngineeringWindowResult> engineeringWindows = Array.Empty<SvEngineeringWindowResult>();
+        string? engineeringWindowDiagnostic = null;
+        if (engineeringWindowEvidence is not null)
+        {
+            if (measurementProjection is null)
+            {
+                engineeringWindowDiagnostic = "Engineering-window evidence was supplied without an explicit SCL publisher profile; no channel waveform analysis was attempted.";
+            }
+            else if (!_engineeringWindows.TryObserve(
+                         measurementProjection,
+                         engineeringWindowEvidence,
+                         out engineeringWindows,
+                         out var reason))
+            {
+                engineeringWindows = Array.Empty<SvEngineeringWindowResult>();
+                engineeringWindowDiagnostic = reason;
+            }
+            else if (!string.IsNullOrWhiteSpace(reason))
+            {
+                engineeringWindowDiagnostic = reason;
+            }
+        }
+
         result = new SvSustainedObservationResult
         {
             Observation = observation,
             Sustained = sustained,
-            MeasurementProjection = measurementProjection
+            MeasurementProjection = measurementProjection,
+            EngineeringWindows = engineeringWindows,
+            EngineeringWindowDiagnostic = engineeringWindowDiagnostic
         };
         return true;
     }
@@ -98,5 +131,6 @@ public sealed class SvSustainedObservationSession
     {
         _observations.Clear();
         _sustained.Clear();
+        _engineeringWindows.Clear();
     }
 }

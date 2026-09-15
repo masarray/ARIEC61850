@@ -22,7 +22,6 @@ public sealed partial class MmsClientSession
         bool acknowledgeBufferedEventLoss,
         CancellationToken cancellationToken = default)
     {
-        EnsureMmsReady();
         ArgumentNullException.ThrowIfNull(reportControl);
 
         if (!acknowledgeBufferedEventLoss)
@@ -52,6 +51,7 @@ public sealed partial class MmsClientSession
             };
         }
 
+        EnsureMmsReady();
         var before = await CaptureReportControlSnapshotAsync(reportControl, "before-purgebuf", cancellationToken).ConfigureAwait(false);
         if (!before.IsSuccess || ParseExplicitBool(before.EnabledState) != false)
         {

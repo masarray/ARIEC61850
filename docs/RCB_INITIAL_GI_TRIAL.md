@@ -5,9 +5,9 @@ It is intentionally evidence-first: use live MMS discovery as the authority for 
 
 ## Current code-gate status
 
-PR #131 code qualification was green on exact head `fb66691d19118001008ee1e87101928067a5bd44` via .NET CI run #569. Source/provenance verification, restore, build, and tests all completed successfully. Documentation-only trial-gate commits after that head must also pass CI before the trial branch is treated as frozen.
+PR #131 previously passed source/provenance verification, restore, build, and tests on the reporting engine changes. The branch now also contains the dedicated `AR.Iec61850.ReportTrial` qualification app; freeze and trial only an exact head whose .NET CI is green.
 
-The remaining merge blocker is field evidence from an authorized IED trial. Do not merge only because CI is green; verify at least one BRCB and one URCB initial-GI session plus one fail-closed negative case as described below.
+The remaining merge blocker after exact-head CI is field evidence from an authorized IED trial. Verify at least one BRCB and one URCB initial-GI session plus one fail-closed negative case.
 
 `RptEnabled@max` preservation remains a P1 diagnostics improvement. It is intentionally outside this merge-critical change because live MMS discovery is the authority for concrete online RCB instances. Future preservation of that SCL metadata must not be used to synthesize runtime names such as `Buffer01` or `Buffer02`.
 
@@ -26,15 +26,15 @@ associate
   -> event-driven reports
 ```
 
-`GI` is a one-shot initial-value bootstrap. Do not enable periodic GI during this qualification.
+`AR.Iec61850.ReportTrial` invokes the same SCL-assisted registered-monitor bootstrap APIs intended for the ARSAS application path. It does not use the legacy `mms-report-monitor` guarded-session path.
 
 ## Safety prerequisites
 
 - Use a laboratory IED or an authorized test window.
-- Confirm no other client is using the RCB selected for the test.
-- Start with live discovery/readiness. Do not assume an SCL base name is a concrete runtime instance.
-- Keep `--strict-rcb` and `--allow-urcb-fallback false` for the qualification runs so the evidence belongs to the intended RCB.
-- Preserve the generated evidence directory for review.
+- Confirm no other client is using the RCB family selected for the test.
+- Start read-only. The trial app performs discovery/family reconciliation/planning without writes unless `--yes` is supplied.
+- Do not substitute a concrete `Buffer01`/`Unbuffer01` guess for the SCL family name. The app must resolve the concrete instance from live MMS evidence.
+- Preserve each generated JSON evidence file for merge review.
 
 ## 1. Inspect both engineering files
 
@@ -43,7 +43,7 @@ dotnet run --project apps/AR.Iec61850.Cli -- inspect-scl "<ED1_FILE.icd>"
 dotnet run --project apps/AR.Iec61850.Cli -- inspect-scl "<ED2_FILE.iid>"
 ```
 
-For the Siemens-derived qualification shape used to design this gate, the declarative controls are family/base identities such as:
+For the qualification shape used to design this gate, the declarative controls are family/base identities such as:
 
 ```text
 .../LLN0$BR$Buffer
@@ -52,75 +52,77 @@ For the Siemens-derived qualification shape used to design this gate, the declar
 
 Do not convert these to `Buffer01` / `Unbuffer01` from SCL alone.
 
-## 2. Discover and classify the live RCB pool
+## 2. Read-only dry run through the exact new path
+
+Run each family first without `--yes`:
 
 ```powershell
-dotnet run --project apps/AR.Iec61850.Cli -- mms-report-plan <IED_IP> --port 102 --timeout-ms 120000 --max-report-probes 286 --raw-limit 0
+dotnet run --project apps/AR.Iec61850.ReportTrial -- "<ED2_FILE.iid>" <IED_IP> --report Buffer --kind BRCB --port 102 --timeout-ms 120000 --max-report-probes 286 --initial-timeout-sec 10 --duration-sec 30 --evidence .artifacts/trial/brcb-dry-run.json
+
+dotnet run --project apps/AR.Iec61850.ReportTrial -- "<ED2_FILE.iid>" <IED_IP> --report Unbuffer --kind URCB --port 102 --timeout-ms 120000 --max-report-probes 286 --initial-timeout-sec 10 --duration-sec 30 --evidence .artifacts/trial/urcb-dry-run.json
 ```
 
 Acceptance:
 
-- concrete live RCB instances are visible, for example `...BR.Buffer01` / `...RP.Unbuffer01` when that is what the IED actually exposes;
-- selected test RCB has a valid DataSet and is not already enabled/reserved by another client;
-- `GI` must be present in the live RCB attribute inventory before the initial-GI bootstrap is treated as supported.
+- one SCL ReportControl family is selected;
+- the family resolves only to concrete live RCB instances in the same domain/LN/report FC;
+- the plan selects a safe concrete instance with a mapped DataSet;
+- no report-control write occurs in dry-run mode;
+- an ambiguous/missing family fails closed.
 
-If identity or ownership is ambiguous, stop. No report-control write is an acceptable fail-closed result.
+Repeat with the Edition 1 file to verify family reconciliation even if GI is not advertised there.
 
-## 3. Probe the intended BRCB and URCB
+## 3. Optional direct read-only probe
 
-Replace the example references below with the concrete names discovered in step 2.
+After the dry run tells you which concrete RCB was selected, you may inspect it with the existing read-only CLI:
 
 ```powershell
-dotnet run --project apps/AR.Iec61850.Cli -- mms-rcb-probe <IED_IP> "AA1E1F06R4Application/LLN0.BR.Buffer01" --port 102 --timeout-ms 120000
+dotnet run --project apps/AR.Iec61850.Cli -- mms-rcb-probe <IED_IP> "<CONCRETE_BRCB_REFERENCE>" --port 102 --timeout-ms 120000
 
-dotnet run --project apps/AR.Iec61850.Cli -- mms-rcb-probe <IED_IP> "AA1E1F06R4Application/LLN0.RP.Unbuffer01" --port 102 --timeout-ms 120000
+dotnet run --project apps/AR.Iec61850.Cli -- mms-rcb-probe <IED_IP> "<CONCRETE_URCB_REFERENCE>" --port 102 --timeout-ms 120000
 ```
-
-Acceptance:
-
-- DataSet reference resolves and its member directory can be mapped;
-- `RptEna` state is known;
-- URCB reservation state is known when exposed;
-- the test RCB is safe to claim;
-- GI capability is live-evidenced rather than inferred only from SCL.
 
 ## 4. BRCB initial-GI trial
 
+For the Edition 2 file/capability set where GI is live-exposed:
+
 ```powershell
-dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor <IED_IP> --port 102 --timeout-ms 120000 --rcb "AA1E1F06R4Application/LLN0.BR.Buffer01" --strict-rcb --allow-urcb-fallback false --duration-sec 30 --gi true --gi-interval-sec 0 --soak-snapshot-sec 0 --evidence .artifacts/trial/brcb-initial-gi --yes
+dotnet run --project apps/AR.Iec61850.ReportTrial -- "<ED2_FILE.iid>" <IED_IP> --report Buffer --kind BRCB --port 102 --timeout-ms 120000 --max-report-probes 286 --initial-timeout-sec 10 --duration-sec 30 --evidence .artifacts/trial/brcb-initial-gi.json --yes
 ```
 
 Required evidence:
 
-1. selected RCB is the requested concrete BRCB;
+1. SCL family `Buffer` resolves to a concrete live BRCB such as `Buffer01` only because that instance exists live;
 2. no URCB-style `Resv=true` pre-reservation is performed;
 3. `RptEna=true` succeeds;
-4. one initial `GI=true` is issued;
-5. a mapped InformationReport containing initial DataSet values is received;
-6. no periodic GI is issued (`--gi-interval-sec 0`);
-7. subsequent value changes arrive through normal reporting;
-8. stop/disconnect disables `RptEna` when this client enabled it.
+4. persistent routing is already registered when the one-shot `GI=true` is sent;
+5. a mapped InformationReport containing initial DataSet values is received in the bootstrap window;
+6. the steady-state slice performs zero additional GI writes and zero polling reads;
+7. subsequent changes can arrive through normal reporting;
+8. cleanup disables `RptEna` when this client enabled it.
+
+The trial command returns exit code `0` only when initial values arrive through the new GI bootstrap path and cleanup succeeds.
 
 ## 5. URCB initial-GI trial
 
 ```powershell
-dotnet run --project apps/AR.Iec61850.Cli -- mms-report-monitor <IED_IP> --port 102 --timeout-ms 120000 --rcb "AA1E1F06R4Application/LLN0.RP.Unbuffer01" --strict-rcb --allow-urcb-fallback false --duration-sec 30 --gi true --gi-interval-sec 0 --soak-snapshot-sec 0 --evidence .artifacts/trial/urcb-initial-gi --yes
+dotnet run --project apps/AR.Iec61850.ReportTrial -- "<ED2_FILE.iid>" <IED_IP> --report Unbuffer --kind URCB --port 102 --timeout-ms 120000 --max-report-probes 286 --initial-timeout-sec 10 --duration-sec 30 --evidence .artifacts/trial/urcb-initial-gi.json --yes
 ```
 
 Required evidence:
 
-1. selected RCB is the requested concrete URCB;
+1. SCL family `Unbuffer` resolves to a concrete live URCB;
 2. `Resv=true` occurs before `RptEna=true` when the live RCB exposes `Resv`;
 3. `RptEna=true` succeeds;
-4. one initial `GI=true` is issued;
+4. persistent routing is active before the one-shot GI request;
 5. a mapped InformationReport containing initial DataSet values is received;
-6. no periodic GI is issued;
-7. normal event-driven reporting continues;
-8. stop/disconnect disables `RptEna` and releases a reservation touched by this client.
+6. the steady-state slice performs no periodic GI and no polling;
+7. event-driven reporting remains active;
+8. cleanup disables `RptEna` and releases a reservation touched by this client.
 
 ## 6. Same-family contention trial
 
-When the laboratory setup permits it, make the first indexed instance unavailable and leave the next instance free, then execute SCL-assisted planning.
+When the laboratory setup permits it, make the first indexed instance unavailable and leave the next instance free, then run the dry-run or live trial again using the same SCL family name.
 
 Acceptance:
 
@@ -130,46 +132,52 @@ Acceptance:
 
 ## 7. Negative/fail-closed trials
 
-At least one negative case should be captured before merge:
+Capture at least one negative case before merge:
 
 - live RCB directory does not expose `GI` -> no blind GI write;
 - SCL family has no matching live concrete instance -> no report-control write;
 - case-mismatched domain/LN/RCB identity -> no automatic match;
-- intended RCB is already enabled/reserved by another client -> leave it untouched or select another proven-free member of the same family;
-- DataSet member mapping is absent/ambiguous -> do not project report values against an arbitrary DataSet.
+- intended family has no safe free member -> no write;
+- DataSet member mapping is absent/ambiguous -> bootstrap planning is blocked.
+
+Edition 1 is useful for the no-GI-capability case when the live RCB inventory actually omits `GI`: the monitor may still start, but the engine must not fabricate GI support.
 
 ## 8. Trial evidence package
 
-After each BRCB/URCB run, keep the entire evidence folder. For the review, record at minimum:
+Keep the JSON evidence from every dry-run/live run. For merge review verify at minimum:
 
-- branch/head SHA used for the trial;
+- exact branch/head SHA used for the trial;
 - IED model/firmware identifier if available;
 - SCL edition/file used;
+- SCL family reference and matched live references;
 - selected concrete RCB reference;
-- DataSet reference and member count;
-- whether `RptEna`, `Resv`/`ResvTms`, and `GI` were observed live;
-- ordered report-control write steps;
-- first mapped InformationReport after GI, including value count;
+- DataSet reference/member mapping;
+- live RCB attributes including GI capability;
+- ordered start/bootstrap write steps;
+- first mapped InformationReport after GI and value count;
+- steady-state `GiWriteCount == 0` and `PollReadCount == 0`;
 - Stop/Close cleanup result;
 - one negative/fail-closed case and its reason.
 
-Do not commit raw proprietary PCAP/SCL captures to the public repository. Preserve them locally and, when a regression fixture is needed, derive project-owned synthetic vectors that contain only the protocol facts required by the test.
+Do not commit raw proprietary PCAP/SCL captures to the public repository. Preserve them locally and derive project-owned synthetic vectors when a permanent regression fixture is required.
 
 ## Merge gate
 
-The code side of PR #131 is merge-candidate quality when:
+Code side is merge-candidate quality only when:
 
-- .NET CI is green on the exact PR head;
+- .NET CI is green on the exact frozen PR head, including the `AR.Iec61850.ReportTrial` app;
 - synthetic Ed.1/Ed.2 family-resolution regressions are green;
 - BRCB and URCB family-planning regressions are green;
 - live GI capability discovery regressions are green;
-- no runtime RCB instance is synthesized from SCL metadata.
+- no runtime RCB instance is synthesized from SCL metadata;
+- the field-trial executable builds from the same solution as the library/tests.
 
-The field side is complete only when:
+Field side is complete only when:
 
-- at least one authorized BRCB and one URCB initial-GI run satisfy the evidence above;
-- no periodic-GI dependency is needed to populate the initial client values;
+- one authorized BRCB initial-GI run passes;
+- one authorized URCB initial-GI run passes;
+- no periodic-GI or polling dependency is needed to populate/maintain the reporting path;
 - cleanup is verified after Stop/Close;
 - at least one fail-closed negative case is observed or reproduced safely.
 
-Keep the PR Draft while field evidence is still pending. `RptEnabled@max` preservation is useful future diagnostics metadata, but it is deliberately not a merge blocker and must never become authority for synthesizing runtime RCB names.
+Keep PR #131 Draft while field evidence is pending. `RptEnabled@max` preservation is useful future diagnostics metadata, but it is deliberately not a merge blocker and must never become authority for synthesizing runtime RCB names.

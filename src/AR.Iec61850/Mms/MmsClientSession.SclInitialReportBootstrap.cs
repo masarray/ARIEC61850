@@ -5,7 +5,8 @@ namespace AR.Iec61850.Mms;
 public enum MmsSclInitialReportBootstrapState
 {
     PlanningBlocked,
-    MonitorBootstrapStarted
+    MonitorStartFailed,
+    Monitoring
 }
 
 public sealed class MmsSclInitialReportBootstrapResult
@@ -14,7 +15,7 @@ public sealed class MmsSclInitialReportBootstrapResult
     public MmsSclReportSubscriptionPlanResult Planning { get; init; } = new();
     public MmsInitialReportBootstrapResult? Bootstrap { get; init; }
 
-    public bool IsMonitoring => Bootstrap?.Session is { IsStopped: false };
+    public bool IsMonitoring => State == MmsSclInitialReportBootstrapState.Monitoring && Bootstrap?.Session is { IsStopped: false };
     public bool HasInitialValues => Bootstrap?.HasInitialValues == true;
     public string Message { get; init; } = string.Empty;
 }
@@ -68,13 +69,17 @@ public sealed partial class MmsClientSession
         var bootstrap = await StartPersistentReportMonitorWithInitialGiAsync(
             planning.Plan,
             initialReportTimeout,
-            deleteDynamicDataSetOnStop,
-            directory,
-            cancellationToken).ConfigureAwait(false);
+            deleteDynamicDataSetOnStop: deleteDynamicDataSetOnStop,
+            directory: directory,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var state = bootstrap.Session == null
+            ? MmsSclInitialReportBootstrapState.MonitorStartFailed
+            : MmsSclInitialReportBootstrapState.Monitoring;
 
         return new MmsSclInitialReportBootstrapResult
         {
-            State = MmsSclInitialReportBootstrapState.MonitorBootstrapStarted,
+            State = state,
             Planning = planning,
             Bootstrap = bootstrap,
             Message = $"{planning.RcbResolution.Message} {bootstrap.Message}"

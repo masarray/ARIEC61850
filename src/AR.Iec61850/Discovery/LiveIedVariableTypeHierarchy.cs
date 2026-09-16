@@ -48,6 +48,115 @@ public static class LiveIedVariableTypeProbeExecutor
     }
 }
 
+/// <summary>
+/// Materializes named IEC 61850 leaf paths that are present in an authoritative
+/// logical-node TypeSpecification but absent from the flat GetNameList inventory.
+/// Existing live GetNameList/DataSet points always win; this only fills proven gaps.
+/// </summary>
+internal static class LiveIedTypeHierarchyPointMaterializer
+{
+    private static readonly HashSet<string> FunctionalConstraints = new(
+        [
+            "ST", "MX", "SP", "SV", "CF", "DC", "SG", "SE", "SR", "OR",
+            "BL", "EX", "CO", "RP", "BR", "LG", "GO", "GS", "MS", "US"
+        ],
+        StringComparer.OrdinalIgnoreCase);
+
+    public static int Augment(
+        MmsIedModelDirectory directory,
+        IReadOnlyList<MmsVariableAccessAttributesResult> results)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(results);
+
+        if (directory.PointCount == 0 || results.Count == 0)
+            return 0;
+
+        var supplemental = new List<MmsFcResolvedPoint>();
+
+        foreach (var result in results.Where(result =>
+                     result.IsSuccess &&
+                     result.TypeSpecification is not null &&
+                     !string.IsNullOrWhiteSpace(result.Reference.Domain) &&
+                     !string.IsNullOrWhiteSpace(result.Reference.Item) &&
+                     !result.Reference.Item.Contains('$')))
+        {
+            var domain = result.Reference.Domain.Trim();
+            var logicalNode = result.Reference.Item.Trim();
+            if (!directory.LogicalDevices.TryGetValue(domain, out var logicalDevice) ||
+                !logicalDevice.LogicalNodes.ContainsKey(logicalNode))
+            {
+                continue;
+            }
+
+            foreach (var fcNode in result.TypeSpecification!.Children)
+            {
+                var functionalConstraint = NormalizeFunctionalConstraint(fcNode.Name);
+                if (string.IsNullOrWhiteSpace(functionalConstraint))
+                    continue;
+
+                foreach (var child in fcNode.Children)
+                    Visit(child, functionalConstraint, []);
+            }
+
+            void Visit(
+                MmsTypeSpecificationNode node,
+                string functionalConstraint,
+                IReadOnlyList<string> parentPath)
+            {
+                var name = (node.Name ?? string.Empty).Trim();
+                if (!IsUsableComponentName(name) ||
+                    string.Equals(node.MmsType, "array", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var path = new string[parentPath.Count + 1];
+                for (var index = 0; index < parentPath.Count; index++)
+                    path[index] = parentPath[index];
+                path[^1] = name;
+
+                if (node.Children.Count > 0)
+                {
+                    foreach (var child in node.Children)
+                        Visit(child, functionalConstraint, path);
+                    return;
+                }
+
+                // An IEC 61850 leaf below an FC must contain at least DO + DA.
+                if (path.Length < 2)
+                    return;
+
+                supplemental.Add(new MmsFcResolvedPoint
+                {
+                    Domain = domain,
+                    LogicalNode = logicalNode,
+                    FunctionalConstraint = functionalConstraint,
+                    DataObjectPath = string.Join(".", path),
+                    MmsItemName = $"{logicalNode}${functionalConstraint}${string.Join("$", path)}",
+                    Source = "GetVariableAccessAttributesLogicalNodeTree",
+                    Confidence = 100
+                });
+            }
+        }
+
+        return directory.AddSupplementalPoints(supplemental);
+    }
+
+    private static string NormalizeFunctionalConstraint(string value)
+    {
+        var normalized = (value ?? string.Empty).Trim().ToUpperInvariant();
+        return FunctionalConstraints.Contains(normalized) ? normalized : string.Empty;
+    }
+
+    private static bool IsUsableComponentName(string value)
+        => !string.IsNullOrWhiteSpace(value) &&
+           !string.Equals(value, "element", StringComparison.OrdinalIgnoreCase) &&
+           value[0] != '[' &&
+           !value.Contains('$') &&
+           !value.Contains('.');
+}
+
 internal sealed class LiveIedVariableTypeHierarchyIndex
 {
     private const char CompositeKeySeparator = '\u001F';
@@ -72,10 +181,12 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
         if (directory.PointCount == 0 || results.Count == 0)
             return index;
 
-        // Build one cheap LN-local candidate index. The previous implementation scanned
-        // every point in the entire IED for every successful GVA result, which made CPU
-        // mapping approach O(points * typeResults) on large models. Every MMS variable
-        // path begins at one logical node, so results can be constrained to that LN.
+        // The live LN-root GVA tree can contain semantic descendants that are not
+        // individually enumerated by GetNameList. Materialize those proven leaves
+        // before indexing so the canonical model and SCL builder can see them without
+        // issuing per-leaf MMS requests.
+        LiveIedTypeHierarchyPointMaterializer.Augment(directory, results);
+
         var pointsByLogicalNode = directory.Points
             .GroupBy(
                 point => BuildLogicalNodeKey(point.Domain, point.LogicalNode),

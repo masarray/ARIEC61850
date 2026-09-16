@@ -95,6 +95,30 @@ public sealed class MmsSmartDiscoveryPolicyTests
     }
 
     [Fact]
+    public void TypeHierarchyIndex_MapsLogicalNodeTreeWithoutCrossNodeLeakage()
+    {
+        var directory = BuildDirectory();
+        var typeResult = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("LD0", "XCBR1", string.Empty),
+            TypeSpecification = Node(
+                "",
+                Node("ST",
+                    Node("Pos",
+                        Node("stVal"),
+                        Node("q"))))
+        };
+
+        var index = LiveIedVariableTypeHierarchyIndex.Build(directory, [typeResult]);
+        var xcbrPoint = directory.Points.Single(point => point.MmsItemName == "XCBR1$ST$Pos$stVal");
+        var mmxuPoint = directory.Points.Single(point => point.MmsItemName == "MMXU1$MX$PhV$phsA$cVal$mag$f");
+
+        Assert.True(index.TryResolve(xcbrPoint, out _));
+        Assert.False(index.TryResolve(mmxuPoint, out _));
+    }
+
+    [Fact]
     public void DataObjectFallbackRoot_StopsAtLnFcDo()
     {
         var point = new MmsFcResolvedPoint

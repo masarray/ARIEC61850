@@ -5,6 +5,7 @@ namespace AR.Iec61850.Osi;
 
 public sealed class TpktClient : IAsyncDisposable
 {
+    private readonly SemaphoreSlim _sendGate = new(1, 1);
     private TcpClient? _tcpClient;
     private NetworkStream? _stream;
 
@@ -43,9 +44,6 @@ public sealed class TpktClient : IAsyncDisposable
 
     public async Task SendTpktAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
     {
-        if (_stream == null)
-            throw new InvalidOperationException("TPKT stream is not connected.");
-
         if (payload.Length > ushort.MaxValue - 4)
             throw new ArgumentOutOfRangeException(nameof(payload), "TPKT payload is too large.");
 
@@ -56,7 +54,16 @@ public sealed class TpktClient : IAsyncDisposable
         frame[3] = (byte)(frame.Length & 0xFF);
         payload.CopyTo(frame.AsMemory(4));
 
-        await _stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var stream = _stream ?? throw new InvalidOperationException("TPKT stream is not connected.");
+            await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
     }
 
     public async Task<byte[]> ReceiveTpktAsync(CancellationToken cancellationToken)

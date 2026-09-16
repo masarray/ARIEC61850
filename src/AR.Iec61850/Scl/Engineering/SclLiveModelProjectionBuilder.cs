@@ -259,6 +259,7 @@ public static class SclLiveModelProjectionBuilder
             LogicalNode = string.IsNullOrWhiteSpace(report.LogicalNodePath) ? "LLN0" : report.LogicalNodePath,
             Name = report.Name,
             Buffered = report.Buffered,
+            Indexed = report.Indexed,
             DataSetReference = report.DataSetReference,
             ReportId = report.ReportId,
             ConfRev = report.ConfigurationRevision.ToString(CultureInfo.InvariantCulture),

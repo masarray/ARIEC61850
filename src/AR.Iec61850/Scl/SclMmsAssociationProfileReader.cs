@@ -9,6 +9,15 @@ namespace AR.Iec61850.Scl;
 /// </summary>
 public static class SclMmsAssociationProfileReader
 {
+    private static readonly HashSet<string> CriticalAssociationParameters = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "OSI-AP-Title",
+        "OSI-AE-Qualifier",
+        "OSI-PSEL",
+        "OSI-SSEL",
+        "OSI-TSEL"
+    };
+
     public static SclMmsAssociationProfileSet Read(string xml)
     {
         if (string.IsNullOrWhiteSpace(xml))
@@ -39,7 +48,7 @@ public static class SclMmsAssociationProfileReader
                 var iedName = Attr(connectedAp, "iedName");
                 var accessPointName = Attr(connectedAp, "apName");
                 var directAddress = connectedAp.Elements().FirstOrDefault(e => Is(e, "Address"));
-                var parameters = ReadDirectParameters(directAddress);
+                var parameters = ReadDirectParameters(directAddress, iedName, accessPointName, warnings);
 
                 string Get(string type)
                     => parameters.TryGetValue(type, out var value) ? value : string.Empty;
@@ -48,10 +57,15 @@ public static class SclMmsAssociationProfileReader
                 int? aeQualifier = null;
                 if (!string.IsNullOrWhiteSpace(aeQualifierText))
                 {
-                    if (int.TryParse(aeQualifierText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+                    if (int.TryParse(aeQualifierText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) &&
+                        parsed is >= 0 and <= 65535)
+                    {
                         aeQualifier = parsed;
+                    }
                     else
-                        warnings.Add($"ConnectedAP {Describe(iedName, accessPointName)} has invalid OSI-AE-Qualifier '{aeQualifierText}'.");
+                    {
+                        warnings.Add($"ConnectedAP {Describe(iedName, accessPointName)} has invalid OSI-AE-Qualifier '{aeQualifierText}'; expected 0..65535.");
+                    }
                 }
 
                 if (string.IsNullOrWhiteSpace(iedName))
@@ -73,7 +87,7 @@ public static class SclMmsAssociationProfileReader
                     },
                     Association = new SclIsoAssociationAddress
                     {
-                        ApTitle = Get("OSI-AP-Title"),
+                        ApTitle = NormalizeApTitleLiteral(Get("OSI-AP-Title")),
                         AeQualifierText = aeQualifierText,
                         AeQualifier = aeQualifier,
                         PresentationSelector = Get("OSI-PSEL"),
@@ -92,24 +106,62 @@ public static class SclMmsAssociationProfileReader
         };
     }
 
-    private static IReadOnlyDictionary<string, string> ReadDirectParameters(XElement? address)
+    private static IReadOnlyDictionary<string, string> ReadDirectParameters(
+        XElement? address,
+        string iedName,
+        string accessPointName,
+        ICollection<string> warnings)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (address is null)
             return result;
 
-        // Direct children only. Nested GSE/SMV Address/P values are process-bus
-        // addressing and must never leak into the MMS association context.
-        foreach (var parameter in address.Elements().Where(e => Is(e, "P")))
-        {
-            var type = Attr(parameter, "type");
-            if (string.IsNullOrWhiteSpace(type))
-                continue;
+        var groups = address.Elements()
+            .Where(e => Is(e, "P"))
+            .Select(parameter => new
+            {
+                Type = Attr(parameter, "type"),
+                Value = (parameter.Value ?? string.Empty).Trim()
+            })
+            .Where(parameter => !string.IsNullOrWhiteSpace(parameter.Type))
+            .GroupBy(parameter => parameter.Type, StringComparer.OrdinalIgnoreCase);
 
-            result[type] = (parameter.Value ?? string.Empty).Trim();
+        foreach (var group in groups)
+        {
+            var values = group.Select(parameter => parameter.Value)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            if (CriticalAssociationParameters.Contains(group.Key) && values.Length > 1)
+            {
+                result[group.Key] = string.Empty;
+                warnings.Add(
+                    $"ConnectedAP {Describe(iedName, accessPointName)} has conflicting duplicate {group.Key} values; the association parameter is ambiguous and was left unresolved.");
+                continue;
+            }
+
+            result[group.Key] = values[0];
+            if (group.Count() > 1)
+            {
+                warnings.Add(
+                    $"ConnectedAP {Describe(iedName, accessPointName)} repeats {group.Key} with the same value; the duplicate declaration was collapsed deterministically.");
+            }
         }
 
         return result;
+    }
+
+    private static string NormalizeApTitleLiteral(string value)
+    {
+        var trimmed = (value ?? string.Empty).Trim();
+        if (trimmed.Length >= 2 &&
+            ((trimmed[0] == '"' && trimmed[^1] == '"') ||
+             (trimmed[0] == '\'' && trimmed[^1] == '\'')))
+        {
+            return trimmed[1..^1].Trim();
+        }
+
+        return trimmed;
     }
 
     private static string Describe(string iedName, string accessPointName)

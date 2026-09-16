@@ -120,6 +120,11 @@ public sealed class SclReportControl
     public uint ConfigurationRevision { get; init; }
     public uint BufferTimeMilliseconds { get; init; }
     public uint IntegrityPeriodMilliseconds { get; init; }
+    /// <summary>
+    /// Declarative SCL RptEnabled@max metadata for diagnostics/capacity context only.
+    /// This value is not authority to synthesize concrete runtime MMS RCB instance names.
+    /// </summary>
+    public uint? RptEnabledMax { get; init; }
     public IReadOnlyList<SclDataSetEntry> Entries { get; init; } = Array.Empty<SclDataSetEntry>();
 }
 

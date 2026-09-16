@@ -329,21 +329,16 @@ public sealed class SclParser
                         var dataSetName = Attr(control, "datSet");
 
                         var dataSetBinding = SclDataSetReferenceResolver.Resolve(
-
                             dataSets.Values,
-
                             iedName,
-
                             ldInst,
-
                             lnPath,
-
                             dataSetName);
 
                         var dataSet = dataSetBinding.DataSet;
-
-
                         var buffered = BoolAttr(control, "buffered");
+                        var rptEnabled = control.Elements().FirstOrDefault(e => Is(e, "RptEnabled"));
+
                         yield return new SclReportControl
                         {
                             IedName = iedName,
@@ -352,14 +347,15 @@ public sealed class SclParser
                             Name = name,
                             ReportId = Attr(control, "rptID"),
                             DataSetName = dataSetName,
-                    DataSetReference = dataSetBinding.CanonicalReference,
-                    DataSetBindingStatus = dataSetBinding.Status,
-                    ControlBlockReference = $"{iedName}{ldInst}/{lnPath}${(buffered ? "BR" : "RP")}${name}",
+                            DataSetReference = dataSetBinding.CanonicalReference,
+                            DataSetBindingStatus = dataSetBinding.Status,
+                            ControlBlockReference = $"{iedName}{ldInst}/{lnPath}${(buffered ? "BR" : "RP")}${name}",
                             Buffered = buffered,
                             Indexed = !string.Equals(Attr(control, "indexed"), "false", StringComparison.OrdinalIgnoreCase),
                             ConfigurationRevision = UIntAttr(control, "confRev"),
                             BufferTimeMilliseconds = UIntAttr(control, "bufTime"),
                             IntegrityPeriodMilliseconds = UIntAttr(control, "intgPd"),
+                            RptEnabledMax = NullableUIntAttr(rptEnabled, "max"),
                             Entries = dataSet?.Entries ?? Array.Empty<SclDataSetEntry>()
                         };
                     }
@@ -536,6 +532,12 @@ public sealed class SclParser
     {
         var parsed = TryParseUInt16(text, preferHexWithoutPrefix);
         return parsed <= byte.MaxValue ? (byte)parsed.Value : null;
+    }
+
+    private static uint? NullableUIntAttr(XElement? element, string localName)
+    {
+        var text = Attr(element, localName);
+        return uint.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
     }
 
     private static uint UIntAttr(XElement element, string localName)

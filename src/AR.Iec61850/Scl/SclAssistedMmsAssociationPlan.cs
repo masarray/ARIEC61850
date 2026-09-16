@@ -15,11 +15,6 @@ public sealed class MmsLocalAssociationProfile
     public byte TpduSizeExponent { get; init; } = 0x0A;
     public MmsInitiateRequestParameters Initiate { get; init; } = new();
 
-    /// <summary>
-    /// Describes the exact calling identity embedded in the current BalancedApTitle
-    /// runtime profile. Step 2 uses this only as an explicit compatibility baseline;
-    /// it does not switch runtime association behavior.
-    /// </summary>
     public static MmsLocalAssociationProfile ExistingRuntimeDefault { get; } = new()
     {
         Name = "ExistingRuntimeDefault",
@@ -28,6 +23,30 @@ public sealed class MmsLocalAssociationProfile
         PresentationSelector = [0x00, 0x00, 0x00, 0x01],
         ApTitle = [1, 1, 1, 999],
         AeQualifier = 12,
+        TpduSizeExponent = 0x0A,
+        Initiate = new MmsInitiateRequestParameters
+        {
+            LocalDetailCalling = 65000,
+            MaxOutstandingCalling = 10,
+            MaxOutstandingCalled = 10,
+            NestingLevel = 5
+        }
+    };
+
+    /// <summary>
+    /// Primary local identity for a trusted-SCL association. The called-side identity
+    /// still comes exclusively from SCL. This calling-side profile reproduces the
+    /// interoperable wire contract observed for SCL-assisted IEC 61850 clients while
+    /// keeping the older runtime identity available as an explicit compatibility lane.
+    /// </summary>
+    public static MmsLocalAssociationProfile SclInteroperabilityDefault { get; } = new()
+    {
+        Name = "SclInteroperabilityDefault",
+        TransportSelector = [0x00, 0x00],
+        SessionSelector = [0x00, 0x01],
+        PresentationSelector = [0x00, 0x00, 0x00, 0x01],
+        ApTitle = [1, 1, 1, 999],
+        AeQualifier = 23,
         TpduSizeExponent = 0x0A,
         Initiate = new MmsInitiateRequestParameters
         {
@@ -63,8 +82,7 @@ public sealed class SclAssistedMmsAssociationPlanResult
 /// <summary>
 /// Converts typed SCL addressing into a deterministic, side-effect-free association plan.
 /// Remote/called identity comes only from SCL. Local/calling identity comes only from the
-/// explicit client profile. Missing remote addressing is a typed failure, never a silent
-/// substitution with local/default values.
+/// explicit client profile. Missing, ambiguous or out-of-range remote identity fails closed.
 /// </summary>
 public static class SclAssistedMmsAssociationPlanBuilder
 {
@@ -86,8 +104,11 @@ public static class SclAssistedMmsAssociationPlanBuilder
         var remotePsel = ParseSelector(remote.Association.PresentationSelector, "OSI-PSEL", errors);
         var remoteApTitle = ParseApTitle(remote.Association.ApTitle, errors);
 
-        if (!remote.Association.AeQualifier.HasValue || remote.Association.AeQualifier.Value < 0)
-            errors.Add("SCL ConnectedAP does not declare a valid non-negative OSI-AE-Qualifier.");
+        if (!remote.Association.AeQualifier.HasValue ||
+            remote.Association.AeQualifier.Value is < 0 or > 65535)
+        {
+            errors.Add("SCL ConnectedAP does not declare a valid OSI-AE-Qualifier in the range 0..65535.");
+        }
 
         ValidateLocal(local, errors);
 
@@ -163,8 +184,8 @@ public static class SclAssistedMmsAssociationPlanBuilder
             errors.Add("Local presentation selector must contain 1 to 16 byte(s).");
         if (local.ApTitle.Length < 2)
             errors.Add("Local AP-title must contain at least two OID arcs.");
-        if (local.AeQualifier < 0)
-            errors.Add("Local AE qualifier cannot be negative.");
+        if (local.AeQualifier is < 0 or > 65535)
+            errors.Add("Local AE qualifier must be in the range 0..65535.");
     }
 
     private static byte[]? ParseSelector(string text, string name, ICollection<string> errors)

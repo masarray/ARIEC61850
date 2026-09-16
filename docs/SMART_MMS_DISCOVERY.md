@@ -1,6 +1,6 @@
 # Smart MMS discovery
 
-`MmsClientSession.DiscoverSmartAsync` is the capture-informed discovery path for fast, deterministic IEC 61850 model construction.
+`MmsClientSession.DiscoverSmartAsync` is the capture-informed discovery path for fast, deterministic IEC 61850 model construction. It follows the repository's canonical contract: live MMS provides online evidence, SCL may prioritize and validate that evidence, and both feed the same canonical model rather than separate semantic trees.
 
 ## Design invariants
 
@@ -10,47 +10,79 @@
 - Independent `(domain, object-class)` GetNameList chains may be outstanding concurrently.
 - Continuation pages inside one GetNameList chain are always sequential.
 - The effective discovery window is capped by the peer's negotiated `maxOutstandingCalling` when available. Unknown peers use a conservative fallback cap.
-- Published dictionaries are rebuilt in sorted domain order, so concurrent completion never changes model ordering.
-- A failed domain chain produces an empty branch while successful branches remain available in the returned structural model.
+- A fixed-size worker pool is used instead of creating one Task per domain/service pair, keeping scheduling and allocation bounded on large IEDs.
+- Published dictionaries are rebuilt from live evidence in deterministic domain order, so concurrent completion and SCL priority hints never change model semantics.
+- Valid evidence from completed pages/chains is retained when a later page or another chain fails.
+- Expected receive-pump/association loss during concurrent work becomes a partial result instead of an unhandled `Task.WhenAll` failure.
 - Initial smart discovery does not perform an eager per-leaf Read or GetVariableAccessAttributes sweep.
+- Report attribute reads and DataSet directory reads are deferred by default because they are enrichment, not prerequisites for the first usable LD/LN/DO/DA tree.
+
+## Bounded pagination
+
+The smart pager is intentionally separate from the compatibility pager. It uses an O(n) `HashSet` boundary de-duplication path and has explicit guards for:
+
+- maximum pages per GetNameList chain;
+- maximum names per chain;
+- no-new-name pages while `moreFollows` remains true;
+- empty continuation tokens;
+- repeated continuation tokens/cycles.
+
+If a guard fires, already-decoded names remain available and the chain is marked incomplete. The engine does not keep asking the same IED question indefinitely.
 
 ## Type enrichment
 
-`GetVariableAccessAttributesSmartAsync` performs structure-first type discovery:
+Canonical type enrichment is planned by `LiveIedVariableTypeProbePlanner` and executed by `LiveIedVariableTypeProbeExecutor.ProbeSmartAsync`.
 
-1. Group discovered FC points by MMS `LN$FC$DO` root.
-2. Probe each root with GetVariableAccessAttributes using the same bounded association-aware window.
-3. When a root returns a structured TypeSpecification, its hierarchy represents descendant attributes.
-4. When the root probe fails or does not describe a hierarchy, fall back to exact leaf probes for that root only.
+The adaptive ladder is:
 
-This keeps exact metadata available while avoiding one GetVariableAccessAttributes request per leaf on normal IEC 61850 MMS models.
+1. Probe each MMS logical-node root (`LN`) once.
+2. Use the returned `TypeSpecification` tree to prove every descendant path that is actually present in that hierarchy.
+3. Only unresolved branches fall back to distinct `LN$FC$DO` roots.
+4. Only descendants still unresolved after the DO-root result fall back to exact leaf GVA.
 
-## Transport safety
+This is deliberately coverage-aware: a successful but shallow parent response does not suppress required child probes. Normal structured IEC 61850 servers therefore approach one GVA per logical node, while unusual servers still retain an exact fallback path.
 
-Pipelining requires multiple confirmed requests to be outstanding. `TpktClient` therefore serializes writers around each complete TPKT frame. This is intentionally a write-frame gate only: it prevents byte interleaving without serializing the request/response lifecycle. The existing single receive pump remains the only association reader.
+## SCL-assisted scheduling
 
-## Suggested usage
+SCL is a scheduling/validation hint, never a substitute for online evidence. `MmsSmartDiscoveryOptions.PriorityDomains` can be populated from the exact expected MMS domains of the trusted SCL IED/AP/Server selection. The engine still performs live VMD `GetNameList`, keeps extra live domains, and publishes the live-selected domain set unchanged.
 
 ```csharp
-var discovery = await session.DiscoverSmartAsync(
-    new MmsSmartDiscoveryOptions
-    {
-        MaxConcurrentChains = 8,
-        ProbeReportAttributes = true,
-        ReadDataSetDirectories = true
-    },
-    cancellationToken);
+var options = new MmsSmartDiscoveryOptions
+{
+    MaxConcurrentChains = 8,
+    // Optional, when trusted SCL context is already selected:
+    PriorityDomains = sclDomainInventory?.ExpectedDomains ?? Array.Empty<string>()
+};
 
-var exactTypes = await session.GetVariableAccessAttributesSmartAsync(
+var discovery = await session.DiscoverSmartAsync(options, cancellationToken);
+
+var exactTypes = await LiveIedVariableTypeProbeExecutor.ProbeSmartAsync(
+    session,
     discovery.IedDirectory,
-    cancellationToken: cancellationToken);
+    options,
+    cancellationToken);
+```
+
+Expensive runtime enrichment can be requested explicitly when needed:
+
+```csharp
+var deepOptions = new MmsSmartDiscoveryOptions
+{
+    MaxConcurrentChains = 8,
+    ProbeReportAttributes = true,
+    ReadDataSetDirectories = true
+};
 ```
 
 The legacy `DiscoverAsync` and `GetVariableAccessAttributesBatchAsync` APIs remain unchanged for compatibility. Consumers can migrate deliberately and compare model completeness before making smart discovery their default.
 
+## Transport safety
+
+Pipelining requires multiple confirmed requests to be outstanding. `TpktClient` therefore serializes writers around each complete TPKT frame. The frame is allocated inside that single-writer gate, keeping peak outbound-frame allocation bounded while still allowing multiple request/response lifecycles to remain outstanding. The existing single receive pump remains the only association reader.
+
 ## Capture-informed target
 
-The reference capture used during this refactor showed the existing consumer issuing roughly 30.7k confirmed MMS requests, including roughly 23.7k GetVariableAccessAttributes and 6.6k Read requests, while the comparison tool used a much smaller, pipelined request set. These values are benchmark evidence, not protocol requirements. The smart path targets the scheduling pattern—single association, bounded outstanding requests, structural discovery first—without copying vendor-specific behavior.
+The reference capture used during this refactor showed the existing consumer issuing roughly 30.7k confirmed MMS requests, including roughly 23.7k GetVariableAccessAttributes and 6.6k Read requests, while the comparison tool used a much smaller, pipelined request set. These values are benchmark evidence, not protocol requirements. The smart path targets the independently observed scheduling pattern—single association, bounded outstanding requests, structural discovery first, hierarchy-aware metadata, selective reads—without copying vendor code or vendor-specific implementation details.
 
 For acceptance, compare the same IED and capture conditions using:
 
@@ -60,6 +92,8 @@ For acceptance, compare the same IED and capture conditions using:
 - confirmed request count by service;
 - peak outstanding confirmed requests;
 - failed/partial domain chains;
-- exact type coverage after smart enrichment.
+- exact type coverage after smart enrichment;
+- managed allocations and task count during discovery;
+- UI-thread stalls / long frames in the consuming application.
 
 A performance result is accepted only when the final model remains semantically equivalent for the required scope.

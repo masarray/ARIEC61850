@@ -66,6 +66,47 @@ jobs:
             Tee-Object -FilePath artifacts/test-results/dotnet-test.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Package test build
+        if: success()
+        shell: pwsh
+        run: |
+          $root = "artifacts/ariec61850-test-build"
+          $binary = Join-Path $root "lib/net8.0"
+          $nuget = Join-Path $root "nuget"
+          New-Item -ItemType Directory -Path $binary -Force | Out-Null
+          New-Item -ItemType Directory -Path $nuget -Force | Out-Null
+
+          Copy-Item ".\source\src\AR.Iec61850\bin\Release\net8.0\*" $binary -Recurse -Force
+
+          $packageVersion = "0.0.0-pr134.$env:GITHUB_RUN_NUMBER"
+          dotnet pack .\source\src\AR.Iec61850\AR.Iec61850.csproj `
+            -c Release `
+            --no-build `
+            -o $nuget `
+            -p:PackageVersion=$packageVersion
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          @(
+            "ARIEC61850 PR #134 smart-discovery test build",
+            "Commit: $env:GITHUB_SHA",
+            "Branch: $env:GITHUB_HEAD_REF",
+            "Run: $env:GITHUB_RUN_NUMBER",
+            "TargetFramework: net8.0",
+            "NuGetVersion: $packageVersion",
+            "",
+            "lib/net8.0 contains the direct Release build for DLL-reference testing.",
+            "nuget contains the installable local .nupkg for PackageReference testing."
+          ) | Set-Content -Path (Join-Path $root "BUILD.txt") -Encoding utf8
+
+      - name: Upload PR test build
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ariec61850-pr134-test-build
+          path: artifacts/ariec61850-test-build
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload test diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

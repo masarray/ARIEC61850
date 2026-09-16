@@ -21,7 +21,9 @@ internal static class MmsSmartDiscoveryPolicy
     /// <summary>
     /// Selects the live domain set independently from any SCL hint. This is important:
     /// SCL may prioritize online work, but it must never manufacture or suppress live
-    /// MMS evidence.
+    /// MMS evidence. Case-only collisions are collapsed deterministically because the
+    /// existing MMS directory model is case-insensitive and cannot represent both
+    /// without a dictionary collision.
     /// </summary>
     public static string[] SelectPublishedDomains(IEnumerable<string> observedDomains, int maxDomains)
     {
@@ -30,8 +32,10 @@ internal static class MmsSmartDiscoveryPolicy
         return observedDomains
             .Where(domain => !string.IsNullOrWhiteSpace(domain))
             .Select(domain => domain.Trim())
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(domain => domain, StringComparer.Ordinal)
+            .GroupBy(domain => domain, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderBy(domain => domain, StringComparer.Ordinal).First())
+            .OrderBy(domain => domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(domain => domain, StringComparer.Ordinal)
             .Take(Math.Clamp(maxDomains, 1, 4096))
             .ToArray();
     }

@@ -158,6 +158,12 @@ public sealed class LiveIedReportControlModel
     public string LogicalNode { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public bool Buffered { get; init; }
+    /// <summary>
+    /// Mirrors SCL ReportControl@indexed. Indexed controls expose numbered runtime
+    /// instances; non-indexed controls use the exact configured name and must never
+    /// receive an artificial numeric suffix.
+    /// </summary>
+    public bool Indexed { get; init; } = true;
     public string DataSetReference { get; init; } = string.Empty;
     public string ReportId { get; init; } = string.Empty;
     public string ConfRev { get; init; } = string.Empty;

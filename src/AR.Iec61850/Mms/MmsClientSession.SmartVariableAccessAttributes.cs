@@ -236,8 +236,8 @@ public sealed partial class MmsClientSession
         public static MmsObjectReferenceKeyComparer Instance { get; } = new();
 
         public bool Equals(MmsObjectReference x, MmsObjectReference y)
-            => x.Domain.Equals(y.Domain, StringComparison.OrdinalIgnoreCase) &&
-               x.Item.Equals(y.Item, StringComparison.OrdinalIgnoreCase);
+            => string.Equals(x.Domain, y.Domain, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(x.Item, y.Item, StringComparison.OrdinalIgnoreCase);
 
         public int GetHashCode(MmsObjectReference obj)
             => HashCode.Combine(

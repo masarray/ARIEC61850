@@ -3,109 +3,233 @@ namespace AR.Iec61850.Mms;
 public sealed partial class MmsClientSession
 {
     /// <summary>
-    /// Reads variable type metadata structure-first. One GetVariableAccessAttributes
-    /// request is issued for each IEC 61850 LN/FC/data-object root. Leaf probes are
-    /// used only when the root request fails or does not return a structured type.
-    /// This preserves exact type discovery while avoiding an eager request for every
-    /// discovered leaf on IEDs that expose the normal MMS structure hierarchy.
+    /// Convenience entry point for live-only callers. Canonical discovery code should
+    /// prefer the overload that supplies logical-node root candidates from its semantic
+    /// probe planner. The fallback ladder is LN root -> unresolved DO root -> unresolved
+    /// leaf, so normal structured IEDs need only roughly one GVA per logical node.
+    /// </summary>
+    public Task<IReadOnlyList<MmsVariableAccessAttributesResult>> GetVariableAccessAttributesSmartAsync(
+        MmsIedModelDirectory directory,
+        MmsSmartDiscoveryOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        var logicalNodeRoots = directory.LogicalDevices.Values
+            .OrderBy(device => device.Name, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(device => device.LogicalNodes.Values
+                .OrderBy(node => node.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(node => new MmsObjectReference(device.Name, node.Name, string.Empty)))
+            .ToArray();
+
+        return GetVariableAccessAttributesSmartAsync(
+            directory,
+            logicalNodeRoots,
+            options,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a bounded, coverage-aware type discovery ladder. A successful parent
+    /// TypeSpecification suppresses all descendant probes it can actually prove; only
+    /// unresolved branches descend to DO roots and finally exact leaves.
     /// </summary>
     public async Task<IReadOnlyList<MmsVariableAccessAttributesResult>> GetVariableAccessAttributesSmartAsync(
         MmsIedModelDirectory directory,
+        IEnumerable<MmsObjectReference> logicalNodeRootCandidates,
         MmsSmartDiscoveryOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         EnsureMmsReady();
         ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(logicalNodeRootCandidates);
         options ??= new MmsSmartDiscoveryOptions();
 
-        var groups = directory.Points
-            .Where(point => !string.IsNullOrWhiteSpace(point.Domain) && !string.IsNullOrWhiteSpace(point.MmsItemName))
-            .GroupBy(
-                point => BuildSmartTypeRoot(point),
-                MmsObjectReferenceKeyComparer.Instance)
-            .OrderBy(group => group.Key.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(group => group.Key.Item, StringComparer.OrdinalIgnoreCase)
+        var points = directory.Points
+            .Where(point => !string.IsNullOrWhiteSpace(point.Domain) &&
+                            !string.IsNullOrWhiteSpace(point.LogicalNode) &&
+                            !string.IsNullOrWhiteSpace(point.MmsItemName))
+            .OrderBy(point => point.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(point => point.LogicalNode, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(point => point.MmsItemName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        if (points.Length == 0)
+            return Array.Empty<MmsVariableAccessAttributesResult>();
 
-        if (groups.Length == 0)
+        var logicalNodeRoots = logicalNodeRootCandidates
+            .Where(reference => !string.IsNullOrWhiteSpace(reference.Domain) &&
+                                !string.IsNullOrWhiteSpace(reference.Item))
+            .Distinct(MmsObjectReferenceKeyComparer.Instance)
+            .OrderBy(reference => reference.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(reference => reference.Item, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (logicalNodeRoots.Length == 0)
             return Array.Empty<MmsVariableAccessAttributesResult>();
 
         var window = ResolveSmartDiscoveryWindow(options);
-        using var gate = new SemaphoreSlim(window, window);
+        var results = new List<MmsVariableAccessAttributesResult>(logicalNodeRoots.Length);
 
-        var rootTasks = groups
-            .Select(group => ReadVariableAttributesBoundedAsync(group.Key, gate, cancellationToken))
-            .ToArray();
-        var rootResults = await Task.WhenAll(rootTasks).ConfigureAwait(false);
+        var logicalNodeResults = await RunVariableAttributeBatchAsync(
+                logicalNodeRoots,
+                window,
+                cancellationToken)
+            .ConfigureAwait(false);
+        results.AddRange(logicalNodeResults);
 
-        var results = new List<MmsVariableAccessAttributesResult>(rootResults.Length);
-        results.AddRange(rootResults);
+        var logicalNodeIndex = logicalNodeResults
+            .GroupBy(result => result.Reference, MmsObjectReferenceKeyComparer.Instance)
+            .ToDictionary(group => group.Key, group => group.Last(), MmsObjectReferenceKeyComparer.Instance);
 
-        var fallbackReferences = new List<MmsObjectReference>();
-        for (var index = 0; index < groups.Length; index++)
+        var unresolvedAfterLogicalNode = new List<MmsFcResolvedPoint>();
+        foreach (var point in points)
         {
-            var group = groups[index];
-            var rootResult = rootResults[index];
-            var hasDescendants = group.Any(point =>
-                !point.MmsItemName.Equals(group.Key.Item, StringComparison.OrdinalIgnoreCase));
-            var rootDescribesHierarchy = rootResult.IsSuccess &&
-                                         (!hasDescendants || rootResult.TypeSpecification?.Children.Count > 0);
-
-            if (rootDescribesHierarchy)
-                continue;
-
-            foreach (var point in group)
+            var logicalNodeRoot = new MmsObjectReference(point.Domain, point.LogicalNode, string.Empty);
+            if (logicalNodeIndex.TryGetValue(logicalNodeRoot, out var rootResult) &&
+                MmsSmartTypeProbePolicy.Covers(rootResult, point.MmsItemName))
             {
-                var reference = point.ToObjectReference();
-                if (reference.Item.Equals(group.Key.Item, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                fallbackReferences.Add(reference);
+                continue;
             }
+
+            unresolvedAfterLogicalNode.Add(point);
         }
 
-        var distinctFallbacks = fallbackReferences
+        if (unresolvedAfterLogicalNode.Count == 0 || !IsMmsInitiated)
+            return results;
+
+        var dataObjectRoots = unresolvedAfterLogicalNode
+            .Select(MmsSmartTypeProbePolicy.BuildDataObjectRoot)
+            .Where(reference => !string.IsNullOrWhiteSpace(reference.Item))
             .Distinct(MmsObjectReferenceKeyComparer.Instance)
             .OrderBy(reference => reference.Domain, StringComparer.OrdinalIgnoreCase)
             .ThenBy(reference => reference.Item, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        if (distinctFallbacks.Length > 0 && IsMmsInitiated)
+        var dataObjectResults = await RunVariableAttributeBatchAsync(
+                dataObjectRoots,
+                window,
+                cancellationToken)
+            .ConfigureAwait(false);
+        results.AddRange(dataObjectResults);
+
+        var dataObjectIndex = dataObjectResults
+            .GroupBy(result => result.Reference, MmsObjectReferenceKeyComparer.Instance)
+            .ToDictionary(group => group.Key, group => group.Last(), MmsObjectReferenceKeyComparer.Instance);
+
+        var leafFallbacks = new List<MmsObjectReference>();
+        foreach (var point in unresolvedAfterLogicalNode)
         {
-            var fallbackTasks = distinctFallbacks
-                .Select(reference => ReadVariableAttributesBoundedAsync(reference, gate, cancellationToken))
-                .ToArray();
-            results.AddRange(await Task.WhenAll(fallbackTasks).ConfigureAwait(false));
+            var dataObjectRoot = MmsSmartTypeProbePolicy.BuildDataObjectRoot(point);
+            if (dataObjectIndex.TryGetValue(dataObjectRoot, out var rootResult) &&
+                MmsSmartTypeProbePolicy.Covers(rootResult, point.MmsItemName))
+            {
+                continue;
+            }
+
+            leafFallbacks.Add(point.ToObjectReference());
+        }
+
+        var distinctLeafFallbacks = leafFallbacks
+            .Distinct(MmsObjectReferenceKeyComparer.Instance)
+            .OrderBy(reference => reference.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(reference => reference.Item, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (distinctLeafFallbacks.Length > 0 && IsMmsInitiated)
+        {
+            results.AddRange(await RunVariableAttributeBatchAsync(
+                    distinctLeafFallbacks,
+                    window,
+                    cancellationToken)
+                .ConfigureAwait(false));
         }
 
         return results;
     }
 
-    private async Task<MmsVariableAccessAttributesResult> ReadVariableAttributesBoundedAsync(
-        MmsObjectReference reference,
-        SemaphoreSlim gate,
+    private async Task<MmsVariableAccessAttributesResult[]> RunVariableAttributeBatchAsync(
+        IReadOnlyList<MmsObjectReference> references,
+        int maxConcurrency,
         CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (references.Count == 0)
+            return Array.Empty<MmsVariableAccessAttributesResult>();
+
+        var results = new MmsVariableAccessAttributesResult?[references.Count];
+        var nextIndex = -1;
+        var workerCount = Math.Min(Math.Max(1, maxConcurrency), references.Count);
+        var workers = new Task[workerCount];
+
+        for (var worker = 0; worker < workerCount; worker++)
+            workers[worker] = WorkerAsync();
+
+        await Task.WhenAll(workers).ConfigureAwait(false);
+
+        var materialized = new MmsVariableAccessAttributesResult[references.Count];
+        for (var index = 0; index < references.Count; index++)
+        {
+            materialized[index] = results[index] ?? BuildUnavailableVariableTypeResult(
+                references[index],
+                "Skipped because the MMS association became unavailable before this probe started.");
+        }
+
+        return materialized;
+
+        async Task WorkerAsync()
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!IsMmsInitiated)
+                    return;
+
+                var index = Interlocked.Increment(ref nextIndex);
+                if (index >= references.Count)
+                    return;
+
+                var reference = references[index];
+                results[index] = await ReadVariableAttributesSafeAsync(reference, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (!IsMmsInitiated)
+                    return;
+            }
+        }
+    }
+
+    private async Task<MmsVariableAccessAttributesResult> ReadVariableAttributesSafeAsync(
+        MmsObjectReference reference,
+        CancellationToken cancellationToken)
+    {
+        if (!IsMmsInitiated)
+            return BuildUnavailableVariableTypeResult(reference, "MMS association is unavailable.");
+
         try
         {
             return await GetVariableAccessAttributesAsync(reference, cancellationToken).ConfigureAwait(false);
         }
-        finally
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            gate.Release();
+            return BuildUnavailableVariableTypeResult(
+                reference,
+                "The receive pump stopped while this type probe was pending.");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
+        {
+            return BuildUnavailableVariableTypeResult(
+                reference,
+                $"Type probe stopped safely after association fault: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
-    private static MmsObjectReference BuildSmartTypeRoot(MmsFcResolvedPoint point)
-    {
-        var parts = point.MmsItemName.Split(
-            '$',
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var item = parts.Length >= 3
-            ? string.Join('$', parts.Take(3))
-            : point.MmsItemName;
-        return new MmsObjectReference(point.Domain, item, point.FunctionalConstraint);
-    }
+    private static MmsVariableAccessAttributesResult BuildUnavailableVariableTypeResult(
+        MmsObjectReference reference,
+        string message)
+        => new()
+        {
+            IsSuccess = false,
+            Reference = reference,
+            Message = message,
+            Source = "SmartTypeProbe"
+        };
 
     private sealed class MmsObjectReferenceKeyComparer : IEqualityComparer<MmsObjectReference>
     {

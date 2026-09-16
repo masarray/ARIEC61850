@@ -23,6 +23,31 @@ public static class LiveIedVariableTypeProbePlanner
     }
 }
 
+/// <summary>
+/// Canonical live-discovery entry point for bounded type enrichment. Planning stays
+/// in the Discovery layer while the MMS session only executes the supplied evidence
+/// probes. This prevents SCL/live semantic logic from leaking into the wire layer.
+/// </summary>
+public static class LiveIedVariableTypeProbeExecutor
+{
+    public static Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ProbeSmartAsync(
+        MmsClientSession session,
+        MmsIedModelDirectory directory,
+        MmsSmartDiscoveryOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(directory);
+
+        var roots = LiveIedVariableTypeProbePlanner.BuildLogicalNodeRootCandidates(directory);
+        return session.GetVariableAccessAttributesSmartAsync(
+            directory,
+            roots,
+            options,
+            cancellationToken);
+    }
+}
+
 internal sealed class LiveIedVariableTypeHierarchyIndex
 {
     private readonly Dictionary<string, LiveIedVariableTypeResolution> _byMmsReference =

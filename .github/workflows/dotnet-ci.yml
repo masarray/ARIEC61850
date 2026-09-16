@@ -73,10 +73,14 @@ jobs:
           $root = "artifacts/ariec61850-test-build"
           $binary = Join-Path $root "lib/net8.0"
           $nuget = Join-Path $root "nuget"
+          $builtBinary = ".\source\.artifacts\bin\AR.Iec61850\Release\net8.0"
           New-Item -ItemType Directory -Path $binary -Force | Out-Null
           New-Item -ItemType Directory -Path $nuget -Force | Out-Null
 
-          Copy-Item ".\source\src\AR.Iec61850\bin\Release\net8.0\*" $binary -Recurse -Force
+          if (-not (Test-Path $builtBinary)) {
+            throw "Expected Release output was not found at $builtBinary"
+          }
+          Copy-Item (Join-Path $builtBinary "*") $binary -Recurse -Force
 
           $packageVersion = "0.0.0-pr134.$env:GITHUB_RUN_NUMBER"
           dotnet pack .\source\src\AR.Iec61850\AR.Iec61850.csproj `

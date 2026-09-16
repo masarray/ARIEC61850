@@ -55,6 +55,10 @@ public sealed partial class MmsClientSession
                 cancellationToken)
             .ConfigureAwait(false);
 
+        // GetNameListPagedAsync deliberately preserves collected names if an endpoint
+        // stops making pagination progress. MoreFollows therefore means partial,
+        // even when the legacy result has IsSuccess=true.
+        var domainListComplete = domainsResult.IsSuccess && !domainsResult.MoreFollows;
         var domains = domainsResult.IsSuccess
             ? domainsResult.Names
                 .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -143,22 +147,24 @@ public sealed partial class MmsClientSession
                 .ConfigureAwait(false))
                 .ToArray();
 
-        var failedChains = chains.Count(chain => !chain.IsSuccess);
+        var failedChains = chains.Count(chain => !chain.IsComplete);
         var successfulDataSetDirectories = dataSetDirectories.Count(directory => directory.IsSuccess);
         var discoveredDataSetMembers = dataSetDirectories
             .Where(directory => directory.IsSuccess)
             .Sum(directory => directory.Members.Count);
         var negotiated = LastNegotiatedCapabilities.MaxOutstandingCalling;
         var negotiatedText = negotiated.HasValue ? negotiated.Value.ToString() : "unknown";
-        var domainStatus = domainsResult.IsSuccess
-            ? $"domains={domains.Length}"
-            : $"domain-list-failed={domainsResult.Message}";
+        var domainStatus = !domainsResult.IsSuccess
+            ? $"domain-list-failed={domainsResult.Message}"
+            : domainListComplete
+                ? $"domains={domains.Length}"
+                : $"domains-partial={domains.Length}, moreFollows=true";
         var dataSetDirectorySummary = options.ReadDataSetDirectories
             ? $"dataset directories={successfulDataSetDirectories}/{dataSetDirectories.Length}, dataset members={discoveredDataSetMembers}"
             : "dataset directories=not requested";
 
         LastDiscoveryAttemptSummary =
-            $"Smart discovery: {domainStatus}, chains={chains.Length}, failedChains={failedChains}, " +
+            $"Smart discovery: {domainStatus}, chains={chains.Length}, incompleteChains={failedChains}, " +
             $"window={effectiveWindow}, negotiatedCalling={negotiatedText}.";
 
         return new MmsDiscoveryResult
@@ -207,7 +213,14 @@ public sealed partial class MmsClientSession
                 .Take(maxNames)
                 .ToArray();
 
-            return new SmartNameChainResult(domain, objectClass, result.IsSuccess, names, result.Message);
+            return new SmartNameChainResult(
+                domain,
+                objectClass,
+                result.IsSuccess && !result.MoreFollows,
+                names,
+                result.MoreFollows
+                    ? $"Partial GetNameList chain: IED still reported moreFollows. {result.Message}"
+                    : result.Message);
         }
         finally
         {
@@ -218,7 +231,7 @@ public sealed partial class MmsClientSession
     private sealed record SmartNameChainResult(
         string Domain,
         MmsGetNameListObjectClass ObjectClass,
-        bool IsSuccess,
+        bool IsComplete,
         IReadOnlyList<string> Names,
         string Message);
 }

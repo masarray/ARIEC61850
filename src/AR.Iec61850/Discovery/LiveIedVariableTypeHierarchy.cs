@@ -50,6 +50,8 @@ public static class LiveIedVariableTypeProbeExecutor
 
 internal sealed class LiveIedVariableTypeHierarchyIndex
 {
+    private const char CompositeKeySeparator = '\u001F';
+
     private readonly Dictionary<string, LiveIedVariableTypeResolution> _byMmsReference =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -67,8 +69,34 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
         ArgumentNullException.ThrowIfNull(results);
 
         var index = new LiveIedVariableTypeHierarchyIndex();
+        if (directory.PointCount == 0 || results.Count == 0)
+            return index;
+
+        // Build one cheap LN-local candidate index. The previous implementation scanned
+        // every point in the entire IED for every successful GVA result, which made CPU
+        // mapping approach O(points * typeResults) on large models. Every MMS variable
+        // path begins at one logical node, so results can be constrained to that LN.
+        var pointsByLogicalNode = directory.Points
+            .GroupBy(
+                point => BuildLogicalNodeKey(point.Domain, point.LogicalNode),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<MmsFcResolvedPoint>)group.ToArray(),
+                StringComparer.OrdinalIgnoreCase);
+
         foreach (var result in results.Where(result => result.IsSuccess && result.TypeSpecification is not null))
-            index.AddResult(directory, result);
+        {
+            var rootParts = SplitMmsItem(result.Reference.Item);
+            if (rootParts.Length == 0 || string.IsNullOrWhiteSpace(result.Reference.Domain))
+                continue;
+
+            var logicalNodeKey = BuildLogicalNodeKey(result.Reference.Domain, rootParts[0]);
+            if (!pointsByLogicalNode.TryGetValue(logicalNodeKey, out var candidates))
+                continue;
+
+            index.AddResult(candidates, result, rootParts);
+        }
 
         return index;
     }
@@ -76,24 +104,21 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
     public bool TryResolve(MmsFcResolvedPoint point, out LiveIedVariableTypeResolution resolution)
         => _byMmsReference.TryGetValue(point.MmsReference, out resolution!);
 
-    private void AddResult(MmsIedModelDirectory directory, MmsVariableAccessAttributesResult result)
+    private void AddResult(
+        IReadOnlyList<MmsFcResolvedPoint> candidatePoints,
+        MmsVariableAccessAttributesResult result,
+        IReadOnlyList<string> rootParts)
     {
-        var rootItem = result.Reference.Item.Trim();
-        if (string.IsNullOrWhiteSpace(result.Reference.Domain) || string.IsNullOrWhiteSpace(rootItem) || result.TypeSpecification is null)
+        if (result.TypeSpecification is null)
             return;
 
-        var rootParts = SplitMmsItem(rootItem);
-        if (rootParts.Length == 0)
-            return;
-
-        foreach (var point in directory.Points.Where(point =>
-                     string.Equals(point.Domain, result.Reference.Domain, StringComparison.OrdinalIgnoreCase)))
+        foreach (var point in candidatePoints)
         {
             var pointParts = SplitMmsItem(point.MmsItemName);
             if (!HasPrefix(pointParts, rootParts))
                 continue;
 
-            var remainder = pointParts[rootParts.Length..];
+            var remainder = pointParts[rootParts.Count..];
             var type = ResolvePath(result.TypeSpecification, remainder);
             if (type is null)
                 continue;
@@ -105,7 +130,7 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
                 type,
                 source,
                 $"Mapped from {result.ReferenceKey} type hierarchy. {result.Message}",
-                rootParts.Length);
+                rootParts.Count);
 
             if (!_byMmsReference.TryGetValue(point.MmsReference, out var existing) ||
                 resolution.Specificity > existing.Specificity)
@@ -131,8 +156,13 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
         return current;
     }
 
+    private static string BuildLogicalNodeKey(string domain, string logicalNode)
+        => string.Concat(domain ?? string.Empty, CompositeKeySeparator, logicalNode ?? string.Empty);
+
     private static string[] SplitMmsItem(string value)
-        => value.Split('$', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        => (value ?? string.Empty).Split(
+            '$',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static bool HasPrefix(IReadOnlyList<string> value, IReadOnlyList<string> prefix)
     {

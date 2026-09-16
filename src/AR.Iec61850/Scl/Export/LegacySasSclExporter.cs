@@ -12,6 +12,7 @@ public sealed class LegacySasSclExportOptions
     public SclSchemaProfile SchemaProfile { get; init; } = SclSchemaProfile.Edition1V16;
     public SclReportControlSelection SelectedReportControl { get; init; } = new(string.Empty);
     public bool RemoveUnreferencedDataSets { get; init; }
+    public bool PreserveSourceReportControlIdentity { get; init; }
     public string ToolId { get; init; } = "ARIEC61850";
 }
 
@@ -70,17 +71,19 @@ public static class LegacySasSclExporter
                 SelectedReportControls = new[] { options.SelectedReportControl },
                 RequireExactlyOneReportControl = true,
                 RemoveUnreferencedDataSets = options.RemoveUnreferencedDataSets,
-                CollapseIndexedSelectionToSingleInstance = true
+                CollapseIndexedSelectionToSingleInstance = !options.PreserveSourceReportControlIdentity
             },
             sourceName);
 
         var document = new XDocument(filtered.Document);
-        ApplyExactRuntimeReportControlIdentity(document, options.SelectedReportControl);
+        if (!options.PreserveSourceReportControlIdentity)
+            ApplyExactRuntimeReportControlIdentity(document, options.SelectedReportControl);
         var root = document.Root ?? throw new InvalidDataException("Filtered SCL document has no root element.");
         var schema = SclSchemaProfiles.Get(options.SchemaProfile);
         ApplySchemaProfile(root, schema);
         Validate(document, normalized.SelectedIedName);
-        ValidateExactRuntimeReportControlIdentity(document, options.SelectedReportControl);
+        if (!options.PreserveSourceReportControlIdentity)
+            ValidateExactRuntimeReportControlIdentity(document, options.SelectedReportControl);
 
         var retained = AssertSingleRetained(filtered);
         var findings = normalized.Findings
@@ -102,7 +105,9 @@ public static class LegacySasSclExporter
             IedName = normalized.SelectedIedName,
             AccessPointName = retained.AccessPointName,
             SclSchema = schema.DisplayName,
-            RetainedReportControlReference = ExactRetainedReference(retained, options.SelectedReportControl),
+            RetainedReportControlReference = options.PreserveSourceReportControlIdentity
+                ? retained.DisplayReference
+                : ExactRetainedReference(retained, options.SelectedReportControl),
             RetainedDataSetName = retained.DataSetName,
             RetainedDataSetMemberCount = retained.DataSetMemberCount,
             RemovedReportControlCount = filtered.RemovedReportControlCount,

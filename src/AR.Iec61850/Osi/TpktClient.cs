@@ -47,17 +47,20 @@ public sealed class TpktClient : IAsyncDisposable
         if (payload.Length > ushort.MaxValue - 4)
             throw new ArgumentOutOfRangeException(nameof(payload), "TPKT payload is too large.");
 
-        var frame = new byte[payload.Length + 4];
-        frame[0] = 0x03;
-        frame[1] = 0x00;
-        frame[2] = (byte)(frame.Length >> 8);
-        frame[3] = (byte)(frame.Length & 0xFF);
-        payload.CopyTo(frame.AsMemory(4));
-
+        // Serialize only complete frame writes. Building the frame inside the gate keeps
+        // peak allocation bounded to one outbound TPKT frame even when many confirmed
+        // MMS operations are outstanding concurrently.
         await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var stream = _stream ?? throw new InvalidOperationException("TPKT stream is not connected.");
+            var frame = new byte[payload.Length + 4];
+            frame[0] = 0x03;
+            frame[1] = 0x00;
+            frame[2] = (byte)(frame.Length >> 8);
+            frame[3] = (byte)(frame.Length & 0xFF);
+            payload.CopyTo(frame.AsMemory(4));
+
             await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
         }
         finally

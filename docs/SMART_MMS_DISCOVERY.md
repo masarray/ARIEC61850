@@ -113,6 +113,10 @@ The legacy `DiscoverAsync`, `GetVariableAccessAttributesBatchAsync`, and sequent
 
 Pipelining requires multiple confirmed requests to be outstanding. `TpktClient` therefore serializes writers around each complete TPKT frame. The frame is allocated inside that single-writer gate, keeping peak outbound-frame allocation bounded while still allowing multiple request/response lifecycles to remain outstanding. The existing single receive pump remains the only association reader.
 
+## Consumer anti-lag rule
+
+The engine smart methods use asynchronous I/O and `ConfigureAwait(false)` internally, so MMS waits, response decoding, and canonical model materialization do not require the caller's UI synchronization context. A UI consumer should publish immutable snapshots/results back to the UI in coarse batches rather than adding thousands of tree nodes one by one. Discovery/type/value phases are intentionally separate so the first structural model can be shown before optional metadata/value enrichment finishes.
+
 ## Capture-informed target
 
 The reference capture used during this refactor showed the existing consumer issuing roughly 30.7k confirmed MMS requests, including roughly 23.7k GetVariableAccessAttributes and 6.6k Read requests, while the comparison tool used a much smaller, pipelined request set. These values are benchmark evidence, not protocol requirements. The smart path targets the independently observed scheduling pattern—single association, bounded outstanding requests, structural discovery first, hierarchy-aware metadata, FC-root selective reads—without copying vendor code or vendor-specific implementation details.

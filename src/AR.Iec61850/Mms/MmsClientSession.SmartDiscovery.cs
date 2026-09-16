@@ -78,9 +78,12 @@ public sealed partial class MmsClientSession
                 cancellationToken)
             .ConfigureAwait(false);
 
-        var publishedDomains = domainsResult.IsSuccess
-            ? MmsSmartDiscoveryPolicy.SelectPublishedDomains(domainsResult.Names, maxDomains)
-            : Array.Empty<string>();
+        // Preserve valid domain evidence even when a later continuation page fails.
+        // The status remains partial/failed in diagnostics, but a recoverable fault
+        // must not erase already-observed IED structure.
+        var publishedDomains = MmsSmartDiscoveryPolicy.SelectPublishedDomains(
+            domainsResult.Names,
+            maxDomains);
         var scheduledDomains = MmsSmartDiscoveryPolicy.OrderDomainsForScheduling(
             publishedDomains,
             options.PriorityDomains);
@@ -135,13 +138,25 @@ public sealed partial class MmsClientSession
         var inventory = MmsReportDiscoveryMapper.BuildInventory(snapshot);
         var iedDirectory = MmsIedModelDirectoryBuilder.Build(snapshot);
 
+        var reportEnrichmentInterrupted = false;
         if (options.ProbeReportAttributes && IsMmsInitiated)
         {
-            await EnrichReportInventoryAsync(
-                    inventory,
-                    Math.Max(0, options.MaxReportAttributeProbes),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            try
+            {
+                await EnrichReportInventoryAsync(
+                        inventory,
+                        Math.Max(0, options.MaxReportAttributeProbes),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                reportEnrichmentInterrupted = true;
+            }
+            catch (Exception ex) when (IsExpectedSmartDiscoveryFault(ex))
+            {
+                reportEnrichmentInterrupted = true;
+            }
         }
 
         var dataSetReferences = options.ReadDataSetDirectories && IsMmsInitiated
@@ -187,16 +202,18 @@ public sealed partial class MmsClientSession
         var negotiated = LastNegotiatedCapabilities.MaxOutstandingCalling;
         var negotiatedText = negotiated.HasValue ? negotiated.Value.ToString() : "unknown";
         var domainStatus = !domainsResult.IsSuccess
-            ? $"domain-list-failed={domainsResult.Message}"
+            ? $"domains={publishedDomains.Length}, domain-list=failed-after-partial:{domainsResult.Message}"
             : domainsResult.MoreFollows
                 ? $"domains={publishedDomains.Length}, domain-list=partial"
                 : $"domains={publishedDomains.Length}, domain-list=complete";
         var dataSetDirectorySummary = options.ReadDataSetDirectories
             ? $"dataset directories={successfulDataSetDirectories}/{dataSetReferences.Length}, dataset members={discoveredDataSetMembers}"
             : "dataset directories=deferred";
-        var reportSummary = options.ProbeReportAttributes
-            ? "report enrichment=requested"
-            : "report enrichment=deferred";
+        var reportSummary = !options.ProbeReportAttributes
+            ? "report enrichment=deferred"
+            : reportEnrichmentInterrupted
+                ? "report enrichment=partial"
+                : "report enrichment=completed";
 
         LastDiscoveryAttemptSummary =
             $"Smart discovery: {domainStatus}, chains={chains.Length}, incompleteChains={incompleteChains}, " +
@@ -403,17 +420,30 @@ public sealed partial class MmsClientSession
             }
 
             var before = names.Count;
+            var truncatedThisPage = false;
             foreach (var rawName in last.Names)
             {
                 if (string.IsNullOrWhiteSpace(rawName))
                     continue;
 
                 var name = rawName.Trim();
-                if (seenNames.Add(name) && names.Count < boundedNames)
+                if (!seenNames.Add(name))
+                    continue;
+
+                if (names.Count < boundedNames)
                     names.Add(name);
+                else
+                    truncatedThisPage = true;
             }
 
             var newCount = names.Count - before;
+            if (truncatedThisPage)
+            {
+                incomplete = true;
+                stopReason = $"name limit {boundedNames} reached inside page {page}";
+                break;
+            }
+
             if (!last.MoreFollows)
                 break;
 

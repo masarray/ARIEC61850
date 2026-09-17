@@ -84,4 +84,21 @@ public sealed class MmsSmartDiscoveryKpiTests
         Assert.Equal(4925, after.FcPointCount);
         Assert.NotEqual(before.DeterministicSignature, after.DeterministicSignature);
     }
+
+    [Fact]
+    public void PartialWireAccounting_IsExplicitAndDeterministic()
+    {
+        var first = new MmsSmartDiscoveryKpiRecorder(1);
+        first.MarkAccountingPartial("Report-enrichment confirmed Reads are not individually observed");
+
+        var second = new MmsSmartDiscoveryKpiRecorder(2);
+        second.MarkAccountingPartial("Report-enrichment confirmed Reads are not individually observed");
+
+        var firstSnapshot = first.Snapshot();
+        var secondSnapshot = second.Snapshot();
+
+        Assert.False(firstSnapshot.WireAccountingComplete);
+        Assert.Single(firstSnapshot.AccountingNotes);
+        Assert.Equal(firstSnapshot.DeterministicSignature, secondSnapshot.DeterministicSignature);
+    }
 }

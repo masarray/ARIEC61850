@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Scl;
 
 namespace AR.Iec61850.Scl.Export;
 
@@ -72,6 +73,7 @@ public static class CanonicalLiveIedSclExporter
 
     public static void ValidateCanonicalCommunication(LiveIedCanonicalModel canonical)
     {
+        ArgumentNullException.ThrowIfNull(canonical);
         var communication = canonical.Communication;
         var association = communication.Association;
         var errors = new List<string>();
@@ -134,10 +136,12 @@ public static class CanonicalLiveIedSclExporter
         AddP(address, "IP-GATEWAY", canonical.Communication.IpGateway);
     }
 
-    private static void PreserveRuntimeServiceCapacity(
+    public static void PreserveRuntimeServiceCapacity(
         XDocument document,
         LiveIedModelDiscoveryDocument discovery)
     {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(discovery);
         // ReportControl elements may be projected from concrete runtime instances to
         // indexed logical controls, but Services/ConfReportControl@max describes the
         // observed runtime capacity and therefore stays bound to the physical inventory.

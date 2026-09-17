@@ -32,6 +32,8 @@ public sealed class MmsSmartDiscoveryKpiSnapshot
     public int FailedRequests { get; init; }
     public int DuplicateRequests { get; init; }
     public int PeakOutstandingRequests { get; init; }
+    public bool WireAccountingComplete { get; init; } = true;
+    public IReadOnlyList<string> AccountingNotes { get; init; } = Array.Empty<string>();
     public int LogicalDeviceCount { get; init; }
     public int LogicalNodeCount { get; init; }
     public int RawVariableCount { get; init; }
@@ -48,9 +50,9 @@ public sealed class MmsSmartDiscoveryKpiSnapshot
     public string Summary =>
         $"Smart discovery KPI: generation={Generation}, requests={TotalRequests}, success={SuccessfulRequests}, " +
         $"failed={FailedRequests}, duplicates={DuplicateRequests}, peakOutstanding={PeakOutstandingRequests}, " +
-        $"elapsed={ElapsedMs:0.0} ms, LD={LogicalDeviceCount}, LN={LogicalNodeCount}, " +
-        $"raw={RawVariableCount}, FC-points={FcPointCount}, datasets={DataSetCount}, " +
-        $"datasetDirectories={DataSetDirectoryCount}, datasetMembers={DataSetMemberCount}, " +
+        $"wireAccounting={(WireAccountingComplete ? "complete" : "partial")}, elapsed={ElapsedMs:0.0} ms, " +
+        $"LD={LogicalDeviceCount}, LN={LogicalNodeCount}, raw={RawVariableCount}, FC-points={FcPointCount}, " +
+        $"datasets={DataSetCount}, datasetDirectories={DataSetDirectoryCount}, datasetMembers={DataSetMemberCount}, " +
         $"RCB={ReportControlCount}, signature={DeterministicSignature}.";
 }
 
@@ -79,6 +81,9 @@ public sealed partial class MmsClientSession
         string logicalKey)
         => Volatile.Read(ref _smartDiscoveryKpiRecorder)?.BeginRequest(phase, service, logicalKey)
            ?? MmsSmartDiscoveryRequestObservation.Noop;
+
+    private void MarkSmartDiscoveryKpiAccountingPartial(string note)
+        => Volatile.Read(ref _smartDiscoveryKpiRecorder)?.MarkAccountingPartial(note);
 
     private void UpdateSmartDiscoveryCompleteness(
         MmsDiscoverySnapshot snapshot,
@@ -152,12 +157,14 @@ internal sealed class MmsSmartDiscoveryKpiRecorder
     private readonly long _startedTimestamp = Stopwatch.GetTimestamp();
     private readonly Dictionary<string, MutableRequestStats> _requestStats = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MutablePhaseStats> _phaseStats = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _accountingNotes = new(StringComparer.Ordinal);
     private int _totalRequests;
     private int _successfulRequests;
     private int _failedRequests;
     private int _duplicateRequests;
     private int _outstandingRequests;
     private int _peakOutstandingRequests;
+    private bool _wireAccountingComplete = true;
     private int _logicalDeviceCount;
     private int _logicalNodeCount;
     private int _rawVariableCount;
@@ -212,6 +219,16 @@ internal sealed class MmsSmartDiscoveryKpiRecorder
         }
 
         return new MmsSmartDiscoveryRequestObservation(this, normalizedPhase, descriptor, Stopwatch.GetTimestamp());
+    }
+
+    public void MarkAccountingPartial(string note)
+    {
+        lock (_gate)
+        {
+            _wireAccountingComplete = false;
+            var normalized = Normalize(note, "unspecified unobserved request path");
+            _accountingNotes.Add(normalized);
+        }
     }
 
     public void UpdateCompleteness(
@@ -280,6 +297,8 @@ internal sealed class MmsSmartDiscoveryKpiRecorder
                 FailedRequests = _failedRequests,
                 DuplicateRequests = _duplicateRequests,
                 PeakOutstandingRequests = _peakOutstandingRequests,
+                WireAccountingComplete = _wireAccountingComplete,
+                AccountingNotes = _accountingNotes.OrderBy(note => note, StringComparer.Ordinal).ToArray(),
                 LogicalDeviceCount = _logicalDeviceCount,
                 LogicalNodeCount = _logicalNodeCount,
                 RawVariableCount = _rawVariableCount,
@@ -338,6 +357,11 @@ internal sealed class MmsSmartDiscoveryKpiRecorder
                 .Append("|fail=").Append(request.FailedAttempts)
                 .Append('\n');
         }
+
+        builder.Append("accounting|complete=").Append(_wireAccountingComplete);
+        foreach (var note in _accountingNotes.OrderBy(note => note, StringComparer.Ordinal))
+            builder.Append("|note=").Append(note);
+        builder.Append('\n');
 
         builder.Append("model|ld=").Append(_logicalDeviceCount)
             .Append("|ln=").Append(_logicalNodeCount)

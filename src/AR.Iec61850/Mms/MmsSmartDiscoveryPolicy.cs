@@ -79,6 +79,49 @@ internal static class MmsSmartDiscoveryPolicy
 
 internal static class MmsSmartTypeProbePolicy
 {
+    private const char CompositeKeySeparator = '\u001F';
+
+    /// <summary>
+    /// Intersects supplied LN-root candidates with the logical nodes proven by the
+    /// current live directory. Hints can affect order at higher layers, but a GVA must
+    /// never be sent merely because a stale SCL/caller candidate names a non-live LN.
+    /// Returned references use canonical live directory spelling and deterministic
+    /// LD/LN order.
+    /// </summary>
+    public static MmsObjectReference[] SelectLiveLogicalNodeRoots(
+        MmsIedModelDirectory directory,
+        IEnumerable<MmsObjectReference> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(candidates);
+
+        var requested = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reference in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(reference.Domain) ||
+                string.IsNullOrWhiteSpace(reference.Item) ||
+                reference.Item.Contains('$', StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            requested.Add(BuildReferenceKey(reference.Domain.Trim(), reference.Item.Trim()));
+        }
+
+        if (requested.Count == 0)
+            return Array.Empty<MmsObjectReference>();
+
+        return directory.LogicalDevices.Values
+            .OrderBy(device => device.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(device => device.Name, StringComparer.Ordinal)
+            .SelectMany(device => device.LogicalNodes.Values
+                .OrderBy(node => node.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(node => node.Name, StringComparer.Ordinal)
+                .Where(node => requested.Contains(BuildReferenceKey(device.Name, node.Name)))
+                .Select(node => new MmsObjectReference(device.Name, node.Name, string.Empty)))
+            .ToArray();
+    }
+
     public static MmsObjectReference BuildDataObjectRoot(MmsFcResolvedPoint point)
     {
         ArgumentNullException.ThrowIfNull(point);
@@ -88,6 +131,46 @@ internal static class MmsSmartTypeProbePolicy
             ? string.Join('$', parts.Take(3))
             : point.MmsItemName;
         return new MmsObjectReference(point.Domain, item, point.FunctionalConstraint);
+    }
+
+    /// <summary>
+    /// Builds exact fallback probes without ever reissuing an exact GVA reference that
+    /// was already attempted earlier in the same hierarchy ladder. This matters for
+    /// flat inventories containing LN$FC$DO roots: after a DO-root GVA fails or is
+    /// shallow, treating that same root as a leaf fallback would otherwise send the
+    /// identical request twice with no new evidence boundary.
+    /// </summary>
+    public static MmsObjectReference[] BuildUnprobedExactFallbacks(
+        IEnumerable<MmsFcResolvedPoint> unresolvedPoints,
+        IEnumerable<MmsObjectReference> alreadyProbed)
+    {
+        ArgumentNullException.ThrowIfNull(unresolvedPoints);
+        ArgumentNullException.ThrowIfNull(alreadyProbed);
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reference in alreadyProbed)
+        {
+            if (string.IsNullOrWhiteSpace(reference.Domain) || string.IsNullOrWhiteSpace(reference.Item))
+                continue;
+            seen.Add(BuildReferenceKey(reference.Domain.Trim(), reference.Item.Trim()));
+        }
+
+        var fallback = new List<MmsObjectReference>();
+        foreach (var point in unresolvedPoints
+                     .Where(point => !string.IsNullOrWhiteSpace(point.Domain) &&
+                                     !string.IsNullOrWhiteSpace(point.MmsItemName))
+                     .OrderBy(point => point.Domain, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(point => point.MmsItemName, StringComparer.OrdinalIgnoreCase))
+        {
+            var reference = point.ToObjectReference();
+            var key = BuildReferenceKey(reference.Domain, reference.Item);
+            if (!seen.Add(key))
+                continue;
+
+            fallback.Add(reference);
+        }
+
+        return fallback.ToArray();
     }
 
     /// <summary>
@@ -127,6 +210,9 @@ internal static class MmsSmartTypeProbePolicy
 
         return true;
     }
+
+    private static string BuildReferenceKey(string domain, string item)
+        => string.Concat(domain ?? string.Empty, CompositeKeySeparator, item ?? string.Empty);
 
     private static string[] Split(string value)
         => (value ?? string.Empty).Split(

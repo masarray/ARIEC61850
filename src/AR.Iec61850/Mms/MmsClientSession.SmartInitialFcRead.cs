@@ -198,6 +198,10 @@ public sealed partial class MmsClientSession
             references,
             MmsReadPayloadProfile.PresentationDataValues);
 
+        using var observation = ObserveSmartDiscoveryRequest(
+            "initial-read",
+            "Read",
+            BuildSmartInitialReadLogicalKey(references));
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout);
 
@@ -210,6 +214,7 @@ public sealed partial class MmsClientSession
                     deadline.Token)
                 .ConfigureAwait(false);
             read = MmsReadBatchCodec.DecodeResponse(response, references, invokeId);
+            observation.Complete(read.IsSuccess);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {
@@ -247,6 +252,12 @@ public sealed partial class MmsClientSession
                 : SmartInitialReadBatchOutcome.Partial,
             RequiresAssociationReset: false);
     }
+
+    private static string BuildSmartInitialReadLogicalKey(IReadOnlyList<MmsObjectReference> references)
+        => string.Join(
+            ";",
+            references.Select(reference =>
+                $"{reference.Domain}/{reference.Item}/{reference.FunctionalConstraint}"));
 
     private static InitialFcReadBatchExecution BuildSmartInitialReadExecution(
         InitialFcReadBatch batch,

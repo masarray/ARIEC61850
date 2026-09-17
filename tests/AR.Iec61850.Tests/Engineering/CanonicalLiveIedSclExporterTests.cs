@@ -78,47 +78,30 @@ public sealed class CanonicalLiveIedSclExporterTests
     }
 
     [Fact]
-    public void WriteFiles_PreservesPhysicalReportCapacityAfterLogicalProjection()
+    public void PreserveRuntimeServiceCapacity_KeepsPhysicalCountIndependentOfLogicalProjection()
     {
-        var root = Path.Combine(Path.GetTempPath(), "ariec-canonical-rcb-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        var path = Path.Combine(root, "ied.iid");
-        try
+        var document = XDocument.Parse(
+            "<SCL xmlns='http://www.iec.ch/61850/2003/SCL'><IED name='IED'><Services><ConfReportControl max='2'/></Services></IED></SCL>");
+        var discovery = new LiveIedModelDiscoveryDocument
         {
-            var canonical = CreateCanonical(reportControlCount: 3);
-            CanonicalLiveIedSclExporter.WriteFiles(canonical, path);
-            var document = XDocument.Load(path);
-            var conf = document.Descendants(Scl + "ConfReportControl").Single();
-            Assert.Equal("3", (string?)conf.Attribute("max"));
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-                Directory.Delete(root, recursive: true);
-        }
+            ReportControls = Enumerable.Range(1, 34)
+                .Select(i => new LiveIedReportControlModel { Name = $"R{i:00}" })
+                .ToArray()
+        };
+
+        CanonicalLiveIedSclExporter.PreserveRuntimeServiceCapacity(document, discovery);
+
+        Assert.Equal("34", (string?)document.Descendants(Scl + "ConfReportControl").Single().Attribute("max"));
     }
 
-    private static LiveIedCanonicalModel CreateCanonical(int reportControlCount = 0)
-    {
-        var reports = Enumerable.Range(1, reportControlCount)
-            .Select(i => new LiveIedReportControlModel
-            {
-                Name = $"R{i:00}",
-                Reference = $"IEDLD0/LLN0$RP$R{i:00}",
-                Domain = "IEDLD0",
-                LogicalNode = "LLN0",
-                Buffered = false
-            })
-            .ToArray();
-
-        return new LiveIedCanonicalModel
+    private static LiveIedCanonicalModel CreateCanonical()
+        => new()
         {
             Discovery = new LiveIedModelDiscoveryDocument
             {
                 Host = "10.20.30.40",
                 IedName = "IED",
-                AccessPointName = "AP1",
-                ReportControls = reports
+                AccessPointName = "AP1"
             },
             Communication = new LiveIedCommunicationEvidence
             {
@@ -138,5 +121,4 @@ public sealed class CanonicalLiveIedSclExporterTests
                 }
             }
         };
-    }
 }

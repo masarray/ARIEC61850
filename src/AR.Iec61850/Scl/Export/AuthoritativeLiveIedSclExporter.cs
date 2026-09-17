@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
@@ -31,7 +32,7 @@ public static class AuthoritativeLiveIedSclExporter
             document = ApplyReportControlConfiguration(document, model, options.ResolvedSchemaProfile);
             ValidateExportGraph(document);
             document.Save(result.SclPath);
-            return result;
+            return WithReportControlCount(result, document.Descendants(Scl + "ReportControl").Count());
         }
         catch
         {
@@ -108,104 +109,205 @@ public static class AuthoritativeLiveIedSclExporter
         ArgumentNullException.ThrowIfNull(schema);
 
         var document = new XDocument(source);
-        var reportControls = model.ReportControls.ToArray();
-        foreach (var element in document.Descendants(Scl + "ReportControl"))
+        var runtimeControls = model.ReportControls.ToArray();
+        var projections = LiveRcbLogicalGroupProjector.Project(runtimeControls);
+
+        foreach (var projection in projections)
         {
-            var name = ((string?)element.Attribute("name") ?? string.Empty).Trim();
-            var buffered = bool.TryParse((string?)element.Attribute("buffered"), out var parsedBuffered) && parsedBuffered;
-            var matches = reportControls
-                .Where(control =>
-                    control.Name.Equals(name, StringComparison.OrdinalIgnoreCase) &&
-                    control.Buffered == buffered)
-                .ToArray();
-            var modelControl = matches.Length == 1
-                ? matches[0]
-                : reportControls.Length == 1
-                    ? reportControls[0]
-                    : null;
-            if (modelControl is null)
-                continue;
+            var runtimeElements = new List<XElement>(projection.RuntimeInstances.Count);
+            foreach (var runtimeControl in projection.RuntimeInstances)
+            {
+                var matches = document.Descendants(Scl + "ReportControl")
+                    .Where(element => MatchesRuntimeControl(element, runtimeControl))
+                    .ToArray();
+                if (matches.Length != 1)
+                {
+                    throw new InvalidDataException(
+                        $"Live RCB '{runtimeControl.Reference}' matched {matches.Length} generated ReportControl element(s); exactly one is required before logical projection.");
+                }
+                runtimeElements.Add(matches[0]);
+            }
 
-            // MMS discovery returns a concrete RCB object name. IEC 61850-6 defines
-            // ReportControl@indexed with a default value of true; if the attribute is
-            // omitted, an engineering tool appends another two-digit instance suffix.
-            // Therefore A_BRCB_1201 would become the invalid A_BRCB_120101. Preserve
-            // the proven live object exactly as one non-indexed instance.
-            element.SetAttributeValue("name", SafeXmlName(modelControl.Name));
-            element.SetAttributeValue("indexed", "false");
-            var rptEnabled = element.Element(Scl + "RptEnabled") ?? new XElement(Scl + "RptEnabled");
-            rptEnabled.SetAttributeValue("max", "1");
-            foreach (var clientLn in rptEnabled.Elements(Scl + "ClientLN").ToArray())
-                clientLn.Remove();
-            if (rptEnabled.Parent is null)
-                element.Add(rptEnabled);
+            if (runtimeElements.Distinct(ReferenceEqualityComparer.Instance).Count() != runtimeElements.Count)
+                throw new InvalidDataException("Multiple live RCB instances resolved to the same generated ReportControl element.");
 
-            var trigger = MmsReportControlFieldCodec.DecodeTriggerOptions(modelControl.TriggerOptions);
-            var triggerElement = element.Element(Scl + "TrgOps") ?? new XElement(Scl + "TrgOps");
-            triggerElement.SetAttributeValue("dchg", XmlBool(trigger.DataChange));
-            triggerElement.SetAttributeValue("qchg", XmlBool(trigger.QualityChange));
-            triggerElement.SetAttributeValue("dupd", XmlBool(trigger.DataUpdate));
-            triggerElement.SetAttributeValue("period", XmlBool(trigger.Integrity));
-            triggerElement.SetAttributeValue(
-                "gi",
-                schema.SupportsTriggerGi ? XmlBool(trigger.GeneralInterrogation) : null);
-            if (triggerElement.Parent is null)
-                element.Add(triggerElement);
+            if (projection.Indexed && runtimeElements.Select(element => element.Parent).Distinct(ReferenceEqualityComparer.Instance).Count() != 1)
+            {
+                throw new InvalidDataException(
+                    $"Indexed RCB group '{projection.LogicalName}' spans multiple logical nodes in the generated SCL.");
+            }
 
-            var optional = MmsReportControlFieldCodec.DecodeOptionalFields(modelControl.OptionalFields);
-            var optionalElement = element.Element(Scl + "OptFields") ?? new XElement(Scl + "OptFields");
-            optionalElement.SetAttributeValue("seqNum", XmlBool(optional.SequenceNumber));
-            optionalElement.SetAttributeValue("timeStamp", XmlBool(optional.ReportTimestamp));
-            optionalElement.SetAttributeValue("reasonCode", XmlBool(optional.ReasonForInclusion));
-            optionalElement.SetAttributeValue("dataSet", XmlBool(optional.DataSetName));
-            optionalElement.SetAttributeValue("dataRef", XmlBool(optional.DataReference));
-            optionalElement.SetAttributeValue("bufOvfl", XmlBool(optional.BufferOverflow));
-            optionalElement.SetAttributeValue("entryID", XmlBool(optional.EntryId));
-            optionalElement.SetAttributeValue("configRef", XmlBool(optional.ConfigurationRevision));
-            optionalElement.SetAttributeValue(
-                "segmentation",
-                schema.IsEdition2 ? XmlBool(optional.Segmentation) : null);
-            if (optionalElement.Parent is null)
-                element.Add(optionalElement);
+            var element = runtimeElements[0];
+            foreach (var redundant in runtimeElements.Skip(1))
+                redundant.Remove();
+
+            ApplyProjectedReportControlConfiguration(element, projection, schema);
         }
 
         var confReportControl = document.Descendants(Scl + "ConfReportControl").SingleOrDefault();
         if (confReportControl is not null)
-            confReportControl.SetAttributeValue("max", reportControls.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            confReportControl.SetAttributeValue("max", projections.Count.ToString(CultureInfo.InvariantCulture));
 
-        ValidateReportControlIdentity(document, reportControls);
+        ValidateReportControlIdentity(document, projections);
         return document;
+    }
+
+    private static void ApplyProjectedReportControlConfiguration(
+        XElement element,
+        LiveRcbLogicalGroupProjector.Projection projection,
+        SclSchemaProfileDescriptor schema)
+    {
+        var modelControl = projection.Representative;
+        element.SetAttributeValue("name", SafeXmlName(projection.LogicalName));
+        element.SetAttributeValue("indexed", projection.Indexed ? "true" : "false");
+        element.SetAttributeValue("rptID", string.IsNullOrWhiteSpace(projection.ReportId) ? null : projection.ReportId);
+
+        var rptEnabled = element.Element(Scl + "RptEnabled") ?? new XElement(Scl + "RptEnabled");
+        rptEnabled.SetAttributeValue("max", projection.MaxInstances.ToString(CultureInfo.InvariantCulture));
+        foreach (var clientLn in rptEnabled.Elements(Scl + "ClientLN").ToArray())
+            clientLn.Remove();
+        if (rptEnabled.Parent is null)
+            element.Add(rptEnabled);
+
+        var trigger = MmsReportControlFieldCodec.DecodeTriggerOptions(modelControl.TriggerOptions);
+        var triggerElement = element.Element(Scl + "TrgOps") ?? new XElement(Scl + "TrgOps");
+        triggerElement.SetAttributeValue("dchg", XmlBool(trigger.DataChange));
+        triggerElement.SetAttributeValue("qchg", XmlBool(trigger.QualityChange));
+        triggerElement.SetAttributeValue("dupd", XmlBool(trigger.DataUpdate));
+        triggerElement.SetAttributeValue("period", XmlBool(trigger.Integrity));
+        triggerElement.SetAttributeValue(
+            "gi",
+            schema.SupportsTriggerGi ? XmlBool(trigger.GeneralInterrogation) : null);
+        if (triggerElement.Parent is null)
+            element.Add(triggerElement);
+
+        var optional = MmsReportControlFieldCodec.DecodeOptionalFields(modelControl.OptionalFields);
+        var optionalElement = element.Element(Scl + "OptFields") ?? new XElement(Scl + "OptFields");
+        optionalElement.SetAttributeValue("seqNum", XmlBool(optional.SequenceNumber));
+        optionalElement.SetAttributeValue("timeStamp", XmlBool(optional.ReportTimestamp));
+        optionalElement.SetAttributeValue("reasonCode", XmlBool(optional.ReasonForInclusion));
+        optionalElement.SetAttributeValue("dataSet", XmlBool(optional.DataSetName));
+        optionalElement.SetAttributeValue("dataRef", XmlBool(optional.DataReference));
+        optionalElement.SetAttributeValue("bufOvfl", XmlBool(optional.BufferOverflow));
+        optionalElement.SetAttributeValue("entryID", XmlBool(optional.EntryId));
+        optionalElement.SetAttributeValue("configRef", XmlBool(optional.ConfigurationRevision));
+        optionalElement.SetAttributeValue(
+            "segmentation",
+            schema.IsEdition2 ? XmlBool(optional.Segmentation) : null);
+        if (optionalElement.Parent is null)
+            element.Add(optionalElement);
     }
 
     private static void ValidateReportControlIdentity(
         XDocument document,
-        IReadOnlyCollection<LiveIedReportControlModel> reportControls)
+        IReadOnlyList<LiveRcbLogicalGroupProjector.Projection> projections)
     {
         var exported = document.Descendants(Scl + "ReportControl").ToArray();
-        if (exported.Length != reportControls.Count)
+        if (exported.Length != projections.Count)
         {
             throw new InvalidDataException(
-                $"Generated SCL contains {exported.Length} ReportControl element(s), but live discovery contains {reportControls.Count}.");
+                $"Generated SCL contains {exported.Length} logical ReportControl element(s), but live evidence projects to {projections.Count}.");
         }
 
-        foreach (var modelControl in reportControls)
+        foreach (var projection in projections)
         {
             var matches = exported.Where(element =>
-                string.Equals((string?)element.Attribute("name"), SafeXmlName(modelControl.Name), StringComparison.Ordinal) &&
-                string.Equals((string?)element.Attribute("indexed"), "false", StringComparison.OrdinalIgnoreCase)).ToArray();
+                    MatchesProjectedControl(element, projection))
+                .ToArray();
             if (matches.Length != 1)
             {
                 throw new InvalidDataException(
-                    $"Live RCB '{modelControl.Name}' was not exported exactly once as indexed=false.");
+                    $"Logical RCB '{projection.LogicalName}' was not exported exactly once in its authoritative LD/LN context.");
+            }
+
+            var expectedIndexed = projection.Indexed ? "true" : "false";
+            if (!string.Equals((string?)matches[0].Attribute("indexed"), expectedIndexed, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    $"Logical RCB '{projection.LogicalName}' must be exported with indexed={expectedIndexed}.");
             }
 
             var rptEnabled = matches[0].Element(Scl + "RptEnabled");
-            if (rptEnabled is null || !string.Equals((string?)rptEnabled.Attribute("max"), "1", StringComparison.Ordinal))
+            var expectedMax = projection.MaxInstances.ToString(CultureInfo.InvariantCulture);
+            if (rptEnabled is null || !string.Equals((string?)rptEnabled.Attribute("max"), expectedMax, StringComparison.Ordinal))
             {
                 throw new InvalidDataException(
-                    $"Live RCB '{modelControl.Name}' must be exported with RptEnabled max=1.");
+                    $"Logical RCB '{projection.LogicalName}' must be exported with RptEnabled max={expectedMax}.");
+            }
+
+            if (projection.Indexed)
+            {
+                foreach (var runtime in projection.RuntimeInstances)
+                {
+                    if (string.Equals(runtime.Name, projection.LogicalName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (exported.Any(element => MatchesRuntimeControl(element, runtime)))
+                    {
+                        throw new InvalidDataException(
+                            $"Concrete runtime RCB '{runtime.Name}' remained in SCL after projection to indexed logical control '{projection.LogicalName}'.");
+                    }
+                }
             }
         }
+    }
+
+    private static bool MatchesRuntimeControl(XElement element, LiveIedReportControlModel control)
+    {
+        var name = ((string?)element.Attribute("name") ?? string.Empty).Trim();
+        if (!name.Equals(SafeXmlName(control.Name), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var buffered = bool.TryParse((string?)element.Attribute("buffered"), out var parsedBuffered) && parsedBuffered;
+        return buffered == control.Buffered && MatchesControlContext(element, control.Domain, control.LogicalNode);
+    }
+
+    private static bool MatchesProjectedControl(
+        XElement element,
+        LiveRcbLogicalGroupProjector.Projection projection)
+    {
+        var name = ((string?)element.Attribute("name") ?? string.Empty).Trim();
+        if (!name.Equals(SafeXmlName(projection.LogicalName), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var buffered = bool.TryParse((string?)element.Attribute("buffered"), out var parsedBuffered) && parsedBuffered;
+        return buffered == projection.Representative.Buffered &&
+               MatchesControlContext(
+                   element,
+                   projection.Representative.Domain,
+                   projection.Representative.LogicalNode);
+    }
+
+    private static bool MatchesControlContext(XElement element, string domain, string logicalNode)
+    {
+        var lDevice = element.Ancestors(Scl + "LDevice").FirstOrDefault();
+        var ln = element.Ancestors().FirstOrDefault(candidate => candidate.Name == Scl + "LN0" || candidate.Name == Scl + "LN");
+        if (lDevice is null || ln is null)
+            return false;
+
+        if (!MatchesLogicalNode(ln, logicalNode))
+            return false;
+
+        var targetDomain = domain.Trim();
+        var inst = ((string?)lDevice.Attribute("inst") ?? string.Empty).Trim();
+        var explicitLdName = ((string?)lDevice.Attribute("ldName") ?? string.Empty).Trim();
+        var iedName = ((string?)lDevice.Ancestors(Scl + "IED").FirstOrDefault()?.Attribute("name") ?? string.Empty).Trim();
+        var implicitDomain = $"{iedName}{inst}";
+
+        return targetDomain.Equals(inst, StringComparison.OrdinalIgnoreCase) ||
+               (!string.IsNullOrWhiteSpace(explicitLdName) && targetDomain.Equals(explicitLdName, StringComparison.OrdinalIgnoreCase)) ||
+               (!string.IsNullOrWhiteSpace(iedName) && targetDomain.Equals(implicitDomain, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool MatchesLogicalNode(XElement element, string logicalNode)
+    {
+        var target = logicalNode.Trim();
+        if (element.Name == Scl + "LN0")
+            return target.Equals("LLN0", StringComparison.OrdinalIgnoreCase);
+
+        var prefix = ((string?)element.Attribute("prefix") ?? string.Empty).Trim();
+        var lnClass = ((string?)element.Attribute("lnClass") ?? string.Empty).Trim();
+        var inst = ((string?)element.Attribute("inst") ?? string.Empty).Trim();
+        return target.Equals($"{prefix}{lnClass}{inst}", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ValidateExportGraph(XDocument document)
@@ -258,6 +360,38 @@ public static class AuthoritativeLiveIedSclExporter
         throw new InvalidDataException(
             $"DataSet '{dataSetName}' contains an FCDA without required '{attributeName}' identity.");
     }
+
+    private static LiveIedSclExportResult WithReportControlCount(
+        LiveIedSclExportResult source,
+        int logicalReportControlCount)
+        => new()
+        {
+            SchemaVersion = source.SchemaVersion,
+            GeneratedAtUtc = source.GeneratedAtUtc,
+            Profile = source.Profile,
+            SclSchema = source.SclSchema,
+            SclPath = source.SclPath,
+            ReportPath = source.ReportPath,
+            SummaryPath = source.SummaryPath,
+            ExcludedAttributesPath = source.ExcludedAttributesPath,
+            LogicalDeviceCount = source.LogicalDeviceCount,
+            LogicalNodeCount = source.LogicalNodeCount,
+            DataSetCount = source.DataSetCount,
+            ReportControlCount = logicalReportControlCount,
+            GooseControlBlockCount = source.GooseControlBlockCount,
+            SampledValueControlBlockCount = source.SampledValueControlBlockCount,
+            SettingGroupControlCount = source.SettingGroupControlCount,
+            LogControlCount = source.LogControlCount,
+            LNodeTypeCount = source.LNodeTypeCount,
+            DoTypeCount = source.DoTypeCount,
+            DaTypeCount = source.DaTypeCount,
+            EnumTypeCount = source.EnumTypeCount,
+            Warnings = source.Warnings,
+            ExcludedAttributes = source.ExcludedAttributes,
+            DataSetMappings = source.DataSetMappings,
+            ReportMappings = source.ReportMappings,
+            ControlBlockMappings = source.ControlBlockMappings
+        };
 
     private static void DeleteIfExists(string? path)
     {

@@ -61,6 +61,50 @@ public sealed partial class MmsClientSession
         return await sharedTask.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Returns the domain-variable inventory already established by the authoritative
+    /// smart discovery on this association. Consumers such as Control must reuse this
+    /// evidence instead of issuing another VMD + per-domain GetNameList sweep.
+    ///
+    /// If no complete smart inventory exists for the current association, the legacy
+    /// browse remains the compatibility fallback. This keeps standalone control usage
+    /// safe while making a smart-discovered session wire-idempotent for later consumers.
+    /// </summary>
+    internal async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetAuthoritativeDomainVariableNamesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+
+        Task<MmsDiscoveryResult>? sharedTask = null;
+        lock (_smartDiscoverySingleFlightSync)
+        {
+            if (IsSameSmartDiscoveryAssociation(LastAssociationAttempts, _lastHost, _lastPort))
+                sharedTask = _smartDiscoverySingleFlightTask;
+        }
+
+        if (sharedTask != null)
+        {
+            try
+            {
+                var discovery = await sharedTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (IsReusableSmartDiscoveryResult(discovery))
+                    return discovery.Snapshot.DomainVariables;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // The shared discovery owns its own lifetime. If it ended unexpectedly,
+                // fall through to the compatibility browse while the association lives.
+            }
+            catch (Exception) when (IsMmsInitiated)
+            {
+                // Do not let a faulted/partial shared generation poison later consumers.
+                // A live association may still support the conservative legacy browse.
+            }
+        }
+
+        return await DiscoverDomainVariableNamesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private void ObserveSmartDiscoverySingleFlightCompletion(Task<MmsDiscoveryResult> task)
     {
         _ = task.ContinueWith(

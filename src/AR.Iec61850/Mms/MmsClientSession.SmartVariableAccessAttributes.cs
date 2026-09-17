@@ -202,9 +202,16 @@ public sealed partial class MmsClientSession
         if (!IsMmsInitiated)
             return BuildUnavailableVariableTypeResult(reference, "MMS association is unavailable.");
 
+        using var observation = ObserveSmartDiscoveryRequest(
+            "type-enrichment",
+            "GetVariableAccessAttributes",
+            $"{reference.Domain}/{reference.Item}");
+
         try
         {
-            return await GetVariableAccessAttributesAsync(reference, cancellationToken).ConfigureAwait(false);
+            var result = await GetVariableAccessAttributesAsync(reference, cancellationToken).ConfigureAwait(false);
+            observation.Complete(result.IsSuccess);
+            return result;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

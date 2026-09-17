@@ -98,7 +98,7 @@ public sealed class AuthoritativeLiveIedSclExporterValidationTests
                                 new XElement(Scl + "LN0",
                                     new XAttribute("lnClass", "LLN0"),
                                     new XAttribute("inst", string.Empty),
-                                    logicalNodeChildren))))))));
+                                    logicalNodeChildren)))))));
 
     private static void Validate(XDocument document)
     {

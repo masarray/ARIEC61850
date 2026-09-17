@@ -178,9 +178,10 @@ public sealed partial class MmsClientSession
         {
             try
             {
-                dataSetDirectories = (await GetObservedSmartDataSetDirectoriesAsync(
+                dataSetDirectories = (await GetObservedSmartDataSetDirectoriesPipelinedAsync(
                         dataSetReferences,
                         iedDirectory,
+                        effectiveWindow,
                         cancellationToken)
                     .ConfigureAwait(false))
                     .ToArray();

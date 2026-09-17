@@ -16,12 +16,14 @@ public sealed partial class MmsClientSession
         int maxConcurrency,
         CancellationToken cancellationToken)
     {
-        if (dataSetReferences.Count == 0)
+        var workerCount = MmsSmartDataSetPipelinePolicy.ResolveWorkerCount(
+            dataSetReferences.Count,
+            maxConcurrency);
+        if (workerCount == 0)
             return Array.Empty<MmsDataSetDirectoryResult>();
 
         var results = new MmsDataSetDirectoryResult?[dataSetReferences.Count];
         var nextIndex = -1;
-        var workerCount = Math.Min(Math.Max(1, maxConcurrency), dataSetReferences.Count);
         var workers = new Task[workerCount];
 
         for (var worker = 0; worker < workerCount; worker++)

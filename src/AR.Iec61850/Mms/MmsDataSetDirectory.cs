@@ -141,9 +141,11 @@ public static class MmsDataSetDirectoryResponseDecoder
             var rawMembers = new List<(string Domain, string Item)>();
             DecodeServiceResponse(service, rawMembers, ref deletable);
 
+            // DataSet membership is positional evidence. Preserve the exact BER traversal
+            // order and multiplicity returned by the IED: report values are indexed against
+            // this sequence, so member-level de-duplication can silently corrupt projection.
             var members = rawMembers
                 .Where(x => !string.IsNullOrWhiteSpace(x.Domain) && !string.IsNullOrWhiteSpace(x.Item))
-                .DistinctBy(x => $"{x.Domain}/{x.Item}", StringComparer.OrdinalIgnoreCase)
                 .Select(x => NormalizeMember(x.Domain, x.Item, iedDirectory))
                 .ToArray();
 

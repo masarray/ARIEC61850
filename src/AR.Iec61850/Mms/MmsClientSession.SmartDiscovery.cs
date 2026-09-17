@@ -63,6 +63,7 @@ public sealed partial class MmsClientSession
     {
         EnsureMmsReady();
         options ??= new MmsSmartDiscoveryOptions();
+        BeginSmartDiscoveryKpiGeneration();
 
         var maxDomains = Math.Clamp(options.MaxDomains, 1, 4096);
         var maxVariables = Math.Clamp(options.MaxVariableNamesPerDomain, 1, 100000);
@@ -177,7 +178,7 @@ public sealed partial class MmsClientSession
         {
             try
             {
-                dataSetDirectories = (await GetDataSetDirectoriesAsync(
+                dataSetDirectories = (await GetObservedSmartDataSetDirectoriesAsync(
                         dataSetReferences,
                         iedDirectory,
                         cancellationToken)
@@ -215,9 +216,15 @@ public sealed partial class MmsClientSession
                 ? "report enrichment=partial"
                 : "report enrichment=completed";
 
+        UpdateSmartDiscoveryCompleteness(snapshot, iedDirectory, inventory, dataSetDirectories);
+        var kpi = LastSmartDiscoveryKpi;
+        var kpiSummary = kpi is null
+            ? "kpi=unavailable"
+            : $"kpi requests={kpi.TotalRequests}, duplicates={kpi.DuplicateRequests}, peak={kpi.PeakOutstandingRequests}, signature={kpi.DeterministicSignature}";
+
         LastDiscoveryAttemptSummary =
             $"Smart discovery: {domainStatus}, chains={chains.Length}, incompleteChains={incompleteChains}, " +
-            $"window={effectiveWindow}, negotiatedCalling={negotiatedText}, {reportSummary}.";
+            $"window={effectiveWindow}, negotiatedCalling={negotiatedText}, {reportSummary}, {kpiSummary}.";
 
         return new MmsDiscoveryResult
         {
@@ -372,6 +379,7 @@ public sealed partial class MmsClientSession
             cancellationToken.ThrowIfCancellationRequested();
             page++;
 
+            var requestContinueAfter = string.IsNullOrWhiteSpace(continueAfter) ? "<first>" : continueAfter;
             var invokeId = NextInvokeId();
             var request = MmsGetNameListRequest.Build(
                 invokeId,
@@ -380,6 +388,10 @@ public sealed partial class MmsClientSession
                 string.IsNullOrWhiteSpace(continueAfter) ? null : continueAfter);
             LastDiscoveryRequestHex = HexDump.ToCompactString(request);
 
+            using var observation = ObserveSmartDiscoveryRequest(
+                "structure",
+                "GetNameList",
+                $"{objectClass}|{domainId ?? "VMD"}|continueAfter={requestContinueAfter}");
             try
             {
                 var response = await SendConfirmedPresentationPayloadAsync(
@@ -389,6 +401,7 @@ public sealed partial class MmsClientSession
                     .ConfigureAwait(false);
                 last = MmsGetNameListResponseDecoder.Decode(response, invokeId);
                 LastDiscoveryResponseHex = last.ResponseHexPreview;
+                observation.Complete(last.IsSuccess);
             }
             catch (OperationCanceledException)
             {

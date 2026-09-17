@@ -216,11 +216,19 @@ public sealed partial class MmsClientSession
                 ? "report enrichment=partial"
                 : "report enrichment=completed";
 
+        if (options.ProbeReportAttributes &&
+            options.MaxReportAttributeProbes > 0 &&
+            inventory.ReportControls.Count > 0)
+        {
+            MarkSmartDiscoveryKpiAccountingPartial(
+                "report-enrichment confirmed Reads are not yet individually observed by the smart KPI recorder");
+        }
+
         UpdateSmartDiscoveryCompleteness(snapshot, iedDirectory, inventory, dataSetDirectories);
         var kpi = LastSmartDiscoveryKpi;
         var kpiSummary = kpi is null
             ? "kpi=unavailable"
-            : $"kpi requests={kpi.TotalRequests}, duplicates={kpi.DuplicateRequests}, peak={kpi.PeakOutstandingRequests}, signature={kpi.DeterministicSignature}";
+            : $"kpi requests={kpi.TotalRequests}, duplicates={kpi.DuplicateRequests}, peak={kpi.PeakOutstandingRequests}, wireAccounting={(kpi.WireAccountingComplete ? "complete" : "partial")}, signature={kpi.DeterministicSignature}";
 
         LastDiscoveryAttemptSummary =
             $"Smart discovery: {domainStatus}, chains={chains.Length}, incompleteChains={incompleteChains}, " +

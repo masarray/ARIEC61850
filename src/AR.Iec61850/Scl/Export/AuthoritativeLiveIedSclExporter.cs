@@ -22,13 +22,28 @@ public static class AuthoritativeLiveIedSclExporter
         options ??= new LiveIedSclExportOptions();
 
         var result = LiveIedSclExporter.WriteFiles(model, sclPath, options);
-        var document = XDocument.Load(result.SclPath, LoadOptions.PreserveWhitespace);
-        if (!string.IsNullOrWhiteSpace(options.IedNameOverride))
-            document = ApplyIdentity(document, model, options.IedNameOverride);
+        try
+        {
+            var document = XDocument.Load(result.SclPath, LoadOptions.PreserveWhitespace);
+            if (!string.IsNullOrWhiteSpace(options.IedNameOverride))
+                document = ApplyIdentity(document, model, options.IedNameOverride);
 
-        document = ApplyReportControlConfiguration(document, model, options.ResolvedSchemaProfile);
-        document.Save(result.SclPath);
-        return result;
+            document = ApplyReportControlConfiguration(document, model, options.ResolvedSchemaProfile);
+            ValidateExportGraph(document);
+            document.Save(result.SclPath);
+            return result;
+        }
+        catch
+        {
+            // Authoritative export is all-or-nothing. The generic exporter writes its
+            // artifacts first, so remove them if authoritative identity/RCB/DataSet/FCDA
+            // validation rejects the generated graph. Never leave a half-valid CID behind.
+            DeleteIfExists(result.SclPath);
+            DeleteIfExists(result.ReportPath);
+            DeleteIfExists(result.SummaryPath);
+            DeleteIfExists(result.ExcludedAttributesPath);
+            throw;
+        }
     }
 
     public static XDocument ApplyIdentity(
@@ -190,6 +205,72 @@ public static class AuthoritativeLiveIedSclExporter
                 throw new InvalidDataException(
                     $"Live RCB '{modelControl.Name}' must be exported with RptEnabled max=1.");
             }
+        }
+    }
+
+    private static void ValidateExportGraph(XDocument document)
+    {
+        foreach (var reportControl in document.Descendants(Scl + "ReportControl"))
+        {
+            var dataSetName = ((string?)reportControl.Attribute("datSet") ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(dataSetName))
+                continue;
+
+            var logicalNode = reportControl.Ancestors()
+                .FirstOrDefault(element => element.Name == Scl + "LN0" || element.Name == Scl + "LN")
+                ?? throw new InvalidDataException(
+                    $"ReportControl '{(string?)reportControl.Attribute("name")}' is not contained by an LN/LN0 element.");
+
+            var dataSets = logicalNode.Elements(Scl + "DataSet")
+                .Where(element => string.Equals(
+                    ((string?)element.Attribute("name") ?? string.Empty).Trim(),
+                    dataSetName,
+                    StringComparison.Ordinal))
+                .ToArray();
+            if (dataSets.Length != 1)
+            {
+                throw new InvalidDataException(
+                    $"ReportControl '{(string?)reportControl.Attribute("name")}' references DataSet '{dataSetName}', but the generated SCL contains {dataSets.Length} matching DataSet element(s) in the same logical node.");
+            }
+
+            var members = dataSets[0].Elements(Scl + "FCDA").ToArray();
+            if (members.Length == 0)
+            {
+                throw new InvalidDataException(
+                    $"ReportControl '{(string?)reportControl.Attribute("name")}' references DataSet '{dataSetName}', but that DataSet contains no valid FCDA members.");
+            }
+
+            foreach (var fcda in members)
+            {
+                RequireFcdaAttribute(fcda, "ldInst", dataSetName);
+                RequireFcdaAttribute(fcda, "lnClass", dataSetName);
+                RequireFcdaAttribute(fcda, "doName", dataSetName);
+                RequireFcdaAttribute(fcda, "fc", dataSetName);
+            }
+        }
+    }
+
+    private static void RequireFcdaAttribute(XElement fcda, string attributeName, string dataSetName)
+    {
+        if (!string.IsNullOrWhiteSpace(((string?)fcda.Attribute(attributeName) ?? string.Empty).Trim()))
+            return;
+
+        throw new InvalidDataException(
+            $"DataSet '{dataSetName}' contains an FCDA without required '{attributeName}' identity.");
+    }
+
+    private static void DeleteIfExists(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return;
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch
+        {
+            // Keep the original authoritative-validation exception as the primary failure.
         }
     }
 

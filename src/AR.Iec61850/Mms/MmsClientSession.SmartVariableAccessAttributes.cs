@@ -1,12 +1,48 @@
 namespace AR.Iec61850.Mms;
 
+/// <summary>
+/// Diagnostic request-budget evidence for one smart hierarchy GVA pass. Counts describe
+/// the bounded probe ladder; they never influence canonical model semantics.
+/// </summary>
+public sealed class MmsSmartTypeProbeBudgetSnapshot
+{
+    public int DirectoryPoints { get; init; }
+    public int SuppliedLogicalNodeCandidates { get; init; }
+    public int SuppressedNonLiveLogicalNodeCandidates { get; init; }
+    public int LogicalNodeRequests { get; init; }
+    public int PointsCoveredByLogicalNode { get; init; }
+    public int DataObjectRequests { get; init; }
+    public int PointsCoveredByDataObject { get; init; }
+    public int ExactLeafRequests { get; init; }
+    public int SuppressedExactRepeatRequests { get; init; }
+    public int PointsCoveredByExactLeaf { get; init; }
+    public int RemainingUnresolvedPoints { get; init; }
+    public int TotalPlannedRequests => LogicalNodeRequests + DataObjectRequests + ExactLeafRequests;
+
+    public string Summary =>
+        $"Smart type budget: points={DirectoryPoints}, LN={LogicalNodeRequests}, " +
+        $"DO={DataObjectRequests}, leaf={ExactLeafRequests}, total={TotalPlannedRequests}, " +
+        $"covered(LN/DO/leaf)={PointsCoveredByLogicalNode}/{PointsCoveredByDataObject}/{PointsCoveredByExactLeaf}, " +
+        $"suppressed(nonLive/repeat)={SuppressedNonLiveLogicalNodeCandidates}/{SuppressedExactRepeatRequests}, " +
+        $"unresolved={RemainingUnresolvedPoints}.";
+}
+
 public sealed partial class MmsClientSession
 {
+    private MmsSmartTypeProbeBudgetSnapshot? _lastSmartTypeProbeBudget;
+
+    /// <summary>
+    /// Most recent hierarchy GVA budget. This is local diagnostic evidence only and
+    /// does not issue requests or alter the discovered IEC 61850 model.
+    /// </summary>
+    public MmsSmartTypeProbeBudgetSnapshot? LastSmartTypeProbeBudget
+        => Volatile.Read(ref _lastSmartTypeProbeBudget);
+
     /// <summary>
     /// Convenience entry point for live-only callers. Canonical discovery code should
     /// prefer the overload that supplies logical-node root candidates from its semantic
     /// probe planner. The fallback ladder is LN root -> unresolved DO root -> unresolved
-    /// leaf, so normal structured IEDs need only roughly one GVA per logical node.
+    /// exact leaf, with exact-reference repeat suppression across tiers.
     /// </summary>
     public Task<IReadOnlyList<MmsVariableAccessAttributesResult>> GetVariableAccessAttributesSmartAsync(
         MmsIedModelDirectory directory,
@@ -30,8 +66,9 @@ public sealed partial class MmsClientSession
 
     /// <summary>
     /// Executes a bounded, coverage-aware type discovery ladder. A successful parent
-    /// TypeSpecification suppresses all descendant probes it can actually prove; only
-    /// unresolved branches descend to DO roots and finally exact leaves.
+    /// TypeSpecification suppresses every descendant probe it can prove. Only unresolved
+    /// branches descend to distinct DO roots and finally exact leaves. An exact GVA
+    /// reference is never reissued inside one pass merely because a shallower tier failed.
     /// </summary>
     public async Task<IReadOnlyList<MmsVariableAccessAttributesResult>> GetVariableAccessAttributesSmartAsync(
         MmsIedModelDirectory directory,
@@ -53,20 +90,34 @@ public sealed partial class MmsClientSession
             .ThenBy(point => point.MmsItemName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (points.Length == 0)
+        {
+            PublishSmartTypeProbeBudget(new MmsSmartTypeProbeBudgetSnapshot());
             return Array.Empty<MmsVariableAccessAttributesResult>();
+        }
 
-        var logicalNodeRoots = logicalNodeRootCandidates
+        var suppliedCandidates = logicalNodeRootCandidates
             .Where(reference => !string.IsNullOrWhiteSpace(reference.Domain) &&
-                                !string.IsNullOrWhiteSpace(reference.Item))
+                                !string.IsNullOrWhiteSpace(reference.Item) &&
+                                !reference.Item.Contains('$', StringComparison.Ordinal))
             .Distinct(MmsObjectReferenceKeyComparer.Instance)
-            .OrderBy(reference => reference.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(reference => reference.Item, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        var logicalNodeRoots = MmsSmartTypeProbePolicy.SelectLiveLogicalNodeRoots(directory, suppliedCandidates);
+        var suppressedNonLiveRoots = Math.Max(0, suppliedCandidates.Length - logicalNodeRoots.Length);
         if (logicalNodeRoots.Length == 0)
+        {
+            PublishSmartTypeProbeBudget(new MmsSmartTypeProbeBudgetSnapshot
+            {
+                DirectoryPoints = points.Length,
+                SuppliedLogicalNodeCandidates = suppliedCandidates.Length,
+                SuppressedNonLiveLogicalNodeCandidates = suppressedNonLiveRoots,
+                RemainingUnresolvedPoints = points.Length
+            });
             return Array.Empty<MmsVariableAccessAttributesResult>();
+        }
 
         var window = ResolveSmartDiscoveryWindow(options);
         var results = new List<MmsVariableAccessAttributesResult>(logicalNodeRoots.Length);
+        var probedReferences = new List<MmsObjectReference>(logicalNodeRoots);
 
         var logicalNodeResults = await RunVariableAttributeBatchAsync(
                 logicalNodeRoots,
@@ -92,8 +143,20 @@ public sealed partial class MmsClientSession
             unresolvedAfterLogicalNode.Add(point);
         }
 
+        var coveredByLogicalNode = points.Length - unresolvedAfterLogicalNode.Count;
         if (unresolvedAfterLogicalNode.Count == 0 || !IsMmsInitiated)
+        {
+            PublishSmartTypeProbeBudget(new MmsSmartTypeProbeBudgetSnapshot
+            {
+                DirectoryPoints = points.Length,
+                SuppliedLogicalNodeCandidates = suppliedCandidates.Length,
+                SuppressedNonLiveLogicalNodeCandidates = suppressedNonLiveRoots,
+                LogicalNodeRequests = logicalNodeRoots.Length,
+                PointsCoveredByLogicalNode = coveredByLogicalNode,
+                RemainingUnresolvedPoints = unresolvedAfterLogicalNode.Count
+            });
             return results;
+        }
 
         var dataObjectRoots = unresolvedAfterLogicalNode
             .Select(MmsSmartTypeProbePolicy.BuildDataObjectRoot)
@@ -102,6 +165,7 @@ public sealed partial class MmsClientSession
             .OrderBy(reference => reference.Domain, StringComparer.OrdinalIgnoreCase)
             .ThenBy(reference => reference.Item, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        probedReferences.AddRange(dataObjectRoots);
 
         var dataObjectResults = await RunVariableAttributeBatchAsync(
                 dataObjectRoots,
@@ -114,7 +178,7 @@ public sealed partial class MmsClientSession
             .GroupBy(result => result.Reference, MmsObjectReferenceKeyComparer.Instance)
             .ToDictionary(group => group.Key, group => group.Last(), MmsObjectReferenceKeyComparer.Instance);
 
-        var leafFallbacks = new List<MmsObjectReference>();
+        var unresolvedAfterDataObject = new List<MmsFcResolvedPoint>();
         foreach (var point in unresolvedAfterLogicalNode)
         {
             var dataObjectRoot = MmsSmartTypeProbePolicy.BuildDataObjectRoot(point);
@@ -124,26 +188,83 @@ public sealed partial class MmsClientSession
                 continue;
             }
 
-            leafFallbacks.Add(point.ToObjectReference());
+            unresolvedAfterDataObject.Add(point);
         }
 
-        var distinctLeafFallbacks = leafFallbacks
-            .Distinct(MmsObjectReferenceKeyComparer.Instance)
-            .OrderBy(reference => reference.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(reference => reference.Item, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        if (distinctLeafFallbacks.Length > 0 && IsMmsInitiated)
+        var coveredByDataObject = unresolvedAfterLogicalNode.Count - unresolvedAfterDataObject.Count;
+        if (unresolvedAfterDataObject.Count == 0 || !IsMmsInitiated)
         {
-            results.AddRange(await RunVariableAttributeBatchAsync(
-                    distinctLeafFallbacks,
+            PublishSmartTypeProbeBudget(new MmsSmartTypeProbeBudgetSnapshot
+            {
+                DirectoryPoints = points.Length,
+                SuppliedLogicalNodeCandidates = suppliedCandidates.Length,
+                SuppressedNonLiveLogicalNodeCandidates = suppressedNonLiveRoots,
+                LogicalNodeRequests = logicalNodeRoots.Length,
+                PointsCoveredByLogicalNode = coveredByLogicalNode,
+                DataObjectRequests = dataObjectRoots.Length,
+                PointsCoveredByDataObject = coveredByDataObject,
+                RemainingUnresolvedPoints = unresolvedAfterDataObject.Count
+            });
+            return results;
+        }
+
+        var exactFallbackCandidates = unresolvedAfterDataObject
+            .Select(point => point.ToObjectReference())
+            .Distinct(MmsObjectReferenceKeyComparer.Instance)
+            .ToArray();
+        var exactLeafFallbacks = MmsSmartTypeProbePolicy.BuildUnprobedExactFallbacks(
+            unresolvedAfterDataObject,
+            probedReferences);
+        var suppressedExactRepeats = Math.Max(0, exactFallbackCandidates.Length - exactLeafFallbacks.Length);
+
+        MmsVariableAccessAttributesResult[] exactLeafResults = Array.Empty<MmsVariableAccessAttributesResult>();
+        if (exactLeafFallbacks.Length > 0 && IsMmsInitiated)
+        {
+            exactLeafResults = await RunVariableAttributeBatchAsync(
+                    exactLeafFallbacks,
                     window,
                     cancellationToken)
-                .ConfigureAwait(false));
+                .ConfigureAwait(false);
+            results.AddRange(exactLeafResults);
         }
+
+        var exactLeafIndex = exactLeafResults
+            .GroupBy(result => result.Reference, MmsObjectReferenceKeyComparer.Instance)
+            .ToDictionary(group => group.Key, group => group.Last(), MmsObjectReferenceKeyComparer.Instance);
+        var remainingUnresolved = 0;
+        foreach (var point in unresolvedAfterDataObject)
+        {
+            var exactReference = point.ToObjectReference();
+            if (exactLeafIndex.TryGetValue(exactReference, out var exactResult) &&
+                MmsSmartTypeProbePolicy.Covers(exactResult, point.MmsItemName))
+            {
+                continue;
+            }
+
+            remainingUnresolved++;
+        }
+
+        var coveredByExactLeaf = unresolvedAfterDataObject.Count - remainingUnresolved;
+        PublishSmartTypeProbeBudget(new MmsSmartTypeProbeBudgetSnapshot
+        {
+            DirectoryPoints = points.Length,
+            SuppliedLogicalNodeCandidates = suppliedCandidates.Length,
+            SuppressedNonLiveLogicalNodeCandidates = suppressedNonLiveRoots,
+            LogicalNodeRequests = logicalNodeRoots.Length,
+            PointsCoveredByLogicalNode = coveredByLogicalNode,
+            DataObjectRequests = dataObjectRoots.Length,
+            PointsCoveredByDataObject = coveredByDataObject,
+            ExactLeafRequests = exactLeafFallbacks.Length,
+            SuppressedExactRepeatRequests = suppressedExactRepeats,
+            PointsCoveredByExactLeaf = coveredByExactLeaf,
+            RemainingUnresolvedPoints = remainingUnresolved
+        });
 
         return results;
     }
+
+    private void PublishSmartTypeProbeBudget(MmsSmartTypeProbeBudgetSnapshot snapshot)
+        => Volatile.Write(ref _lastSmartTypeProbeBudget, snapshot);
 
     private async Task<MmsVariableAccessAttributesResult[]> RunVariableAttributeBatchAsync(
         IReadOnlyList<MmsObjectReference> references,

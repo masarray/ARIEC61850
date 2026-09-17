@@ -67,6 +67,61 @@ public sealed class MmsSmartDiscoveryPolicyTests
     }
 
     [Fact]
+    public void TypeBudget_SelectsOnlyLogicalNodesProvenByLiveDirectory()
+    {
+        var directory = BuildDirectory();
+        var selected = MmsSmartTypeProbePolicy.SelectLiveLogicalNodeRoots(
+            directory,
+            [
+                new MmsObjectReference("ld0", "xcbr1", string.Empty),
+                new MmsObjectReference("LD0", "MISSING1", string.Empty),
+                new MmsObjectReference("LD0", "MMXU1$MX$PhV", "MX"),
+                new MmsObjectReference("LD0", "MMXU1", string.Empty),
+                new MmsObjectReference("LD0", "MMXU1", string.Empty)
+            ]);
+
+        Assert.Equal(2, selected.Length);
+        Assert.Equal("MMXU1", selected[0].Item);
+        Assert.Equal("XCBR1", selected[1].Item);
+        Assert.All(selected, reference => Assert.Equal("LD0", reference.Domain));
+    }
+
+    [Fact]
+    public void TypeBudget_DoesNotRepeatExactDataObjectRootAsLeafFallback()
+    {
+        var dataObjectPoint = new MmsFcResolvedPoint
+        {
+            Domain = "LD0",
+            LogicalNode = "XCBR1",
+            FunctionalConstraint = "ST",
+            DataObjectPath = "Pos",
+            MmsItemName = "XCBR1$ST$Pos"
+        };
+        var descendantPoint = new MmsFcResolvedPoint
+        {
+            Domain = "LD0",
+            LogicalNode = "MMXU1",
+            FunctionalConstraint = "MX",
+            DataObjectPath = "A.phsA.cVal.mag.f",
+            MmsItemName = "MMXU1$MX$A$phsA$cVal$mag$f"
+        };
+        var alreadyProbed = new[]
+        {
+            MmsSmartTypeProbePolicy.BuildDataObjectRoot(dataObjectPoint),
+            MmsSmartTypeProbePolicy.BuildDataObjectRoot(descendantPoint)
+        };
+
+        var fallback = MmsSmartTypeProbePolicy.BuildUnprobedExactFallbacks(
+            [dataObjectPoint, descendantPoint, descendantPoint],
+            alreadyProbed);
+
+        var exact = Assert.Single(fallback);
+        Assert.Equal("LD0", exact.Domain);
+        Assert.Equal("MMXU1$MX$A$phsA$cVal$mag$f", exact.Item);
+        Assert.DoesNotContain(fallback, reference => reference.Item == "XCBR1$ST$Pos");
+    }
+
+    [Fact]
     public void TypeCoverage_UsesParentHierarchyAndRejectsUnknownBranch()
     {
         var root = new MmsVariableAccessAttributesResult

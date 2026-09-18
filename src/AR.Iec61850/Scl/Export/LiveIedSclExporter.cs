@@ -680,6 +680,7 @@ public static class LiveIedSclExporter
 
                     var doTypeId = MakeUniqueId(context, dataObject.ProposedDoTypeId);
                     context.DataObjectTypeIds[dataObject.Reference] = doTypeId;
+                    context.DataObjectReferencePaths.Add(dataObject.Reference);
                     lNodeType.Add(new XElement(Scl + "DO", new XAttribute("name", SafeXmlName(dataObject.Name)), new XAttribute("type", doTypeId)));
                     context.DoTypes.Add(BuildDoType(dataObject, doTypeId, context, filteredAttributes, ln.LnClass));
                 }
@@ -748,9 +749,98 @@ public static class LiveIedSclExporter
         }
 
         foreach (var child in tree.Children.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
-            doType.Add(BuildDaElement(child, doTypeId, context, cdc, dataObject.Name, logicalNodeClass, isRootDa: true));
+        {
+            if (child.Children.Count > 0 &&
+                TryResolveStandardSubDataObjectCdc(cdc, child.Name, out var subCdc))
+            {
+                var subTypeId = MakeUniqueId(
+                    context,
+                    $"DO_{Iec61850ReferenceParts.SafeIdPart(subCdc)}_{Iec61850ReferenceParts.SafeIdPart(doTypeId)}_{Iec61850ReferenceParts.SafeIdPart(child.Path)}");
+                context.DataObjectReferencePaths.Add($"{dataObject.Reference}.{child.Path}");
+                context.DoTypes.Add(BuildSubDataObjectType(
+                    child,
+                    subTypeId,
+                    context,
+                    subCdc,
+                    logicalNodeClass));
+
+                doType.Add(new XElement(
+                    Scl + "SDO",
+                    new XAttribute("name", SafeXmlName(child.Name)),
+                    new XAttribute("type", subTypeId)));
+                continue;
+            }
+
+            doType.Add(BuildDaElement(
+                child,
+                doTypeId,
+                context,
+                cdc,
+                dataObject.Name,
+                logicalNodeClass,
+                isRootDa: true));
+        }
 
         return doType;
+    }
+
+    private static XElement BuildSubDataObjectType(
+        TypeTreeNode node,
+        string doTypeId,
+        LiveIedSclBuildContext context,
+        string cdc,
+        string logicalNodeClass)
+    {
+        var doType = new XElement(
+            Scl + "DOType",
+            new XAttribute("id", doTypeId),
+            new XAttribute("cdc", cdc));
+
+        foreach (var child in node.Children.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            doType.Add(BuildDaElement(
+                child,
+                doTypeId,
+                context,
+                cdc,
+                node.Name,
+                logicalNodeClass,
+                isRootDa: true));
+        }
+
+        return doType;
+    }
+
+    private static bool TryResolveStandardSubDataObjectCdc(
+        string parentCdc,
+        string childName,
+        out string childCdc)
+    {
+        childCdc = string.Empty;
+        var cdc = (parentCdc ?? string.Empty).Trim().ToUpperInvariant();
+        var name = (childName ?? string.Empty).Trim();
+
+        var isComplexValue =
+            (cdc == "WYE" && (
+                name.Equals("phsA", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("phsB", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("phsC", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("neut", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("res", StringComparison.OrdinalIgnoreCase))) ||
+            (cdc == "DEL" && (
+                name.Equals("phsAB", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("phsBC", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("phsCA", StringComparison.OrdinalIgnoreCase))) ||
+            (cdc == "SEQ" && (
+                name.Equals("c1", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("c2", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("c3", StringComparison.OrdinalIgnoreCase)));
+
+        if (!isComplexValue)
+            return false;
+
+        childCdc = "CMV";
+        return true;
     }
 
     private static XElement BuildDaElement(TypeTreeNode node, string ownerTypeId, LiveIedSclBuildContext context, string cdc, string dataObjectName, string logicalNodeClass, bool isRootDa)
@@ -763,7 +853,7 @@ public static class LiveIedSclExporter
                 return new XElement(
                     Scl + (isRootDa ? "DA" : "BDA"),
                     new XAttribute("name", SafeXmlName(node.Name)),
-                    isRootDa ? new XAttribute("fc", string.IsNullOrWhiteSpace(node.Fc) ? "ST" : node.Fc) : null,
+                    isRootDa ? new XAttribute("fc", node.EffectiveFunctionalConstraint) : null,
                     new XAttribute("bType", "Enum"),
                     new XAttribute("type", enumTypeId));
             }
@@ -772,7 +862,7 @@ public static class LiveIedSclExporter
             return new XElement(
                 Scl + (isRootDa ? "DA" : "BDA"),
                 new XAttribute("name", SafeXmlName(node.Name)),
-                isRootDa ? new XAttribute("fc", string.IsNullOrWhiteSpace(node.Fc) ? "ST" : node.Fc) : null,
+                isRootDa ? new XAttribute("fc", node.EffectiveFunctionalConstraint) : null,
                 new XAttribute("bType", bType));
         }
 
@@ -786,7 +876,7 @@ public static class LiveIedSclExporter
         return new XElement(
             Scl + (isRootDa ? "DA" : "BDA"),
             new XAttribute("name", SafeXmlName(node.Name)),
-            isRootDa ? new XAttribute("fc", string.IsNullOrWhiteSpace(node.Fc) ? "ST" : node.Fc) : null,
+            isRootDa ? new XAttribute("fc", node.EffectiveFunctionalConstraint) : null,
             new XAttribute("bType", "Struct"),
             new XAttribute("type", daTypeId));
     }
@@ -831,6 +921,7 @@ public static class LiveIedSclExporter
                     var cdc = CdcInferenceEngine.IsKnownCdc(inferred.Cdc) ? inferred.Cdc : "SPS";
                     var doTypeId = MakeUniqueId(context, $"DO_{Iec61850ReferenceParts.SafeIdPart(cdc)}_{Iec61850ReferenceParts.SafeIdPart(parts.LnClass)}_{Iec61850ReferenceParts.SafeIdPart(parts.DoName)}");
                     lNodeType.Add(new XElement(Scl + "DO", new XAttribute("name", SafeXmlName(parts.DoName)), new XAttribute("type", doTypeId)));
+                    context.DataObjectReferencePaths.Add($"{parts.MmsDomain}/{parts.LogicalNodeName}.{parts.DoName}");
                     context.LNodeTypes.Add(lNodeType);
                     context.DoTypes.Add(new XElement(Scl + "DOType", new XAttribute("id", doTypeId), new XAttribute("cdc", cdc)));
                     context.Warnings.Add(new LiveIedSclExportWarning
@@ -1221,14 +1312,28 @@ public static class LiveIedSclExporter
         var lnName = rest[..dot].Trim();
         var dataPath = rest[(dot + 1)..].Trim();
         var ln = Iec61850ReferenceParts.ParseLogicalNodeName(lnName);
-        var doName = dataPath;
-        var daName = string.Empty;
-        var doDot = dataPath.IndexOf('.', StringComparison.Ordinal);
-        if (doDot >= 0)
+
+        var pathSegments = dataPath.Split(
+            '.',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var doSegmentCount = pathSegments.Length > 0 ? 1 : 0;
+        for (var count = pathSegments.Length; count >= 2; count--)
         {
-            doName = dataPath[..doDot];
-            daName = dataPath[(doDot + 1)..];
+            var candidatePath = string.Join('.', pathSegments.Take(count));
+            var candidateReference = $"{mmsDomain}/{lnName}.{candidatePath}";
+            if (!context.DataObjectReferencePaths.Contains(candidateReference))
+                continue;
+
+            doSegmentCount = count;
+            break;
         }
+
+        var doName = doSegmentCount > 0
+            ? string.Join('.', pathSegments.Take(doSegmentCount))
+            : dataPath;
+        var daName = doSegmentCount > 0 && doSegmentCount < pathSegments.Length
+            ? string.Join('.', pathSegments.Skip(doSegmentCount))
+            : string.Empty;
 
         return new SclReferenceParts(
             MmsDomain: mmsDomain,
@@ -1276,6 +1381,33 @@ public static class LiveIedSclExporter
         public string Fc { get; private set; } = string.Empty;
         public string BType { get; private set; } = string.Empty;
         public IReadOnlyCollection<TypeTreeNode> Children => _children.Values;
+
+        public string EffectiveFunctionalConstraint
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(Fc))
+                    return Fc;
+
+                var descendantFcs = EnumerateFunctionalConstraints()
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                return descendantFcs.Length == 1 ? descendantFcs[0] : "ST";
+            }
+        }
+
+        private IEnumerable<string> EnumerateFunctionalConstraints()
+        {
+            if (!string.IsNullOrWhiteSpace(Fc))
+                yield return Fc;
+
+            foreach (var child in _children.Values)
+            {
+                foreach (var value in child.EnumerateFunctionalConstraints())
+                    yield return value;
+            }
+        }
 
         public static TypeTreeNode Build(IEnumerable<LiveIedDataAttributeModel> attributes)
         {

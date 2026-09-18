@@ -1,3 +1,4 @@
+using System.Globalization;
 using AR.Iec61850.Mms;
 
 namespace AR.Iec61850.Discovery;
@@ -230,9 +231,14 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
                 continue;
 
             var remainder = pointParts[rootParts.Count..];
-            var type = ResolvePath(result.TypeSpecification, remainder);
-            if (type is null)
+            if (!TryResolvePath(
+                    result.TypeSpecification,
+                    remainder,
+                    out var type,
+                    out var declarationOrderKey))
+            {
                 continue;
+            }
 
             var source = remainder.Length == 0
                 ? "GetVariableAccessAttributes"
@@ -241,7 +247,8 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
                 type,
                 source,
                 $"Mapped from {result.ReferenceKey} type hierarchy. {result.Message}",
-                rootParts.Count);
+                rootParts.Count,
+                declarationOrderKey);
 
             if (!_byMmsReference.TryGetValue(point.MmsReference, out var existing) ||
                 resolution.Specificity > existing.Specificity)
@@ -251,20 +258,42 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
         }
     }
 
-    private static MmsTypeSpecificationNode? ResolvePath(MmsTypeSpecificationNode root, IReadOnlyList<string> path)
+    private static bool TryResolvePath(
+        MmsTypeSpecificationNode root,
+        IReadOnlyList<string> path,
+        out MmsTypeSpecificationNode type,
+        out string declarationOrderKey)
     {
         var current = root;
+        var declarationPath = new List<int>(path.Count);
         foreach (var part in path)
         {
-            var next = current.Children.FirstOrDefault(child =>
-                string.Equals(child.Name, part, StringComparison.OrdinalIgnoreCase));
-            if (next is null)
-                return null;
+            var matchIndex = -1;
+            for (var index = 0; index < current.Children.Count; index++)
+            {
+                if (!string.Equals(current.Children[index].Name, part, StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-            current = next;
+                matchIndex = index;
+                break;
+            }
+
+            if (matchIndex < 0)
+            {
+                type = root;
+                declarationOrderKey = string.Empty;
+                return false;
+            }
+
+            declarationPath.Add(matchIndex);
+            current = current.Children[matchIndex];
         }
 
-        return current;
+        type = current;
+        declarationOrderKey = string.Join(
+            ".",
+            declarationPath.Select(index => index.ToString("D6", CultureInfo.InvariantCulture)));
+        return true;
     }
 
     private static string BuildLogicalNodeKey(string domain, string logicalNode)
@@ -294,4 +323,5 @@ internal sealed record LiveIedVariableTypeResolution(
     MmsTypeSpecificationNode TypeSpecification,
     string Source,
     string Message,
-    int Specificity);
+    int Specificity,
+    string DeclarationOrderKey);

@@ -98,7 +98,7 @@ public sealed class LiveIedSclExporterTests
         Assert.Equal(
             ["stVal", "q", "t"],
             doType.Elements(ns + "DA")
-                .Select(element => (string?)element.Attribute("name"))
+                .Select(element => element.Attribute("name")?.Value ?? string.Empty)
                 .ToArray());
     }
 

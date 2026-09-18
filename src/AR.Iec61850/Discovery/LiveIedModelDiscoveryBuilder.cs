@@ -453,7 +453,9 @@ public static class LiveIedModelDiscoveryBuilder
     }
 
     private static bool CanContainControlBlock(string functionalConstraint)
-        => functionalConstraint.ToUpperInvariant() is "GO" or "MS" or "US" or "SP" or "LG";
+        // SG/SE can contain the actual SGCB control object as well as ordinary
+        // setting data. Classification below keeps only the SGCB object.
+        => functionalConstraint.ToUpperInvariant() is "GO" or "MS" or "US" or "SG" or "SE" or "SP" or "LG";
 
     private static string ClassifyControlBlock(string functionalConstraint, string dataObjectName)
         => functionalConstraint.ToUpperInvariant() switch
@@ -462,7 +464,7 @@ public static class LiveIedModelDiscoveryBuilder
             "MS" or "US" => "SampledValueControl",
             // SG/SE are setting-value Functional Constraints, not control blocks.
             // The actual SettingControl inventory is the LLN0 SGCB object.
-            "SP" when string.Equals(dataObjectName, "SGCB", StringComparison.OrdinalIgnoreCase) => "SettingGroupControl",
+            "SG" or "SE" or "SP" when string.Equals(dataObjectName, "SGCB", StringComparison.OrdinalIgnoreCase) => "SettingGroupControl",
             "LG" => "LogControl",
             _ => string.Empty
         };

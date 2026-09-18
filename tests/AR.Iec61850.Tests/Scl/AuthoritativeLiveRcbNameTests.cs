@@ -55,6 +55,58 @@ public sealed class AuthoritativeLiveRcbNameTests
         Assert.Equal("1", (string?)Assert.Single(reportControl.Elements(Scl + "RptEnabled")).Attribute("max"));
     }
 
+    [Theory]
+    [InlineData("A_URCB_101", "AA1E1F06R4ADD/LLN0$RP$A_URCB_1", "A_URCB_1")]
+    [InlineData("A_URCB_1001", "AA1E1F06R4ADD/LLN0$RP$A_URCB_10", "A_URCB_10")]
+    public void ApplyReportControlConfiguration_Projects_Preallocated_Singleton_01_Families(
+        string runtimeName,
+        string reportId,
+        string logicalName)
+    {
+        var source = XDocument.Parse(
+            $"""
+            <SCL xmlns="http://www.iec.ch/61850/2003/SCL">
+              <IED name="AA1E1F06R4">
+                <Services><ConfReportControl max="1" /></Services>
+                <AccessPoint name="AP1"><Server><LDevice inst="ADD"><LN0 lnClass="LLN0" lnType="LN0_TYPE">
+                  <ReportControl name="{runtimeName}" rptID="{reportId}" buffered="false" confRev="1">
+                    <TrgOps dchg="false" qchg="false" dupd="false" period="false" />
+                    <OptFields seqNum="false" timeStamp="false" reasonCode="false" dataSet="false" dataRef="false" entryID="false" configRef="false" />
+                    <RptEnabled max="1" />
+                  </ReportControl>
+                </LN0></LDevice></Server></AccessPoint>
+              </IED>
+              <DataTypeTemplates><LNodeType id="LN0_TYPE" lnClass="LLN0" /></DataTypeTemplates>
+            </SCL>
+            """);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            ReportControls =
+            [
+                new LiveIedReportControlModel
+                {
+                    Reference = $"AA1E1F06R4ADD/LLN0.RP.{runtimeName}",
+                    Domain = "AA1E1F06R4ADD",
+                    LogicalNode = "LLN0",
+                    Name = runtimeName,
+                    ReportId = reportId,
+                    Buffered = false,
+                    ConfRev = "1"
+                }
+            ]
+        };
+
+        var result = AuthoritativeLiveIedSclExporter.ApplyReportControlConfiguration(
+            source,
+            model,
+            SclSchemaProfiles.Get(SclSchemaProfile.Edition2V31));
+
+        var reportControl = Assert.Single(result.Descendants(Scl + "ReportControl"));
+        Assert.Equal(logicalName, (string?)reportControl.Attribute("name"));
+        Assert.Equal("true", (string?)reportControl.Attribute("indexed"));
+        Assert.Equal("1", (string?)Assert.Single(reportControl.Elements(Scl + "RptEnabled")).Attribute("max"));
+    }
+
     [Fact]
     public void ApplyReportControlConfiguration_Preserves_A_BRCB_1201_Without_Second_Index()
     {

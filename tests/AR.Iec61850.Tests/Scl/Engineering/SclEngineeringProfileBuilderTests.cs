@@ -50,6 +50,42 @@ public sealed class SclEngineeringProfileBuilderTests
     }
 
     [Fact]
+    public void Builder_Treats_Indexed_Unassigned_Report_As_Preallocated_Warning()
+    {
+        var profile = new SclEngineeringProfileBuilder().Parse(
+            """
+            <SCL xmlns="http://www.iec.ch/61850/2003/SCL" version="2007" revision="B">
+              <Header id="PREALLOCATED_RCB" version="1" revision="0" />
+              <IED name="IED1">
+                <AccessPoint name="AP1">
+                  <Server>
+                    <LDevice inst="ADD">
+                      <LN0 lnClass="LLN0" lnType="LN0Type">
+                        <ReportControl name="A_URCB" indexed="true" buffered="false" confRev="1">
+                          <RptEnabled max="1" />
+                        </ReportControl>
+                      </LN0>
+                    </LDevice>
+                  </Server>
+                </AccessPoint>
+              </IED>
+              <DataTypeTemplates>
+                <LNodeType id="LN0Type" lnClass="LLN0" />
+              </DataTypeTemplates>
+            </SCL>
+            """,
+            "preallocated-rcb.iid");
+
+        Assert.Contains(
+            profile.Findings,
+            finding => finding.Code == "SCL_REPORT_DATASET_UNASSIGNED" &&
+                       finding.Severity == "Warning");
+        Assert.DoesNotContain(
+            profile.Findings,
+            finding => finding.Code == "SCL_REPORT_DATASET_MISSING");
+    }
+
+    [Fact]
     public void Builder_Flags_Incomplete_Process_Bus_Bindings()
     {
         var xml = File.ReadAllText(SclParserTests.MinimalStationPath())

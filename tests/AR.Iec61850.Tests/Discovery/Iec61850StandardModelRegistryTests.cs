@@ -37,7 +37,7 @@ public sealed class Iec61850StandardModelRegistryTests
     }
 
     [Fact]
-    public void CdcInference_Uses_Exact_Tctr_Registry_Before_Heuristics()
+    public void CdcInference_Uses_Standard_Tctr_Registry_Before_Heuristics()
     {
         var result = CdcInferenceEngine.Infer(
             "TCTR",
@@ -46,7 +46,7 @@ public sealed class Iec61850StandardModelRegistryTests
             ["CF"]);
 
         Assert.Equal("ASG", result.Cdc);
-        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Exact, result.Level);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, result.Level);
         Assert.Contains(result.Evidence, item => item.Contains("standard registry match", StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -16,20 +16,41 @@ public static class Iec61850ReferenceParts
         if (string.Equals(normalized, "LLN0", StringComparison.OrdinalIgnoreCase))
             return new Iec61850LogicalNodeName(normalized, string.Empty, "LLN0", string.Empty);
 
-        for (var index = 0; index <= normalized.Length - 4; index++)
-        {
-            if (!IsUpperAsciiLetter(normalized[index]) ||
-                !IsUpperAsciiLetter(normalized[index + 1]) ||
-                !IsUpperAsciiLetter(normalized[index + 2]) ||
-                !IsUpperAsciiLetter(normalized[index + 3]))
-            {
-                continue;
-            }
+        // IEC 61850 LN names are prefix + four-letter LN class + numeric instance.
+        // Prefixes are allowed to contain uppercase letters and digits themselves, so
+        // selecting the first four-uppercase run corrupts names such as RPRE_MMXU1
+        // (RPRE/_MMXU1) and I01ATCTR1 (I01/ATCT/R1). Anchor the class immediately
+        // before the trailing numeric instance instead.
+        var instanceStart = normalized.Length;
+        while (instanceStart > 0 && char.IsAsciiDigit(normalized[instanceStart - 1]))
+            instanceStart--;
 
-            var prefix = normalized[..index];
-            var lnClass = normalized.Substring(index, 4);
-            var lnInst = normalized[(index + 4)..];
-            return new Iec61850LogicalNodeName(normalized, prefix, lnClass, lnInst);
+        if (instanceStart < normalized.Length && instanceStart >= 4)
+        {
+            var classStart = instanceStart - 4;
+            if (IsFourLetterLnClass(normalized, classStart))
+            {
+                return new Iec61850LogicalNodeName(
+                    normalized,
+                    normalized[..classStart],
+                    normalized.Substring(classStart, 4),
+                    normalized[instanceStart..]);
+            }
+        }
+
+        // Keep a conservative fallback for unusual live names without a numeric
+        // instance. Prefer the final four-letter class candidate so an uppercase
+        // prefix cannot steal the LN class boundary.
+        for (var index = normalized.Length - 4; index >= 0; index--)
+        {
+            if (!IsFourLetterLnClass(normalized, index))
+                continue;
+
+            return new Iec61850LogicalNodeName(
+                normalized,
+                normalized[..index],
+                normalized.Substring(index, 4),
+                normalized[(index + 4)..]);
         }
 
         return new Iec61850LogicalNodeName(normalized, string.Empty, normalized, string.Empty);
@@ -65,6 +86,14 @@ public static class Iec61850ReferenceParts
             .ToArray();
         return new string(chars);
     }
+
+    private static bool IsFourLetterLnClass(string value, int start)
+        => start >= 0 &&
+           start + 4 <= value.Length &&
+           IsUpperAsciiLetter(value[start]) &&
+           IsUpperAsciiLetter(value[start + 1]) &&
+           IsUpperAsciiLetter(value[start + 2]) &&
+           IsUpperAsciiLetter(value[start + 3]);
 
     private static bool IsUpperAsciiLetter(char value)
         => value is >= 'A' and <= 'Z';

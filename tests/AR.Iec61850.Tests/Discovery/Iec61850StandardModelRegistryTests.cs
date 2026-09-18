@@ -21,6 +21,11 @@ public sealed class Iec61850StandardModelRegistryTests
     [InlineData("XCBR", "EEName", "DPL")]
     [InlineData("XSWI", "EEName", "DPL")]
     [InlineData("LLN0", "MltLev", "SPG")]
+    [InlineData("LTRK", "BrcbTrk", "BTS")]
+    [InlineData("LTRK", "UrcbTrk", "UTS")]
+    [InlineData("LTRK", "GenTrk", "CST")]
+    [InlineData("LTRK", "SgcbTrk", "STS")]
+    [InlineData("LTRK", "DpcTrk", "CTS")]
     public void Registry_Resolves_Standard_Physical_Model_DataObjects(
         string lnClass,
         string dataObject,

@@ -1,4 +1,7 @@
+using System.Globalization;
+using AR.Iec61850.Acse;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Osi;
 using AR.Iec61850.Scl;
 
 namespace AR.Iec61850.Mms;
@@ -6,10 +9,11 @@ namespace AR.Iec61850.Mms;
 public sealed partial class MmsClientSession
 {
     /// <summary>
-    /// Projects the exact accepted built-in association profile into canonical SCL
-    /// communication evidence. This is session evidence, not an exporter default.
-    /// Profiles that do not carry a qualified called AP-title remain explicitly
-    /// unresolved so a safe-connection export can fail closed.
+    /// Projects the exact accepted built-in association request into canonical SCL
+    /// communication evidence. AP-title, AE-qualifier, PSEL and SSEL are decoded from
+    /// the request bytes that the IED actually accepted; TSEL comes from the exact COTP
+    /// destination selector used by this built-in connection path. No exporter default
+    /// or duplicated profile-name mapping is allowed here.
     /// </summary>
     public LiveIedCommunicationEvidence GetAcceptedCommunicationEvidence(string accessPointName = "AP1")
     {
@@ -21,7 +25,7 @@ public sealed partial class MmsClientSession
         {
             Source = string.IsNullOrWhiteSpace(profileName)
                 ? "AcceptedAssociationUnavailable"
-                : "AcceptedAssociationProfile",
+                : "AcceptedAssociationWireProfile",
             AssociationProfileName = profileName,
             Host = _lastHost?.Trim() ?? string.Empty,
             Port = _lastPort <= 0 ? 102 : _lastPort,
@@ -32,31 +36,37 @@ public sealed partial class MmsClientSession
 
     private static SclIsoAssociationAddress ResolveAcceptedRemoteAssociation(string profileName)
     {
-        // These values describe the called/remote side encoded by the shipped runtime
-        // association payloads. They are deliberately tied to the accepted profile name,
-        // not to any IED identity or vendor. If a future profile changes its wire identity,
-        // its evidence mapping must change with it and the round-trip regression will fail.
-        if (string.Equals(profileName, "BalancedApTitle", StringComparison.Ordinal))
-        {
-            return new SclIsoAssociationAddress
-            {
-                ApTitle = "1,1,1,999,1",
-                AeQualifierText = "12",
-                AeQualifier = 12,
-                PresentationSelector = "00000001",
-                SessionSelector = "0001",
-                TransportSelector = "0001"
-            };
-        }
+        if (string.IsNullOrWhiteSpace(profileName))
+            return new SclIsoAssociationAddress();
 
-        // LegacyMinimal intentionally does not provide a qualified called AP-title.
-        // Exporting a guessed AP-title would create an SCL that looks valid but is not
-        // evidence-backed, so leave it unresolved and let canonical export fail closed.
+        var profile = AcseMmsInitiateRequest
+            .BuildAssociationProfiles()
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, profileName, StringComparison.Ordinal));
+
+        if (profile is null)
+            return new SclIsoAssociationAddress();
+
+        // The current runtime COTP association path calls CotpClient.ConnectAsync()
+        // without custom parameters, therefore the accepted request used this exact
+        // default destination TSAP. If runtime COTP parameters become configurable,
+        // this evidence path must receive the actual accepted parameters instead.
+        var transportSelector = new CotpConnectParameters().DestinationTsap;
+        var wire = AcseAssociationRequestIdentityReader.Read(
+            profile.Payload,
+            transportSelector);
+
         return new SclIsoAssociationAddress
         {
-            PresentationSelector = "00000001",
-            SessionSelector = "0001",
-            TransportSelector = "0001"
+            ApTitle = wire.CalledApTitleText,
+            AeQualifierText = wire.CalledAeQualifier?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            AeQualifier = wire.CalledAeQualifier,
+            PresentationSelector = ToSelectorHex(wire.CalledPresentationSelector),
+            SessionSelector = ToSelectorHex(wire.CalledSessionSelector),
+            TransportSelector = ToSelectorHex(wire.CalledTransportSelector)
         };
     }
+
+    private static string ToSelectorHex(byte[] selector)
+        => selector.Length == 0 ? string.Empty : Convert.ToHexString(selector);
 }

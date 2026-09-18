@@ -9,6 +9,99 @@ namespace AR.Iec61850.Tests.Scl;
 public sealed class LiveIedSclExporterTests
 {
     [Fact]
+    public void Exporter_Keeps_ServiceTracking_Cdc_In_Edition2_And_Omits_It_In_Edition1()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.10",
+            IedName = "IED1",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "IED1Application",
+                    Inst = "IED1Application",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "LLN0",
+                            LnClass = "LLN0",
+                            ProposedLnTypeId = "LN_LLN0"
+                        },
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "LTRK0",
+                            Prefix = string.Empty,
+                            LnClass = "LTRK",
+                            LnInst = "0",
+                            ProposedLnTypeId = "LN_LTRK0",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = "IED1Application/LTRK0.BrcbTrk",
+                                    Name = "BrcbTrk",
+                                    ProposedDoTypeId = "DO_BTS_LTRK_BrcbTrk",
+                                    InferredCdc = "BTS",
+                                    CdcConfidence = 0.99,
+                                    ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.Exact,
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = "IED1Application/LTRK0.BrcbTrk.objRef",
+                                            AttributePath = "objRef",
+                                            FunctionalConstraint = "SR",
+                                            SclBType = "ObjRef",
+                                            TypeConfidence = LiveIedDiscoveryConfidenceLevel.Exact,
+                                            FunctionalConstraintConfidence = LiveIedDiscoveryConfidenceLevel.Exact
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var ed2 = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions
+            {
+                Profile = "full-model",
+                SchemaProfile = SclSchemaProfile.Edition2V31
+            });
+        var ed2Ns = ed2.Root!.Name.Namespace;
+        var ed2Ltrk = Assert.Single(
+            ed2.Descendants(ed2Ns + "LNodeType"),
+            element => (string?)element.Attribute("lnClass") == "LTRK");
+        var ed2Do = Assert.Single(
+            ed2Ltrk.Elements(ed2Ns + "DO"),
+            element => (string?)element.Attribute("name") == "BrcbTrk");
+        var ed2DoType = Assert.Single(
+            ed2.Descendants(ed2Ns + "DOType"),
+            element => (string?)element.Attribute("id") == (string?)ed2Do.Attribute("type"));
+        Assert.Equal("BTS", (string?)ed2DoType.Attribute("cdc"));
+
+        var ed1 = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions
+            {
+                Profile = "full-model",
+                SchemaProfile = SclSchemaProfile.Edition1V16
+            });
+        var ed1Ns = ed1.Root!.Name.Namespace;
+        Assert.DoesNotContain(
+            ed1.Descendants(ed1Ns + "DO"),
+            element => (string?)element.Attribute("name") == "BrcbTrk");
+        Assert.DoesNotContain(
+            ed1.Descendants(ed1Ns + "DOType"),
+            element => (string?)element.Attribute("cdc") == "BTS");
+    }
+
+    [Fact]
     public void Exporter_Projects_Wye_Phase_As_Sdo_With_Cmv_Fc_Ownership_And_Fcda_DoPath()
     {
         var model = new LiveIedModelDiscoveryDocument

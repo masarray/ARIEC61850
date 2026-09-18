@@ -36,6 +36,31 @@ public sealed class MmsIedModelDirectoryTests
     }
 
     [Fact]
+    public void Build_Preserves_CaseDistinct_MmsMemberNames()
+    {
+        var snapshot = new MmsDiscoverySnapshot
+        {
+            DomainVariables = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["LD0"] =
+                [
+                    "LTRK1$SR$SpcTrk$t",
+                    "LTRK1$SR$SpcTrk$T"
+                ]
+            }
+        };
+
+        var directory = MmsIedModelDirectoryBuilder.Build(snapshot);
+
+        Assert.Equal(2, directory.PointCount);
+        Assert.True(directory.TryFindByMmsReference("LD0/LTRK1$SR$SpcTrk$t", out var lower));
+        Assert.True(directory.TryFindByMmsReference("LD0/LTRK1$SR$SpcTrk$T", out var upper));
+        Assert.Equal("SpcTrk.t", lower.DataObjectPath);
+        Assert.Equal("SpcTrk.T", upper.DataObjectPath);
+        Assert.NotEqual(lower.MmsReference, upper.MmsReference);
+    }
+
+    [Fact]
     public void Resolve_UsesLiveDirectoryWithoutUserSupplyingFc()
     {
         var directory = BuildDemoDirectory();

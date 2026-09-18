@@ -3,8 +3,12 @@ namespace AR.Iec61850.Mms;
 public sealed class MmsIedModelDirectory
 {
     private readonly Dictionary<string, MmsLogicalDeviceDirectory> _logicalDevices = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, List<MmsFcResolvedPoint>> _pointsByUserReference = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, MmsFcResolvedPoint> _pointsByMmsReference = new(StringComparer.OrdinalIgnoreCase);
+    // MMS component identifiers are case-sensitive. This matters for standard
+    // service-tracking CDCs where distinct members such as "t" and "T" coexist.
+    // Keep exact keys here and provide a conservative case-insensitive fallback
+    // only when that fallback is unambiguous.
+    private readonly Dictionary<string, List<MmsFcResolvedPoint>> _pointsByUserReference = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, MmsFcResolvedPoint> _pointsByMmsReference = new(StringComparer.Ordinal);
 
     public MmsIedModelDirectory(IEnumerable<MmsFcResolvedPoint> points)
     {
@@ -27,7 +31,7 @@ public sealed class MmsIedModelDirectory
         var combined = new List<MmsFcResolvedPoint>(Points);
         var knownMmsReferences = new HashSet<string>(
             Points.Select(point => point.MmsReference),
-            StringComparer.OrdinalIgnoreCase);
+            StringComparer.Ordinal);
         var added = 0;
 
         foreach (var point in supplementalPoints)
@@ -52,13 +56,38 @@ public sealed class MmsIedModelDirectory
     public IReadOnlyList<MmsFcResolvedPoint> FindByUserReference(string reference)
     {
         var normalized = MmsFcReferenceNormalizer.NormalizeUserReference(reference);
-        return _pointsByUserReference.TryGetValue(normalized, out var matches) ? matches : Array.Empty<MmsFcResolvedPoint>();
+        if (_pointsByUserReference.TryGetValue(normalized, out var matches))
+            return matches;
+
+        // Preserve the historical convenience of case-insensitive user lookup,
+        // but never collapse exact case-distinct MMS members in storage.
+        return _pointsByUserReference
+            .Where(pair => string.Equals(pair.Key, normalized, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(pair => pair.Value)
+            .OrderByDescending(candidate => candidate.Confidence)
+            .ThenBy(candidate => candidate.MmsReference, StringComparer.Ordinal)
+            .ToArray();
     }
 
     public bool TryFindByMmsReference(string reference, out MmsFcResolvedPoint point)
     {
         var normalized = MmsFcReferenceNormalizer.NormalizeMmsReference(reference);
-        return _pointsByMmsReference.TryGetValue(normalized, out point!);
+        if (_pointsByMmsReference.TryGetValue(normalized, out point!))
+            return true;
+
+        var fallback = _pointsByMmsReference
+            .Where(pair => string.Equals(pair.Key, normalized, StringComparison.OrdinalIgnoreCase))
+            .Select(pair => pair.Value)
+            .Take(2)
+            .ToArray();
+        if (fallback.Length == 1)
+        {
+            point = fallback[0];
+            return true;
+        }
+
+        point = null!;
+        return false;
     }
 
     public IReadOnlyList<MmsFcResolvedPoint> FindByPathSuffix(string reference)
@@ -101,11 +130,11 @@ public sealed class MmsIedModelDirectory
             _logicalDevices[group.Key] = new MmsLogicalDeviceDirectory(group.Key, group);
 
         _pointsByUserReference.Clear();
-        foreach (var group in Points.GroupBy(x => x.UserReference, StringComparer.OrdinalIgnoreCase))
+        foreach (var group in Points.GroupBy(x => x.UserReference, StringComparer.Ordinal))
             _pointsByUserReference[group.Key] = group.ToList();
 
         _pointsByMmsReference.Clear();
-        foreach (var group in Points.GroupBy(x => x.MmsReference, StringComparer.OrdinalIgnoreCase))
+        foreach (var group in Points.GroupBy(x => x.MmsReference, StringComparer.Ordinal))
             _pointsByMmsReference[group.Key] = group.OrderByDescending(point => point.Confidence).First();
     }
 }

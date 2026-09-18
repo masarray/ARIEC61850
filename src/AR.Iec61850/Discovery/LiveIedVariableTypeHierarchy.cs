@@ -162,8 +162,10 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
 {
     private const char CompositeKeySeparator = '\u001F';
 
+    // MMS member names are case-sensitive; LTRK service-tracking structures may
+    // legally contain both "t" and "T", so type resolutions must not coalesce them.
     private readonly Dictionary<string, LiveIedVariableTypeResolution> _byMmsReference =
-        new(StringComparer.OrdinalIgnoreCase);
+        new(StringComparer.Ordinal);
 
     private LiveIedVariableTypeHierarchyIndex()
     {

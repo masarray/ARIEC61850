@@ -1385,7 +1385,9 @@ public static class LiveIedSclExporter
 
     private sealed class TypeTreeNode
     {
-        private readonly Dictionary<string, TypeTreeNode> _children = new(StringComparer.OrdinalIgnoreCase);
+        // SCL DA/BDA names are case-sensitive. In particular, Edition 2 tracking
+        // CDCs can contain both "t" (Timestamp) and "T" as distinct members.
+        private readonly Dictionary<string, TypeTreeNode> _children = new(StringComparer.Ordinal);
         private readonly List<TypeTreeNode> _orderedChildren = new();
 
         private TypeTreeNode(string name, string path)

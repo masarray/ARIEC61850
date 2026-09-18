@@ -13,7 +13,7 @@ public static class MmsIedModelDirectoryBuilder
             if (string.IsNullOrWhiteSpace(domain))
                 continue;
 
-            foreach (var raw in domainPair.Value.Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (var raw in domainPair.Value.Distinct(StringComparer.Ordinal))
             {
                 if (TryParseLiveMmsVariable(domain, raw, out var point))
                     points.Add(point);

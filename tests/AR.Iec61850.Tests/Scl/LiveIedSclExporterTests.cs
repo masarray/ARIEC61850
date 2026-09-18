@@ -103,6 +103,89 @@ public sealed class LiveIedSclExporterTests
     }
 
     [Fact]
+    public void Exporter_Preserves_CaseDistinct_Ltrk_Cts_Members_From_Root_TypeSpecification()
+    {
+        var discovery = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDTRACK",
+                    LogicalNode = "LTRK1",
+                    FunctionalConstraint = "SR",
+                    DataObjectPath = "SpcTrk.objRef",
+                    MmsItemName = "LTRK1$SR$SpcTrk$objRef"
+                }
+            ])
+        };
+        var typeResult = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("IEDTRACK", "LTRK1", string.Empty),
+            TypeSpecification = new MmsTypeSpecificationNode
+            {
+                MmsType = "structure",
+                SclBType = "Struct",
+                Children =
+                [
+                    new MmsTypeSpecificationNode
+                    {
+                        Name = "SR",
+                        MmsType = "structure",
+                        SclBType = "Struct",
+                        Children =
+                        [
+                            new MmsTypeSpecificationNode
+                            {
+                                Name = "SpcTrk",
+                                MmsType = "structure",
+                                SclBType = "Struct",
+                                Children =
+                                [
+                                    new MmsTypeSpecificationNode { Name = "objRef", MmsType = "visible-string", SclBType = "VisString255" },
+                                    new MmsTypeSpecificationNode { Name = "t", MmsType = "utc-time", SclBType = "Timestamp" },
+                                    new MmsTypeSpecificationNode { Name = "T", MmsType = "integer", SclBType = "INT32" }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions { IedName = "IED" },
+            variableTypeAttributes: [typeResult]);
+
+        var logicalNode = Assert.Single(model.LogicalDevices.SelectMany(device => device.LogicalNodes));
+        var spcTrk = Assert.Single(logicalNode.DataObjects, dataObject => dataObject.Name == "SpcTrk");
+        Assert.Contains(spcTrk.Attributes, attribute => attribute.AttributePath == "t");
+        Assert.Contains(spcTrk.Attributes, attribute => attribute.AttributePath == "T");
+
+        var document = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model" });
+        var ns = document.Root!.Name.Namespace;
+        var lNodeType = Assert.Single(
+            document.Descendants(ns + "LNodeType"),
+            element => (string?)element.Attribute("lnClass") == "LTRK");
+        var doRef = Assert.Single(
+            lNodeType.Elements(ns + "DO"),
+            element => (string?)element.Attribute("name") == "SpcTrk");
+        var doType = Assert.Single(
+            document.Descendants(ns + "DOType"),
+            element => (string?)element.Attribute("id") == (string?)doRef.Attribute("type"));
+        var names = doType.Elements(ns + "DA")
+            .Select(element => element.Attribute("name")?.Value ?? string.Empty)
+            .ToArray();
+
+        Assert.Contains("t", names);
+        Assert.Contains("T", names);
+    }
+
+    [Fact]
     public void Exporter_Keeps_Sg_Se_Setting_DataObjects_And_Emits_Only_Actual_Sgcb_Control()
     {
         var discovery = new MmsDiscoveryResult

@@ -378,6 +378,113 @@ public sealed class LiveIedModelDiscoveryBuilderTests
     }
 
     [Fact]
+    public void LnRootTypeTree_OrderOverridesAlphabeticalDirectoryOrder()
+    {
+        var result = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                // MmsIedModelDirectory intentionally sorts paths alphabetically,
+                // which would place q before stVal without declaration-order evidence.
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.q",
+                    MmsItemName = "GGIO1$ST$Ind1$q"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.stVal",
+                    MmsItemName = "GGIO1$ST$Ind1$stVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.t",
+                    MmsItemName = "GGIO1$ST$Ind1$t"
+                }
+            ])
+        };
+        var typeResult = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("LD0", "GGIO1", string.Empty),
+            TypeSpecification = Structure(string.Empty,
+                Structure("ST",
+                    Structure("Ind1",
+                        Basic("stVal", "boolean", "BOOLEAN"),
+                        Basic("q", "bit-string", "Quality"),
+                        Basic("t", "utc-time", "Timestamp")))),
+            Message = "LN-root declaration order"
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            result,
+            new LiveIedModelDiscoveryBuildOptions(),
+            variableTypeAttributes: [typeResult]);
+
+        var dataObject = Assert.Single(Assert.Single(Assert.Single(model.LogicalDevices).LogicalNodes).DataObjects);
+        Assert.Equal(
+            ["stVal", "q", "t"],
+            dataObject.Attributes.Select(attribute => attribute.AttributePath).ToArray());
+        Assert.All(dataObject.Attributes, attribute =>
+            Assert.False(string.IsNullOrWhiteSpace(attribute.TypeDeclarationOrder)));
+        Assert.False(string.IsNullOrWhiteSpace(dataObject.TypeDeclarationOrder));
+    }
+
+    [Fact]
+    public void SettingFc_DataObjects_AreNotMisclassifiedAsSettingControls()
+    {
+        var result = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SG",
+                    DataObjectPath = "MltLev.setVal",
+                    MmsItemName = "LLN0$SG$MltLev$setVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SE",
+                    DataObjectPath = "MltLev.setVal",
+                    MmsItemName = "LLN0$SE$MltLev$setVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SP",
+                    DataObjectPath = "SGCB.NumOfSG",
+                    MmsItemName = "LLN0$SP$SGCB$NumOfSG"
+                }
+            ])
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            result,
+            new LiveIedModelDiscoveryBuildOptions());
+
+        var ln0 = Assert.Single(Assert.Single(model.LogicalDevices).LogicalNodes);
+        Assert.Contains(ln0.DataObjects, dataObject => dataObject.Name == "MltLev");
+        var settingControl = Assert.Single(model.SettingGroupControls);
+        Assert.Equal("SGCB", settingControl.Name);
+        Assert.Equal(1, model.Coverage.SettingGroupControlCount);
+    }
+
+    [Fact]
     public void Preserves_file_directory_evidence_without_affecting_model_discovery()
     {
         var result = new MmsDiscoveryResult

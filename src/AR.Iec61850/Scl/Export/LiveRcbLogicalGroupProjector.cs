@@ -153,129 +153,14 @@ internal static class LiveRcbLogicalGroupProjector
             return false;
         }
 
-        // A server may expose the only physical instance as <logical-name>01 while
-        // rptID keeps the engineering ReportControl identity. Only strip the 01
-        // when rptID proves the exact logical base. Keeping indexed=true with max=1
-        // then reconstructs the concrete MMS instance name correctly.
         var reportId = control.ReportId?.Trim() ?? string.Empty;
-        var lastDollar = reportId.LastIndexOf('        LiveIedReportControlModel left,
-        LiveIedReportControlModel right)
-        => left.Buffered == right.Buffered &&
-           Same(left.Domain, right.Domain) &&
-           Same(left.LogicalNode, right.LogicalNode) &&
-           Same(left.DataSetReference, right.DataSetReference) &&
-           SameNumericText(left.ConfRev, right.ConfRev);
-
-    // DataSet/ConfRev remain engineering identity guards. BufTm, IntgPd, TrgOps and
-    // OptFlds are writable/runtime configuration on many IEDs. Concrete indexed RCB
-    // instances may legitimately expose different current
-    // values even though the engineering model contains one logical ReportControl.
-    // Requiring those live values to match prevents the standard indexed projection
-    // (for example Buffer01/02 -> Buffer, max=2) and incorrectly serializes physical
-    // runtime instances as separate SCL controls.
-
-    private static bool TryResolveLogicalReportId(
-        IReadOnlyList<Candidate> ordered,
-        out string reportId)
-    {
-        reportId = ordered[0].Control.ReportId.Trim();
-        var initialReportId = reportId;
-        if (ordered.All(candidate => Same(candidate.Control.ReportId, initialReportId)))
-            return true;
-
-        string? baseReportId = null;
-        foreach (var candidate in ordered)
-        {
-            var value = candidate.Control.ReportId.Trim();
-            if (string.IsNullOrWhiteSpace(value) || !TrySplitTwoDigitSuffix(value, out var currentBase, out var instanceIndex))
-                return false;
-            if (instanceIndex != candidate.InstanceIndex)
-                return false;
-
-            baseReportId ??= currentBase;
-            if (!Same(baseReportId, currentBase))
-                return false;
-        }
-
-        reportId = baseReportId ?? string.Empty;
-        return true;
-    }
-
-    private static Candidate? TryParseInstance(LiveIedReportControlModel control, int originalIndex)
-    {
-        if (control is null || !TrySplitTwoDigitSuffix(control.Name.Trim(), out var baseName, out var instanceIndex))
-            return null;
-        if (instanceIndex <= 0 || string.IsNullOrWhiteSpace(baseName))
-            return null;
-        return new Candidate(control, originalIndex, baseName, instanceIndex);
-    }
-
-    private static bool TrySplitTwoDigitSuffix(string value, out string baseName, out int instanceIndex)
-    {
-        baseName = string.Empty;
-        instanceIndex = 0;
-        if (string.IsNullOrWhiteSpace(value) || value.Length < 3)
-            return false;
-
-        var suffix = value.AsSpan(value.Length - 2, 2);
-        if (!char.IsDigit(suffix[0]) || !char.IsDigit(suffix[1]) ||
-            !int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture, out instanceIndex))
-        {
-            return false;
-        }
-
-        baseName = value[..^2];
-        return !string.IsNullOrWhiteSpace(baseName);
-    }
-
-    private static bool Same(string? left, string? right)
-        => string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
-
-    private static bool SameNumericText(string? left, string? right)
-    {
-        var leftText = left?.Trim() ?? string.Empty;
-        var rightText = right?.Trim() ?? string.Empty;
-        if (ulong.TryParse(leftText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var leftNumber) &&
-            ulong.TryParse(rightText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rightNumber))
-        {
-            return leftNumber == rightNumber;
-        }
-
-        return Same(leftText, rightText);
-    }
-
-    private readonly record struct GroupKey(
-        string Domain,
-        string LogicalNode,
-        bool Buffered,
-        string BaseName);
-
-    private sealed class GroupKeyComparer : IEqualityComparer<GroupKey>
-    {
-        public static GroupKeyComparer Instance { get; } = new();
-
-        public bool Equals(GroupKey x, GroupKey y)
-            => x.Buffered == y.Buffered &&
-               Same(x.Domain, y.Domain) &&
-               Same(x.LogicalNode, y.LogicalNode) &&
-               Same(x.BaseName, y.BaseName);
-
-        public int GetHashCode(GroupKey obj)
-        {
-            var hash = new HashCode();
-            hash.Add(obj.Buffered);
-            hash.Add(obj.Domain, StringComparer.OrdinalIgnoreCase);
-            hash.Add(obj.LogicalNode, StringComparer.OrdinalIgnoreCase);
-            hash.Add(obj.BaseName, StringComparer.OrdinalIgnoreCase);
-            return hash.ToHashCode();
-        }
-    }
-}
-);
+        var lastDollar = reportId.LastIndexOf("$", StringComparison.Ordinal);
         var reportLeaf = lastDollar >= 0 ? reportId[(lastDollar + 1)..] : reportId;
         if (!Same(reportLeaf, baseName))
             return false;
 
+        // Preserve the SCL logical identity while keeping indexing semantics so
+        // <logical-name> + 01 still resolves to the exact runtime MMS object.
         logicalName = baseName;
         return true;
     }

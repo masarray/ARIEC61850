@@ -101,9 +101,13 @@ public sealed class LiveIedSclExporterTests
         var wye = document.Descendants(ns + "DOType")
             .Single(element => (string?)element.Attribute("id") == (string?)a.Attribute("type"));
         Assert.Equal("WYE", (string?)wye.Attribute("cdc"));
-        Assert.Empty(wye.Elements(ns + "DA").Where(element => (string?)element.Attribute("name") == "phsA"));
+        Assert.DoesNotContain(
+            wye.Elements(ns + "DA"),
+            element => (string?)element.Attribute("name") == "phsA");
 
-        var phsA = Assert.Single(wye.Elements(ns + "SDO").Where(element => (string?)element.Attribute("name") == "phsA"));
+        var phsA = Assert.Single(
+            wye.Elements(ns + "SDO"),
+            element => (string?)element.Attribute("name") == "phsA");
         var cmv = document.Descendants(ns + "DOType")
             .Single(element => (string?)element.Attribute("id") == (string?)phsA.Attribute("type"));
         Assert.Equal("CMV", (string?)cmv.Attribute("cdc"));

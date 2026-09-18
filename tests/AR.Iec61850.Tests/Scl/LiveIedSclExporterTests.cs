@@ -1114,7 +1114,7 @@ public sealed class LiveIedSclExporterTests
         Assert.Contains("SPC", cdcValues);
         Assert.Single(document.Descendants(ns + "SettingControl"));
 
-        var beh = document.Descendants(ns + "DOType").Single(x => x.Attribute("id")?.Value == "DO_INS_LLN0_Beh");
+        var beh = document.Descendants(ns + "DOType").Single(x => x.Attribute("id")?.Value == "DO_ENS_LLN0_Beh");
         var behStVal = beh.Elements(ns + "DA").Single(x => x.Attribute("name")?.Value == "stVal");
         Assert.Equal("Enum", behStVal.Attribute("bType")?.Value);
         Assert.Equal("ARIEC61850_BehaviourKind", behStVal.Attribute("type")?.Value);

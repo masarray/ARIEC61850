@@ -10,6 +10,77 @@ public sealed class CanonicalLiveIedSclExporterTests
 {
     private static readonly XNamespace Scl = "http://www.iec.ch/61850/2003/SCL";
 
+    [Fact]
+    public void CanonicalBuilder_Preserves_CaseDistinct_InitialFcLeafEvidence()
+    {
+        var discovery = CreateCaseDistinctTrackingDiscovery();
+        var communication = CreateCanonical().Communication;
+        var target = new InitialFcReadTarget
+        {
+            Domain = "IEDLD0",
+            LogicalNode = "LTRK1",
+            FunctionalConstraint = "SR",
+            MmsItemName = "LTRK1$SR",
+            DataObjects =
+            [
+                new InitialFcReadDataObjectBinding
+                {
+                    Name = "SpcTrk",
+                    Reference = "IEDLD0/LTRK1.SpcTrk",
+                    Leaves =
+                    [
+                        new InitialFcReadLeafBinding
+                        {
+                            Reference = "IEDLD0/LTRK1.SpcTrk.t",
+                            AttributePath = "t",
+                            FunctionalConstraint = "SR",
+                            SclBType = "VisString255"
+                        },
+                        new InitialFcReadLeafBinding
+                        {
+                            Reference = "IEDLD0/LTRK1.SpcTrk.T",
+                            AttributePath = "T",
+                            FunctionalConstraint = "SR",
+                            SclBType = "VisString255"
+                        }
+                    ]
+                }
+            ]
+        };
+        var projection = InitialFcValueProjector.Project(
+            target,
+            MmsDataValue.Structure(
+            [
+                MmsDataValue.Structure(
+                [
+                    MmsDataValue.VisibleString("lower"),
+                    MmsDataValue.VisibleString("upper")
+                ])
+            ]));
+        Assert.True(projection.IsExact, string.Join(" | ", projection.Errors));
+
+        var canonical = LiveIedCanonicalModelBuilder.Build(
+            discovery,
+            communication,
+            new InitialFcReadExecutionResult
+            {
+                Status = InitialFcReadExecutionStatus.Completed,
+                Batches =
+                [
+                    new InitialFcReadBatchExecution
+                    {
+                        BatchIndex = 0,
+                        Targets = [target],
+                        Projections = [projection]
+                    }
+                ]
+            });
+
+        Assert.Equal(2, canonical.InstanceValues.Count);
+        Assert.Contains(canonical.InstanceValues, value => value.AttributePath == "t");
+        Assert.Contains(canonical.InstanceValues, value => value.AttributePath == "T");
+    }
+
     [Theory]
     [InlineData(SclSchemaProfile.Edition2V31)]
     [InlineData(SclSchemaProfile.Edition1V16)]

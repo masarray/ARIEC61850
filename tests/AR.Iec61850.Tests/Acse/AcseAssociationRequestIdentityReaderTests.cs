@@ -45,6 +45,25 @@ public sealed class AcseAssociationRequestIdentityReaderTests
         Assert.False(evidence.HasQualifiedCalledApplicationIdentity);
     }
 
+
+    [Fact]
+    public void TruncatedPayload_FailsClosedWithoutInventingApplicationIdentity()
+    {
+        var profile = AcseMmsInitiateRequest
+            .BuildAssociationProfiles()
+            .Single(candidate => candidate.Name == "BalancedApTitle");
+        var truncated = profile.Payload[..Math.Min(40, profile.Payload.Length)];
+
+        var evidence = AcseAssociationRequestIdentityReader.Read(
+            truncated,
+            new CotpConnectParameters().DestinationTsap);
+
+        Assert.Empty(evidence.CalledApTitle);
+        Assert.Null(evidence.CalledAeQualifier);
+        Assert.False(evidence.HasQualifiedCalledApplicationIdentity);
+        Assert.Equal("0001", Convert.ToHexString(evidence.CalledTransportSelector));
+    }
+
     [Fact]
     public void WirePayload_IsAuthority_NotProfileNameMapping()
     {

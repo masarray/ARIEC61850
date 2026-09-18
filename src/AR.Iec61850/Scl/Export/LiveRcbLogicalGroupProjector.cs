@@ -133,8 +133,9 @@ internal static class LiveRcbLogicalGroupProjector
            Same(left.DataSetReference, right.DataSetReference) &&
            SameNumericText(left.ConfRev, right.ConfRev);
 
-    // BufTm, IntgPd, TrgOps and OptFlds are writable/runtime configuration on many
-    // IEDs. Concrete indexed RCB instances may legitimately expose different current
+    // DataSet/ConfRev remain engineering identity guards. BufTm, IntgPd, TrgOps and
+    // OptFlds are writable/runtime configuration on many IEDs. Concrete indexed RCB
+    // instances may legitimately expose different current
     // values even though the engineering model contains one logical ReportControl.
     // Requiring those live values to match prevents the standard indexed projection
     // (for example Buffer01/02 -> Buffer, max=2) and incorrectly serializes physical

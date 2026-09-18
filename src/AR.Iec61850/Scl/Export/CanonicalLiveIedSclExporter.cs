@@ -338,7 +338,9 @@ public static class CanonicalLiveIedSclExporter
             .SingleOrDefault(element => string.Equals(
                 ((string?)element.Attribute("name") ?? string.Empty).Trim(),
                 dataObjectName.Trim(),
-                StringComparison.OrdinalIgnoreCase));
+                // SCL DataObject identity is case-sensitive. Do not let instance
+                // value evidence for e.g. Flag/flag resolve to the same template DO.
+                StringComparison.Ordinal));
         var typeId = ((string?)dataObject?.Attribute("type") ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(typeId))
             return false;

@@ -273,7 +273,7 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
             var matchIndex = -1;
             for (var index = 0; index < current.Children.Count; index++)
             {
-                if (!string.Equals(current.Children[index].Name, part, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(current.Children[index].Name, part, StringComparison.Ordinal))
                     continue;
 
                 matchIndex = index;
@@ -313,7 +313,7 @@ internal sealed class LiveIedVariableTypeHierarchyIndex
 
         for (var index = 0; index < prefix.Count; index++)
         {
-            if (!string.Equals(value[index], prefix[index], StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(value[index], prefix[index], StringComparison.Ordinal))
                 return false;
         }
 

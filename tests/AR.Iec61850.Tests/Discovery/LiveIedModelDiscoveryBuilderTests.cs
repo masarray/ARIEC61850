@@ -440,6 +440,60 @@ public sealed class LiveIedModelDiscoveryBuilderTests
     }
 
     [Fact]
+    public void LnRootTypeTree_Preserves_CaseDistinct_Tracking_Members()
+    {
+        var result = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "LTRK1",
+                    FunctionalConstraint = "SR",
+                    DataObjectPath = "SpcTrk.t",
+                    MmsItemName = "LTRK1$SR$SpcTrk$t"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "LTRK1",
+                    FunctionalConstraint = "SR",
+                    DataObjectPath = "SpcTrk.T",
+                    MmsItemName = "LTRK1$SR$SpcTrk$T"
+                }
+            ])
+        };
+        var typeResult = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("LD0", "LTRK1", string.Empty),
+            TypeSpecification = Structure(string.Empty,
+                Structure("SR",
+                    Structure("SpcTrk",
+                        Basic("t", "utc-time", "Timestamp"),
+                        Basic("T", "integer", "INT32")))),
+            Message = "case-distinct tracking members"
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            result,
+            new LiveIedModelDiscoveryBuildOptions(),
+            variableTypeAttributes: [typeResult]);
+
+        var dataObject = Assert.Single(
+            Assert.Single(
+                Assert.Single(model.LogicalDevices).LogicalNodes).DataObjects);
+
+        var lower = Assert.Single(dataObject.Attributes, attribute => attribute.AttributePath == "t");
+        var upper = Assert.Single(dataObject.Attributes, attribute => attribute.AttributePath == "T");
+
+        Assert.Equal("utc-time", lower.MmsType);
+        Assert.Equal("integer", upper.MmsType);
+        Assert.NotEqual(lower.TypeDeclarationOrder, upper.TypeDeclarationOrder);
+    }
+
+    [Fact]
     public void SettingFc_DataObjects_AreNotMisclassifiedAsSettingControls()
     {
         var result = new MmsDiscoveryResult

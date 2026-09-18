@@ -81,6 +81,103 @@ public sealed class CanonicalLiveIedSclExporterTests
         Assert.Contains(canonical.InstanceValues, value => value.AttributePath == "T");
     }
 
+    [Fact]
+    public void ApplyCanonicalInstanceValues_Preserves_CaseDistinct_DataObject_Names()
+    {
+        var document = XDocument.Parse(
+            """
+            <SCL xmlns="http://www.iec.ch/61850/2003/SCL">
+              <IED name="IED">
+                <AccessPoint name="AP1">
+                  <Server>
+                    <LDevice inst="LD0">
+                      <LN lnClass="GGIO" inst="1" lnType="LNT_GGIO1" />
+                    </LDevice>
+                  </Server>
+                </AccessPoint>
+              </IED>
+              <DataTypeTemplates>
+                <LNodeType id="LNT_GGIO1" lnClass="GGIO">
+                  <DO name="Flag" type="DOT_Flag" />
+                  <DO name="flag" type="DOT_flag" />
+                </LNodeType>
+                <DOType id="DOT_Flag" cdc="SPS">
+                  <DA name="stVal" bType="BOOLEAN" fc="ST" />
+                </DOType>
+                <DOType id="DOT_flag" cdc="SPS">
+                  <DA name="stVal" bType="BOOLEAN" fc="ST" />
+                </DOType>
+              </DataTypeTemplates>
+            </SCL>
+            """);
+
+        var canonical = new LiveIedCanonicalModel
+        {
+            Discovery = new LiveIedModelDiscoveryDocument
+            {
+                IedName = "IED",
+                AccessPointName = "AP1",
+                LogicalDevices =
+                [
+                    new LiveIedLogicalDeviceModel
+                    {
+                        MmsDomain = "IEDLD0",
+                        Inst = "LD0",
+                        LogicalNodes =
+                        [
+                            new LiveIedLogicalNodeModel
+                            {
+                                Name = "GGIO1",
+                                LnClass = "GGIO",
+                                LnInst = "1"
+                            }
+                        ]
+                    }
+                ]
+            },
+            Communication = new LiveIedCommunicationEvidence
+            {
+                AccessPointName = "AP1"
+            },
+            InstanceValues =
+            [
+                new LiveIedInstanceValueEvidence
+                {
+                    Domain = "IEDLD0",
+                    LogicalNode = "GGIO1",
+                    DataObject = "Flag",
+                    AttributePath = "stVal",
+                    FunctionalConstraint = "ST",
+                    SclBType = "BOOLEAN",
+                    Value = MmsDataValue.Boolean(false)
+                },
+                new LiveIedInstanceValueEvidence
+                {
+                    Domain = "IEDLD0",
+                    LogicalNode = "GGIO1",
+                    DataObject = "flag",
+                    AttributePath = "stVal",
+                    FunctionalConstraint = "ST",
+                    SclBType = "BOOLEAN",
+                    Value = MmsDataValue.Boolean(true)
+                }
+            ]
+        };
+
+        CanonicalLiveIedSclExporter.ApplyCanonicalInstanceValues(document, canonical);
+
+        var ln = Assert.Single(document.Descendants(Scl + "LN"));
+        var dois = ln.Elements(Scl + "DOI")
+            .ToDictionary(
+                element => (string)element.Attribute("name")!,
+                element => element,
+                StringComparer.Ordinal);
+
+        Assert.Equal(2, dois.Count);
+        Assert.Equal("false", Assert.Single(dois["Flag"].Descendants(Scl + "Val")).Value);
+        Assert.Equal("true", Assert.Single(dois["flag"].Descendants(Scl + "Val")).Value);
+    }
+
     [Theory]
     [InlineData(SclSchemaProfile.Edition2V31)]
     [InlineData(SclSchemaProfile.Edition1V16)]

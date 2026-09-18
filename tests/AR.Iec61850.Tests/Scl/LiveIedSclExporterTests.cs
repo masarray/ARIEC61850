@@ -9,6 +9,242 @@ namespace AR.Iec61850.Tests.Scl;
 public sealed class LiveIedSclExporterTests
 {
     [Fact]
+    public void Exporter_Preserves_Mms_TypeSpecification_Declaration_Order_For_Status_Structures()
+    {
+        var discovery = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDADD",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.q",
+                    MmsItemName = "GGIO1$ST$Ind1$q"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDADD",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.stVal",
+                    MmsItemName = "GGIO1$ST$Ind1$stVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDADD",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.t",
+                    MmsItemName = "GGIO1$ST$Ind1$t"
+                }
+            ])
+        };
+        var typeResult = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("IEDADD", "GGIO1", string.Empty),
+            TypeSpecification = new MmsTypeSpecificationNode
+            {
+                MmsType = "structure",
+                SclBType = "Struct",
+                Children =
+                [
+                    new MmsTypeSpecificationNode
+                    {
+                        Name = "ST",
+                        MmsType = "structure",
+                        SclBType = "Struct",
+                        Children =
+                        [
+                            new MmsTypeSpecificationNode
+                            {
+                                Name = "Ind1",
+                                MmsType = "structure",
+                                SclBType = "Struct",
+                                Children =
+                                [
+                                    new MmsTypeSpecificationNode { Name = "stVal", MmsType = "boolean", SclBType = "BOOLEAN" },
+                                    new MmsTypeSpecificationNode { Name = "q", MmsType = "bit-string", SclBType = "Quality" },
+                                    new MmsTypeSpecificationNode { Name = "t", MmsType = "utc-time", SclBType = "Timestamp" }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions { IedName = "IED" },
+            variableTypeAttributes: [typeResult]);
+
+        var document = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model" });
+        var ns = document.Root!.Name.Namespace;
+        var lNodeType = Assert.Single(
+            document.Descendants(ns + "LNodeType"),
+            element => (string?)element.Attribute("lnClass") == "GGIO");
+        var doRef = Assert.Single(
+            lNodeType.Elements(ns + "DO"),
+            element => (string?)element.Attribute("name") == "Ind1");
+        var doType = Assert.Single(
+            document.Descendants(ns + "DOType"),
+            element => (string?)element.Attribute("id") == (string?)doRef.Attribute("type"));
+
+        Assert.Equal(
+            ["stVal", "q", "t"],
+            doType.Elements(ns + "DA")
+                .Select(element => (string?)element.Attribute("name"))
+                .ToArray());
+    }
+
+    [Fact]
+    public void Exporter_Keeps_Sg_Se_Setting_DataObjects_And_Emits_Only_Actual_Sgcb_Control()
+    {
+        var discovery = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SG",
+                    DataObjectPath = "MltLev.setVal",
+                    MmsItemName = "LLN0$SG$MltLev$setVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SE",
+                    DataObjectPath = "MltLev.setVal",
+                    MmsItemName = "LLN0$SE$MltLev$setVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SP",
+                    DataObjectPath = "SGCB.NumOfSG",
+                    MmsItemName = "LLN0$SP$SGCB$NumOfSG"
+                }
+            ])
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions { IedName = "IED" });
+        var document = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model" });
+        var ns = document.Root!.Name.Namespace;
+
+        var lNodeType = Assert.Single(
+            document.Descendants(ns + "LNodeType"),
+            element => (string?)element.Attribute("lnClass") == "LLN0");
+        Assert.Contains(
+            lNodeType.Elements(ns + "DO"),
+            element => (string?)element.Attribute("name") == "MltLev");
+        Assert.DoesNotContain(
+            lNodeType.Elements(ns + "DO"),
+            element => (string?)element.Attribute("name") == "SGCB");
+        Assert.Single(document.Descendants(ns + "SettingControl"));
+    }
+
+    [Fact]
+    public void Exporter_Projects_Mhai_ThdA_As_Wye_Cmv_Sdo_And_Fcda_DoPath()
+    {
+        var discovery = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDTHD",
+                    LogicalNode = "I_MHAI1",
+                    FunctionalConstraint = "MX",
+                    DataObjectPath = "ThdA.phsA.cVal.mag.f",
+                    MmsItemName = "I_MHAI1$MX$ThdA$phsA$cVal$mag$f"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDTHD",
+                    LogicalNode = "I_MHAI1",
+                    FunctionalConstraint = "MX",
+                    DataObjectPath = "ThdA.phsA.q",
+                    MmsItemName = "I_MHAI1$MX$ThdA$phsA$q"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDTHD",
+                    LogicalNode = "I_MHAI1",
+                    FunctionalConstraint = "MX",
+                    DataObjectPath = "ThdA.phsA.t",
+                    MmsItemName = "I_MHAI1$MX$ThdA$phsA$t"
+                }
+            ])
+        };
+        discovery.ReportInventory.DataSets.Add(new MmsDataSetCandidate
+        {
+            Domain = "IEDTHD",
+            LogicalNode = "LLN0",
+            Name = "Analog",
+            Reference = "IEDTHD/LLN0.Analog"
+        });
+        var directory = new MmsDataSetDirectoryResult
+        {
+            IsSuccess = true,
+            DataSetReference = "IEDTHD/LLN0.Analog",
+            Members =
+            [
+                new MmsDataSetDirectoryMember
+                {
+                    Domain = "IEDTHD",
+                    LogicalNode = "I_MHAI1",
+                    FunctionalConstraint = "MX",
+                    DataObjectPath = "ThdA.phsA",
+                    UserReference = "IEDTHD/I_MHAI1.ThdA.phsA",
+                    MmsItemName = "I_MHAI1$MX$ThdA$phsA",
+                    Confidence = 100
+                }
+            ]
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions { IedName = "IED" },
+            [directory]);
+        var thd = Assert.Single(
+            Assert.Single(Assert.Single(model.LogicalDevices).LogicalNodes, node => node.LnClass == "MHAI").DataObjects,
+            dataObject => dataObject.Name == "ThdA");
+        Assert.Equal("WYE", thd.InferredCdc);
+
+        var document = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model" });
+        var ns = document.Root!.Name.Namespace;
+        var wye = Assert.Single(
+            document.Descendants(ns + "DOType"),
+            element => (string?)element.Attribute("cdc") == "WYE");
+        var phase = Assert.Single(
+            wye.Elements(ns + "SDO"),
+            element => (string?)element.Attribute("name") == "phsA");
+        var cmv = Assert.Single(
+            document.Descendants(ns + "DOType"),
+            element => (string?)element.Attribute("id") == (string?)phase.Attribute("type"));
+        Assert.Equal("CMV", (string?)cmv.Attribute("cdc"));
+
+        var fcda = Assert.Single(document.Descendants(ns + "FCDA"));
+        Assert.Equal("ThdA.phsA", (string?)fcda.Attribute("doName"));
+        Assert.Null(fcda.Attribute("daName"));
+    }
+
+    [Fact]
     public void Exporter_Keeps_ServiceTracking_Cdc_In_Edition2_And_Omits_It_In_Edition1()
     {
         var model = new LiveIedModelDiscoveryDocument

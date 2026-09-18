@@ -360,7 +360,9 @@ public static class CanonicalLiveIedSclExporter
                     string.Equals(
                         ((string?)element.Attribute("name") ?? string.Empty).Trim(),
                         segment,
-                        StringComparison.OrdinalIgnoreCase));
+                        // SCL DA/BDA/SDO component names are case-sensitive.
+                        // Tracking CDCs can contain both "t" and "T".
+                        StringComparison.Ordinal));
             if (definition is null)
                 return false;
 
@@ -399,7 +401,10 @@ public static class CanonicalLiveIedSclExporter
             .SingleOrDefault(element => string.Equals(
                 ((string?)element.Attribute("name") ?? string.Empty).Trim(),
                 name.Trim(),
-                StringComparison.OrdinalIgnoreCase));
+                // Preserve exact SCL instance component identity. Using an
+                // ignore-case comparison here collapses legal pairs such as
+                // LTRK tracking members "t" and "T".
+                StringComparison.Ordinal));
         if (existing is not null)
             return existing;
 

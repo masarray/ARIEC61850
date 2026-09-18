@@ -1357,6 +1357,66 @@ public sealed class LiveIedSclExporterTests
 
 
     [Fact]
+    public void Exporter_Uses_Standard_ServiceTracking_And_ReportField_BTypes()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.10",
+            IedName = "IED1",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "IED1APP",
+                    Inst = "APP",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "LTRK0",
+                            LnClass = "LTRK",
+                            LnInst = "0",
+                            ProposedLnTypeId = "LN_LTRK0",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = "IED1APP/LTRK0.SpcTrk",
+                                    Name = "SpcTrk",
+                                    ProposedDoTypeId = "DO_CTS_SpcTrk",
+                                    InferredCdc = "CTS",
+                                    CdcConfidence = 0.99,
+                                    ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.Exact,
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel { AttributePath = "objRef", FunctionalConstraint = "SR", SclBType = "VisString255" },
+                                        new LiveIedDataAttributeModel { AttributePath = "subQ", FunctionalConstraint = "SR", SclBType = "Check" },
+                                        new LiveIedDataAttributeModel { AttributePath = "subID", FunctionalConstraint = "SR", SclBType = "VisString255" },
+                                        new LiveIedDataAttributeModel { AttributePath = "Check", FunctionalConstraint = "SR", SclBType = "BOOLEAN" },
+                                        new LiveIedDataAttributeModel { AttributePath = "origin.orCat", FunctionalConstraint = "SR", SclBType = "INT32" },
+                                        new LiveIedDataAttributeModel { AttributePath = "bufTm", FunctionalConstraint = "SR", SclBType = "INT32U" }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var xml = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model", IpAddress = "192.0.2.10" }).ToString();
+
+        Assert.Contains("<DA name=\"objRef\" fc=\"SR\" bType=\"ObjRef\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<DA name=\"subQ\" fc=\"SR\" bType=\"Quality\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<DA name=\"subID\" fc=\"SR\" bType=\"VisString64\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<DA name=\"Check\" fc=\"SR\" bType=\"Check\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<BDA name=\"orCat\" bType=\"Enum\" type=\"ARIEC61850_OriginatorCategoryKind\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<DA name=\"bufTm\" fc=\"SR\" bType=\"INT32U\"", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Exporter_InsCdc_Uses_Enum_BType_And_EnumType_For_Status_Value()
     {
         var model = new LiveIedModelDiscoveryDocument

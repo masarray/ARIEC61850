@@ -47,11 +47,8 @@ public sealed partial class MmsClientSession
         if (profile is null)
             return new SclIsoAssociationAddress();
 
-        // The current runtime COTP association path calls CotpClient.ConnectAsync()
-        // without custom parameters, therefore the accepted request used this exact
-        // default destination TSAP. If runtime COTP parameters become configurable,
-        // this evidence path must receive the actual accepted parameters instead.
-        var transportSelector = new CotpConnectParameters().DestinationTsap;
+        var transportSelector = _cotp.LastConnectParameters?.DestinationTsap
+            ?? Array.Empty<byte>();
         var wire = AcseAssociationRequestIdentityReader.Read(
             profile.Payload,
             transportSelector);

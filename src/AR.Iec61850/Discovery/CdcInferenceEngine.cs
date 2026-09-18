@@ -17,7 +17,9 @@ public static class CdcInferenceEngine
         "SPC", "DPC", "INC", "BSC", "ISC", "APC", "BAC",
         "SPG", "ING", "ASG", "CURVE", "ORG", "TSG", "CUG",
         "VSG", "ENG", "ENS", "ENC",
-        "LPL", "DPL"
+        "LPL", "DPL",
+        // Edition 2 service-tracking CDCs used by LTRK.
+        "CST", "BTS", "UTS", "STS", "CTS"
     };
 
     public static bool IsKnownCdc(string cdc)

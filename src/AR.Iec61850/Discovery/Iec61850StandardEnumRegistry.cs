@@ -66,6 +66,21 @@ public static class Iec61850StandardEnumRegistry
             new(4, "sboWithEnhancedSecurity")
         ]);
 
+    private static readonly Iec61850StandardEnumDefinition OriginatorCategory = new(
+        "ARIEC61850_OriginatorCategoryKind",
+        "IEC 61850 originator category.",
+        [
+            new(0, "not-supported"),
+            new(1, "bay-control"),
+            new(2, "station-control"),
+            new(3, "remote-control"),
+            new(4, "automatic-bay"),
+            new(5, "automatic-station"),
+            new(6, "automatic-remote"),
+            new(7, "maintenance"),
+            new(8, "process")
+        ]);
+
     public static bool RequiresEnumType(string cdc, string attributeName)
         => TryResolve(string.Empty, string.Empty, cdc, attributeName, out _);
 
@@ -87,6 +102,12 @@ public static class Iec61850StandardEnumRegistry
         if (daName.Equals("ctlModel", StringComparison.OrdinalIgnoreCase))
         {
             definition = ControlModel;
+            return true;
+        }
+
+        if (daName.Equals("orCat", StringComparison.OrdinalIgnoreCase))
+        {
+            definition = OriginatorCategory;
             return true;
         }
 

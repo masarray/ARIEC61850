@@ -1204,7 +1204,7 @@ public static class LiveIedSclExporter
             return "Quality";
         if (string.Equals(name, "t", StringComparison.OrdinalIgnoreCase))
             return "Timestamp";
-        if (string.Equals(name, "T", StringComparison.Ordinal) || name.EndsWith("Tm", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(name, "T", StringComparison.Ordinal))
             return "Timestamp";
 
         var normalizedCdc = cdc.Trim().ToUpperInvariant();
@@ -1220,9 +1220,38 @@ public static class LiveIedSclExporter
 
     private static string InferBTypeFromCdc(string cdc, string name, string path)
     {
+        if (string.Equals(name, "Check", StringComparison.Ordinal))
+            return "Check";
+        if (string.Equals(name, "subQ", StringComparison.OrdinalIgnoreCase))
+            return "Quality";
+        if (string.Equals(name, "subID", StringComparison.OrdinalIgnoreCase))
+            return "VisString64";
+        if (string.Equals(name, "setSrcRef", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, "objRef", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, "SBO", StringComparison.Ordinal) ||
+            string.Equals(name, "datSet", StringComparison.OrdinalIgnoreCase))
+            return "ObjRef";
+        if (string.Equals(name, "rptID", StringComparison.OrdinalIgnoreCase))
+            return "VisString129";
+        if (string.Equals(name, "entryID", StringComparison.OrdinalIgnoreCase))
+            return "EntryID";
+        if (string.Equals(name, "timeOfEntry", StringComparison.OrdinalIgnoreCase))
+            return "EntryTime";
+        if (string.Equals(name, "trgOps", StringComparison.OrdinalIgnoreCase))
+            return "TrgOps";
+        if (string.Equals(name, "optFlds", StringComparison.OrdinalIgnoreCase))
+            return "OptFlds";
+        if (string.Equals(name, "bufTm", StringComparison.OrdinalIgnoreCase))
+            return "INT32U";
+        if (string.Equals(name, "resvTms", StringComparison.OrdinalIgnoreCase))
+            return "INT16";
+        if (string.Equals(name, "actSG", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, "editSG", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, "numOfSG", StringComparison.OrdinalIgnoreCase))
+            return "INT8U";
+
         if (string.Equals(name, "ctlModel", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(name, "sboClass", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(name, "orCat", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("dir", StringComparison.OrdinalIgnoreCase))
             return "INT32";
 
@@ -1230,7 +1259,6 @@ public static class LiveIedSclExporter
             return "INT8U";
 
         if (string.Equals(name, "Test", StringComparison.Ordinal) ||
-            string.Equals(name, "Check", StringComparison.Ordinal) ||
             string.Equals(name, "general", StringComparison.OrdinalIgnoreCase) ||
             IsPhaseBooleanName(name))
             return "BOOLEAN";

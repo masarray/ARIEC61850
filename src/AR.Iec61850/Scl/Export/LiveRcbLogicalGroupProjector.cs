@@ -131,11 +131,14 @@ internal static class LiveRcbLogicalGroupProjector
            Same(left.Domain, right.Domain) &&
            Same(left.LogicalNode, right.LogicalNode) &&
            Same(left.DataSetReference, right.DataSetReference) &&
-           SameNumericText(left.ConfRev, right.ConfRev) &&
-           SameNumericText(left.BufferTimeMs, right.BufferTimeMs) &&
-           SameNumericText(left.IntegrityPeriodMs, right.IntegrityPeriodMs) &&
-           Same(left.TriggerOptions, right.TriggerOptions) &&
-           Same(left.OptionalFields, right.OptionalFields);
+           SameNumericText(left.ConfRev, right.ConfRev);
+
+    // BufTm, IntgPd, TrgOps and OptFlds are writable/runtime configuration on many
+    // IEDs. Concrete indexed RCB instances may legitimately expose different current
+    // values even though the engineering model contains one logical ReportControl.
+    // Requiring those live values to match prevents the standard indexed projection
+    // (for example Buffer01/02 -> Buffer, max=2) and incorrectly serializes physical
+    // runtime instances as separate SCL controls.
 
     private static bool TryResolveLogicalReportId(
         IReadOnlyList<Candidate> ordered,

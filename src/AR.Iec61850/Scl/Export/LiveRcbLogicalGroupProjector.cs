@@ -70,7 +70,7 @@ internal static class LiveRcbLogicalGroupProjector
             projections.Add((index, new Projection
             {
                 Representative = control,
-                LogicalName = control.Name.Trim(),
+                LogicalName = ResolveSingletonLogicalName(control),
                 ReportId = control.ReportId.Trim(),
                 RuntimeInstances = new[] { control }
             }));
@@ -122,6 +122,139 @@ internal static class LiveRcbLogicalGroupProjector
             RuntimeInstances = ordered.Select(candidate => candidate.Control).ToArray()
         };
         return true;
+    }
+
+    private static string ResolveSingletonLogicalName(LiveIedReportControlModel control)
+    {
+        var runtimeName = control.Name.Trim();
+        if (!TrySplitTwoDigitSuffix(runtimeName, out var baseName, out var instanceIndex) ||
+            instanceIndex != 1)
+        {
+            return runtimeName;
+        }
+
+        // A live MMS server commonly exposes the first concrete instance as
+        // <logical-name>01 while rptID retains the engineering ReportControl
+        // identity without the physical instance suffix. Strip 01 only when the
+        // authoritative rptID proves that exact base identity. This fixes
+        // A_URCB01 -> A_URCB and A_URCB_1001 -> A_URCB_10 without corrupting
+        // genuine singleton names such as A_BRCB_1201 whose rptID also ends 1201.
+        var reportId = control.ReportId?.Trim() ?? string.Empty;
+        var lastDollar = reportId.LastIndexOf('
+        => left.Buffered == right.Buffered &&
+           Same(left.Domain, right.Domain) &&
+           Same(left.LogicalNode, right.LogicalNode) &&
+           Same(left.DataSetReference, right.DataSetReference) &&
+           SameNumericText(left.ConfRev, right.ConfRev);
+
+    // DataSet/ConfRev remain engineering identity guards. BufTm, IntgPd, TrgOps and
+    // OptFlds are writable/runtime configuration on many IEDs. Concrete indexed RCB
+    // instances may legitimately expose different current
+    // values even though the engineering model contains one logical ReportControl.
+    // Requiring those live values to match prevents the standard indexed projection
+    // (for example Buffer01/02 -> Buffer, max=2) and incorrectly serializes physical
+    // runtime instances as separate SCL controls.
+
+    private static bool TryResolveLogicalReportId(
+        IReadOnlyList<Candidate> ordered,
+        out string reportId)
+    {
+        reportId = ordered[0].Control.ReportId.Trim();
+        var initialReportId = reportId;
+        if (ordered.All(candidate => Same(candidate.Control.ReportId, initialReportId)))
+            return true;
+
+        string? baseReportId = null;
+        foreach (var candidate in ordered)
+        {
+            var value = candidate.Control.ReportId.Trim();
+            if (string.IsNullOrWhiteSpace(value) || !TrySplitTwoDigitSuffix(value, out var currentBase, out var instanceIndex))
+                return false;
+            if (instanceIndex != candidate.InstanceIndex)
+                return false;
+
+            baseReportId ??= currentBase;
+            if (!Same(baseReportId, currentBase))
+                return false;
+        }
+
+        reportId = baseReportId ?? string.Empty;
+        return true;
+    }
+
+    private static Candidate? TryParseInstance(LiveIedReportControlModel control, int originalIndex)
+    {
+        if (control is null || !TrySplitTwoDigitSuffix(control.Name.Trim(), out var baseName, out var instanceIndex))
+            return null;
+        if (instanceIndex <= 0 || string.IsNullOrWhiteSpace(baseName))
+            return null;
+        return new Candidate(control, originalIndex, baseName, instanceIndex);
+    }
+
+    private static bool TrySplitTwoDigitSuffix(string value, out string baseName, out int instanceIndex)
+    {
+        baseName = string.Empty;
+        instanceIndex = 0;
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 3)
+            return false;
+
+        var suffix = value.AsSpan(value.Length - 2, 2);
+        if (!char.IsDigit(suffix[0]) || !char.IsDigit(suffix[1]) ||
+            !int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture, out instanceIndex))
+        {
+            return false;
+        }
+
+        baseName = value[..^2];
+        return !string.IsNullOrWhiteSpace(baseName);
+    }
+
+    private static bool Same(string? left, string? right)
+        => string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static bool SameNumericText(string? left, string? right)
+    {
+        var leftText = left?.Trim() ?? string.Empty;
+        var rightText = right?.Trim() ?? string.Empty;
+        if (ulong.TryParse(leftText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var leftNumber) &&
+            ulong.TryParse(rightText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rightNumber))
+        {
+            return leftNumber == rightNumber;
+        }
+
+        return Same(leftText, rightText);
+    }
+
+    private readonly record struct GroupKey(
+        string Domain,
+        string LogicalNode,
+        bool Buffered,
+        string BaseName);
+
+    private sealed class GroupKeyComparer : IEqualityComparer<GroupKey>
+    {
+        public static GroupKeyComparer Instance { get; } = new();
+
+        public bool Equals(GroupKey x, GroupKey y)
+            => x.Buffered == y.Buffered &&
+               Same(x.Domain, y.Domain) &&
+               Same(x.LogicalNode, y.LogicalNode) &&
+               Same(x.BaseName, y.BaseName);
+
+        public int GetHashCode(GroupKey obj)
+        {
+            var hash = new HashCode();
+            hash.Add(obj.Buffered);
+            hash.Add(obj.Domain, StringComparer.OrdinalIgnoreCase);
+            hash.Add(obj.LogicalNode, StringComparer.OrdinalIgnoreCase);
+            hash.Add(obj.BaseName, StringComparer.OrdinalIgnoreCase);
+            return hash.ToHashCode();
+        }
+    }
+}
+);
+        var reportLeaf = lastDollar >= 0 ? reportId[(lastDollar + 1)..] : reportId;
+        return Same(reportLeaf, baseName) ? baseName : runtimeName;
     }
 
     private static bool StaticConfigurationMatches(

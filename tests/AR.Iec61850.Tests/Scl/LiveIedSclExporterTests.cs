@@ -9,6 +9,132 @@ namespace AR.Iec61850.Tests.Scl;
 public sealed class LiveIedSclExporterTests
 {
     [Fact]
+    public void Exporter_Projects_Wye_Phase_As_Sdo_With_Cmv_Fc_Ownership_And_Fcda_DoPath()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.10",
+            IedName = "IED1",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "IED1Measurements",
+                    Inst = "IED1Measurements",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "LLN0",
+                            LnClass = "LLN0",
+                            ProposedLnTypeId = "LN_LLN0"
+                        },
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "RPRE_MMXU1",
+                            Prefix = "RPRE_",
+                            LnClass = "MMXU",
+                            LnInst = "1",
+                            ProposedLnTypeId = "LN_MMXU_RPRE_MMXU1",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = "IED1Measurements/RPRE_MMXU1.A",
+                                    Name = "A",
+                                    ProposedDoTypeId = "DO_WYE_MMXU_A",
+                                    InferredCdc = "WYE",
+                                    CdcConfidence = 0.99,
+                                    ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.Exact,
+                                    Attributes =
+                                    [
+                                        Attr("phsA.cVal.mag.f", "MX", "FLOAT32"),
+                                        Attr("phsA.q", "MX", "Quality"),
+                                        Attr("phsA.t", "MX", "Timestamp"),
+                                        Attr("phsA.units.SIUnit", "CF", "Enum"),
+                                        Attr("phsA.units.multiplier", "CF", "Enum"),
+                                        Attr("phsA.db", "CF", "INT32U")
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            DataSets =
+            [
+                new LiveIedDataSetModel
+                {
+                    Reference = "IED1Measurements/LLN0.Analog",
+                    Domain = "IED1Measurements",
+                    LogicalNode = "LLN0",
+                    Name = "Analog",
+                    MemberCount = 1,
+                    Members =
+                    [
+                        new LiveIedDataSetMemberModel
+                        {
+                            Index = 0,
+                            Reference = "IED1Measurements/RPRE_MMXU1.A.phsA",
+                            FunctionalConstraint = "MX",
+                            Confidence = LiveIedDiscoveryConfidenceLevel.Exact
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var document = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions
+            {
+                Profile = "full-model",
+                IncludeLowConfidenceTypes = true
+            });
+        var ns = document.Root!.Name.Namespace;
+
+        var lNodeType = document.Descendants(ns + "LNodeType")
+            .Single(element => (string?)element.Attribute("id") == "LN_MMXU_RPRE_MMXU1");
+        var a = Assert.Single(lNodeType.Elements(ns + "DO"));
+        Assert.Equal("A", (string?)a.Attribute("name"));
+
+        var wye = document.Descendants(ns + "DOType")
+            .Single(element => (string?)element.Attribute("id") == (string?)a.Attribute("type"));
+        Assert.Equal("WYE", (string?)wye.Attribute("cdc"));
+        Assert.Empty(wye.Elements(ns + "DA").Where(element => (string?)element.Attribute("name") == "phsA"));
+
+        var phsA = Assert.Single(wye.Elements(ns + "SDO").Where(element => (string?)element.Attribute("name") == "phsA"));
+        var cmv = document.Descendants(ns + "DOType")
+            .Single(element => (string?)element.Attribute("id") == (string?)phsA.Attribute("type"));
+        Assert.Equal("CMV", (string?)cmv.Attribute("cdc"));
+
+        Assert.Equal("MX", (string?)cmv.Elements(ns + "DA").Single(element => (string?)element.Attribute("name") == "cVal").Attribute("fc"));
+        Assert.Equal("CF", (string?)cmv.Elements(ns + "DA").Single(element => (string?)element.Attribute("name") == "units").Attribute("fc"));
+        Assert.Equal("CF", (string?)cmv.Elements(ns + "DA").Single(element => (string?)element.Attribute("name") == "db").Attribute("fc"));
+
+        var fcda = Assert.Single(document.Descendants(ns + "FCDA"));
+        Assert.Equal("RPRE_", (string?)fcda.Attribute("prefix"));
+        Assert.Equal("MMXU", (string?)fcda.Attribute("lnClass"));
+        Assert.Equal("1", (string?)fcda.Attribute("lnInst"));
+        Assert.Equal("A.phsA", (string?)fcda.Attribute("doName"));
+        Assert.Null(fcda.Attribute("daName"));
+        Assert.Equal("MX", (string?)fcda.Attribute("fc"));
+
+        static LiveIedDataAttributeModel Attr(string path, string fc, string bType)
+            => new()
+            {
+                ObjectReference = $"IED1Measurements/RPRE_MMXU1.A.{path}",
+                AttributePath = path,
+                FunctionalConstraint = fc,
+                SclBType = bType,
+                TypeDiscoveryStatus = "Exact",
+                TypeSource = "GetVariableAccessAttributesLogicalNodeTree",
+                TypeConfidence = LiveIedDiscoveryConfidenceLevel.Exact,
+                FunctionalConstraintConfidence = LiveIedDiscoveryConfidenceLevel.Exact
+            };
+    }
+
+    [Fact]
     public void Exporter_Preserves_Prefixed_LogicalNode_Identity_In_Ln_And_Fcda()
     {
         var discovery = new MmsDiscoveryResult

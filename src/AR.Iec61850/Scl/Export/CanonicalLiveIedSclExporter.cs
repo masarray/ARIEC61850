@@ -183,7 +183,10 @@ public static class CanonicalLiveIedSclExporter
                     value.LogicalNode.Trim(), "\u001F",
                     value.DataObject.Trim(), "\u001F",
                     value.AttributePath.Trim()),
-                StringComparer.OrdinalIgnoreCase)
+                // MMS/SCL component names are case-sensitive. Tracking CDCs can
+                // legitimately contain both "t" and "T" and they must retain
+                // independent instance evidence.
+                StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal);
 
         foreach (var group in grouped)

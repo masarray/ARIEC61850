@@ -293,6 +293,132 @@ public sealed class CanonicalLiveIedSclExporterTests
         }
     }
 
+    [Fact]
+    public void WriteFiles_Preserves_CaseDistinct_Tracking_Instance_Paths()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ariec-canonical-case-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "ied.iid");
+        try
+        {
+            var baseline = CreateCanonical();
+            var canonical = new LiveIedCanonicalModel
+            {
+                Discovery = CreateCaseDistinctTrackingDiscovery(),
+                Communication = baseline.Communication,
+                InstanceValues =
+                [
+                    new LiveIedInstanceValueEvidence
+                    {
+                        Domain = "IEDLD0",
+                        LogicalNode = "LTRK1",
+                        DataObject = "SpcTrk",
+                        AttributePath = "t",
+                        FunctionalConstraint = "SR",
+                        SclBType = "VisString255",
+                        Value = MmsDataValue.VisibleString("lower")
+                    },
+                    new LiveIedInstanceValueEvidence
+                    {
+                        Domain = "IEDLD0",
+                        LogicalNode = "LTRK1",
+                        DataObject = "SpcTrk",
+                        AttributePath = "T",
+                        FunctionalConstraint = "SR",
+                        SclBType = "VisString255",
+                        Value = MmsDataValue.VisibleString("upper")
+                    }
+                ]
+            };
+
+            CanonicalLiveIedSclExporter.WriteFiles(canonical, path, SclSchemaProfile.Edition2V31);
+
+            var document = XDocument.Load(path);
+            var logicalNode = document.Descendants(Scl + "LN")
+                .Single(element =>
+                    (string?)element.Attribute("lnClass") == "LTRK" &&
+                    (string?)element.Attribute("inst") == "1");
+            var doi = logicalNode.Elements(Scl + "DOI")
+                .Single(element => (string?)element.Attribute("name") == "SpcTrk");
+            var values = doi.Elements(Scl + "DAI")
+                .ToDictionary(
+                    element => element.Attribute("name")?.Value ?? string.Empty,
+                    element => element.Element(Scl + "Val")?.Value ?? string.Empty,
+                    StringComparer.Ordinal);
+
+            Assert.Equal("lower", values["t"]);
+            Assert.Equal("upper", values["T"]);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static LiveIedModelDiscoveryDocument CreateCaseDistinctTrackingDiscovery()
+        => new()
+        {
+            Host = "10.20.30.40",
+            IedName = "IED",
+            AccessPointName = "AP1",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "IEDLD0",
+                    Inst = "IEDLD0",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "LTRK1",
+                            LnClass = "LTRK",
+                            LnInst = "1",
+                            ProposedLnTypeId = "LN_LTRK_1",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = "IEDLD0/LTRK1.SpcTrk",
+                                    Name = "SpcTrk",
+                                    ProposedDoTypeId = "DO_CTS_SpcTrk",
+                                    InferredCdc = "CTS",
+                                    CdcConfidence = 0.99,
+                                    ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.Exact,
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = "IEDLD0/LTRK1.SpcTrk.t",
+                                            AttributePath = "t",
+                                            FunctionalConstraint = "SR",
+                                            MmsReference = "IEDLD0/LTRK1$SR$SpcTrk$t",
+                                            MmsItemName = "LTRK1$SR$SpcTrk$t",
+                                            SclBType = "VisString255",
+                                            MmsType = "visible-string",
+                                            TypeConfidence = LiveIedDiscoveryConfidenceLevel.Exact
+                                        },
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = "IEDLD0/LTRK1.SpcTrk.T",
+                                            AttributePath = "T",
+                                            FunctionalConstraint = "SR",
+                                            MmsReference = "IEDLD0/LTRK1$SR$SpcTrk$T",
+                                            MmsItemName = "LTRK1$SR$SpcTrk$T",
+                                            SclBType = "VisString255",
+                                            MmsType = "visible-string",
+                                            TypeConfidence = LiveIedDiscoveryConfidenceLevel.Exact
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
     private static LiveIedModelDiscoveryDocument CreateInstanceDiscovery()
         => new()
         {

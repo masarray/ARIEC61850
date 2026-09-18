@@ -18,7 +18,7 @@ internal static class LiveRcbLogicalGroupProjector
         public required string LogicalName { get; init; }
         public required string ReportId { get; init; }
         public required IReadOnlyList<LiveIedReportControlModel> RuntimeInstances { get; init; }
-        public bool Indexed => RuntimeInstances.Count > 1;
+        public required bool Indexed { get; init; }
         public int MaxInstances => RuntimeInstances.Count;
     }
 
@@ -67,13 +67,7 @@ internal static class LiveRcbLogicalGroupProjector
             if (consumed.Contains(control))
                 continue;
 
-            projections.Add((index, new Projection
-            {
-                Representative = control,
-                LogicalName = ResolveSingletonLogicalName(control),
-                ReportId = control.ReportId.Trim(),
-                RuntimeInstances = new[] { control }
-            }));
+            projections.Add((index, ProjectSingleton(control)));
         }
 
         return projections
@@ -119,28 +113,53 @@ internal static class LiveRcbLogicalGroupProjector
             Representative = representative,
             LogicalName = ordered[0].BaseName,
             ReportId = logicalReportId,
-            RuntimeInstances = ordered.Select(candidate => candidate.Control).ToArray()
+            RuntimeInstances = ordered.Select(candidate => candidate.Control).ToArray(),
+            Indexed = true
         };
         return true;
     }
 
-    private static string ResolveSingletonLogicalName(LiveIedReportControlModel control)
+    private static Projection ProjectSingleton(LiveIedReportControlModel control)
     {
+        var runtimeName = control.Name.Trim();
+        var logicalName = runtimeName;
+        var indexed = false;
+
+        if (TryResolveSingletonLogicalName(control, out var resolvedLogicalName))
+        {
+            logicalName = resolvedLogicalName;
+            indexed = true;
+        }
+
+        return new Projection
+        {
+            Representative = control,
+            LogicalName = logicalName,
+            ReportId = control.ReportId.Trim(),
+            RuntimeInstances = new[] { control },
+            Indexed = indexed
+        };
+    }
+
+    private static bool TryResolveSingletonLogicalName(
+        LiveIedReportControlModel control,
+        out string logicalName)
+    {
+        logicalName = string.Empty;
         var runtimeName = control.Name.Trim();
         if (!TrySplitTwoDigitSuffix(runtimeName, out var baseName, out var instanceIndex) ||
             instanceIndex != 1)
         {
-            return runtimeName;
+            return false;
         }
 
-        // A live MMS server commonly exposes the first concrete instance as
-        // <logical-name>01 while rptID retains the engineering ReportControl
-        // identity without the physical instance suffix. Strip 01 only when the
-        // authoritative rptID proves that exact base identity. This fixes
-        // A_URCB01 -> A_URCB and A_URCB_1001 -> A_URCB_10 without corrupting
-        // genuine singleton names such as A_BRCB_1201 whose rptID also ends 1201.
+        // A server may expose the only physical instance as <logical-name>01 while
+        // rptID keeps the engineering ReportControl identity. Only strip the 01
+        // when rptID proves the exact logical base. Keeping indexed=true with max=1
+        // then reconstructs the concrete MMS instance name correctly.
         var reportId = control.ReportId?.Trim() ?? string.Empty;
-        var lastDollar = reportId.LastIndexOf('
+        var lastDollar = reportId.LastIndexOf('        LiveIedReportControlModel left,
+        LiveIedReportControlModel right)
         => left.Buffered == right.Buffered &&
            Same(left.Domain, right.Domain) &&
            Same(left.LogicalNode, right.LogicalNode) &&
@@ -254,7 +273,11 @@ internal static class LiveRcbLogicalGroupProjector
 }
 );
         var reportLeaf = lastDollar >= 0 ? reportId[(lastDollar + 1)..] : reportId;
-        return Same(reportLeaf, baseName) ? baseName : runtimeName;
+        if (!Same(reportLeaf, baseName))
+            return false;
+
+        logicalName = baseName;
+        return true;
     }
 
     private static bool StaticConfigurationMatches(

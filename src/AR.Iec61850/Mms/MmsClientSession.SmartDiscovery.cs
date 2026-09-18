@@ -144,7 +144,7 @@ public sealed partial class MmsClientSession
         {
             try
             {
-                await EnrichReportInventoryAsync(
+                await EnrichReportInventorySmartAsync(
                         inventory,
                         Math.Max(0, options.MaxReportAttributeProbes),
                         cancellationToken)
@@ -217,14 +217,6 @@ public sealed partial class MmsClientSession
                 ? "report enrichment=partial"
                 : "report enrichment=completed";
 
-        if (options.ProbeReportAttributes &&
-            options.MaxReportAttributeProbes > 0 &&
-            inventory.ReportControls.Count > 0)
-        {
-            MarkSmartDiscoveryKpiAccountingPartial(
-                "report-enrichment confirmed Reads are not yet individually observed by the smart KPI recorder");
-        }
-
         UpdateSmartDiscoveryCompleteness(snapshot, iedDirectory, inventory, dataSetDirectories);
         var kpi = LastSmartDiscoveryKpi;
         var kpiSummary = kpi is null
@@ -247,6 +239,141 @@ public sealed partial class MmsClientSession
                 $"RCB={inventory.ReportControls.Count} (BRCB={inventory.BufferedCount}, URCB={inventory.UnbufferedCount}). " +
                 LastDiscoveryAttemptSummary
         };
+    }
+
+    private async Task EnrichReportInventorySmartAsync(
+        MmsReportInventory inventory,
+        int maxReportAttributeProbes,
+        CancellationToken cancellationToken)
+    {
+        if (maxReportAttributeProbes <= 0 ||
+            inventory.ReportControls.Count == 0 ||
+            !IsMmsInitiated)
+        {
+            return;
+        }
+
+        foreach (var reportControl in inventory.ReportControls
+                     .OrderByDescending(control => control.Buffered)
+                     .ThenByDescending(control =>
+                         control.LogicalNode.Equals("LLN0", StringComparison.OrdinalIgnoreCase))
+                     .Take(maxReportAttributeProbes))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // A complete RCB value is normally one MMS structure. Reading that structure
+            // first avoids 8-9 individual confirmed Reads per runtime instance while
+            // preserving the same static configuration evidence.
+            await TryReadReportControlStructureSmartAsync(
+                    reportControl,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            // Fall back only for static fields that the structured value did not expose.
+            // Every fallback is individually observed by the smart KPI recorder.
+            if (string.IsNullOrWhiteSpace(reportControl.DataSetReference))
+                await TryReadReportAttributeSmartAsync(reportControl, "DatSet", cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(reportControl.ReportId))
+                await TryReadReportAttributeSmartAsync(reportControl, "RptID", cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(reportControl.ConfRev))
+                await TryReadReportAttributeSmartAsync(reportControl, "ConfRev", cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(reportControl.IntegrityPeriodMs))
+                await TryReadReportAttributeSmartAsync(reportControl, "IntgPd", cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(reportControl.BufferTimeMs))
+                await TryReadReportAttributeSmartAsync(reportControl, "BufTm", cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(reportControl.TriggerOptions))
+                await TryReadReportAttributeSmartAsync(reportControl, "TrgOps", cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(reportControl.OptionalFields))
+                await TryReadReportAttributeSmartAsync(reportControl, "OptFlds", cancellationToken).ConfigureAwait(false);
+
+            if (reportControl.Buffered)
+            {
+                if (string.IsNullOrWhiteSpace(reportControl.ReservationTimeSeconds))
+                    await TryReadReportAttributeSmartAsync(reportControl, "ResvTms", cancellationToken).ConfigureAwait(false);
+            }
+            else if (string.IsNullOrWhiteSpace(reportControl.ReservationState))
+            {
+                await TryReadReportAttributeSmartAsync(reportControl, "Resv", cancellationToken).ConfigureAwait(false);
+            }
+
+            reportControl.Status = HasUsefulReportProbeData(reportControl)
+                ? "Attribute-probed"
+                : reportControl.Status;
+        }
+    }
+
+    private async Task TryReadReportControlStructureSmartAsync(
+        MmsReportControlCandidate reportControl,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var reference = MmsObjectReference.Parse(
+                reportControl.Reference,
+                reportControl.FunctionalConstraint);
+            using var observation = ObserveSmartDiscoveryRequest(
+                "report-enrichment",
+                "Read",
+                $"RCB:{reference.Domain}/{reference.Item}");
+            var result = await ReadSingleVariableAsync(reference, cancellationToken)
+                .ConfigureAwait(false);
+            observation.Complete(result.IsSuccess);
+
+            reportControl.ProbeDiagnostics.Add(
+                $"RCB base {reference.Item}: {(result.IsSuccess ? "OK" : result.Message)}");
+            if (result.IsSuccess && result.Value is not null)
+                ApplyReportControlStructure(reportControl, result.Value);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            reportControl.ProbeDiagnostics.Add(
+                $"RCB base structure read failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private async Task TryReadReportAttributeSmartAsync(
+        MmsReportControlCandidate reportControl,
+        string attribute,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(attribute, "DatSet", StringComparison.OrdinalIgnoreCase) &&
+            !reportControl.Attributes.Contains(attribute, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            var reference = MmsObjectReference.Parse(
+                $"{reportControl.Reference}.{attribute}",
+                reportControl.FunctionalConstraint);
+            using var observation = ObserveSmartDiscoveryRequest(
+                "report-enrichment",
+                "Read",
+                $"RCB:{reference.Domain}/{reference.Item}");
+            var result = await ReadSingleVariableAsync(reference, cancellationToken)
+                .ConfigureAwait(false);
+            observation.Complete(result.IsSuccess);
+
+            if (result.IsSuccess && result.Value is not null)
+            {
+                var text = NormalizeReportAttributeText(result.Value);
+                if (!string.IsNullOrWhiteSpace(text))
+                    ApplyReportAttributeText(reportControl, attribute, text);
+                reportControl.ProbeDiagnostics.Add(
+                    $"{attribute} item={reference.Item}: OK {MmsDataValueRenderer.ToCompactString(result.Value)}");
+            }
+            else
+            {
+                reportControl.ProbeDiagnostics.Add(
+                    $"{attribute} item={reference.Item}: {result.Message}");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            reportControl.ProbeDiagnostics.Add(
+                $"{attribute}: exception {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     internal int ResolveSmartDiscoveryWindow(MmsSmartDiscoveryOptions options)

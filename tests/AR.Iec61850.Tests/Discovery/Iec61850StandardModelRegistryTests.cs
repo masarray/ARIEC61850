@@ -21,6 +21,8 @@ public sealed class Iec61850StandardModelRegistryTests
     [InlineData("XCBR", "EEName", "DPL")]
     [InlineData("XSWI", "EEName", "DPL")]
     [InlineData("LLN0", "MltLev", "SPG")]
+    [InlineData("MHAI", "ThdA", "WYE")]
+    [InlineData("MHAI", "ThdPhV", "WYE")]
     [InlineData("LTRK", "BrcbTrk", "BTS")]
     [InlineData("LTRK", "UrcbTrk", "UTS")]
     [InlineData("LTRK", "GenTrk", "CST")]

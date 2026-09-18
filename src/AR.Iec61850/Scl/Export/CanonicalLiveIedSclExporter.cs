@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Mms;
 using AR.Iec61850.Scl;
 
 namespace AR.Iec61850.Scl.Export;
@@ -54,6 +55,7 @@ public static class CanonicalLiveIedSclExporter
             var document = XDocument.Load(result.SclPath, LoadOptions.PreserveWhitespace);
             ApplyCanonicalCommunication(document, canonical);
             PreserveRuntimeServiceCapacity(document, canonical.Discovery);
+            ApplyCanonicalInstanceValues(document, canonical);
             ValidateRoundTripAssociation(document, canonical);
             document.Save(result.SclPath);
             return result;
@@ -151,6 +153,297 @@ public static class CanonicalLiveIedSclExporter
             confReportControl.SetAttributeValue(
                 "max",
                 discovery.ReportControls.Count.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    public static void ApplyCanonicalInstanceValues(
+        XDocument document,
+        LiveIedCanonicalModel canonical)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(canonical);
+        if (canonical.InstanceValues.Count == 0)
+            return;
+
+        var grouped = canonical.InstanceValues
+            .Where(value =>
+                !string.IsNullOrWhiteSpace(value.Domain) &&
+                !string.IsNullOrWhiteSpace(value.LogicalNode) &&
+                !string.IsNullOrWhiteSpace(value.DataObject) &&
+                !string.IsNullOrWhiteSpace(value.AttributePath) &&
+                value.Value is not null)
+            .GroupBy(
+                value => string.Concat(
+                    value.Domain.Trim(), "\u001F",
+                    value.LogicalNode.Trim(), "\u001F",
+                    value.DataObject.Trim(), "\u001F",
+                    value.AttributePath.Trim()),
+                StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => group.Key, StringComparer.Ordinal);
+
+        foreach (var group in grouped)
+        {
+            var candidates = group.ToArray();
+            var formatted = candidates
+                .Select(candidate => TryFormatScalarValue(candidate.Value, out var text)
+                    ? text
+                    : null)
+                .Where(text => text is not null)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (formatted.Length == 0)
+                continue;
+            if (formatted.Length != 1)
+            {
+                throw new InvalidDataException(
+                    $"Conflicting live instance values were observed for '{candidates[0].Reference}'.");
+            }
+
+            var evidence = candidates[0];
+            var logicalNodeModel = FindLogicalNodeModel(canonical.Discovery, evidence);
+            if (logicalNodeModel is null)
+                continue;
+
+            var lDevice = FindExportedLogicalDevice(document, canonical, evidence.Domain);
+            if (lDevice is null)
+                continue;
+
+            var logicalNode = FindExportedLogicalNode(lDevice, logicalNodeModel);
+            if (logicalNode is null ||
+                !IsExportedAttributePath(document, logicalNode, evidence.DataObject, evidence.AttributePath))
+            {
+                continue;
+            }
+
+            var doi = GetOrAddChild(logicalNode, "DOI", evidence.DataObject);
+            var segments = evidence.AttributePath
+                .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length == 0)
+                continue;
+
+            XElement parent = doi;
+            for (var index = 0; index < segments.Length - 1; index++)
+                parent = GetOrAddChild(parent, "SDI", segments[index]);
+
+            var dai = GetOrAddChild(parent, "DAI", segments[^1]);
+            var existingValues = dai.Elements(Scl + "Val").ToArray();
+            if (existingValues.Length > 1)
+            {
+                throw new InvalidDataException(
+                    $"Generated SCL contains multiple Val elements for '{evidence.Reference}'.");
+            }
+
+            if (existingValues.Length == 1)
+            {
+                if (!string.Equals(existingValues[0].Value, formatted[0], StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        $"Generated SCL already contains a different Val for '{evidence.Reference}'.");
+                }
+                continue;
+            }
+
+            dai.Add(new XElement(Scl + "Val", formatted[0]));
+        }
+    }
+
+    private static LiveIedLogicalNodeModel? FindLogicalNodeModel(
+        LiveIedModelDiscoveryDocument discovery,
+        LiveIedInstanceValueEvidence evidence)
+        => discovery.LogicalDevices
+            .Where(device => string.Equals(
+                device.MmsDomain?.Trim(),
+                evidence.Domain.Trim(),
+                StringComparison.OrdinalIgnoreCase))
+            .SelectMany(device => device.LogicalNodes)
+            .FirstOrDefault(node => string.Equals(
+                node.Name?.Trim(),
+                evidence.LogicalNode.Trim(),
+                StringComparison.OrdinalIgnoreCase));
+
+    private static XElement? FindExportedLogicalDevice(
+        XDocument document,
+        LiveIedCanonicalModel canonical,
+        string domain)
+    {
+        var normalizedDomain = domain.Trim();
+        var iedName = canonical.IedName.Trim();
+        var stripped = normalizedDomain.StartsWith(iedName, StringComparison.OrdinalIgnoreCase) &&
+                       normalizedDomain.Length > iedName.Length
+            ? normalizedDomain[iedName.Length..]
+            : normalizedDomain;
+
+        var candidates = document.Descendants(Scl + "LDevice")
+            .Where(element =>
+            {
+                var inst = ((string?)element.Attribute("inst") ?? string.Empty).Trim();
+                return string.Equals(inst, stripped, StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(inst, normalizedDomain, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToArray();
+        return candidates.Length == 1 ? candidates[0] : null;
+    }
+
+    private static XElement? FindExportedLogicalNode(
+        XElement lDevice,
+        LiveIedLogicalNodeModel model)
+    {
+        if (string.Equals(model.Name, "LLN0", StringComparison.OrdinalIgnoreCase))
+            return lDevice.Elements(Scl + "LN0").SingleOrDefault();
+
+        return lDevice.Elements(Scl + "LN")
+            .SingleOrDefault(element =>
+                string.Equals(
+                    ((string?)element.Attribute("prefix") ?? string.Empty).Trim(),
+                    model.Prefix?.Trim() ?? string.Empty,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    ((string?)element.Attribute("lnClass") ?? string.Empty).Trim(),
+                    model.LnClass?.Trim() ?? string.Empty,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    ((string?)element.Attribute("inst") ?? string.Empty).Trim(),
+                    model.LnInst?.Trim() ?? string.Empty,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsExportedAttributePath(
+        XDocument document,
+        XElement logicalNode,
+        string dataObjectName,
+        string attributePath)
+    {
+        var lnTypeId = ((string?)logicalNode.Attribute("lnType") ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(lnTypeId))
+            return false;
+
+        var templates = document.Root?.Element(Scl + "DataTypeTemplates");
+        if (templates is null)
+            return false;
+
+        var lnType = templates.Elements(Scl + "LNodeType")
+            .SingleOrDefault(element => string.Equals(
+                ((string?)element.Attribute("id") ?? string.Empty).Trim(),
+                lnTypeId,
+                StringComparison.Ordinal));
+        var dataObject = lnType?.Elements(Scl + "DO")
+            .SingleOrDefault(element => string.Equals(
+                ((string?)element.Attribute("name") ?? string.Empty).Trim(),
+                dataObjectName.Trim(),
+                StringComparison.OrdinalIgnoreCase));
+        var typeId = ((string?)dataObject?.Attribute("type") ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(typeId))
+            return false;
+
+        XElement? currentType = FindTemplateById(templates, "DOType", typeId);
+        var segments = attributePath
+            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (var index = 0; index < segments.Length; index++)
+        {
+            if (currentType is null)
+                return false;
+
+            var segment = segments[index];
+            var definition = currentType.Elements()
+                .SingleOrDefault(element =>
+                    (element.Name == Scl + "DA" ||
+                     element.Name == Scl + "BDA" ||
+                     element.Name == Scl + "SDO") &&
+                    string.Equals(
+                        ((string?)element.Attribute("name") ?? string.Empty).Trim(),
+                        segment,
+                        StringComparison.OrdinalIgnoreCase));
+            if (definition is null)
+                return false;
+
+            var isLast = index == segments.Length - 1;
+            if (isLast)
+                return definition.Name == Scl + "DA" || definition.Name == Scl + "BDA";
+
+            var nestedTypeId = ((string?)definition.Attribute("type") ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(nestedTypeId))
+                return false;
+
+            currentType = definition.Name == Scl + "SDO"
+                ? FindTemplateById(templates, "DOType", nestedTypeId)
+                : FindTemplateById(templates, "DAType", nestedTypeId);
+        }
+
+        return false;
+    }
+
+    private static XElement? FindTemplateById(
+        XElement templates,
+        string localName,
+        string id)
+        => templates.Elements(Scl + localName)
+            .SingleOrDefault(element => string.Equals(
+                ((string?)element.Attribute("id") ?? string.Empty).Trim(),
+                id,
+                StringComparison.Ordinal));
+
+    private static XElement GetOrAddChild(
+        XElement parent,
+        string localName,
+        string name)
+    {
+        var existing = parent.Elements(Scl + localName)
+            .SingleOrDefault(element => string.Equals(
+                ((string?)element.Attribute("name") ?? string.Empty).Trim(),
+                name.Trim(),
+                StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+            return existing;
+
+        var created = new XElement(
+            Scl + localName,
+            new XAttribute("name", name.Trim()));
+        parent.Add(created);
+        return created;
+    }
+
+    private static bool TryFormatScalarValue(
+        MmsDataValue value,
+        out string text)
+    {
+        text = string.Empty;
+        switch (value.Kind)
+        {
+            case MmsDataKind.Boolean:
+                text = Convert.ToBoolean(value.Value, CultureInfo.InvariantCulture)
+                    ? "true"
+                    : "false";
+                return true;
+            case MmsDataKind.Integer:
+            case MmsDataKind.Unsigned:
+                text = Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty;
+                return true;
+            case MmsDataKind.FloatingPoint:
+                text = value.Value switch
+                {
+                    float single => single.ToString("R", CultureInfo.InvariantCulture),
+                    double number => number.ToString("R", CultureInfo.InvariantCulture),
+                    _ => string.Empty
+                };
+                return text.Length > 0;
+            case MmsDataKind.VisibleString:
+            case MmsDataKind.MmsString:
+                text = Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty;
+                return true;
+            case MmsDataKind.UtcTime:
+                if (value.Value is Iec61850UtcTime utc)
+                {
+                    text = Iec61850UtcTimeFormatter.FormatFullPrecisionUtc(utc);
+                    return true;
+                }
+                return false;
+            case MmsDataKind.OctetString:
+                text = Convert.ToHexString(value.RawValue.ToArray());
+                return true;
+            default:
+                // BitString/Quality, BinaryTime, arrays, structures, and unknown tags
+                // are intentionally omitted until their SCL lexical form is proven.
+                return false;
         }
     }
 

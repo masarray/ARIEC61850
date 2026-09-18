@@ -86,6 +86,11 @@ public static class CanonicalLiveIedSclExporter
             errors.Add("Canonical access-point identity is empty.");
         if (string.IsNullOrWhiteSpace(communication.Host))
             errors.Add("Canonical communication evidence has no IP/host endpoint.");
+        if (communication.Port != 102)
+        {
+            errors.Add(
+                $"Canonical communication evidence uses MMS/TCP port {communication.Port}, but the current SCL association plan represents IEC 61850 MMS on port 102 only.");
+        }
         if (string.IsNullOrWhiteSpace(association.ApTitle))
             errors.Add("Canonical communication evidence has no accepted remote OSI-AP-Title.");
         if (association.AeQualifier is not (>= 0 and <= 65535))

@@ -142,7 +142,8 @@ internal static class LiveRcbLogicalGroupProjector
         out string reportId)
     {
         reportId = ordered[0].Control.ReportId.Trim();
-        if (ordered.All(candidate => Same(candidate.Control.ReportId, reportId)))
+        var initialReportId = reportId;
+        if (ordered.All(candidate => Same(candidate.Control.ReportId, initialReportId)))
             return true;
 
         string? baseReportId = null;

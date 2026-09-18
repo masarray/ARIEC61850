@@ -81,6 +81,37 @@ public static class Iec61850StandardEnumRegistry
             new(8, "process")
         ]);
 
+    private static readonly Iec61850StandardEnumDefinition SiUnit = new(
+        "ARIEC61850_SIUnitKind",
+        "IEC 61850 SI unit enumeration.",
+        [
+            new(1, ""), new(2, "m"), new(3, "kg"), new(4, "s"), new(5, "A"),
+            new(6, "K"), new(7, "mol"), new(8, "cd"), new(9, "deg"), new(10, "rad"),
+            new(11, "sr"), new(21, "Gy"), new(22, "Bq"), new(23, "°C"), new(24, "Sv"),
+            new(25, "F"), new(26, "C"), new(27, "S"), new(28, "H"), new(29, "V"),
+            new(30, "ohm"), new(31, "J"), new(32, "N"), new(33, "Hz"), new(34, "lx"),
+            new(35, "Lm"), new(36, "Wb"), new(37, "T"), new(38, "W"), new(39, "Pa"),
+            new(41, "m²"), new(42, "m³"), new(43, "m/s"), new(44, "m/s²"), new(45, "m³/s"),
+            new(46, "m/m³"), new(47, "M"), new(48, "kg/m³"), new(49, "m²/s"), new(50, "W/m K"),
+            new(51, "J/K"), new(52, "ppm"), new(53, "1/s"), new(54, "rad/s"), new(55, "W/m²"),
+            new(56, "J/m²"), new(57, "S/m"), new(58, "K/s"), new(59, "Pa/s"), new(60, "J/kg K"),
+            new(61, "VA"), new(62, "Watts"), new(63, "VAr"), new(64, "phi"), new(65, "cos(phi)"),
+            new(66, "Vs"), new(67, "V²"), new(68, "As"), new(69, "A²"), new(70, "A²t"),
+            new(71, "VAh"), new(72, "Wh"), new(73, "VArh"), new(74, "V/Hz"), new(75, "Hz/s"),
+            new(76, "char"), new(77, "char/s"), new(78, "kgm²"), new(79, "dB"), new(80, "J/Wh"),
+            new(81, "W/s"), new(82, "l/s"), new(83, "dBm")
+        ]);
+
+    private static readonly Iec61850StandardEnumDefinition Multiplier = new(
+        "ARIEC61850_MultiplierKind",
+        "IEC 61850 unit multiplier enumeration.",
+        [
+            new(-24, "y"), new(-21, "z"), new(-18, "a"), new(-15, "f"), new(-12, "p"),
+            new(-9, "n"), new(-6, "µ"), new(-3, "m"), new(-2, "c"), new(-1, "d"),
+            new(0, ""), new(1, "da"), new(2, "h"), new(3, "k"), new(6, "M"),
+            new(9, "G"), new(12, "T"), new(15, "P"), new(18, "E"), new(21, "Z"), new(24, "Y")
+        ]);
+
     public static bool RequiresEnumType(string cdc, string attributeName)
         => TryResolve(string.Empty, string.Empty, cdc, attributeName, out _);
 
@@ -108,6 +139,18 @@ public static class Iec61850StandardEnumRegistry
         if (daName.Equals("orCat", StringComparison.OrdinalIgnoreCase))
         {
             definition = OriginatorCategory;
+            return true;
+        }
+
+        if (daName.Equals("SIUnit", StringComparison.OrdinalIgnoreCase))
+        {
+            definition = SiUnit;
+            return true;
+        }
+
+        if (daName.Equals("multiplier", StringComparison.OrdinalIgnoreCase))
+        {
+            definition = Multiplier;
             return true;
         }
 

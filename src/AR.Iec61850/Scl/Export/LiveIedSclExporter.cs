@@ -913,7 +913,7 @@ public static class LiveIedSclExporter
             enumType.Add(new XElement(
                 Scl + "EnumVal",
                 new XAttribute("ord", value.Ord.ToString(CultureInfo.InvariantCulture)),
-                SafeXmlName(value.Symbol)));
+                value.Symbol ?? string.Empty));
         }
 
         context.EnumTypes.Add(enumType);

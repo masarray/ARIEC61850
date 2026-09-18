@@ -1,11 +1,124 @@
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Scl;
+using AR.Iec61850.Scl.Export;
 
 namespace AR.Iec61850.Tests.Mms;
 
 public sealed class InitialFcReadSclShapeTests
 {
+    [Fact]
+    public void Exported_Scl_RoundTrip_Preserves_Status_Leaf_Order_For_FcRoot_Projection()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.10",
+            IedName = "IED1",
+            AccessPointName = "AP1",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "IED1ADD",
+                    Inst = "IED1ADD",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "GGIO1",
+                            LnClass = "GGIO",
+                            LnInst = "1",
+                            ProposedLnTypeId = "LN_GGIO1",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = "IED1ADD/GGIO1.Ind1",
+                                    Name = "Ind1",
+                                    ProposedDoTypeId = "DO_SPS_GGIO_Ind1",
+                                    InferredCdc = "SPS",
+                                    CdcConfidence = 1.0,
+                                    ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.Exact,
+                                    TypeDeclarationOrder = "000000.000000",
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = "IED1ADD/GGIO1.Ind1.stVal",
+                                            AttributePath = "stVal",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = "BOOLEAN",
+                                            TypeDeclarationOrder = "000000.000000.000000"
+                                        },
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = "IED1ADD/GGIO1.Ind1.q",
+                                            AttributePath = "q",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = "Quality",
+                                            TypeDeclarationOrder = "000000.000000.000001"
+                                        },
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = "IED1ADD/GGIO1.Ind1.t",
+                                            AttributePath = "t",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = "Timestamp",
+                                            TypeDeclarationOrder = "000000.000000.000002"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var scl = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions
+            {
+                Profile = "full-model",
+                IpAddress = "192.0.2.10"
+            }).ToString();
+
+        var design = SclInitialFcReadDesignBuilder.Read(scl, "IED1", "AP1");
+        Assert.True(design.IsSuccess, string.Join(" | ", design.Errors));
+
+        var plan = InitialFcReadPlanner.FromSclModel(
+            design.Model,
+            design.DomainInventory.ExpectedDomains);
+        var target = Assert.Single(
+            plan.Targets,
+            item => item.MmsReference == "IED1ADD/GGIO1$ST");
+        var binding = Assert.Single(target.DataObjects);
+
+        Assert.Equal(
+            ["stVal", "q", "t"],
+            binding.Leaves.Select(leaf => leaf.AttributePath).ToArray());
+
+        var projection = InitialFcValueProjector.Project(
+            target,
+            MmsDataValue.Structure(
+            [
+                MmsDataValue.Structure(
+                [
+                    MmsDataValue.Boolean(false),
+                    MmsDataValue.BitString(3, [0x00, 0x00]),
+                    MmsDataValue.VisibleString("timestamp-placeholder")
+                ])
+            ]));
+
+        Assert.Empty(projection.Errors);
+        Assert.Equal(
+            ["stVal", "q", "t"],
+            projection.Leaves.Select(leaf => leaf.AttributePath).ToArray());
+        Assert.Equal(MmsDataKind.Boolean, projection.Leaves[0].Value.Kind);
+        Assert.Equal(MmsDataKind.BitString, projection.Leaves[1].Value.Kind);
+        Assert.Equal(MmsDataKind.VisibleString, projection.Leaves[2].Value.Kind);
+    }
+
     [Fact]
     public void Planner_Treats_Scl_Struct_As_Container_Not_Leaf()
     {

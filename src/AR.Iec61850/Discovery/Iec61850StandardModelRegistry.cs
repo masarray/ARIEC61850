@@ -18,14 +18,14 @@ public static class Iec61850StandardModelRegistry
     private static readonly Dictionary<string, Iec61850StandardDataObjectDefinition> ExactDefinitions = new(StringComparer.OrdinalIgnoreCase)
     {
         [Key("LLN0", "NamPlt")] = Def("LLN0", "NamPlt", "LPL", 0.98, "logical-node nameplate"),
-        [Key("LLN0", "Mod")] = Def("LLN0", "Mod", "INC", 0.94, "controllable mode"),
-        [Key("LLN0", "Beh")] = Def("LLN0", "Beh", "INS", 0.94, "behaviour integer/enumerated status"),
-        [Key("LLN0", "Health")] = Def("LLN0", "Health", "INS", 0.94, "health integer/enumerated status"),
+        [Key("LLN0", "Mod")] = Def("LLN0", "Mod", "ENC", 0.98, "enumerated mode control"),
+        [Key("LLN0", "Beh")] = Def("LLN0", "Beh", "ENS", 0.98, "enumerated behaviour status"),
+        [Key("LLN0", "Health")] = Def("LLN0", "Health", "ENS", 0.98, "enumerated health status"),
         [Key("LLN0", "MltLev")] = Def("LLN0", "MltLev", "SPG", 0.96, "multiple setting-level selection"),
 
         [Key("LPHD", "PhyNam")] = Def("LPHD", "PhyNam", "DPL", 0.98, "physical device nameplate"),
         [Key("LPHD", "Proxy")] = Def("LPHD", "Proxy", "SPS", 0.92, "proxy status"),
-        [Key("LPHD", "PhyHealth")] = Def("LPHD", "PhyHealth", "INS", 0.94, "physical device health integer/enumerated status"),
+        [Key("LPHD", "PhyHealth")] = Def("LPHD", "PhyHealth", "ENS", 0.98, "physical device health status"),
 
         [Key("PTOC", "Op")] = Def("PTOC", "Op", "ACT", 0.94, "protection operation indication"),
         [Key("PTOC", "Str")] = Def("PTOC", "Str", "ACD", 0.94, "protection start indication"),
@@ -144,6 +144,30 @@ public static class Iec61850StandardModelRegistry
         definition = default!;
         var doName = dataObjectName.Trim();
         var lnClass = logicalNodeClass.Trim();
+
+        // Common Data Objects inherited by many logical-node classes. These
+        // semantics are standard model authority, not device-specific guesses.
+        // Keeping them here prevents raw integer/string wire types from degrading
+        // the engineering CDC in canonical SCL.
+        if (doName.Equals("Mod", StringComparison.OrdinalIgnoreCase))
+        {
+            definition = Def(lnClass, doName, "ENC", 0.98, "common enumerated mode control");
+            return true;
+        }
+
+        if (doName.Equals("Beh", StringComparison.OrdinalIgnoreCase) ||
+            doName.Equals("Health", StringComparison.OrdinalIgnoreCase) ||
+            doName.Equals("PhyHealth", StringComparison.OrdinalIgnoreCase))
+        {
+            definition = Def(lnClass, doName, "ENS", 0.98, "common enumerated status");
+            return true;
+        }
+
+        if (doName.Equals("GrRef", StringComparison.OrdinalIgnoreCase))
+        {
+            definition = Def(lnClass, doName, "ORG", 0.98, "common object-reference setting group reference");
+            return true;
+        }
 
         if (doName.StartsWith("DPCSO", StringComparison.OrdinalIgnoreCase))
         {

@@ -52,6 +52,57 @@ public sealed class CanonicalLiveIedSclExporterTests
     }
 
     [Fact]
+    public void WriteFiles_RejectsAssociationEvidenceThatChangesDuringRoundTrip()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ariec-canonical-roundtrip-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "ied.iid");
+        try
+        {
+            var baseline = CreateCanonical();
+            var canonical = new LiveIedCanonicalModel
+            {
+                Discovery = baseline.Discovery,
+                Communication = new LiveIedCommunicationEvidence
+                {
+                    Source = baseline.Communication.Source,
+                    AssociationProfileName = baseline.Communication.AssociationProfileName,
+                    Host = baseline.Communication.Host,
+                    Port = baseline.Communication.Port,
+                    AccessPointName = baseline.Communication.AccessPointName,
+                    Association = new SclIsoAssociationAddress
+                    {
+                        ApTitle = "\"1,1,1,999,1\"",
+                        AeQualifierText = "12",
+                        AeQualifier = 12,
+                        PresentationSelector = "00000001",
+                        SessionSelector = "0001",
+                        TransportSelector = "0001"
+                    }
+                }
+            };
+
+            var ex = Assert.Throws<InvalidDataException>(() =>
+                CanonicalLiveIedSclExporter.WriteFiles(
+                    canonical,
+                    path,
+                    SclSchemaProfile.Edition2V31));
+
+            Assert.Contains(
+                "changed canonical association evidence during serialization",
+                ex.Message,
+                StringComparison.Ordinal);
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+
+    [Fact]
     public void ValidateCanonicalCommunication_RejectsMissingRemoteApTitle()
     {
         var canonical = CreateCanonical();

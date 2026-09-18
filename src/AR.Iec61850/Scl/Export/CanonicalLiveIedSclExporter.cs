@@ -454,6 +454,26 @@ public static class CanonicalLiveIedSclExporter
             ?? throw new InvalidDataException(
                 $"Generated SCL cannot round-trip its own ConnectedAP '{canonical.IedName}/{canonical.AccessPointName}'.");
 
+        var canonicalAssociation = canonical.Communication.Association;
+        var roundTripErrors = new List<string>();
+        CompareRoundTrip("IP", canonical.Communication.Host, remote.Endpoint.IpAddress, roundTripErrors);
+        CompareRoundTrip("OSI-AP-Title", canonicalAssociation.ApTitle, remote.Association.ApTitle, roundTripErrors);
+        if (canonicalAssociation.AeQualifier != remote.Association.AeQualifier)
+        {
+            roundTripErrors.Add(
+                $"OSI-AE-Qualifier expected '{canonicalAssociation.AeQualifier?.ToString(CultureInfo.InvariantCulture) ?? "<null>"}' " +
+                $"but parsed '{remote.Association.AeQualifier?.ToString(CultureInfo.InvariantCulture) ?? "<null>"}'.");
+        }
+        CompareRoundTrip("OSI-PSEL", canonicalAssociation.PresentationSelector, remote.Association.PresentationSelector, roundTripErrors);
+        CompareRoundTrip("OSI-SSEL", canonicalAssociation.SessionSelector, remote.Association.SessionSelector, roundTripErrors);
+        CompareRoundTrip("OSI-TSEL", canonicalAssociation.TransportSelector, remote.Association.TransportSelector, roundTripErrors);
+        if (roundTripErrors.Count > 0)
+        {
+            throw new InvalidDataException(
+                "Generated SCL changed canonical association evidence during serialization: " +
+                string.Join(" | ", roundTripErrors));
+        }
+
         var plan = SclAssistedMmsAssociationPlanBuilder.BuildExact(
             remote,
             MmsLocalAssociationProfile.SclInteroperabilityDefault);
@@ -462,6 +482,21 @@ public static class CanonicalLiveIedSclExporter
             throw new InvalidDataException(
                 "Generated SCL failed its own MMS association-plan validation: " +
                 string.Join(" | ", plan.Errors));
+        }
+    }
+
+    private static void CompareRoundTrip(
+        string name,
+        string? expected,
+        string? actual,
+        ICollection<string> errors)
+    {
+        var normalizedExpected = expected?.Trim() ?? string.Empty;
+        var normalizedActual = actual?.Trim() ?? string.Empty;
+        if (!string.Equals(normalizedExpected, normalizedActual, StringComparison.Ordinal))
+        {
+            errors.Add(
+                $"{name} expected '{normalizedExpected}' but parsed '{normalizedActual}'.");
         }
     }
 

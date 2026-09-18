@@ -12,7 +12,7 @@ public sealed partial class MmsClientSession
     /// Projects the exact accepted built-in association request into canonical SCL
     /// communication evidence. AP-title, AE-qualifier, PSEL and SSEL are decoded from
     /// the request bytes that the IED actually accepted; TSEL comes from the exact COTP
-    /// destination selector used by this built-in connection path. No exporter default
+    /// destination selector retained by the accepted COTP session. No exporter default
     /// or duplicated profile-name mapping is allowed here.
     /// </summary>
     public LiveIedCommunicationEvidence GetAcceptedCommunicationEvidence(string accessPointName = "AP1")
@@ -34,7 +34,7 @@ public sealed partial class MmsClientSession
         };
     }
 
-    private static SclIsoAssociationAddress ResolveAcceptedRemoteAssociation(string profileName)
+    private SclIsoAssociationAddress ResolveAcceptedRemoteAssociation(string profileName)
     {
         if (string.IsNullOrWhiteSpace(profileName))
             return new SclIsoAssociationAddress();

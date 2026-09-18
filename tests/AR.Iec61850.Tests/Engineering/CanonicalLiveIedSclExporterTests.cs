@@ -103,6 +103,32 @@ public sealed class CanonicalLiveIedSclExporterTests
 
 
     [Fact]
+    public void ValidateCanonicalCommunication_RejectsNonStandardMmsPortForSafeScl()
+    {
+        var baseline = CreateCanonical();
+        var canonical = new LiveIedCanonicalModel
+        {
+            Discovery = baseline.Discovery,
+            Communication = new LiveIedCommunicationEvidence
+            {
+                Source = baseline.Communication.Source,
+                AssociationProfileName = baseline.Communication.AssociationProfileName,
+                Host = baseline.Communication.Host,
+                Port = 8102,
+                AccessPointName = baseline.Communication.AccessPointName,
+                Association = baseline.Communication.Association
+            }
+        };
+
+        var ex = Assert.Throws<InvalidDataException>(() =>
+            CanonicalLiveIedSclExporter.ValidateCanonicalCommunication(canonical));
+
+        Assert.Contains("port 8102", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("port 102 only", ex.Message, StringComparison.Ordinal);
+    }
+
+
+    [Fact]
     public void ValidateCanonicalCommunication_RejectsMissingRemoteApTitle()
     {
         var canonical = CreateCanonical();

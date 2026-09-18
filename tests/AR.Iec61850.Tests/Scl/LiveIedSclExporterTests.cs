@@ -9,6 +9,77 @@ namespace AR.Iec61850.Tests.Scl;
 public sealed class LiveIedSclExporterTests
 {
     [Fact]
+    public void Exporter_Preserves_Prefixed_LogicalNode_Identity_In_Ln_And_Fcda()
+    {
+        var discovery = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IED1Measurements",
+                    LogicalNode = "RPRE_MMXU1",
+                    FunctionalConstraint = "MX",
+                    DataObjectPath = "A.phsA",
+                    MmsItemName = "RPRE_MMXU1$MX$A$phsA"
+                }
+            ])
+        };
+        discovery.ReportInventory.DataSets.Add(new MmsDataSetCandidate
+        {
+            Domain = "IED1Measurements",
+            LogicalNode = "LLN0",
+            Name = "Analog",
+            Reference = "IED1Measurements/LLN0.Analog"
+        });
+        var dataSet = new MmsDataSetDirectoryResult
+        {
+            IsSuccess = true,
+            DataSetReference = "IED1Measurements/LLN0.Analog",
+            Members =
+            [
+                new MmsDataSetDirectoryMember
+                {
+                    Domain = "IED1Measurements",
+                    LogicalNode = "RPRE_MMXU1",
+                    FunctionalConstraint = "MX",
+                    DataObjectPath = "A.phsA",
+                    UserReference = "IED1Measurements/RPRE_MMXU1.A.phsA",
+                    MmsItemName = "RPRE_MMXU1$MX$A$phsA",
+                    Confidence = 100
+                }
+            ]
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions
+            {
+                Host = "192.0.2.10",
+                IedName = "IED1"
+            },
+            [dataSet]);
+
+        var document = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model" });
+        var ns = document.Root!.Name.Namespace;
+
+        var ln = document.Descendants(ns + "LN")
+            .Single(element => (string?)element.Attribute("lnClass") == "MMXU");
+        Assert.Equal("RPRE_", (string?)ln.Attribute("prefix"));
+        Assert.Equal("1", (string?)ln.Attribute("inst"));
+
+        var fcda = Assert.Single(document.Descendants(ns + "FCDA"));
+        Assert.Equal("RPRE_", (string?)fcda.Attribute("prefix"));
+        Assert.Equal("MMXU", (string?)fcda.Attribute("lnClass"));
+        Assert.Equal("1", (string?)fcda.Attribute("lnInst"));
+        Assert.Equal("A", (string?)fcda.Attribute("doName"));
+        Assert.Equal("phsA", (string?)fcda.Attribute("daName"));
+        Assert.Equal("MX", (string?)fcda.Attribute("fc"));
+    }
+
+    [Fact]
     public void Exporter_Builds_Importable_Scl_With_Dataset_Report_And_Templates()
     {
         var discovery = new MmsDiscoveryResult

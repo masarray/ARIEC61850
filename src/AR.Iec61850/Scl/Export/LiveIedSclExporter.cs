@@ -654,6 +654,18 @@ public static class LiveIedSclExporter
                         continue;
                     }
 
+                    if (!options.ResolvedSchemaProfile.IsEdition2 &&
+                        IsEdition2ServiceTrackingCdc(dataObject.InferredCdc))
+                    {
+                        context.Warnings.Add(new LiveIedSclExportWarning
+                        {
+                            Code = "SchemaDowngradeTrackingCdc",
+                            Reference = dataObject.Reference,
+                            Message = $"Edition 2 service-tracking CDC '{dataObject.InferredCdc}' is omitted from the selected Edition 1 schema."
+                        });
+                        continue;
+                    }
+
                     var resolvedProfile = options.ResolvedProfile;
                     if ((!options.IncludeLowConfidenceTypes || resolvedProfile == LiveIedSclExportProfile.SafeConnection) && dataObject.ConfidenceLevel is LiveIedDiscoveryConfidenceLevel.Low or LiveIedDiscoveryConfidenceLevel.Unknown)
                     {
@@ -720,6 +732,10 @@ public static class LiveIedSclExporter
             });
         }
     }
+
+    private static bool IsEdition2ServiceTrackingCdc(string cdc)
+        => (cdc ?? string.Empty).Trim().ToUpperInvariant() is
+            "CST" or "BTS" or "UTS" or "STS" or "CTS";
 
     private static XElement BuildDoType(LiveIedDataObjectModel dataObject, string doTypeId, LiveIedSclBuildContext context, IReadOnlyCollection<LiveIedDataAttributeModel>? exportAttributes = null, string logicalNodeClass = "")
     {

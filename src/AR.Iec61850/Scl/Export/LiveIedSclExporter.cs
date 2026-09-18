@@ -638,7 +638,10 @@ public static class LiveIedSclExporter
                     new XAttribute("id", lnTypeId),
                     new XAttribute("lnClass", string.IsNullOrWhiteSpace(ln.LnClass) ? ln.Name : ln.LnClass));
 
-                foreach (var dataObject in ln.DataObjects.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+                foreach (var dataObject in ln.DataObjects
+                    .OrderBy(x => string.IsNullOrWhiteSpace(x.TypeDeclarationOrder) ? 1 : 0)
+                    .ThenBy(x => x.TypeDeclarationOrder, StringComparer.Ordinal)
+                    .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     if (IsControlBlockDataObject(dataObject))
                         continue;
@@ -764,7 +767,7 @@ public static class LiveIedSclExporter
             return doType;
         }
 
-        foreach (var child in tree.Children.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var child in tree.Children)
         {
             if (child.Children.Count > 0 &&
                 TryResolveStandardSubDataObjectCdc(cdc, child.Name, out var subCdc))
@@ -812,7 +815,7 @@ public static class LiveIedSclExporter
             new XAttribute("id", doTypeId),
             new XAttribute("cdc", cdc));
 
-        foreach (var child in node.Children.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var child in node.Children)
         {
             doType.Add(BuildDaElement(
                 child,
@@ -885,7 +888,7 @@ public static class LiveIedSclExporter
         var daTypeId = MakeUniqueId(context, $"DA_{Iec61850ReferenceParts.SafeIdPart(ownerTypeId)}_{Iec61850ReferenceParts.SafeIdPart(node.Path)}");
         context.DataAttributeTypeIds[$"{ownerTypeId}|{node.Path}"] = daTypeId;
         var daType = new XElement(Scl + "DAType", new XAttribute("id", daTypeId));
-        foreach (var child in node.Children.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var child in node.Children)
             daType.Add(BuildDaElement(child, daTypeId, context, cdc, dataObjectName, logicalNodeClass, isRootDa: false));
         context.DaTypes.Add(daType);
 
@@ -1193,8 +1196,6 @@ public static class LiveIedSclExporter
             string.Equals(attribute.FunctionalConstraint, "GO", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(attribute.FunctionalConstraint, "MS", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(attribute.FunctionalConstraint, "US", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(attribute.FunctionalConstraint, "SG", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(attribute.FunctionalConstraint, "SE", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(attribute.FunctionalConstraint, "LG", StringComparison.OrdinalIgnoreCase));
 
     private static string NormalizeBType(string bType, string name, string path, string cdc)
@@ -1385,6 +1386,7 @@ public static class LiveIedSclExporter
     private sealed class TypeTreeNode
     {
         private readonly Dictionary<string, TypeTreeNode> _children = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<TypeTreeNode> _orderedChildren = new();
 
         private TypeTreeNode(string name, string path)
         {
@@ -1396,7 +1398,7 @@ public static class LiveIedSclExporter
         public string Path { get; }
         public string Fc { get; private set; } = string.Empty;
         public string BType { get; private set; } = string.Empty;
-        public IReadOnlyCollection<TypeTreeNode> Children => _children.Values;
+        public IReadOnlyList<TypeTreeNode> Children => _orderedChildren;
 
         public string EffectiveFunctionalConstraint
         {
@@ -1451,6 +1453,7 @@ public static class LiveIedSclExporter
                 {
                     child = new TypeTreeNode(segment, path);
                     current._children[segment] = child;
+                    current._orderedChildren.Add(child);
                 }
 
                 current = child;

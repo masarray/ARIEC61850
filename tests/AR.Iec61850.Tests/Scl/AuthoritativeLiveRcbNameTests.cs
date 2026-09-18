@@ -51,7 +51,7 @@ public sealed class AuthoritativeLiveRcbNameTests
 
         var reportControl = Assert.Single(result.Descendants(Scl + "ReportControl"));
         Assert.Equal("A_URCB", (string?)reportControl.Attribute("name"));
-        Assert.Equal("false", (string?)reportControl.Attribute("indexed"));
+        Assert.Equal("true", (string?)reportControl.Attribute("indexed"));
         Assert.Equal("1", (string?)Assert.Single(reportControl.Elements(Scl + "RptEnabled")).Attribute("max"));
     }
 

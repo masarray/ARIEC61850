@@ -94,6 +94,24 @@ public static class Iec61850StandardModelRegistry
         [Key("LTIM", "TmOfsTmm")] = Def("LTIM", "TmOfsTmm", "ING", 0.98, "time offset"),
         [Key("LTIM", "TmUseDT")] = Def("LTIM", "TmUseDT", "SPG", 0.98, "daylight-saving enable"),
 
+        // IEC 61850 Edition 2 service tracking LN. These CDCs are intentionally
+        // schema-gated by the SCL exporter for Edition 2 output.
+        [Key("LTRK", "SpcTrk")] = Def("LTRK", "SpcTrk", "CTS", 0.98, "single-point control service tracking"),
+        [Key("LTRK", "DpcTrk")] = Def("LTRK", "DpcTrk", "CTS", 0.98, "double-point control service tracking"),
+        [Key("LTRK", "IncTrk")] = Def("LTRK", "IncTrk", "CTS", 0.98, "integer control service tracking"),
+        [Key("LTRK", "EncTrk1")] = Def("LTRK", "EncTrk1", "CTS", 0.98, "enumerated control service tracking"),
+        [Key("LTRK", "EncTrk2")] = Def("LTRK", "EncTrk2", "CTS", 0.98, "enumerated control service tracking"),
+        [Key("LTRK", "EncTrk3")] = Def("LTRK", "EncTrk3", "CTS", 0.98, "enumerated control service tracking"),
+        [Key("LTRK", "EncTrk4")] = Def("LTRK", "EncTrk4", "CTS", 0.98, "enumerated control service tracking"),
+        [Key("LTRK", "ApcFTrk")] = Def("LTRK", "ApcFTrk", "CTS", 0.98, "analogue control service tracking"),
+        [Key("LTRK", "BscTrk")] = Def("LTRK", "BscTrk", "CTS", 0.98, "binary step control service tracking"),
+        [Key("LTRK", "IscTrk")] = Def("LTRK", "IscTrk", "CTS", 0.98, "integer step control service tracking"),
+        [Key("LTRK", "BacTrk")] = Def("LTRK", "BacTrk", "CTS", 0.98, "binary analogue control service tracking"),
+        [Key("LTRK", "GenTrk")] = Def("LTRK", "GenTrk", "CST", 0.98, "common service tracking"),
+        [Key("LTRK", "UrcbTrk")] = Def("LTRK", "UrcbTrk", "UTS", 0.98, "unbuffered report control tracking"),
+        [Key("LTRK", "BrcbTrk")] = Def("LTRK", "BrcbTrk", "BTS", 0.98, "buffered report control tracking"),
+        [Key("LTRK", "SgcbTrk")] = Def("LTRK", "SgcbTrk", "STS", 0.98, "setting-group control tracking"),
+
         [Key("MSQI", "SeqA")] = Def("MSQI", "SeqA", "SEQ", 0.92, "current sequence components"),
         [Key("MSQI", "SeqV")] = Def("MSQI", "SeqV", "SEQ", 0.92, "voltage sequence components")
     };

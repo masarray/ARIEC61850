@@ -16,11 +16,13 @@ public sealed class CotpClient
     public bool IsConnected { get; private set; }
     public bool HasDataAvailable => IsConnected && _tpkt.HasDataAvailable;
     public CotpConnectionConfirm? LastConnectionConfirm { get; private set; }
+    public CotpConnectParameters? LastConnectParameters { get; private set; }
 
     public void Reset()
     {
         IsConnected = false;
         LastConnectionConfirm = null;
+        LastConnectParameters = null;
     }
 
     public Task ConnectAsync(CancellationToken cancellationToken)
@@ -31,7 +33,14 @@ public sealed class CotpClient
         ArgumentNullException.ThrowIfNull(parameters);
         Reset();
 
-        await _tpkt.SendTpktAsync(CotpConnectRequest.Build(parameters), cancellationToken).ConfigureAwait(false);
+        var acceptedParameters = new CotpConnectParameters
+        {
+            SourceTsap = parameters.SourceTsap.ToArray(),
+            DestinationTsap = parameters.DestinationTsap.ToArray(),
+            TpduSizeExponent = parameters.TpduSizeExponent
+        };
+
+        await _tpkt.SendTpktAsync(CotpConnectRequest.Build(acceptedParameters), cancellationToken).ConfigureAwait(false);
         var response = await _tpkt.ReceiveTpktAsync(cancellationToken).ConfigureAwait(false);
         var confirm = CotpConnectionConfirm.Parse(response);
         LastConnectionConfirm = confirm;
@@ -39,6 +48,7 @@ public sealed class CotpClient
         if (!confirm.IsAccepted)
             throw new InvalidDataException(confirm.Message);
 
+        LastConnectParameters = acceptedParameters;
         IsConnected = true;
     }
 

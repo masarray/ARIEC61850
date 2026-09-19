@@ -8,13 +8,13 @@ public sealed class LiveIedModelDiscoveryBuilderTests
     [Theory]
     [InlineData("LLN0", "NamPlt", "vendor;swRev;configRev", "DC", "LPL")]
     [InlineData("LPHD", "PhyNam", "vendor;hwRev;swRev;serNum", "DC", "DPL")]
-    [InlineData("LPHD", "PhyHealth", "stVal;q;t", "ST", "INS")]
-    [InlineData("PTOC", "Beh", "stVal;q;t", "ST", "INS")]
-    [InlineData("PTOC", "Health", "stVal;q;t", "ST", "INS")]
+    [InlineData("LPHD", "PhyHealth", "stVal;q;t", "ST", "ENS")]
+    [InlineData("PTOC", "Beh", "stVal;q;t", "ST", "ENS")]
+    [InlineData("PTOC", "Health", "stVal;q;t", "ST", "ENS")]
     [InlineData("RDRE", "FltNum", "stVal;q;t", "ST", "INS")]
     [InlineData("CSWI", "Pos", "stVal;q;t;Oper.ctlVal;SBOw.ctlVal", "ST;CO", "DPC")]
     [InlineData("MMXU", "PPV", "phsAB.cVal.mag.f;phsBC.cVal.mag.f;phsCA.cVal.mag.f", "MX", "DEL")]
-    [InlineData("PTOC", "Mod", "stVal;q;t;ctlModel", "ST;CF", "INC")]
+    [InlineData("PTOC", "Mod", "stVal;q;t;ctlModel", "ST;CF", "ENC")]
     [InlineData("PTOC", "Op", "general;q;t", "ST", "ACT")]
     [InlineData("PTOC", "Str", "general;dirGeneral;q;t", "ST", "ACD")]
     [InlineData("XCBR", "SumSwARs1", "actVal;q;t;pulsQty", "ST;CF", "BCR")]
@@ -375,6 +375,167 @@ public sealed class LiveIedModelDiscoveryBuilderTests
 
         Assert.Equal(["LD1/LLN0", "LD1/MMXU1", "LD2/PTOC1"], probes.Select(probe => $"{probe.Domain}/{probe.Item}"));
         Assert.All(probes, probe => Assert.True(string.IsNullOrEmpty(probe.FunctionalConstraint)));
+    }
+
+    [Fact]
+    public void LnRootTypeTree_OrderOverridesAlphabeticalDirectoryOrder()
+    {
+        var result = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                // MmsIedModelDirectory intentionally sorts paths alphabetically,
+                // which would place q before stVal without declaration-order evidence.
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.q",
+                    MmsItemName = "GGIO1$ST$Ind1$q"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.stVal",
+                    MmsItemName = "GGIO1$ST$Ind1$stVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "Ind1.t",
+                    MmsItemName = "GGIO1$ST$Ind1$t"
+                }
+            ])
+        };
+        var typeResult = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("LD0", "GGIO1", string.Empty),
+            TypeSpecification = Structure(string.Empty,
+                Structure("ST",
+                    Structure("Ind1",
+                        Basic("stVal", "boolean", "BOOLEAN"),
+                        Basic("q", "bit-string", "Quality"),
+                        Basic("t", "utc-time", "Timestamp")))),
+            Message = "LN-root declaration order"
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            result,
+            new LiveIedModelDiscoveryBuildOptions(),
+            variableTypeAttributes: [typeResult]);
+
+        var dataObject = Assert.Single(Assert.Single(Assert.Single(model.LogicalDevices).LogicalNodes).DataObjects);
+        Assert.Equal(
+            ["stVal", "q", "t"],
+            dataObject.Attributes.Select(attribute => attribute.AttributePath).ToArray());
+        Assert.All(dataObject.Attributes, attribute =>
+            Assert.False(string.IsNullOrWhiteSpace(attribute.TypeDeclarationOrder)));
+        Assert.False(string.IsNullOrWhiteSpace(dataObject.TypeDeclarationOrder));
+    }
+
+    [Fact]
+    public void LnRootTypeTree_Preserves_CaseDistinct_Tracking_Members()
+    {
+        var result = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "LTRK1",
+                    FunctionalConstraint = "SR",
+                    DataObjectPath = "SpcTrk.t",
+                    MmsItemName = "LTRK1$SR$SpcTrk$t"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "LD0",
+                    LogicalNode = "LTRK1",
+                    FunctionalConstraint = "SR",
+                    DataObjectPath = "SpcTrk.T",
+                    MmsItemName = "LTRK1$SR$SpcTrk$T"
+                }
+            ])
+        };
+        var typeResult = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("LD0", "LTRK1", string.Empty),
+            TypeSpecification = Structure(string.Empty,
+                Structure("SR",
+                    Structure("SpcTrk",
+                        Basic("t", "utc-time", "Timestamp"),
+                        Basic("T", "integer", "INT32")))),
+            Message = "case-distinct tracking members"
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            result,
+            new LiveIedModelDiscoveryBuildOptions(),
+            variableTypeAttributes: [typeResult]);
+
+        var dataObject = Assert.Single(
+            Assert.Single(
+                Assert.Single(model.LogicalDevices).LogicalNodes).DataObjects);
+
+        var lower = Assert.Single(dataObject.Attributes, attribute => attribute.AttributePath == "t");
+        var upper = Assert.Single(dataObject.Attributes, attribute => attribute.AttributePath == "T");
+
+        Assert.Equal("utc-time", lower.MmsType);
+        Assert.Equal("integer", upper.MmsType);
+        Assert.NotEqual(lower.TypeDeclarationOrder, upper.TypeDeclarationOrder);
+    }
+
+    [Fact]
+    public void SettingFc_DataObjects_AreNotMisclassifiedAsSettingControls()
+    {
+        var result = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SG",
+                    DataObjectPath = "MltLev.setVal",
+                    MmsItemName = "LLN0$SG$MltLev$setVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SE",
+                    DataObjectPath = "MltLev.setVal",
+                    MmsItemName = "LLN0$SE$MltLev$setVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDApplication",
+                    LogicalNode = "LLN0",
+                    FunctionalConstraint = "SP",
+                    DataObjectPath = "SGCB.NumOfSG",
+                    MmsItemName = "LLN0$SP$SGCB$NumOfSG"
+                }
+            ])
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            result,
+            new LiveIedModelDiscoveryBuildOptions());
+
+        var ln0 = Assert.Single(Assert.Single(model.LogicalDevices).LogicalNodes);
+        Assert.Contains(ln0.DataObjects, dataObject => dataObject.Name == "MltLev");
+        var settingControl = Assert.Single(model.SettingGroupControls);
+        Assert.Equal("SGCB", settingControl.Name);
+        Assert.Equal(1, model.Coverage.SettingGroupControlCount);
     }
 
     [Fact]

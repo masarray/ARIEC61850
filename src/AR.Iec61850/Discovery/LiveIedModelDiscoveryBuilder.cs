@@ -205,7 +205,12 @@ public static class LiveIedModelDiscoveryBuilder
             var attributes = group
                 .Where(point => !string.IsNullOrWhiteSpace(Iec61850ReferenceParts.DataAttributePath(point.DataObjectPath)))
                 .Select(point => BuildAttribute(point, group.Key, variableTypeIndex))
-                .OrderBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
+                // TypeSpecification declaration order is wire evidence. Alphabetical
+                // DA ordering corrupts structured FC reads/reports (for example SPS
+                // stVal,q,t becoming q,stVal,t after SCL reload).
+                .OrderBy(x => string.IsNullOrWhiteSpace(x.TypeDeclarationOrder) ? 1 : 0)
+                .ThenBy(x => x.TypeDeclarationOrder, StringComparer.Ordinal)
+                .ThenBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => x.AttributePath, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             var attrPaths = attributes.Select(x => x.AttributePath).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
@@ -221,9 +226,34 @@ public static class LiveIedModelDiscoveryBuilder
                 CdcConfidence = cdc.Confidence,
                 ConfidenceLevel = cdc.Level,
                 Evidence = cdc.Evidence,
+                TypeDeclarationOrder = DataObjectDeclarationOrder(attributes),
                 Attributes = attributes
             };
         }
+    }
+
+    private static string DataObjectDeclarationOrder(
+        IReadOnlyList<LiveIedDataAttributeModel> attributes)
+    {
+        // For one DO the first two TypeSpecification positions are FC and DO.
+        // Keeping the earliest exact occurrence makes LNodeType DO order stable
+        // while preserving exact relative order inside every FC.
+        return attributes
+            .Select(attribute => PrefixDeclarationOrder(attribute.TypeDeclarationOrder, 2))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .FirstOrDefault() ?? string.Empty;
+    }
+
+    private static string PrefixDeclarationOrder(string value, int componentCount)
+    {
+        if (string.IsNullOrWhiteSpace(value) || componentCount <= 0)
+            return string.Empty;
+
+        var parts = value.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 0
+            ? string.Empty
+            : string.Join('.', parts.Take(Math.Min(componentCount, parts.Length)));
     }
 
     private static LiveIedDataAttributeModel BuildAttribute(
@@ -254,6 +284,7 @@ public static class LiveIedModelDiscoveryBuilder
             TypeDiscoveryStatus = hasExactType ? "Exact" : "NotRead",
             TypeDiscoveryMessage = hasExactType ? typeResult.Message : string.Empty,
             TypeSource = hasExactType ? typeResult.Source : "NameListHeuristic",
+            TypeDeclarationOrder = hasExactType ? typeResult.DeclarationOrderKey : string.Empty,
             TypeConfidence = hasExactType ? LiveIedDiscoveryConfidenceLevel.Exact : LiveIedDiscoveryConfidenceLevel.Low,
             FunctionalConstraintConfidence = LiveIedDiscoveryConfidenceLevel.Exact
         };
@@ -422,6 +453,8 @@ public static class LiveIedModelDiscoveryBuilder
     }
 
     private static bool CanContainControlBlock(string functionalConstraint)
+        // SG/SE can contain the actual SGCB control object as well as ordinary
+        // setting data. Classification below keeps only the SGCB object.
         => functionalConstraint.ToUpperInvariant() is "GO" or "MS" or "US" or "SG" or "SE" or "SP" or "LG";
 
     private static string ClassifyControlBlock(string functionalConstraint, string dataObjectName)
@@ -429,8 +462,9 @@ public static class LiveIedModelDiscoveryBuilder
         {
             "GO" => "GSEControl",
             "MS" or "US" => "SampledValueControl",
-            "SG" or "SE" => "SettingGroupControl",
-            "SP" when string.Equals(dataObjectName, "SGCB", StringComparison.OrdinalIgnoreCase) => "SettingGroupControl",
+            // SG/SE are setting-value Functional Constraints, not control blocks.
+            // The actual SettingControl inventory is the LLN0 SGCB object.
+            "SG" or "SE" or "SP" when string.Equals(dataObjectName, "SGCB", StringComparison.OrdinalIgnoreCase) => "SettingGroupControl",
             "LG" => "LogControl",
             _ => string.Empty
         };

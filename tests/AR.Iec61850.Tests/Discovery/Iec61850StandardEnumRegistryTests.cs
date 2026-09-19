@@ -5,6 +5,28 @@ namespace AR.Iec61850.Tests.Discovery;
 public sealed class Iec61850StandardEnumRegistryTests
 {
     [Fact]
+    public void OriginatorCategory_Uses_Standard_Ordinals()
+    {
+        var definition = Iec61850StandardEnumRegistry.Resolve("CSWI", "Pos", "DPC", "orCat");
+
+        Assert.Equal("bay-control", definition.Values.Single(value => value.Ord == 1).Symbol);
+        Assert.Equal("remote-control", definition.Values.Single(value => value.Ord == 3).Symbol);
+        Assert.Equal("process", definition.Values.Single(value => value.Ord == 8).Symbol);
+    }
+
+    [Fact]
+    public void EngineeringUnits_Use_Standard_Enums_And_Preserve_Display_Text()
+    {
+        var unit = Iec61850StandardEnumRegistry.Resolve("MMXU", "PhV", "CMV", "SIUnit");
+        var multiplier = Iec61850StandardEnumRegistry.Resolve("MMXU", "PhV", "CMV", "multiplier");
+
+        Assert.Equal("°C", unit.Values.Single(value => value.Ord == 23).Symbol);
+        Assert.Equal("cos(phi)", unit.Values.Single(value => value.Ord == 65).Symbol);
+        Assert.Equal("µ", multiplier.Values.Single(value => value.Ord == -6).Symbol);
+        Assert.Equal("k", multiplier.Values.Single(value => value.Ord == 3).Symbol);
+    }
+
+    [Fact]
     public void Behaviour_Uses_Standard_On_Test_And_Off_Ordinals()
     {
         var definition = Iec61850StandardEnumRegistry.Resolve("LLN0", "Beh", "INS", "stVal");

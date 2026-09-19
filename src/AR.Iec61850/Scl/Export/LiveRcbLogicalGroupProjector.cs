@@ -18,7 +18,7 @@ internal static class LiveRcbLogicalGroupProjector
         public required string LogicalName { get; init; }
         public required string ReportId { get; init; }
         public required IReadOnlyList<LiveIedReportControlModel> RuntimeInstances { get; init; }
-        public bool Indexed => RuntimeInstances.Count > 1;
+        public required bool Indexed { get; init; }
         public int MaxInstances => RuntimeInstances.Count;
     }
 
@@ -67,13 +67,7 @@ internal static class LiveRcbLogicalGroupProjector
             if (consumed.Contains(control))
                 continue;
 
-            projections.Add((index, new Projection
-            {
-                Representative = control,
-                LogicalName = control.Name.Trim(),
-                ReportId = control.ReportId.Trim(),
-                RuntimeInstances = new[] { control }
-            }));
+            projections.Add((index, ProjectSingleton(control)));
         }
 
         return projections
@@ -119,8 +113,55 @@ internal static class LiveRcbLogicalGroupProjector
             Representative = representative,
             LogicalName = ordered[0].BaseName,
             ReportId = logicalReportId,
-            RuntimeInstances = ordered.Select(candidate => candidate.Control).ToArray()
+            RuntimeInstances = ordered.Select(candidate => candidate.Control).ToArray(),
+            Indexed = true
         };
+        return true;
+    }
+
+    private static Projection ProjectSingleton(LiveIedReportControlModel control)
+    {
+        var runtimeName = control.Name.Trim();
+        var logicalName = runtimeName;
+        var indexed = false;
+
+        if (TryResolveSingletonLogicalName(control, out var resolvedLogicalName))
+        {
+            logicalName = resolvedLogicalName;
+            indexed = true;
+        }
+
+        return new Projection
+        {
+            Representative = control,
+            LogicalName = logicalName,
+            ReportId = control.ReportId.Trim(),
+            RuntimeInstances = new[] { control },
+            Indexed = indexed
+        };
+    }
+
+    private static bool TryResolveSingletonLogicalName(
+        LiveIedReportControlModel control,
+        out string logicalName)
+    {
+        logicalName = string.Empty;
+        var runtimeName = control.Name.Trim();
+        if (!TrySplitTwoDigitSuffix(runtimeName, out var baseName, out var instanceIndex) ||
+            instanceIndex != 1)
+        {
+            return false;
+        }
+
+        var reportId = control.ReportId?.Trim() ?? string.Empty;
+        var lastDollar = reportId.LastIndexOf("$", StringComparison.Ordinal);
+        var reportLeaf = lastDollar >= 0 ? reportId[(lastDollar + 1)..] : reportId;
+        if (!Same(reportLeaf, baseName))
+            return false;
+
+        // Preserve the SCL logical identity while keeping indexing semantics so
+        // <logical-name> + 01 still resolves to the exact runtime MMS object.
+        logicalName = baseName;
         return true;
     }
 
@@ -131,11 +172,15 @@ internal static class LiveRcbLogicalGroupProjector
            Same(left.Domain, right.Domain) &&
            Same(left.LogicalNode, right.LogicalNode) &&
            Same(left.DataSetReference, right.DataSetReference) &&
-           SameNumericText(left.ConfRev, right.ConfRev) &&
-           SameNumericText(left.BufferTimeMs, right.BufferTimeMs) &&
-           SameNumericText(left.IntegrityPeriodMs, right.IntegrityPeriodMs) &&
-           Same(left.TriggerOptions, right.TriggerOptions) &&
-           Same(left.OptionalFields, right.OptionalFields);
+           SameNumericText(left.ConfRev, right.ConfRev);
+
+    // DataSet/ConfRev remain engineering identity guards. BufTm, IntgPd, TrgOps and
+    // OptFlds are writable/runtime configuration on many IEDs. Concrete indexed RCB
+    // instances may legitimately expose different current
+    // values even though the engineering model contains one logical ReportControl.
+    // Requiring those live values to match prevents the standard indexed projection
+    // (for example Buffer01/02 -> Buffer, max=2) and incorrectly serializes physical
+    // runtime instances as separate SCL controls.
 
     private static bool TryResolveLogicalReportId(
         IReadOnlyList<Candidate> ordered,

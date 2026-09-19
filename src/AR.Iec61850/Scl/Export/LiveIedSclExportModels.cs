@@ -124,6 +124,10 @@ internal sealed class LiveIedSclBuildContext
     public Dictionary<string, string> SclLogicalDeviceInstByMmsDomain { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> LogicalNodeTypeIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> DataObjectTypeIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    // Full live references that are known to be Data Objects, including nested SDO
+    // paths such as LD/LN.A.phsA. FCDA export uses this authority to keep SDO
+    // membership in doName instead of flattening it into daName.
+    public HashSet<string> DataObjectReferencePaths { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> DataAttributeTypeIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<XElement> LNodeTypes { get; } = [];
     public List<XElement> DoTypes { get; } = [];

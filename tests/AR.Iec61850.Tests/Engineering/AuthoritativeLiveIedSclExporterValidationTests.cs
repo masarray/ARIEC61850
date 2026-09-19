@@ -154,6 +154,51 @@ public sealed class AuthoritativeLiveIedSclExporterValidationTests
     }
 
     [Fact]
+    public void ApplyReportControlConfiguration_CollapsesIndexedSiblingsDespiteRuntimeMutableSettingDrift()
+    {
+        var controls = new[]
+        {
+            new LiveIedReportControlModel
+            {
+                Reference = "IED_ALD0/LLN0$BR$Buffer01",
+                Domain = "IED_ALD0",
+                LogicalNode = "LLN0",
+                Name = "Buffer01",
+                Buffered = true,
+                DataSetReference = "IED_ALD0/LLN0$Digital",
+                ReportId = "IED_ALD0/LLN0$BR$Buffer",
+                ConfRev = "100001",
+                BufferTimeMs = "100",
+                IntegrityPeriodMs = "0",
+                TriggerOptions = "dchg,qchg,dupd,period,gi",
+                OptionalFields = "seqnum,timestamp,reason,dataset,configref"
+            },
+            new LiveIedReportControlModel
+            {
+                Reference = "IED_ALD0/LLN0$BR$Buffer02",
+                Domain = "IED_ALD0",
+                LogicalNode = "LLN0",
+                Name = "Buffer02",
+                Buffered = true,
+                DataSetReference = "IED_ALD0/LLN0$Digital",
+                ReportId = "IED_ALD0/LLN0$BR$Buffer",
+                ConfRev = "100001",
+                BufferTimeMs = "100",
+                IntegrityPeriodMs = "5000",
+                TriggerOptions = "dchg,qchg,dupd,period,gi",
+                OptionalFields = "seqnum,timestamp,reason,dataset,entryid,bufoverflow,configref"
+            }
+        };
+
+        var result = ApplyReportProjection(controls);
+        var exported = result.Descendants(Scl + "ReportControl").Single();
+
+        Assert.Equal("Buffer", (string?)exported.Attribute("name"));
+        Assert.Equal("true", (string?)exported.Attribute("indexed"));
+        Assert.Equal("2", (string?)exported.Element(Scl + "RptEnabled")?.Attribute("max"));
+    }
+
+    [Fact]
     public void ApplyReportControlConfiguration_ProjectsThirtyFourRuntimeInstancesToThirtyTwoLogicalControls()
     {
         var controls = Enumerable.Range(1, 30)

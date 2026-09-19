@@ -86,6 +86,11 @@ public static class CanonicalLiveIedSclExporter
             errors.Add("Canonical access-point identity is empty.");
         if (string.IsNullOrWhiteSpace(communication.Host))
             errors.Add("Canonical communication evidence has no IP/host endpoint.");
+        if (communication.Port != 102)
+        {
+            errors.Add(
+                $"Canonical communication evidence uses MMS/TCP port {communication.Port}, but the current SCL association plan represents IEC 61850 MMS on port 102 only.");
+        }
         if (string.IsNullOrWhiteSpace(association.ApTitle))
             errors.Add("Canonical communication evidence has no accepted remote OSI-AP-Title.");
         if (association.AeQualifier is not (>= 0 and <= 65535))
@@ -178,7 +183,10 @@ public static class CanonicalLiveIedSclExporter
                     value.LogicalNode.Trim(), "\u001F",
                     value.DataObject.Trim(), "\u001F",
                     value.AttributePath.Trim()),
-                StringComparer.OrdinalIgnoreCase)
+                // MMS/SCL component names are case-sensitive. Tracking CDCs can
+                // legitimately contain both "t" and "T" and they must retain
+                // independent instance evidence.
+                StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal);
 
         foreach (var group in grouped)
@@ -330,7 +338,9 @@ public static class CanonicalLiveIedSclExporter
             .SingleOrDefault(element => string.Equals(
                 ((string?)element.Attribute("name") ?? string.Empty).Trim(),
                 dataObjectName.Trim(),
-                StringComparison.OrdinalIgnoreCase));
+                // SCL DataObject identity is case-sensitive. Do not let instance
+                // value evidence for e.g. Flag/flag resolve to the same template DO.
+                StringComparison.Ordinal));
         var typeId = ((string?)dataObject?.Attribute("type") ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(typeId))
             return false;
@@ -352,7 +362,9 @@ public static class CanonicalLiveIedSclExporter
                     string.Equals(
                         ((string?)element.Attribute("name") ?? string.Empty).Trim(),
                         segment,
-                        StringComparison.OrdinalIgnoreCase));
+                        // SCL DA/BDA/SDO component names are case-sensitive.
+                        // Tracking CDCs can contain both "t" and "T".
+                        StringComparison.Ordinal));
             if (definition is null)
                 return false;
 
@@ -391,7 +403,10 @@ public static class CanonicalLiveIedSclExporter
             .SingleOrDefault(element => string.Equals(
                 ((string?)element.Attribute("name") ?? string.Empty).Trim(),
                 name.Trim(),
-                StringComparison.OrdinalIgnoreCase));
+                // Preserve exact SCL instance component identity. Using an
+                // ignore-case comparison here collapses legal pairs such as
+                // LTRK tracking members "t" and "T".
+                StringComparison.Ordinal));
         if (existing is not null)
             return existing;
 
@@ -454,6 +469,26 @@ public static class CanonicalLiveIedSclExporter
             ?? throw new InvalidDataException(
                 $"Generated SCL cannot round-trip its own ConnectedAP '{canonical.IedName}/{canonical.AccessPointName}'.");
 
+        var canonicalAssociation = canonical.Communication.Association;
+        var roundTripErrors = new List<string>();
+        CompareRoundTrip("IP", canonical.Communication.Host, remote.Endpoint.IpAddress, roundTripErrors);
+        CompareRoundTrip("OSI-AP-Title", canonicalAssociation.ApTitle, remote.Association.ApTitle, roundTripErrors);
+        if (canonicalAssociation.AeQualifier != remote.Association.AeQualifier)
+        {
+            roundTripErrors.Add(
+                $"OSI-AE-Qualifier expected '{canonicalAssociation.AeQualifier?.ToString(CultureInfo.InvariantCulture) ?? "<null>"}' " +
+                $"but parsed '{remote.Association.AeQualifier?.ToString(CultureInfo.InvariantCulture) ?? "<null>"}'.");
+        }
+        CompareRoundTrip("OSI-PSEL", canonicalAssociation.PresentationSelector, remote.Association.PresentationSelector, roundTripErrors);
+        CompareRoundTrip("OSI-SSEL", canonicalAssociation.SessionSelector, remote.Association.SessionSelector, roundTripErrors);
+        CompareRoundTrip("OSI-TSEL", canonicalAssociation.TransportSelector, remote.Association.TransportSelector, roundTripErrors);
+        if (roundTripErrors.Count > 0)
+        {
+            throw new InvalidDataException(
+                "Generated SCL changed canonical association evidence during serialization: " +
+                string.Join(" | ", roundTripErrors));
+        }
+
         var plan = SclAssistedMmsAssociationPlanBuilder.BuildExact(
             remote,
             MmsLocalAssociationProfile.SclInteroperabilityDefault);
@@ -462,6 +497,21 @@ public static class CanonicalLiveIedSclExporter
             throw new InvalidDataException(
                 "Generated SCL failed its own MMS association-plan validation: " +
                 string.Join(" | ", plan.Errors));
+        }
+    }
+
+    private static void CompareRoundTrip(
+        string name,
+        string? expected,
+        string? actual,
+        ICollection<string> errors)
+    {
+        var normalizedExpected = expected?.Trim() ?? string.Empty;
+        var normalizedActual = actual?.Trim() ?? string.Empty;
+        if (!string.Equals(normalizedExpected, normalizedActual, StringComparison.Ordinal))
+        {
+            errors.Add(
+                $"{name} expected '{normalizedExpected}' but parsed '{normalizedActual}'.");
         }
     }
 

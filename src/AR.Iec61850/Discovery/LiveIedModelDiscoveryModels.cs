@@ -107,6 +107,10 @@ public sealed class LiveIedDataObjectModel
     public double CdcConfidence { get; init; }
     public LiveIedDiscoveryConfidenceLevel ConfidenceLevel { get; init; } = LiveIedDiscoveryConfidenceLevel.Unknown;
     public IReadOnlyList<string> Evidence { get; init; } = Array.Empty<string>();
+    // Lexicographically sortable path derived from the accepted LN-root MMS
+    // TypeSpecification. It is evidence for declaration order, not a synthetic
+    // SCL ordering preference.
+    public string TypeDeclarationOrder { get; init; } = string.Empty;
     public IReadOnlyList<LiveIedDataAttributeModel> Attributes { get; init; } = Array.Empty<LiveIedDataAttributeModel>();
 }
 
@@ -124,6 +128,9 @@ public sealed class LiveIedDataAttributeModel
     public string TypeDiscoveryStatus { get; init; } = "NotRead";
     public string TypeDiscoveryMessage { get; init; } = string.Empty;
     public string TypeSource { get; init; } = "NameListHeuristic";
+    // Exact member position in the LN-root MMS TypeSpecification, encoded as a
+    // zero-padded path (FC.DO.DA...). Empty only when no exact type-tree evidence exists.
+    public string TypeDeclarationOrder { get; init; } = string.Empty;
     public LiveIedDiscoveryConfidenceLevel TypeConfidence { get; init; } = LiveIedDiscoveryConfidenceLevel.Low;
     public LiveIedDiscoveryConfidenceLevel FunctionalConstraintConfidence { get; init; } = LiveIedDiscoveryConfidenceLevel.Exact;
 }

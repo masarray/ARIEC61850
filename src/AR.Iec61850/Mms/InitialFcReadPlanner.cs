@@ -32,6 +32,27 @@ public sealed class InitialFcReadTarget
     public string MmsReference => string.IsNullOrWhiteSpace(Domain)
         ? MmsItemName
         : $"{Domain}/{MmsItemName}";
+
+    public bool IsDataObjectScoped
+    {
+        get
+        {
+            if (DataObjects.Count != 1)
+                return false;
+
+            var dataObjectName = (DataObjects[0].Name ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(dataObjectName))
+                return false;
+
+            var expected = string.Concat(
+                LogicalNode.Trim(),
+                "$",
+                FunctionalConstraint.Trim().ToUpperInvariant(),
+                "$",
+                dataObjectName);
+            return string.Equals(MmsItemName.Trim(), expected, StringComparison.Ordinal);
+        }
+    }
 }
 
 public sealed class InitialFcReadBatch
@@ -135,15 +156,38 @@ public static class InitialFcReadPlanner
                     if (dataObjects.Length == 0)
                         continue;
 
-                    targets.Add(new InitialFcReadTarget
+                    // SCL LNodeType has one global DO order, while MMS has an
+                    // independent declaration order inside each FC structure. R9 physical
+                    // evidence proved that multi-DO CF roots can therefore be reordered.
+                    // Read those CF DataObjects independently so projection is keyed by
+                    // the exact MMS object name instead of cross-DO position.
+                    if (ShouldUseDataObjectScopedRead(fc, dataObjects))
                     {
-                        Domain = domain,
-                        LogicalNode = logicalNodeName,
-                        FunctionalConstraint = fc,
-                        MmsItemName = BuildFcRootItem(logicalNodeName, fc),
-                        Source = "SclDataTypeTemplates",
-                        DataObjects = dataObjects
-                    });
+                        foreach (var dataObject in dataObjects)
+                        {
+                            targets.Add(new InitialFcReadTarget
+                            {
+                                Domain = domain,
+                                LogicalNode = logicalNodeName,
+                                FunctionalConstraint = fc,
+                                MmsItemName = BuildDataObjectItem(logicalNodeName, fc, dataObject.Name),
+                                Source = "SclDataTypeTemplates:DataObjectScopedCf",
+                                DataObjects = new[] { dataObject }
+                            });
+                        }
+                    }
+                    else
+                    {
+                        targets.Add(new InitialFcReadTarget
+                        {
+                            Domain = domain,
+                            LogicalNode = logicalNodeName,
+                            FunctionalConstraint = fc,
+                            MmsItemName = BuildFcRootItem(logicalNodeName, fc),
+                            Source = "SclDataTypeTemplates",
+                            DataObjects = dataObjects
+                        });
+                    }
                 }
             }
         }
@@ -265,6 +309,27 @@ public static class InitialFcReadPlanner
         };
     }
 
+    private static bool ShouldUseDataObjectScopedRead(
+        string functionalConstraint,
+        IReadOnlyCollection<InitialFcReadDataObjectBinding> dataObjects)
+        => string.Equals(NormalizeFc(functionalConstraint), "CF", StringComparison.Ordinal) &&
+           dataObjects.Count > 1;
+
+    private static string BuildDataObjectItem(
+        string logicalNode,
+        string functionalConstraint,
+        string dataObjectName)
+        => string.IsNullOrWhiteSpace(logicalNode) ||
+           string.IsNullOrWhiteSpace(functionalConstraint) ||
+           string.IsNullOrWhiteSpace(dataObjectName)
+            ? string.Empty
+            : string.Concat(
+                logicalNode.Trim(),
+                "$",
+                NormalizeFc(functionalConstraint),
+                "$",
+                dataObjectName.Trim());
+
     private static string BuildFcRootItem(string logicalNode, string functionalConstraint)
         => string.IsNullOrWhiteSpace(logicalNode) || string.IsNullOrWhiteSpace(functionalConstraint)
             ? string.Empty
@@ -307,7 +372,13 @@ public static class InitialFcValueProjector
 
         if (target.DataObjects.Count == 0)
         {
-            errors.Add("No SCL DataObject shape is attached to this FC-root target.");
+            errors.Add("No SCL DataObject shape is attached to this initial Read target.");
+            return Build(target, leaves, errors);
+        }
+
+        if (target.IsDataObjectScoped)
+        {
+            ProjectDataObjectValue(target.DataObjects[0], value, leaves, errors);
             return Build(target, leaves, errors);
         }
 
@@ -325,35 +396,47 @@ public static class InitialFcValueProjector
 
         for (var index = 0; index < target.DataObjects.Count; index++)
         {
-            var designObject = target.DataObjects[index];
-            var flattened = new List<MmsDataValue>();
-            if (!TryFlattenStructureOnly(value.Children[index], flattened, out var flattenError))
-            {
-                errors.Add($"{designObject.Reference}: {flattenError}");
-                continue;
-            }
-
-            if (flattened.Count != designObject.Leaves.Count)
-            {
-                errors.Add($"{designObject.Reference}: SCL expects {designObject.Leaves.Count} leaf value(s), MMS returned {flattened.Count} after structure flattening.");
-                continue;
-            }
-
-            for (var leafIndex = 0; leafIndex < designObject.Leaves.Count; leafIndex++)
-            {
-                var binding = designObject.Leaves[leafIndex];
-                leaves.Add(new InitialFcProjectedLeaf
-                {
-                    Reference = binding.Reference,
-                    AttributePath = binding.AttributePath,
-                    FunctionalConstraint = binding.FunctionalConstraint,
-                    SclBType = binding.SclBType,
-                    Value = flattened[leafIndex]
-                });
-            }
+            ProjectDataObjectValue(
+                target.DataObjects[index],
+                value.Children[index],
+                leaves,
+                errors);
         }
 
         return Build(target, leaves, errors);
+    }
+
+    private static void ProjectDataObjectValue(
+        InitialFcReadDataObjectBinding designObject,
+        MmsDataValue value,
+        ICollection<InitialFcProjectedLeaf> leaves,
+        ICollection<string> errors)
+    {
+        var flattened = new List<MmsDataValue>();
+        if (!TryFlattenStructureOnly(value, flattened, out var flattenError))
+        {
+            errors.Add($"{designObject.Reference}: {flattenError}");
+            return;
+        }
+
+        if (flattened.Count != designObject.Leaves.Count)
+        {
+            errors.Add($"{designObject.Reference}: SCL expects {designObject.Leaves.Count} leaf value(s), MMS returned {flattened.Count} after structure flattening.");
+            return;
+        }
+
+        for (var leafIndex = 0; leafIndex < designObject.Leaves.Count; leafIndex++)
+        {
+            var binding = designObject.Leaves[leafIndex];
+            leaves.Add(new InitialFcProjectedLeaf
+            {
+                Reference = binding.Reference,
+                AttributePath = binding.AttributePath,
+                FunctionalConstraint = binding.FunctionalConstraint,
+                SclBType = binding.SclBType,
+                Value = flattened[leafIndex]
+            });
+        }
     }
 
     private static bool TryFlattenStructureOnly(

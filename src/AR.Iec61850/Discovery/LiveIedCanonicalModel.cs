@@ -103,7 +103,9 @@ public static class LiveIedCanonicalModelBuilder
             return Array.Empty<LiveIedInstanceValueEvidence>();
 
         var values = new List<LiveIedInstanceValueEvidence>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // MMS/SCL member identity is case-sensitive. Service-tracking CDCs can
+        // legitimately expose both "t" and "T"; keep both instance values.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var batch in initialRead.Batches.OrderBy(batch => batch.BatchIndex))
         {

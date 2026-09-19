@@ -41,7 +41,7 @@ public static class MmsFcResolver
             candidates.AddRange(directory.FindByPathSuffix(normalized));
 
         var distinct = candidates
-            .GroupBy(x => x.MmsReference, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(x => x.MmsReference, StringComparer.Ordinal)
             .Select(x => x.OrderByDescending(p => p.Confidence).First())
             .OrderByDescending(x => x.Confidence)
             .ThenBy(x => ScoreFunctionalConstraintForReference(x, normalized))

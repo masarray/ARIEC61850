@@ -45,15 +45,25 @@ public static class SclStaticReportActivationPolicy
 public sealed partial class MmsClientSession
 {
     /// <summary>
-    /// Starts a persistent monitor for a static DataSet already trusted from SCL.
+    /// Backward-compatible SCL entry point. Static report activation is source-neutral once
+    /// the caller has supplied an authoritative ordered DataSet and configured RCB.
+    /// </summary>
+    public Task<MmsPersistentReportMonitorStartResult> StartStaticSclReportMonitorAsync(
+        MmsReportSubscriptionPlan plan,
+        bool triggerGeneralInterrogation = false,
+        CancellationToken cancellationToken = default)
+        => StartConfiguredStaticReportMonitorAsync(plan, triggerGeneralInterrogation, cancellationToken);
+
+    /// <summary>
+    /// Starts a persistent monitor for an authoritative configured static DataSet.
     /// The primary wire sequence is deliberately minimal: whole-RCB Read, optional
     /// URCB Resv=true, RptEna=true, then two whole-RCB verification Reads. BRCB
     /// ResvTms is a retry-only compatibility fallback when direct RptEna is rejected.
-    /// No DataSet browsing/creation and no GI are performed unless explicitly requested.
-    /// When explicit GI is requested, GI acceptance is part of startup success so a
-    /// caller cannot report an active initial-image monitor when the GI write was rejected.
+    /// No DataSet browsing/creation is performed here. When explicit GI is requested,
+    /// GI acceptance is part of startup success so a caller cannot report an active
+    /// initial-image monitor when the GI write was rejected.
     /// </summary>
-    public async Task<MmsPersistentReportMonitorStartResult> StartStaticSclReportMonitorAsync(
+    public async Task<MmsPersistentReportMonitorStartResult> StartConfiguredStaticReportMonitorAsync(
         MmsReportSubscriptionPlan plan,
         bool triggerGeneralInterrogation = false,
         CancellationToken cancellationToken = default)
@@ -66,7 +76,7 @@ public sealed partial class MmsClientSession
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = false,
-                Message = "Trusted-SCL static report activation requires a ready plan with selected RCB."
+                Message = "Configured static report activation requires a ready plan with selected RCB."
             };
         }
 
@@ -75,7 +85,7 @@ public sealed partial class MmsClientSession
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = false,
-                Message = "Trusted-SCL static report activation never creates or mutates a dynamic DataSet."
+                Message = "Configured static report activation never creates or mutates a dynamic DataSet."
             };
         }
 
@@ -179,7 +189,7 @@ public sealed partial class MmsClientSession
                     WriteSteps = writes,
                     Warnings = warnings,
                     RcbSnapshots = snapshots,
-                    Message = "RptEna=true was not accepted; trusted-SCL static report monitor was not started."
+                    Message = "RptEna=true was not accepted; configured static report monitor was not started."
                 };
             }
 
@@ -252,8 +262,8 @@ public sealed partial class MmsClientSession
                 Warnings = warnings,
                 RcbSnapshots = snapshots,
                 Message = triggerGeneralInterrogation
-                    ? $"Trusted-SCL static report monitor armed for {rcb.Reference}; explicit one-shot GI=true was accepted after activation."
-                    : $"Trusted-SCL static report monitor armed for {rcb.Reference}; no DataSet discovery/mutation or GI was performed."
+                    ? $"Configured static report monitor armed for {rcb.Reference}; explicit one-shot GI=true was accepted after activation."
+                    : $"Configured static report monitor armed for {rcb.Reference}; no DataSet discovery/mutation or GI was performed."
             };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
@@ -291,7 +301,7 @@ public sealed partial class MmsClientSession
                 WriteSteps = writes,
                 Warnings = warnings,
                 RcbSnapshots = snapshots,
-                Message = $"Trusted-SCL static report activation failed: {ex.GetType().Name}: {ex.Message}"
+                Message = $"Configured static report activation failed: {ex.GetType().Name}: {ex.Message}"
             };
         }
     }

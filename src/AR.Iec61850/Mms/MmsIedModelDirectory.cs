@@ -2,51 +2,52 @@ namespace AR.Iec61850.Mms;
 
 public sealed class MmsIedModelDirectory
 {
-    private readonly Dictionary<string, MmsLogicalDeviceDirectory> _logicalDevices;
-    private readonly Dictionary<string, List<MmsFcResolvedPoint>> _pointsByUserReference;
-    private readonly Dictionary<string, MmsFcResolvedPoint> _pointsByMmsReference;
+    private readonly Dictionary<string, MmsLogicalDeviceDirectory> _logicalDevices = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<MmsFcResolvedPoint>> _pointsByUserReference = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, MmsFcResolvedPoint> _pointsByMmsReference = new(StringComparer.OrdinalIgnoreCase);
 
     public MmsIedModelDirectory(IEnumerable<MmsFcResolvedPoint> points)
     {
         ArgumentNullException.ThrowIfNull(points);
-
-        Points = points
-            .Where(x => !string.IsNullOrWhiteSpace(x.Domain) && !string.IsNullOrWhiteSpace(x.MmsItemName))
-            .OrderBy(x => x.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.DataObjectPath, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        _logicalDevices = Points
-            .GroupBy(x => x.Domain, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                x => x.Key,
-                x => new MmsLogicalDeviceDirectory(x.Key, x),
-                StringComparer.OrdinalIgnoreCase);
-
-        _pointsByUserReference = Points
-            .GroupBy(x => x.UserReference, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                x => x.Key,
-                x => x.ToList(),
-                StringComparer.OrdinalIgnoreCase);
-
-        _pointsByMmsReference = Points
-            .GroupBy(x => x.MmsReference, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                x => x.Key,
-                x => x.OrderByDescending(p => p.Confidence).First(),
-                StringComparer.OrdinalIgnoreCase);
+        Rebuild(points);
     }
 
-    public IReadOnlyList<MmsFcResolvedPoint> Points { get; }
+    public IReadOnlyList<MmsFcResolvedPoint> Points { get; private set; } = Array.Empty<MmsFcResolvedPoint>();
     public IReadOnlyDictionary<string, MmsLogicalDeviceDirectory> LogicalDevices => _logicalDevices;
     public int LogicalDeviceCount => _logicalDevices.Count;
     public int LogicalNodeCount => _logicalDevices.Values.Sum(x => x.LogicalNodes.Count);
     public int PointCount => Points.Count;
     public int ReportAttributeCount => Points.Count(x => x.IsReportAttribute);
     public int ControlAttributeCount => Points.Count(x => x.IsControlAttribute);
+
+    internal int AddSupplementalPoints(IEnumerable<MmsFcResolvedPoint> supplementalPoints)
+    {
+        ArgumentNullException.ThrowIfNull(supplementalPoints);
+
+        var combined = new List<MmsFcResolvedPoint>(Points);
+        var knownMmsReferences = new HashSet<string>(
+            Points.Select(point => point.MmsReference),
+            StringComparer.OrdinalIgnoreCase);
+        var added = 0;
+
+        foreach (var point in supplementalPoints)
+        {
+            if (string.IsNullOrWhiteSpace(point.Domain) ||
+                string.IsNullOrWhiteSpace(point.MmsItemName) ||
+                !knownMmsReferences.Add(point.MmsReference))
+            {
+                continue;
+            }
+
+            combined.Add(point);
+            added++;
+        }
+
+        if (added > 0)
+            Rebuild(combined);
+
+        return added;
+    }
 
     public IReadOnlyList<MmsFcResolvedPoint> FindByUserReference(string reference)
     {
@@ -84,6 +85,29 @@ public sealed class MmsIedModelDirectory
 
     public string Summary =>
         $"IED directory: LD={LogicalDeviceCount}, LN={LogicalNodeCount}, FC-points={PointCount}, reportAttrs={ReportAttributeCount}, controlAttrs={ControlAttributeCount}";
+
+    private void Rebuild(IEnumerable<MmsFcResolvedPoint> points)
+    {
+        Points = points
+            .Where(x => !string.IsNullOrWhiteSpace(x.Domain) && !string.IsNullOrWhiteSpace(x.MmsItemName))
+            .OrderBy(x => x.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.LogicalNode, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.DataObjectPath, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        _logicalDevices.Clear();
+        foreach (var group in Points.GroupBy(x => x.Domain, StringComparer.OrdinalIgnoreCase))
+            _logicalDevices[group.Key] = new MmsLogicalDeviceDirectory(group.Key, group);
+
+        _pointsByUserReference.Clear();
+        foreach (var group in Points.GroupBy(x => x.UserReference, StringComparer.OrdinalIgnoreCase))
+            _pointsByUserReference[group.Key] = group.ToList();
+
+        _pointsByMmsReference.Clear();
+        foreach (var group in Points.GroupBy(x => x.MmsReference, StringComparer.OrdinalIgnoreCase))
+            _pointsByMmsReference[group.Key] = group.OrderByDescending(point => point.Confidence).First();
+    }
 }
 
 public sealed class MmsLogicalDeviceDirectory

@@ -17,12 +17,40 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        return OpenCoreAsync(new MmsClientControlTransport(session), objectReference, cancellationToken);
+        return OpenCoreAsync(new MmsClientControlTransport(session), objectReference, null, cancellationToken);
     }
+
+    /// <summary>
+    /// Opens a control object while reusing an authoritative name inventory already
+    /// discovered on the same MMS association. The supplied inventory is structural
+    /// evidence only: ctlModel, exact control type specifications, timeout values and
+    /// status values remain live reads/probes so command safety stays fail-closed.
+    /// </summary>
+    public Task<Iec61850ControlObjectSession> OpenAsync(
+        MmsClientSession session,
+        string objectReference,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> authoritativeDomainVariables,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(authoritativeDomainVariables);
+        return OpenCoreAsync(
+            new MmsClientControlTransport(session),
+            objectReference,
+            authoritativeDomainVariables,
+            cancellationToken);
+    }
+
+    internal Task<Iec61850ControlObjectSession> OpenCoreAsync(
+        IIec61850ControlTransport transport,
+        string objectReference,
+        CancellationToken cancellationToken = default)
+        => OpenCoreAsync(transport, objectReference, null, cancellationToken);
 
     internal async Task<Iec61850ControlObjectSession> OpenCoreAsync(
         IIec61850ControlTransport transport,
         string objectReference,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? authoritativeDomainVariables,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(transport);
@@ -65,7 +93,18 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             evidence.Add($"Cancel={cancelSpecification.Signature}");
         }
 
-        var namesByDomain = await transport.DiscoverDomainVariablesAsync(cancellationToken).ConfigureAwait(false);
+        IReadOnlyDictionary<string, IReadOnlyList<string>> namesByDomain;
+        if (authoritativeDomainVariables != null)
+        {
+            namesByDomain = authoritativeDomainVariables;
+            evidence.Add("domainInventory=authoritative-reuse");
+        }
+        else
+        {
+            namesByDomain = await transport.DiscoverDomainVariablesAsync(cancellationToken).ConfigureAwait(false);
+            evidence.Add("domainInventory=live-fallback");
+        }
+
         namesByDomain.TryGetValue(references.Domain, out var domainNames);
         domainNames ??= Array.Empty<string>();
 

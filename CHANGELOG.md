@@ -6,6 +6,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Added
 
+- Added zero-traffic smart-discovery KPI evidence across structural `GetNameList`, DataSet directory, hierarchy GVA, and bounded FC-root initial Read phases, including per-phase latency, duplicate semantic-request detection, peak outstanding requests, canonical completeness counters, deterministic repeat-run signatures, and explicit partial wire-accounting status for unobserved enrichment paths.
 - Added live-authoritative SCL ReportControl family reconciliation for static reporting: indexed declarative controls are matched only to concrete live MMS RCB instances in the same domain/logical-node/report-FC with decimal instance suffixes, while non-indexed controls remain exact-name only and no runtime RCB name is synthesized.
 - Added an SCL-aware static report planner that scopes the existing safe RCB selector to the reconciled live family, allowing a busy first instance to fall through to another proven-free instance without escaping to an unrelated control block.
 - Added registered-monitor initial GI bootstrap for persistent reporting: the monitor is installed before the one-shot GI request, initial mapped DataSet reports are returned explicitly, and GI is attempted only when the live RCB attribute inventory proves the field exists.

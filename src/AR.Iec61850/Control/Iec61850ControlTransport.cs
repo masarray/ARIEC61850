@@ -41,7 +41,7 @@ internal sealed class MmsClientControlTransport : IIec61850ControlTransport
         => _session.GetVariableAccessAttributesAsync(reference, cancellationToken);
 
     public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> DiscoverDomainVariablesAsync(CancellationToken cancellationToken)
-        => _session.DiscoverDomainVariableNamesAsync(cancellationToken);
+        => _session.GetAuthoritativeDomainVariableNamesAsync(cancellationToken);
 
     public IAsyncDisposable SubscribeInformationReports(out ChannelReader<MmsPduEnvelope> reader, int capacity = 32)
     {

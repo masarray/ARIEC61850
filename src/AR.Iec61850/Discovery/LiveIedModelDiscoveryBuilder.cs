@@ -213,9 +213,7 @@ public static class LiveIedModelDiscoveryBuilder
                 .ThenBy(x => x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => x.AttributePath, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            var attrPaths = attributes.Select(x => x.AttributePath).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
-            var fcs = group.Select(x => x.FunctionalConstraint).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
-            var cdc = CdcInferenceEngine.Infer(parsedLn.SclLnClass, group.Key, attrPaths, fcs);
+            var cdc = CdcInferenceEngine.Infer(parsedLn.SclLnClass, group.Key, attributes);
             var reference = $"{ln.Domain}/{ln.Name}.{group.Key}";
             yield return new LiveIedDataObjectModel
             {

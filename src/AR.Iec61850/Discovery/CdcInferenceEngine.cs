@@ -30,6 +30,43 @@ public static class CdcInferenceEngine
         string dataObjectName,
         IReadOnlyCollection<string> attributePaths,
         IReadOnlyCollection<string> functionalConstraints)
+        => InferCore(
+            logicalNodeClass,
+            dataObjectName,
+            attributePaths,
+            functionalConstraints,
+            Array.Empty<LiveIedDataAttributeModel>());
+
+    /// <summary>
+    /// Type-authoritative overload used by live discovery when exact MMS
+    /// TypeSpecification evidence is available for DataAttributes.
+    /// </summary>
+    public static CdcInferenceResult Infer(
+        string logicalNodeClass,
+        string dataObjectName,
+        IReadOnlyCollection<LiveIedDataAttributeModel> attributes)
+    {
+        ArgumentNullException.ThrowIfNull(attributes);
+        return InferCore(
+            logicalNodeClass,
+            dataObjectName,
+            attributes
+                .Select(attribute => attribute.AttributePath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToArray(),
+            attributes
+                .Select(attribute => attribute.FunctionalConstraint)
+                .Where(fc => !string.IsNullOrWhiteSpace(fc))
+                .ToArray(),
+            attributes);
+    }
+
+    private static CdcInferenceResult InferCore(
+        string logicalNodeClass,
+        string dataObjectName,
+        IReadOnlyCollection<string> attributePaths,
+        IReadOnlyCollection<string> functionalConstraints,
+        IReadOnlyCollection<LiveIedDataAttributeModel> typedAttributes)
     {
         var evidence = new List<string>();
         var doName = dataObjectName.Trim();
@@ -93,6 +130,9 @@ public static class CdcInferenceEngine
 
         if (ContainsAny(attrs, "stVal") && ContainsAny(attrs, "q") && ContainsAny(attrs, "t"))
         {
+            if (TryInferTypedStatusCdc(typedAttributes, out var typedStatus))
+                return typedStatus;
+
             evidence.Add("contains stVal/q/t status triplet");
             if (IsProtectionOperation(lnClass, doName))
                 return Result("ACT", 0.86, evidence.Append("protection LN operation/status DO pattern"));
@@ -132,6 +172,66 @@ public static class CdcInferenceEngine
 
         return Result(string.Empty, 0.0, evidence.Append("CDC cannot be inferred from current online discovery only"));
     }
+
+    private static bool TryInferTypedStatusCdc(
+        IReadOnlyCollection<LiveIedDataAttributeModel> attributes,
+        out CdcInferenceResult result)
+    {
+        result = new CdcInferenceResult();
+        if (attributes.Count == 0)
+            return false;
+
+        var stVal = attributes.FirstOrDefault(attribute =>
+            string.Equals(
+                (attribute.AttributePath ?? string.Empty).Trim(),
+                "stVal",
+                StringComparison.OrdinalIgnoreCase));
+        if (stVal is null ||
+            stVal.TypeConfidence != LiveIedDiscoveryConfidenceLevel.Exact)
+        {
+            return false;
+        }
+
+        var declaredType = FirstNonEmpty(stVal.SclBType, stVal.MmsType)
+            .Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .ToUpperInvariant();
+
+        if (declaredType is "BOOLEAN" or "BOOL")
+        {
+            result = Result(
+                "SPS",
+                0.98,
+                new[] { "exact stVal type is BOOLEAN" });
+            return true;
+        }
+
+        if (declaredType.StartsWith("INT", StringComparison.Ordinal) ||
+            declaredType.StartsWith("UINT", StringComparison.Ordinal) ||
+            declaredType is "INTEGER" or "SIGNED" or "UNSIGNED")
+        {
+            result = Result(
+                "INS",
+                0.98,
+                new[] { $"exact stVal type is {declaredType}" });
+            return true;
+        }
+
+        if (declaredType.StartsWith("ENUM", StringComparison.Ordinal))
+        {
+            result = Result(
+                "ENS",
+                0.98,
+                new[] { $"exact stVal type is {declaredType}" });
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 
     private static bool IsProtectionOperation(string lnClass, string dataObjectName)
         => string.Equals(dataObjectName, "Op", StringComparison.OrdinalIgnoreCase) &&

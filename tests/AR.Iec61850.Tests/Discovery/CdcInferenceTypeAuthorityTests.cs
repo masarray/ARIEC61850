@@ -9,7 +9,7 @@ public sealed class CdcInferenceTypeAuthorityTests
     {
         var attributes = StatusTriplet("INT32", "integer");
 
-        var result = CdcInferenceEngine.Infer("GGIO", "CounterStatus", attributes);
+        var result = CdcInferenceEngine.Infer("GGIO", "CBClsCounter", attributes);
 
         Assert.Equal("INS", result.Cdc);
         Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, result.Level);

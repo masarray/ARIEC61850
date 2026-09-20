@@ -742,7 +742,7 @@ public static class LiveIedSclExporter
 
     private static XElement BuildDoType(LiveIedDataObjectModel dataObject, string doTypeId, LiveIedSclBuildContext context, IReadOnlyCollection<LiveIedDataAttributeModel>? exportAttributes = null, string logicalNodeClass = "")
     {
-        var cdc = dataObject.InferredCdc.Trim();
+        var cdc = ResolveExportCdc(dataObject, logicalNodeClass, context);
         if (!CdcInferenceEngine.IsKnownCdc(cdc))
         {
             cdc = "SPS";
@@ -801,6 +801,56 @@ public static class LiveIedSclExporter
         }
 
         return doType;
+    }
+
+    private static string ResolveExportCdc(
+        LiveIedDataObjectModel dataObject,
+        string logicalNodeClass,
+        LiveIedSclBuildContext context)
+    {
+        var declaredCdc = (dataObject.InferredCdc ?? string.Empty).Trim();
+
+        // Export is the last semantic boundary before the model becomes portable SCL.
+        // Exact live TypeSpecification evidence for stVal must not be downgraded by a
+        // stale conservative CDC that may have been inferred before typed evidence was
+        // available. Re-run the typed CDC inference only for exact LIVE stVal evidence;
+        // an opened SCL's explicit DOType@cdc remains its own engineering authority.
+        var exactLiveStVal = dataObject.Attributes.FirstOrDefault(attribute =>
+            string.Equals(
+                (attribute.AttributePath ?? string.Empty).Trim(),
+                "stVal",
+                StringComparison.OrdinalIgnoreCase) &&
+            attribute.TypeConfidence == LiveIedDiscoveryConfidenceLevel.Exact &&
+            !string.Equals(
+                (attribute.TypeSource ?? string.Empty).Trim(),
+                "SCL",
+                StringComparison.OrdinalIgnoreCase));
+
+        if (exactLiveStVal is null)
+            return declaredCdc;
+
+        var typed = CdcInferenceEngine.Infer(
+            logicalNodeClass,
+            dataObject.Name,
+            dataObject.Attributes);
+
+        if (!CdcInferenceEngine.IsKnownCdc(typed.Cdc) ||
+            typed.Confidence < 0.95 ||
+            string.Equals(typed.Cdc, declaredCdc, StringComparison.OrdinalIgnoreCase))
+        {
+            return declaredCdc;
+        }
+
+        context.Warnings.Add(new LiveIedSclExportWarning
+        {
+            Code = "ExactLiveTypeCdcAuthority",
+            Reference = dataObject.Reference,
+            Message =
+                $"Exact live stVal TypeSpecification corrected exported CDC from " +
+                $"'{declaredCdc}' to '{typed.Cdc}'."
+        });
+
+        return typed.Cdc;
     }
 
     private static XElement BuildSubDataObjectType(

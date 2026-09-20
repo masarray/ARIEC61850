@@ -742,7 +742,7 @@ public static class LiveIedSclExporter
 
     private static XElement BuildDoType(LiveIedDataObjectModel dataObject, string doTypeId, LiveIedSclBuildContext context, IReadOnlyCollection<LiveIedDataAttributeModel>? exportAttributes = null, string logicalNodeClass = "")
     {
-        var cdc = dataObject.InferredCdc.Trim();
+        var cdc = ResolveExportCdc(dataObject, context);
         if (!CdcInferenceEngine.IsKnownCdc(cdc))
         {
             cdc = "SPS";
@@ -801,6 +801,73 @@ public static class LiveIedSclExporter
         }
 
         return doType;
+    }
+
+    private static string ResolveExportCdc(
+        LiveIedDataObjectModel dataObject,
+        LiveIedSclBuildContext context)
+    {
+        var declaredCdc = (dataObject.InferredCdc ?? string.Empty).Trim();
+
+        // IMPORTANT: this is an EXPORT-ONLY semantic repair boundary.
+        // Live discovery/runtime/reporting remains exactly on the physically proven
+        // baseline. Only a generic status-family CDC may be corrected here, and only
+        // when exact LIVE stVal TypeSpecification evidence proves the primitive type.
+        //
+        // Do not apply this rule to ACT/ACD/DPC/SPC/etc. Those CDCs carry stronger
+        // IEC 61850 semantics than a primitive MMS leaf type.
+        var genericStatusFamily =
+            declaredCdc.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
+            declaredCdc.Equals("INS", StringComparison.OrdinalIgnoreCase) ||
+            declaredCdc.Equals("ENS", StringComparison.OrdinalIgnoreCase);
+
+        if (!genericStatusFamily)
+            return declaredCdc;
+
+        var hasQ = dataObject.Attributes.Any(attribute =>
+            string.Equals((attribute.AttributePath ?? string.Empty).Trim(), "q", StringComparison.OrdinalIgnoreCase));
+        var hasT = dataObject.Attributes.Any(attribute =>
+            string.Equals((attribute.AttributePath ?? string.Empty).Trim(), "t", StringComparison.OrdinalIgnoreCase));
+        if (!hasQ || !hasT)
+            return declaredCdc;
+
+        var stVal = dataObject.Attributes.FirstOrDefault(attribute =>
+            string.Equals((attribute.AttributePath ?? string.Empty).Trim(), "stVal", StringComparison.OrdinalIgnoreCase) &&
+            attribute.TypeConfidence == LiveIedDiscoveryConfidenceLevel.Exact &&
+            !string.Equals((attribute.TypeSource ?? string.Empty).Trim(), "SCL", StringComparison.OrdinalIgnoreCase));
+
+        if (stVal is null)
+            return declaredCdc;
+
+        var primitive = FirstNonEmpty(stVal.SclBType, stVal.MmsType)
+            .Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .ToUpperInvariant();
+
+        var resolved = primitive switch
+        {
+            "BOOLEAN" or "BOOL" => "SPS",
+            "INTEGER" or "SIGNED" or "UNSIGNED" => "INS",
+            _ when primitive.StartsWith("INT", StringComparison.Ordinal) => "INS",
+            _ when primitive.StartsWith("UINT", StringComparison.Ordinal) => "INS",
+            _ when primitive.StartsWith("ENUM", StringComparison.Ordinal) => "ENS",
+            _ => declaredCdc
+        };
+
+        if (string.Equals(resolved, declaredCdc, StringComparison.OrdinalIgnoreCase))
+            return declaredCdc;
+
+        context.Warnings.Add(new LiveIedSclExportWarning
+        {
+            Code = "ExactLiveTypeExportCdcAuthority",
+            Reference = dataObject.Reference,
+            Message =
+                $"Export-only exact live stVal TypeSpecification corrected generic status CDC " +
+                $"from '{declaredCdc}' to '{resolved}' without changing live discovery/runtime semantics."
+        });
+
+        return resolved;
     }
 
     private static XElement BuildSubDataObjectType(

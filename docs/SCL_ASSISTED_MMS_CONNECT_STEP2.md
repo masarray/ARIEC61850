@@ -10,7 +10,7 @@ The design keeps remote/called and local/calling identity separate:
 
 - remote/called IP, TSEL, SSEL, PSEL, AP-title and AE qualifier come from the selected SCL `ConnectedAP`;
 - local/calling selectors, AP-title, AE qualifier and MMS Initiate limits come from an explicit named client profile;
-- missing or invalid remote SCL association values fail closed and remain visible as typed build errors;
+- the **exact-plan builder** still fails closed when required remote values are missing or invalid; later runtime interoperability resolution is a separate typed layer and never rewrites the source SCL;
 - no remote value is silently replaced with a local value.
 
 ## Implemented
@@ -21,7 +21,9 @@ The design keeps remote/called and local/calling identity separate:
 - exact SCL selector/AP-title parsing and validation;
 - `ExistingRuntimeDefault` as an explicit compatibility baseline, not an automatic fallback;
 - golden test proving the parameterized encoder reproduces the existing `BalancedApTitle` association payload exactly when supplied the same identities;
-- negative tests proving incomplete SCL association addressing does not silently fall back.
+- negative tests proving the exact builder does not silently invent incomplete SCL association addressing.
+
+The exact builder is intentionally preserved as the deterministic complete-SCL contract. Step 3 now layers a bounded candidate resolver above it: genuinely unspecified fields may be resolved from engine-owned association profiles, while malformed or conflicting explicit declarations still fail closed.
 
 ## Runtime boundary
 
@@ -34,6 +36,6 @@ Step 2 does **not**:
 
 The existing runtime continues to use `CotpConnectRequest.BuildDefault()` and the existing association profiles.
 
-## Next step
+## Runtime handoff
 
-Step 3 should add an opt-in SCL-assisted association entry point that consumes a validated plan, performs TCP/COTP/ACSE association, then validates only the live MMS domain inventory with `GetNameList(Domain, VMD)`. It must not repeat NamedVariable/GVAA/DataSet discovery when the trusted SCL model is being used.
+Step 3 consumes either a complete exact plan or an engine-owned bounded association resolution, performs TCP/COTP/ACSE association, and then validates only the live MMS domain inventory with `GetNameList(Domain, VMD)`. It does not repeat NamedVariable/GVAA/DataSet discovery when the trusted SCL model is being used.

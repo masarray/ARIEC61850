@@ -51,13 +51,13 @@ public static class Iec61850StandardModelRegistry
         [Key("MMXU", "PF")] = Def("MMXU", "PF", "WYE", 0.84, "power factor"),
 
         // Harmonic measurements use phase-group CDCs. Physical AA1E1F06R4
-        // plus IEDScout SCL prove that MHAI ThdA / ThdPhV are WYE objects whose
+        // plus field-reference SCL evidence prove that MHAI ThdA / ThdPhV are WYE objects whose
         // phase children are CMV SDOs, not ACD indication structures.
         [Key("MHAI", "ThdA")] = Def("MHAI", "ThdA", "WYE", 0.98, "three-phase current THD"),
         [Key("MHAI", "ThdPhV")] = Def("MHAI", "ThdPhV", "WYE", 0.98, "three-phase voltage THD"),
 
         // Instrument-transformer semantics are standardized and were also observed in
-        // the AA1E1F06R4 IEDScout engineering model. Exact registry entries prevent
+        // the field-reference engineering model. Exact registry entries prevent
         // live discovery from dropping these configuration DOs when attribute-name
         // heuristics alone cannot infer their CDC safely.
         [Key("TCTR", "Mod")] = Def("TCTR", "Mod", "ENC", 0.98, "mode control"),

@@ -6,6 +6,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Added
 
+- Added bounded SCL-assisted association resolution for incomplete ConnectedAP addressing: explicit valid selectors/application identity remain immutable constraints, genuinely unspecified fields may be resolved from engine-owned interoperability profiles, malformed/conflicting declarations fail closed, and accepted candidate provenance is retained without mutating the source SCL.
 - Added zero-traffic smart-discovery KPI evidence across structural `GetNameList`, DataSet directory, hierarchy GVA, and bounded FC-root initial Read phases, including per-phase latency, duplicate semantic-request detection, peak outstanding requests, canonical completeness counters, deterministic repeat-run signatures, and explicit partial wire-accounting status for unobserved enrichment paths.
 - Added live-authoritative SCL ReportControl family reconciliation for static reporting: indexed declarative controls are matched only to concrete live MMS RCB instances in the same domain/logical-node/report-FC with decimal instance suffixes, while non-indexed controls remain exact-name only and no runtime RCB name is synthesized.
 - Added an SCL-aware static report planner that scopes the existing safe RCB selector to the reconciled live family, allowing a busy first instance to fall through to another proven-free instance without escaping to an unrelated control block.
@@ -38,6 +39,7 @@ All notable public changes to ARIEC61850 are recorded here. The project is still
 
 ### Fixed
 
+- SCL-assisted connection no longer rejects a usable CID/SCL before TCP solely because AP-title or AE-qualifier is omitted; the runtime now performs serial fresh-transport negotiation over the bounded engine candidate set and still limits live validation to VMD Domain inventory rather than falling back to full discovery.
 - Closed the persistent-monitor GI startup race in the new bootstrap path: a fast IED can no longer deliver the initial GI InformationReport before the target persistent monitor has been registered for routing.
 - Hardened the SCL-assisted Step-3 runtime so the configured timeout bounds TCP/COTP/ACSE/MMS plus Domain/VMD inventory, MMS domain identifiers are reconciled case-sensitively, and malformed SCL returns typed validation evidence instead of leaking XML parser exceptions.
 - Live-model discovery no longer drops DataSet members when callers request DataSet-directory reads through `MmsClientSession.DiscoverAsync`.

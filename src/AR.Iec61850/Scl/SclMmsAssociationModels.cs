@@ -22,6 +22,14 @@ public sealed class SclMmsAccessPoint
     public IReadOnlyDictionary<string, string> Parameters { get; init; }
         = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Critical Address/P parameter names that were declared more than once with
+    /// conflicting values. Ambiguity is distinct from omission: interoperability
+    /// resolution may fill only omitted values and must fail closed on ambiguity.
+    /// </summary>
+    public IReadOnlySet<string> AmbiguousParameters { get; init; }
+        = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     public bool HasNetworkEndpoint => !string.IsNullOrWhiteSpace(Endpoint.IpAddress);
 }
 

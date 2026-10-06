@@ -43,8 +43,56 @@ public sealed partial class MmsClientSession
                 validationError);
         }
 
-        _lastHost = plan.Host;
-        _lastPort = plan.Port;
+        return await ConnectSclAssistedAsync(
+                SclAssistedMmsAssociationCandidateResolver.FromExactPlan(plan),
+                designDomains,
+                timeout,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public Task<SclAssistedMmsOnlineResult> ConnectSclAssistedAsync(
+        SclAssistedMmsAssociationResolution resolution,
+        SclMmsDomainInventory designDomains,
+        CancellationToken cancellationToken = default)
+        => ConnectSclAssistedAsync(
+            resolution,
+            designDomains,
+            TimeSpan.FromSeconds(5),
+            cancellationToken);
+
+    /// <summary>
+    /// Bounded SCL-assisted association negotiation. Candidates are engine-owned and
+    /// already constrained by explicit SCL evidence. Attempts are strictly serial and
+    /// every candidate starts from a fresh TCP/COTP transport. After the first accepted
+    /// MMS association only VMD Domain GetNameList is used to reconcile the trusted SCL
+    /// model; no NamedVariable/GVAA/DataSet discovery is introduced here.
+    /// </summary>
+    public async Task<SclAssistedMmsOnlineResult> ConnectSclAssistedAsync(
+        SclAssistedMmsAssociationResolution resolution,
+        SclMmsDomainInventory designDomains,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(resolution);
+        ArgumentNullException.ThrowIfNull(designDomains);
+
+        var validationError = ValidateSclAssistedInputs(resolution, designDomains);
+        if (!string.IsNullOrWhiteSpace(validationError))
+        {
+            return BuildSclAssistedResult(
+                SclAssistedMmsOnlineStatus.InvalidPlan,
+                resolution,
+                associationSucceeded: false,
+                domainInventorySucceeded: false,
+                domains: null,
+                validationError,
+                selectedCandidate: null,
+                associationAttemptCount: 0);
+        }
+
+        _lastHost = resolution.Host;
+        _lastPort = resolution.Port;
         _lastTimeout = timeout <= TimeSpan.Zero ? TimeSpan.FromSeconds(5) : timeout;
         _nextInvokeId = 0;
 
@@ -52,74 +100,144 @@ public sealed partial class MmsClientSession
         State = MmsAssociationState.Disconnected;
         ResetSclAssistedDiagnostics();
 
-        var associationSucceeded = false;
-        var profileName = $"SCL:{plan.IedName}/{plan.AccessPointName}";
-        using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        operationTimeout.CancelAfter(_lastTimeout);
-        var operationToken = operationTimeout.Token;
+        var attempts = new List<AcseAssociationAttempt>();
+        SclAssistedMmsAssociationCandidate? selectedCandidate = null;
+        var sawTimedOutAttempt = false;
+        var sawNonTimeoutFailure = false;
 
-        try
+        foreach (var candidate in resolution.Candidates)
         {
-            await _tpkt.ConnectAsync(_lastHost, _lastPort, _lastTimeout, operationToken).ConfigureAwait(false);
-            State = MmsAssociationState.TcpConnected;
+            cancellationToken.ThrowIfCancellationRequested();
+            await ResetTransportAsync().ConfigureAwait(false);
+            State = MmsAssociationState.Disconnected;
+            LastAssociationResponseHex = string.Empty;
 
-            await _cotp.ConnectAsync(plan.Cotp, operationToken).ConfigureAwait(false);
-            State = MmsAssociationState.CotpConnected;
-            LastHandshakeMessage = $"{profileName}: {_cotp.LastConnectionConfirm?.Message ?? "COTP connection confirmed."}";
+            using var attemptTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            attemptTimeout.CancelAfter(_lastTimeout);
+            var attemptToken = attemptTimeout.Token;
 
-            var associationProfile = new AcseAssociationProfile(
-                profileName,
-                "Exact SCL-assisted MMS association plan.",
-                plan.SessionPresentationAcseMmsRequest.ToArray());
+            try
+            {
+                await _tpkt.ConnectAsync(_lastHost, _lastPort, _lastTimeout, attemptToken).ConfigureAwait(false);
+                State = MmsAssociationState.TcpConnected;
 
-            var association = await TryInitiateMmsAssociationAsync(associationProfile, operationToken).ConfigureAwait(false);
-            LastAssociationAttempts =
-            [
-                new AcseAssociationAttempt
+                await _cotp.ConnectAsync(candidate.Cotp, attemptToken).ConfigureAwait(false);
+                State = MmsAssociationState.CotpConnected;
+                LastHandshakeMessage =
+                    $"{candidate.Name}: {_cotp.LastConnectionConfirm?.Message ?? "COTP connection confirmed."}";
+
+                var association = await TryInitiateMmsAssociationAsync(
+                        candidate.AssociationProfile,
+                        attemptToken)
+                    .ConfigureAwait(false);
+
+                attempts.Add(new AcseAssociationAttempt
                 {
-                    ProfileName = profileName,
+                    ProfileName = candidate.Name,
                     IsAccepted = association.IsAccepted,
                     Message = association.Message,
                     ResponseHexPreview = association.ResponseHexPreview
+                });
+                LastAssociationAttempts = attempts.ToArray();
+
+                if (!association.IsAccepted)
+                {
+                    sawNonTimeoutFailure = true;
+                    State = MmsAssociationState.MmsInitiateFailed;
+                    continue;
                 }
-            ];
 
-            if (!association.IsAccepted)
-            {
-                State = MmsAssociationState.MmsInitiateFailed;
-                LastHandshakeMessage = association.Message;
-                await ResetTransportAsync().ConfigureAwait(false);
-                State = MmsAssociationState.MmsInitiateFailed;
-
-                return BuildSclAssistedResult(
-                    SclAssistedMmsOnlineStatus.AssociationFailed,
-                    plan,
-                    associationSucceeded: false,
-                    domainInventorySucceeded: false,
-                    domains: null,
-                    association.Message);
+                selectedCandidate = candidate;
+                State = MmsAssociationState.MmsInitiated;
+                LastHandshakeMessage = $"{candidate.Name}: {association.Message}";
+                break;
             }
+            catch (OperationCanceledException) when (
+                !cancellationToken.IsCancellationRequested &&
+                attemptTimeout.IsCancellationRequested)
+            {
+                sawTimedOutAttempt = true;
+                State = MmsAssociationState.MmsInitiateFailed;
+                attempts.Add(new AcseAssociationAttempt
+                {
+                    ProfileName = candidate.Name,
+                    IsAccepted = false,
+                    Message = $"{candidate.Name}: association attempt timed out after {_lastTimeout.TotalMilliseconds:0} ms.",
+                    ResponseHexPreview = LastAssociationResponseHex
+                });
+                LastAssociationAttempts = attempts.ToArray();
+            }
+            catch (OperationCanceledException)
+            {
+                await ResetTransportAsync().ConfigureAwait(false);
+                State = MmsAssociationState.Disconnected;
+                throw;
+            }
+            catch (Exception ex) when (
+                ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
+            {
+                sawNonTimeoutFailure = true;
+                State = MmsAssociationState.MmsInitiateFailed;
+                attempts.Add(new AcseAssociationAttempt
+                {
+                    ProfileName = candidate.Name,
+                    IsAccepted = false,
+                    Message = $"{candidate.Name}: transport/association failure: {ex.GetType().Name}: {ex.Message}",
+                    ResponseHexPreview = LastAssociationResponseHex
+                });
+                LastAssociationAttempts = attempts.ToArray();
+            }
+        }
 
-            associationSucceeded = true;
-            State = MmsAssociationState.MmsInitiated;
-            LastHandshakeMessage = association.Message;
-            _receivePump.Start(cancellationToken);
+        if (selectedCandidate is null)
+        {
+            await ResetTransportAsync().ConfigureAwait(false);
+            State = MmsAssociationState.MmsInitiateFailed;
+            LastAssociationAttempts = attempts.ToArray();
+            LastHandshakeMessage = LastAssociationAttemptSummary;
+            var status = sawTimedOutAttempt && !sawNonTimeoutFailure
+                ? SclAssistedMmsOnlineStatus.TimedOut
+                : SclAssistedMmsOnlineStatus.AssociationFailed;
+            var message = string.IsNullOrWhiteSpace(LastHandshakeMessage)
+                ? "All bounded SCL-assisted association candidates failed."
+                : LastHandshakeMessage;
 
+            return BuildSclAssistedResult(
+                status,
+                resolution,
+                associationSucceeded: false,
+                domainInventorySucceeded: false,
+                domains: null,
+                message,
+                selectedCandidate: null,
+                associationAttemptCount: attempts.Count);
+        }
+
+        _receivePump.Start(cancellationToken);
+
+        using var domainTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        domainTimeout.CancelAfter(_lastTimeout);
+        var domainToken = domainTimeout.Token;
+
+        try
+        {
             var domainInventory = await GetNameListPagedAsync(
                     MmsGetNameListObjectClass.Domain,
                     domainId: null,
-                    cancellationToken: operationToken)
+                    cancellationToken: domainToken)
                 .ConfigureAwait(false);
 
             if (!domainInventory.IsSuccess)
             {
                 return BuildSclAssistedResult(
                     SclAssistedMmsOnlineStatus.DomainInventoryFailed,
-                    plan,
+                    resolution,
                     associationSucceeded: true,
                     domainInventorySucceeded: false,
                     domains: null,
-                    domainInventory.Message);
+                    domainInventory.Message,
+                    selectedCandidate,
+                    attempts.Count);
             }
 
             var reconciliation = SclMmsDomainReconciler.Reconcile(
@@ -129,30 +247,37 @@ public sealed partial class MmsClientSession
                 ? SclAssistedMmsOnlineStatus.Compatible
                 : SclAssistedMmsOnlineStatus.DomainMismatch;
 
-            LastHandshakeMessage = $"{profileName}: association accepted. {reconciliation.Summary}";
+            LastHandshakeMessage =
+                $"{selectedCandidate.Name}: association accepted. {reconciliation.Summary}";
             return BuildSclAssistedResult(
                 status,
-                plan,
+                resolution,
                 associationSucceeded: true,
                 domainInventorySucceeded: true,
                 reconciliation,
-                LastHandshakeMessage);
+                LastHandshakeMessage,
+                selectedCandidate,
+                attempts.Count);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && operationTimeout.IsCancellationRequested)
+        catch (OperationCanceledException) when (
+            !cancellationToken.IsCancellationRequested &&
+            domainTimeout.IsCancellationRequested)
         {
-            var phase = associationSucceeded ? "Domain/VMD inventory" : "TCP/COTP/ACSE/MMS association";
-            var message = $"{profileName}: {phase} timed out after {_lastTimeout.TotalMilliseconds:0} ms.";
+            var message =
+                $"{selectedCandidate.Name}: Domain/VMD inventory timed out after {_lastTimeout.TotalMilliseconds:0} ms.";
             LastHandshakeMessage = message;
             await ResetTransportAsync().ConfigureAwait(false);
             State = MmsAssociationState.MmsInitiateFailed;
 
             return BuildSclAssistedResult(
                 SclAssistedMmsOnlineStatus.TimedOut,
-                plan,
-                associationSucceeded,
+                resolution,
+                associationSucceeded: true,
                 domainInventorySucceeded: false,
                 domains: null,
-                message);
+                message,
+                selectedCandidate,
+                attempts.Count);
         }
         catch (OperationCanceledException)
         {
@@ -160,37 +285,25 @@ public sealed partial class MmsClientSession
             State = MmsAssociationState.Disconnected;
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (
+            ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
         {
-            var message = associationSucceeded
-                ? $"{profileName}: Domain/VMD inventory transport failure after association: {ex.GetType().Name}: {ex.Message}"
-                : $"{profileName}: SCL-assisted transport/association failure: {ex.GetType().Name}: {ex.Message}";
-
-            LastAssociationAttempts = associationSucceeded
-                ? LastAssociationAttempts
-                :
-                [
-                    new AcseAssociationAttempt
-                    {
-                        ProfileName = profileName,
-                        IsAccepted = false,
-                        Message = message,
-                        ResponseHexPreview = LastAssociationResponseHex
-                    }
-                ];
+            var message =
+                $"{selectedCandidate.Name}: Domain/VMD inventory transport failure after association: " +
+                $"{ex.GetType().Name}: {ex.Message}";
             LastHandshakeMessage = message;
             await ResetTransportAsync().ConfigureAwait(false);
             State = MmsAssociationState.MmsInitiateFailed;
 
             return BuildSclAssistedResult(
-                associationSucceeded
-                    ? SclAssistedMmsOnlineStatus.DomainInventoryFailed
-                    : SclAssistedMmsOnlineStatus.AssociationFailed,
-                plan,
-                associationSucceeded,
+                SclAssistedMmsOnlineStatus.DomainInventoryFailed,
+                resolution,
+                associationSucceeded: true,
                 domainInventorySucceeded: false,
                 domains: null,
-                message);
+                message,
+                selectedCandidate,
+                attempts.Count);
         }
     }
 
@@ -243,6 +356,47 @@ public sealed partial class MmsClientSession
         return string.Empty;
     }
 
+    private static string ValidateSclAssistedInputs(
+        SclAssistedMmsAssociationResolution resolution,
+        SclMmsDomainInventory designDomains)
+    {
+        if (!designDomains.IsSuccess)
+            return "SCL MMS design-domain inventory is not valid: " + string.Join(" | ", designDomains.Errors);
+        if (!resolution.IsSuccess)
+            return resolution.Errors.Count == 0
+                ? "SCL-assisted association resolution contains no usable candidate."
+                : string.Join(" | ", resolution.Errors);
+        if (resolution.Candidates.Count > SclAssistedMmsAssociationCandidateResolver.MaximumCandidateCount)
+            return $"SCL-assisted association resolution exceeds the bounded candidate limit of {SclAssistedMmsAssociationCandidateResolver.MaximumCandidateCount}.";
+        if (!string.Equals(resolution.IedName, designDomains.IedName, StringComparison.Ordinal) ||
+            !string.Equals(resolution.AccessPointName, designDomains.AccessPointName, StringComparison.Ordinal))
+        {
+            return $"SCL association identity '{resolution.IedName}/{resolution.AccessPointName}' does not match design-domain identity '{designDomains.IedName}/{designDomains.AccessPointName}'.";
+        }
+
+        foreach (var candidate in resolution.Candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate.Name))
+                return "SCL-assisted association candidate has no stable name.";
+            if (candidate.AssociationProfile.Payload.Length == 0)
+                return $"SCL-assisted association candidate '{candidate.Name}' has an empty ACSE/MMS payload.";
+
+            try
+            {
+                _ = CotpConnectRequest.Build(candidate.Cotp);
+                var inspection = AcseAssociationPayloadInspector.Inspect(candidate.AssociationProfile.Payload);
+                if (!inspection.LooksLikeClientAssociateRequest)
+                    return $"SCL-assisted association candidate '{candidate.Name}' is not a valid client associate request: {inspection.Message}";
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+            {
+                return $"SCL-assisted association candidate '{candidate.Name}' validation failed: {ex.GetType().Name}: {ex.Message}";
+            }
+        }
+
+        return string.Empty;
+    }
+
     private SclAssistedMmsOnlineResult BuildSclAssistedResult(
         SclAssistedMmsOnlineStatus status,
         SclAssistedMmsAssociationPlan plan,
@@ -260,6 +414,33 @@ public sealed partial class MmsClientSession
             AssociationSucceeded = associationSucceeded,
             DomainInventorySucceeded = domainInventorySucceeded,
             SessionRemainsOpen = IsMmsInitiated && IsTransportConnected,
+            Domains = domains,
+            Message = message
+        };
+
+    private SclAssistedMmsOnlineResult BuildSclAssistedResult(
+        SclAssistedMmsOnlineStatus status,
+        SclAssistedMmsAssociationResolution resolution,
+        bool associationSucceeded,
+        bool domainInventorySucceeded,
+        SclMmsDomainReconciliation? domains,
+        string message,
+        SclAssistedMmsAssociationCandidate? selectedCandidate,
+        int associationAttemptCount)
+        => new()
+        {
+            Status = status,
+            IedName = resolution.IedName,
+            AccessPointName = resolution.AccessPointName,
+            Host = resolution.Host,
+            Port = resolution.Port,
+            AssociationSucceeded = associationSucceeded,
+            DomainInventorySucceeded = domainInventorySucceeded,
+            SessionRemainsOpen = IsMmsInitiated && IsTransportConnected,
+            SelectedAssociationCandidateName = selectedCandidate?.Name ?? string.Empty,
+            SelectedAssociationCandidateSource = selectedCandidate?.Source,
+            AssociationAttemptCount = associationAttemptCount,
+            AssociationResolutionNotes = selectedCandidate?.ResolutionNotes ?? Array.Empty<string>(),
             Domains = domains,
             Message = message
         };

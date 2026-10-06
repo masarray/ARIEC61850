@@ -48,7 +48,12 @@ public static class SclMmsAssociationProfileReader
                 var iedName = Attr(connectedAp, "iedName");
                 var accessPointName = Attr(connectedAp, "apName");
                 var directAddress = connectedAp.Elements().FirstOrDefault(e => Is(e, "Address"));
-                var parameters = ReadDirectParameters(directAddress, iedName, accessPointName, warnings);
+                var parameters = ReadDirectParameters(
+                    directAddress,
+                    iedName,
+                    accessPointName,
+                    warnings,
+                    out var ambiguousParameters);
 
                 string Get(string type)
                     => parameters.TryGetValue(type, out var value) ? value : string.Empty;
@@ -94,7 +99,8 @@ public static class SclMmsAssociationProfileReader
                         SessionSelector = Get("OSI-SSEL"),
                         TransportSelector = Get("OSI-TSEL")
                     },
-                    Parameters = parameters
+                    Parameters = parameters,
+                    AmbiguousParameters = ambiguousParameters
                 });
             }
         }
@@ -110,11 +116,16 @@ public static class SclMmsAssociationProfileReader
         XElement? address,
         string iedName,
         string accessPointName,
-        ICollection<string> warnings)
+        ICollection<string> warnings,
+        out IReadOnlySet<string> ambiguousParameters)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (address is null)
+        {
+            ambiguousParameters = ambiguous;
             return result;
+        }
 
         var groups = address.Elements()
             .Where(e => Is(e, "P"))
@@ -135,6 +146,7 @@ public static class SclMmsAssociationProfileReader
             if (CriticalAssociationParameters.Contains(group.Key) && values.Length > 1)
             {
                 result[group.Key] = string.Empty;
+                ambiguous.Add(group.Key);
                 warnings.Add(
                     $"ConnectedAP {Describe(iedName, accessPointName)} has conflicting duplicate {group.Key} values; the association parameter is ambiguous and was left unresolved.");
                 continue;
@@ -148,6 +160,7 @@ public static class SclMmsAssociationProfileReader
             }
         }
 
+        ambiguousParameters = ambiguous;
         return result;
     }
 

@@ -226,6 +226,10 @@ public sealed class SclAssistedMmsOnlineResult
     public bool AssociationSucceeded { get; init; }
     public bool DomainInventorySucceeded { get; init; }
     public bool SessionRemainsOpen { get; init; }
+    public string SelectedAssociationCandidateName { get; init; } = string.Empty;
+    public SclAssociationCandidateSource? SelectedAssociationCandidateSource { get; init; }
+    public int AssociationAttemptCount { get; init; }
+    public IReadOnlyList<string> AssociationResolutionNotes { get; init; } = Array.Empty<string>();
     public SclMmsDomainReconciliation? Domains { get; init; }
     public string Message { get; init; } = string.Empty;
     public bool IsCompatible => Status == SclAssistedMmsOnlineStatus.Compatible;

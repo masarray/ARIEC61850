@@ -62,11 +62,21 @@ public sealed class MmsConfiguredStaticActivationVerifierTests
     [Fact]
     public void BeforeWrite_Blocks_Positive_Busy_Evidence()
     {
-        var brcb = Snapshot(success: true, enabled: "false", dataSet: "LD0/LLN0.DS01", stage: "before", buffered: true);
-        brcb = brcb with { ReservationTimeSeconds = "30" };
+        var brcb = Snapshot(
+            success: true,
+            enabled: "false",
+            dataSet: "LD0/LLN0.DS01",
+            stage: "before",
+            buffered: true,
+            reservationTimeSeconds: "30");
 
-        var urcb = Snapshot(success: true, enabled: "false", dataSet: "LD0/LLN0.DS01", stage: "before", buffered: false);
-        urcb = urcb with { ReservationState = "true" };
+        var urcb = Snapshot(
+            success: true,
+            enabled: "false",
+            dataSet: "LD0/LLN0.DS01",
+            stage: "before",
+            buffered: false,
+            reservationState: "true");
 
         Assert.Equal(
             MmsConfiguredStaticActivationProofKind.BusyRuntimeEvidence,
@@ -123,7 +133,10 @@ public sealed class MmsConfiguredStaticActivationVerifierTests
         string dataSet,
         string stage,
         bool buffered = true,
-        MmsRcbDataSetProbeState dataSetProbeState = MmsRcbDataSetProbeState.NotAttempted)
+        MmsRcbDataSetProbeState dataSetProbeState = MmsRcbDataSetProbeState.NotAttempted,
+        string reservationState = "",
+        string reservationTimeSeconds = "",
+        string owner = "")
         => new()
         {
             Stage = stage,
@@ -133,6 +146,9 @@ public sealed class MmsConfiguredStaticActivationVerifierTests
             EnabledState = enabled,
             DataSetReference = dataSet,
             DataSetProbeState = dataSetProbeState,
+            ReservationState = reservationState,
+            ReservationTimeSeconds = reservationTimeSeconds,
+            Owner = owner,
             Message = success ? "snapshot ok" : "snapshot failed"
         };
 }

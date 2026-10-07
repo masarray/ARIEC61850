@@ -726,7 +726,7 @@ public static class MmsHybridReportAcquisitionPlanner
         => kind switch
         {
             MmsConfiguredStaticRcbEligibilityKind.CallerOwned => 0,
-            MmsConfiguredStaticRcbEligibilityKind.ExactFree => 1,
+            MmsConfiguredStaticRcbEligibilityKind.ExplicitFree => 1,
             MmsConfiguredStaticRcbEligibilityKind.ReducedMissingReservationEvidence => 2,
             _ => 9
         };

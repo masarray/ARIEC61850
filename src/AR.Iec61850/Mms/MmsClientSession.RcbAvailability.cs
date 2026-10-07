@@ -16,12 +16,38 @@ public sealed partial class MmsClientSession
         var warnings = new List<string>();
         var snapshots = new List<MmsRcbAvailabilitySnapshot>();
         var dataSetDirectories = new Dictionary<string, MmsDataSetDirectoryResult>(StringComparer.OrdinalIgnoreCase);
+        var dataSetDirectoryNetworkReads = 0;
+        var dataSetDirectoryCacheHits = 0;
+
         var callerOwned = options.CallerOwnedRcbReferences
             .Select(MmsRcbAvailabilityEvaluator.NormalizeReference)
             .Where(reference => reference.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var targets = options.TargetReportControlReferences
+            .Select(MmsRcbAvailabilityEvaluator.NormalizeReference)
+            .Where(reference => reference.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targetFilterApplied = targets.Count > 0;
+
+        IEnumerable<MmsReportControlCandidate> eligible = inventory.ReportControls;
+        if (targetFilterApplied)
+        {
+            eligible = eligible.Where(candidate =>
+                targets.Contains(MmsRcbAvailabilityEvaluator.NormalizeReference(candidate.Reference)));
+        }
+
+        var eligibleArray = eligible.ToArray();
+        var matchedTargetCount = targetFilterApplied ? eligibleArray.Length : 0;
+        if (targetFilterApplied && matchedTargetCount < targets.Count)
+        {
+            warnings.Add(
+                $"Targeted RCB availability matched {matchedTargetCount} of {targets.Count} requested exact live reference(s); " +
+                "unmatched targets were not broadened to unrelated RCBs.");
+        }
+
         var max = Math.Clamp(options.MaxReportControls, 1, 4096);
-        var candidates = inventory.ReportControls
+        var candidates = eligibleArray
             .OrderByDescending(candidate => !string.IsNullOrWhiteSpace(candidate.DataSetReference))
             .ThenByDescending(candidate => candidate.Buffered)
             .ThenBy(candidate => candidate.Domain, StringComparer.OrdinalIgnoreCase)
@@ -30,8 +56,8 @@ public sealed partial class MmsClientSession
             .Take(max)
             .ToArray();
 
-        if (inventory.ReportControls.Count > candidates.Length)
-            warnings.Add($"Availability check was bounded to {candidates.Length} of {inventory.ReportControls.Count} discovered RCBs.");
+        if (eligibleArray.Length > candidates.Length)
+            warnings.Add($"Availability check was bounded to {candidates.Length} of {eligibleArray.Length} eligible RCBs.");
 
         foreach (var source in candidates)
         {
@@ -56,7 +82,15 @@ public sealed partial class MmsClientSession
             {
                 if (!dataSetDirectories.TryGetValue(dataSetReference, out dataSetDirectory))
                 {
-                    dataSetDirectory = await GetDataSetDirectoryAsync(candidate.DataSetReference, directory, cancellationToken).ConfigureAwait(false);
+                    var directoryEvidence = await GetAvailabilityDataSetDirectoryAsync(
+                        candidate.DataSetReference,
+                        directory,
+                        cancellationToken).ConfigureAwait(false);
+                    dataSetDirectory = directoryEvidence.Result;
+                    if (directoryEvidence.CacheHit)
+                        dataSetDirectoryCacheHits++;
+                    else
+                        dataSetDirectoryNetworkReads++;
                     dataSetDirectories[dataSetReference] = dataSetDirectory;
                 }
             }
@@ -71,6 +105,12 @@ public sealed partial class MmsClientSession
         return new MmsRcbAvailabilityResult
         {
             CheckedAtUtc = checkedAt,
+            InventoryReportControlCount = inventory.ReportControls.Count,
+            TargetFilterApplied = targetFilterApplied,
+            RequestedTargetReportControlCount = targets.Count,
+            MatchedTargetReportControlCount = matchedTargetCount,
+            DataSetDirectoryNetworkReadCount = dataSetDirectoryNetworkReads,
+            DataSetDirectoryCacheHitCount = dataSetDirectoryCacheHits,
             ReportControls = snapshots
                 .OrderByDescending(item => item.DataSetMemberCount > 0)
                 .ThenBy(item => AvailabilityRank(item.Availability))

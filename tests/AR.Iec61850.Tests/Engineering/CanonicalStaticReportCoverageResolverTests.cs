@@ -1,5 +1,7 @@
+using System.Xml.Linq;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Engineering.Canonical;
+using AR.Iec61850.Scl.Engineering;
 
 namespace AR.Iec61850.Tests.Engineering;
 
@@ -32,6 +34,50 @@ public sealed class CanonicalStaticReportCoverageResolverTests
         Assert.Equal(
             fromDiscovery.Signals[0].DataSetCandidates[0].ReportControlReferences,
             fromScl.Signals[0].DataSetCandidates[0].ReportControlReferences);
+    }
+
+    [Fact]
+    public void Real_Discovery_And_OpenScl_Builders_Converge_On_Static_Coverage()
+    {
+        var discoveryModel = BuildStatusDiscoveryCanonical();
+        var imported = SclCanonicalImporter.Import(
+            XDocument.Parse(BuildEquivalentStatusScl()),
+            new SclCanonicalImportOptions
+            {
+                IedName = "IEDA",
+                AccessPointName = "P1",
+                SourceName = "equivalent.cid"
+            });
+
+        Assert.True(imported.IsSuccess, string.Join(" | ", imported.Errors));
+        var sclModel = Assert.IsType<CanonicalIedModel>(imported.Model);
+
+        var selection = new[]
+        {
+            new CanonicalStaticReportSelection
+            {
+                Reference = "IEDALD0/GGIO1.Alm.stVal",
+                FunctionalConstraint = "ST"
+            }
+        };
+
+        var discoveryCoverage = CanonicalStaticReportCoverageResolver.Resolve(discoveryModel, selection);
+        var sclCoverage = CanonicalStaticReportCoverageResolver.Resolve(sclModel, selection);
+
+        Assert.Equal(1, discoveryCoverage.CoveredSignalCount);
+        Assert.Equal(1, sclCoverage.CoveredSignalCount);
+        Assert.Equal(
+            discoveryCoverage.Signals[0].DataSetCandidates[0].DataSetReference,
+            sclCoverage.Signals[0].DataSetCandidates[0].DataSetReference);
+        Assert.Equal(
+            "IEDALD0/LLN0.Indications",
+            sclCoverage.Signals[0].DataSetCandidates[0].DataSetReference);
+        Assert.Equal(
+            discoveryCoverage.Signals[0].DataSetCandidates[0].ReportControlReferences,
+            sclCoverage.Signals[0].DataSetCandidates[0].ReportControlReferences);
+        Assert.Equal(
+            ["IEDALD0/LLN0.BR.Rpt01"],
+            sclCoverage.Signals[0].DataSetCandidates[0].ReportControlReferences);
     }
 
     [Fact]
@@ -146,6 +192,127 @@ public sealed class CanonicalStaticReportCoverageResolverTests
             plan.Signals[0].Status);
         Assert.Empty(plan.Segments);
     }
+
+    private static CanonicalIedModel BuildStatusDiscoveryCanonical()
+    {
+        var live = new LiveIedModelDiscoveryDocument
+        {
+            Source = "LiveMmsDiscovery",
+            IedName = "IEDA",
+            AccessPointName = "P1",
+            IedIdentity = new LiveIedIdentity
+            {
+                IedName = "IEDA",
+                Confidence = LiveIedDiscoveryConfidenceLevel.Exact
+            },
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "IEDALD0",
+                    Inst = "LD0",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "GGIO1",
+                            LnClass = "GGIO",
+                            LnInst = "1",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = "IEDALD0/GGIO1.Alm",
+                                    Name = "Alm",
+                                    InferredCdc = "SPS",
+                                    ConfidenceLevel = LiveIedDiscoveryConfidenceLevel.Exact,
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = "IEDALD0/GGIO1.Alm.stVal",
+                                            AttributePath = "stVal",
+                                            FunctionalConstraint = "ST",
+                                            SclBType = "BOOLEAN",
+                                            MmsType = "boolean",
+                                            MmsTypeSignature = "boolean",
+                                            TypeConfidence = LiveIedDiscoveryConfidenceLevel.Exact
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            DataSets =
+            [
+                new LiveIedDataSetModel
+                {
+                    Reference = "IEDALD0/LLN0.Indications",
+                    Domain = "IEDALD0",
+                    LogicalNode = "LLN0",
+                    Name = "Indications",
+                    MemberCount = 1,
+                    Members =
+                    [
+                        new LiveIedDataSetMemberModel
+                        {
+                            Index = 1,
+                            Reference = "IEDALD0/GGIO1.Alm",
+                            FunctionalConstraint = "ST"
+                        }
+                    ]
+                }
+            ],
+            ReportControls =
+            [
+                new LiveIedReportControlModel
+                {
+                    Reference = "IEDALD0/LLN0.BR.Rpt01",
+                    Domain = "IEDALD0",
+                    LogicalNode = "LLN0",
+                    Name = "Rpt01",
+                    Buffered = true,
+                    DataSetReference = "IEDALD0/LLN0.Indications"
+                }
+            ]
+        };
+
+        return CanonicalLiveModelAdapter.FromLiveDiscovery(live);
+    }
+
+    private static string BuildEquivalentStatusScl()
+        => """
+            <SCL xmlns="http://www.iec.ch/61850/2003/SCL" version="2007" revision="B">
+              <IED name="IEDA">
+                <AccessPoint name="P1">
+                  <Server>
+                    <LDevice inst="LD0">
+                      <LN0 lnClass="LLN0" lnType="LT_LLN0">
+                        <DataSet name="Indications">
+                          <FCDA ldInst="LD0" lnClass="GGIO" lnInst="1" doName="Alm" fc="ST" />
+                        </DataSet>
+                        <ReportControl name="Rpt01" rptID="IEDA_Rpt01" datSet="Indications" confRev="1" buffered="true" />
+                      </LN0>
+                      <LN lnClass="GGIO" inst="1" lnType="LT_GGIO" />
+                    </LDevice>
+                  </Server>
+                </AccessPoint>
+              </IED>
+              <DataTypeTemplates>
+                <LNodeType id="LT_LLN0" lnClass="LLN0" />
+                <LNodeType id="LT_GGIO" lnClass="GGIO">
+                  <DO name="Alm" type="DOT_Alm" />
+                </LNodeType>
+                <DOType id="DOT_Alm" cdc="SPS">
+                  <DA name="stVal" fc="ST" bType="BOOLEAN" />
+                  <DA name="q" fc="ST" bType="Quality" />
+                  <DA name="t" fc="ST" bType="Timestamp" />
+                </DOType>
+              </DataTypeTemplates>
+            </SCL>
+            """;
 
     private static CanonicalIedModel BuildCanonical()
     {

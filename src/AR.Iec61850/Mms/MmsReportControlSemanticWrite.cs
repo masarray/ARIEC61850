@@ -196,7 +196,7 @@ public sealed partial class MmsClientSession
             cancellationToken).ConfigureAwait(false);
 
         if (!step.IsSuccess &&
-            string.Equals(step.FailureName, "type-inconsistent", StringComparison.OrdinalIgnoreCase) &&
+            step.FailureKind == MmsInteropFailureKind.TypeMismatch &&
             IsMmsInitiated)
         {
             typeEvidence = await GetReportSemanticTypeEvidenceAsync(
@@ -283,6 +283,8 @@ public sealed partial class MmsClientSession
             IsSuccess = step.IsSuccess,
             FailureCode = step.FailureCode,
             FailureName = step.FailureName,
+            FailureKind = step.FailureKind,
+            RecoveryHint = step.RecoveryHint,
             TypeEvidence = typeEvidence,
             Message = $"{step.Message} Type evidence: {typeEvidence.Message}"
         };

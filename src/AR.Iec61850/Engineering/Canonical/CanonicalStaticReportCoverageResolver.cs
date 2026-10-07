@@ -274,8 +274,7 @@ public static class CanonicalStaticReportCoverageResolver
     private static string NormalizeConfiguredReference(string? value)
     {
         var text = (value ?? string.Empty).Trim();
-        return text.Length == 0 ? string.Empty : text.Replace('
-, '.');
+        return text.Length == 0 ? string.Empty : text.Replace('$', '.');
     }
 
     private static string NormalizeFc(string? value)

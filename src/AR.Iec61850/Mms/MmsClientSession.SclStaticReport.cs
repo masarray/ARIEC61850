@@ -101,9 +101,10 @@ public sealed partial class MmsClientSession
 
         try
         {
-            var beforeSnapshot = await CaptureReportControlSnapshotAsync(
+            var beforeSnapshot = await CaptureConfiguredStaticActivationSnapshotAsync(
                 rcb,
                 "configured-static-before-enable",
+                includeReservationEvidence: true,
                 cancellationToken).ConfigureAwait(false);
             snapshots.Add(beforeSnapshot);
 
@@ -201,19 +202,15 @@ public sealed partial class MmsClientSession
 
             monitor.EnabledByThisClient = true;
 
-            var afterEnable1 = await CaptureReportControlSnapshotAsync(
+            var afterEnable = await CaptureConfiguredStaticActivationSnapshotAsync(
                 rcb,
-                "configured-static-after-enable-1",
+                "configured-static-after-enable",
+                includeReservationEvidence: false,
                 cancellationToken).ConfigureAwait(false);
-            var afterEnable2 = await CaptureReportControlSnapshotAsync(
-                rcb,
-                "configured-static-after-enable-2",
-                cancellationToken).ConfigureAwait(false);
-            snapshots.Add(afterEnable1);
-            snapshots.Add(afterEnable2);
+            snapshots.Add(afterEnable);
 
             var enableProof = MmsConfiguredStaticActivationVerifier.VerifyAfterEnable(
-                new[] { afterEnable1, afterEnable2 },
+                afterEnable,
                 plan.DataSetReference);
             if (!enableProof.IsProven)
             {

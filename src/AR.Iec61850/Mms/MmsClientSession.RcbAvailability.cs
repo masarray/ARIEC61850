@@ -24,42 +24,10 @@ public sealed partial class MmsClientSession
             .Where(reference => reference.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var targets = options.TargetReportControlReferences
-            .Select(MmsRcbAvailabilityEvaluator.NormalizeReference)
-            .Where(reference => reference.Length > 0)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var targetFilterApplied = targets.Count > 0;
+        var selection = MmsRcbAvailabilityTargetSelector.Select(inventory, options);
+        warnings.AddRange(selection.Warnings);
 
-        IEnumerable<MmsReportControlCandidate> eligible = inventory.ReportControls;
-        if (targetFilterApplied)
-        {
-            eligible = eligible.Where(candidate =>
-                targets.Contains(MmsRcbAvailabilityEvaluator.NormalizeReference(candidate.Reference)));
-        }
-
-        var eligibleArray = eligible.ToArray();
-        var matchedTargetCount = targetFilterApplied ? eligibleArray.Length : 0;
-        if (targetFilterApplied && matchedTargetCount < targets.Count)
-        {
-            warnings.Add(
-                $"Targeted RCB availability matched {matchedTargetCount} of {targets.Count} requested exact live reference(s); " +
-                "unmatched targets were not broadened to unrelated RCBs.");
-        }
-
-        var max = Math.Clamp(options.MaxReportControls, 1, 4096);
-        var candidates = eligibleArray
-            .OrderByDescending(candidate => !string.IsNullOrWhiteSpace(candidate.DataSetReference))
-            .ThenByDescending(candidate => candidate.Buffered)
-            .ThenBy(candidate => candidate.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(candidate => candidate.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
-            .Take(max)
-            .ToArray();
-
-        if (eligibleArray.Length > candidates.Length)
-            warnings.Add($"Availability check was bounded to {candidates.Length} of {eligibleArray.Length} eligible RCBs.");
-
-        foreach (var source in candidates)
+        foreach (var source in selection.Candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var candidate = CloneReportControl(source);
@@ -106,9 +74,9 @@ public sealed partial class MmsClientSession
         {
             CheckedAtUtc = checkedAt,
             InventoryReportControlCount = inventory.ReportControls.Count,
-            TargetFilterApplied = targetFilterApplied,
-            RequestedTargetReportControlCount = targets.Count,
-            MatchedTargetReportControlCount = matchedTargetCount,
+            TargetFilterApplied = selection.TargetFilterApplied,
+            RequestedTargetReportControlCount = selection.RequestedTargetCount,
+            MatchedTargetReportControlCount = selection.MatchedTargetCount,
             DataSetDirectoryNetworkReadCount = dataSetDirectoryNetworkReads,
             DataSetDirectoryCacheHitCount = dataSetDirectoryCacheHits,
             ReportControls = snapshots

@@ -101,10 +101,26 @@ public sealed partial class MmsClientSession
 
         try
         {
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
+            var beforeSnapshot = await CaptureReportControlSnapshotAsync(
                 rcb,
-                "scl-static-before-enable",
-                cancellationToken).ConfigureAwait(false));
+                "configured-static-before-enable",
+                cancellationToken).ConfigureAwait(false);
+            snapshots.Add(beforeSnapshot);
+
+            var beforeProof = MmsConfiguredStaticActivationVerifier.VerifyBeforeWrite(
+                beforeSnapshot,
+                plan.DataSetReference);
+            if (!beforeProof.IsProven)
+            {
+                return new MmsPersistentReportMonitorStartResult
+                {
+                    IsSuccess = false,
+                    WriteSteps = writes,
+                    Warnings = warnings,
+                    RcbSnapshots = snapshots,
+                    Message = $"Configured static activation failed JIT pre-write proof: {beforeProof.Kind}: {beforeProof.Message}"
+                };
+            }
 
             monitor = new MmsPersistentReportMonitorSession(
                 plan,
@@ -185,14 +201,55 @@ public sealed partial class MmsClientSession
 
             monitor.EnabledByThisClient = true;
 
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
+            var afterEnable1 = await CaptureReportControlSnapshotAsync(
                 rcb,
-                "scl-static-after-enable-1",
-                cancellationToken).ConfigureAwait(false));
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
+                "configured-static-after-enable-1",
+                cancellationToken).ConfigureAwait(false);
+            var afterEnable2 = await CaptureReportControlSnapshotAsync(
                 rcb,
-                "scl-static-after-enable-2",
-                cancellationToken).ConfigureAwait(false));
+                "configured-static-after-enable-2",
+                cancellationToken).ConfigureAwait(false);
+            snapshots.Add(afterEnable1);
+            snapshots.Add(afterEnable2);
+
+            var enableProof = MmsConfiguredStaticActivationVerifier.VerifyAfterEnable(
+                new[] { afterEnable1, afterEnable2 },
+                plan.DataSetReference);
+            if (!enableProof.IsProven)
+            {
+                UnregisterPersistentReportMonitor(monitor);
+
+                writes.Add(await TryWriteReportSemanticAttributeForCleanupAsync(
+                    rcb,
+                    MmsReportControlSemanticWrite.ReportEnable(false),
+                    CancellationToken.None).ConfigureAwait(false));
+                enabled = false;
+                monitor.EnabledByThisClient = false;
+
+                if (reservationTouched)
+                {
+                    writes.Add(rcb.Buffered
+                        ? await TryWriteReportSemanticAttributeForCleanupAsync(
+                            rcb,
+                            MmsReportControlSemanticWrite.ReservationTime(0),
+                            CancellationToken.None).ConfigureAwait(false)
+                        : await TryWriteReportSemanticAttributeForCleanupAsync(
+                            rcb,
+                            MmsReportControlSemanticWrite.Reservation(false),
+                            CancellationToken.None).ConfigureAwait(false));
+                    reservationTouched = false;
+                    monitor.ReservationTouched = false;
+                }
+
+                return new MmsPersistentReportMonitorStartResult
+                {
+                    IsSuccess = false,
+                    WriteSteps = writes,
+                    Warnings = warnings,
+                    RcbSnapshots = snapshots,
+                    Message = $"Configured static activation failed post-enable proof: {enableProof.Kind}: {enableProof.Message}"
+                };
+            }
 
             if (triggerGeneralInterrogation)
             {

@@ -16,12 +16,12 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
                 "LD0/XCBR1.Pos.stVal"));
 
         var inventory = Inventory(
+            MmsReportInventoryAuthority.SclDesignProjection,
             Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Events", buffered: true));
 
         var plan = MmsCanonicalStaticAcquisitionPreflightPlanner.Build(
             coverage,
-            inventory,
-            MmsReportInventoryAuthority.SclDesignProjection);
+            inventory);
 
         Assert.Equal(MmsCanonicalStaticAcquisitionProbeStatus.LiveInventoryRequired, plan.Status);
         Assert.False(plan.HasExactOperationalTargets);
@@ -41,13 +41,13 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
                 "LD0/XCBR1.Pos.stVal"));
 
         var inventory = Inventory(
+            MmsReportInventoryAuthority.LiveMmsObserved,
             Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Events", buffered: true),
             Candidate("LD0/LLN0.BR.Other01", "LD0/LLN0.Other", buffered: true));
 
         var plan = MmsCanonicalStaticAcquisitionPreflightPlanner.Build(
             coverage,
-            inventory,
-            MmsReportInventoryAuthority.LiveMmsObserved);
+            inventory);
 
         Assert.Equal(MmsCanonicalStaticAcquisitionProbeStatus.ExactTargetsReady, plan.Status);
         Assert.True(plan.HasExactOperationalTargets);
@@ -74,14 +74,14 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
                 "LD0/MMXU1.A.phsA.cVal.mag.f"));
 
         var inventory = Inventory(
+            MmsReportInventoryAuthority.LiveMmsObserved,
             Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Events", buffered: true),
             Candidate("LD0/LLN0.RP.Meas01", string.Empty, buffered: false),
             Candidate("LD0/LLN0.RP.Meas02", string.Empty, buffered: false));
 
         var plan = MmsCanonicalStaticAcquisitionPreflightPlanner.Build(
             coverage,
-            inventory,
-            MmsReportInventoryAuthority.LiveMmsObserved);
+            inventory);
 
         Assert.Equal(MmsCanonicalStaticAcquisitionProbeStatus.PartialExactTargetsReady, plan.Status);
         Assert.Equal(1, plan.ResolvedSegmentCount);
@@ -102,11 +102,11 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
                 buffered: true,
                 "LD0/XCBR1.Pos.stVal"));
         var inventory = Inventory(
+            MmsReportInventoryAuthority.SclDesignProjection,
             Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Events", buffered: true));
         var plan = MmsCanonicalStaticAcquisitionPreflightPlanner.Build(
             coverage,
-            inventory,
-            MmsReportInventoryAuthority.SclDesignProjection);
+            inventory);
 
         await using var session = new MmsClientSession();
         var result = await session.ProbeCanonicalStaticAcquisitionAsync(plan, inventory);
@@ -114,6 +114,36 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
         Assert.False(result.NetworkProbePerformed);
         Assert.Null(result.Availability);
         Assert.Equal(MmsCanonicalStaticAcquisitionProbeStatus.LiveInventoryRequired, result.Status);
+    }
+
+    [Fact]
+    public async Task ExecutorRejectsInventoryAuthoritySwapBeforeNetworkWork()
+    {
+        var coverage = Coverage(
+            Segment(
+                "LD0/LLN0.Events",
+                "LD0/LLN0.BR.Rpt01",
+                buffered: true,
+                "LD0/XCBR1.Pos.stVal"));
+        var liveInventory = Inventory(
+            MmsReportInventoryAuthority.LiveMmsObserved,
+            Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Events", buffered: true));
+        var plan = MmsCanonicalStaticAcquisitionPreflightPlanner.Build(
+            coverage,
+            liveInventory);
+
+        var structuralOnlyInventory = Inventory(
+            MmsReportInventoryAuthority.SclDesignProjection,
+            Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Events", buffered: true));
+
+        await using var session = new MmsClientSession();
+        var result = await session.ProbeCanonicalStaticAcquisitionAsync(
+            plan,
+            structuralOnlyInventory);
+
+        Assert.Equal(MmsCanonicalStaticAcquisitionProbeStatus.LiveInventoryRequired, result.Status);
+        Assert.False(result.NetworkProbePerformed);
+        Assert.Null(result.Availability);
     }
 
     [Fact]
@@ -153,6 +183,7 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
         var result = await session.ProbeCanonicalStaticAcquisitionAsync(
             plan,
             Inventory(
+                MmsReportInventoryAuthority.LiveMmsObserved,
                 Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Events", true),
                 Candidate("LD0/LLN0.BR.Rpt02", "LD0/LLN0.Events", true),
                 Candidate("LD0/LLN0.BR.Rpt03", "LD0/LLN0.Events", true)),
@@ -219,9 +250,14 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
             ]
         };
 
-    private static MmsReportInventory Inventory(params MmsReportControlCandidate[] controls)
+    private static MmsReportInventory Inventory(
+        MmsReportInventoryAuthority authority,
+        params MmsReportControlCandidate[] controls)
     {
-        var inventory = new MmsReportInventory();
+        var inventory = new MmsReportInventory
+        {
+            Authority = authority
+        };
         inventory.ReportControls.AddRange(controls);
         return inventory;
     }

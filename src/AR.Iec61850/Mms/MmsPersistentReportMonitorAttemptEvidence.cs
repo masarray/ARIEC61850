@@ -162,10 +162,8 @@ public sealed partial class MmsClientSession
 
             if (enabled)
             {
-                var disable = await TryWriteReportAttributeForCleanupAsync(
-                    rcb,
-                    "RptEna",
-                    MmsDataValue.Boolean(false),
+                var disable = await TryWriteReportSemanticAttributeForCleanupAsync(
+                    rcb, MmsReportControlSemanticWrite.ReportEnable(false),
                     CancellationToken.None).ConfigureAwait(false);
                 cleanupSteps.Add(disable);
                 cleanupSucceeded &= disable.IsSuccess;
@@ -218,8 +216,8 @@ public sealed partial class MmsClientSession
             if (reserved)
             {
                 var release = rcb.Buffered
-                    ? await TryWriteReportAttributeForCleanupAsync(rcb, "ResvTms", MmsDataValue.Unsigned(0), CancellationToken.None).ConfigureAwait(false)
-                    : await TryWriteReportAttributeForCleanupAsync(rcb, "Resv", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+                    ? await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.ReservationTime(0), CancellationToken.None).ConfigureAwait(false)
+                    : await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.Reservation(false), CancellationToken.None).ConfigureAwait(false);
                 cleanupSteps.Add(release);
                 cleanupSucceeded &= release.IsSuccess;
             }

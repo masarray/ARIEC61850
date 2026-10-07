@@ -16,6 +16,7 @@ public sealed partial class MmsClientSession
         var warnings = new List<string>();
         var snapshots = new List<MmsRcbAvailabilitySnapshot>();
         var dataSetDirectories = new Dictionary<string, MmsDataSetDirectoryResult>(StringComparer.OrdinalIgnoreCase);
+        var rcbStateLogicalReads = 0;
         var dataSetDirectoryNetworkReads = 0;
         var dataSetDirectoryCacheHits = 0;
 
@@ -32,17 +33,32 @@ public sealed partial class MmsClientSession
             cancellationToken.ThrowIfCancellationRequested();
             var candidate = CloneReportControl(source);
 
-            // Preserve discovery/SCL-derived binding only as fallback evidence. Clear the
-            // candidate before the forced live probe so a successful empty DatSet read can
-            // be distinguished from a failed read that merely left an old value in memory.
+            // Preserve discovery/SCL-derived binding only as fallback evidence. Volatile
+            // runtime state is cleared before every live check so stale discovery values
+            // can never masquerade as just-in-time availability evidence.
             var previouslyKnownDataSetReference = candidate.DataSetReference;
             candidate.DataSetReference = string.Empty;
             candidate.DataSetProbeState = MmsRcbDataSetProbeState.NotAttempted;
             candidate.DataSetProbeMessage = string.Empty;
+            candidate.EnabledState = string.Empty;
+            candidate.ReservationState = string.Empty;
+            candidate.ReservationTimeSeconds = string.Empty;
+            candidate.Owner = string.Empty;
 
-            await ProbeReportControlAttributesAsync(candidate, cancellationToken).ConfigureAwait(false);
+            if (selection.TargetFilterApplied)
+            {
+                rcbStateLogicalReads += await ProbeTargetedReportControlAvailabilityAsync(
+                    candidate,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await ProbeReportControlAttributesAsync(candidate, cancellationToken).ConfigureAwait(false);
+                // Broad diagnostic mode intentionally retains full attribute/Owner evidence.
+                await ProbeOwnerReadOnlyAsync(candidate, cancellationToken).ConfigureAwait(false);
+            }
+
             CaptureDataSetProbeEvidence(candidate, previouslyKnownDataSetReference);
-            await ProbeOwnerReadOnlyAsync(candidate, cancellationToken).ConfigureAwait(false);
 
             MmsDataSetDirectoryResult? dataSetDirectory = null;
             var dataSetReference = MmsRcbAvailabilityEvaluator.NormalizeReference(candidate.DataSetReference);
@@ -77,6 +93,7 @@ public sealed partial class MmsClientSession
             TargetFilterApplied = selection.TargetFilterApplied,
             RequestedTargetReportControlCount = selection.RequestedTargetCount,
             MatchedTargetReportControlCount = selection.MatchedTargetCount,
+            RcbStateLogicalReadCount = rcbStateLogicalReads,
             DataSetDirectoryNetworkReadCount = dataSetDirectoryNetworkReads,
             DataSetDirectoryCacheHitCount = dataSetDirectoryCacheHits,
             ReportControls = snapshots

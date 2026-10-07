@@ -2,8 +2,19 @@ using System.Collections.Concurrent;
 
 namespace AR.Iec61850.Mms;
 
+public enum MmsPersistentReportTrafficState
+{
+    ArmedAwaitingTraffic,
+    TrafficProven,
+    Stopped
+}
+
 public sealed class MmsPersistentReportMonitorSession
 {
+    private long _firstRoutedReportUtcTicks;
+    private long _lastRoutedReportUtcTicks;
+    private int _routedReportCount;
+
     internal MmsPersistentReportMonitorSession(
         MmsReportSubscriptionPlan plan,
         MmsReportControlCandidate reportControl,
@@ -38,10 +49,35 @@ public sealed class MmsPersistentReportMonitorSession
     public int ReportCount { get; internal set; }
     public int PollReadCount { get; internal set; }
     public bool IsStopped { get; internal set; }
+    public int RoutedReportCount => Volatile.Read(ref _routedReportCount);
+    public DateTimeOffset? FirstRoutedReportAt => ToUtcTimestamp(Volatile.Read(ref _firstRoutedReportUtcTicks));
+    public DateTimeOffset? LastRoutedReportAt => ToUtcTimestamp(Volatile.Read(ref _lastRoutedReportUtcTicks));
+    public MmsPersistentReportTrafficState TrafficState => IsStopped
+        ? MmsPersistentReportTrafficState.Stopped
+        : RoutedReportCount > 0
+            ? MmsPersistentReportTrafficState.TrafficProven
+            : MmsPersistentReportTrafficState.ArmedAwaitingTraffic;
+    public TimeSpan? FirstReportLatency => FirstRoutedReportAt.HasValue
+        ? FirstRoutedReportAt.Value - StartedAt
+        : null;
+
     internal ConcurrentQueue<MmsReportFrame> PendingReports { get; } = new();
 
+    internal void ObserveRoutedReport(MmsReportFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        var ticks = frame.ReceivedAt.UtcDateTime.Ticks;
+        Interlocked.CompareExchange(ref _firstRoutedReportUtcTicks, ticks, 0);
+        Interlocked.Exchange(ref _lastRoutedReportUtcTicks, ticks);
+        Interlocked.Increment(ref _routedReportCount);
+    }
+
     public string Summary =>
-        $"persistent report monitor: rcb={ReportControl.Reference}, dataset={Plan.DataSetReference}, mode={Plan.Mode}, reports={ReportCount}, stopped={IsStopped}";
+        $"persistent report monitor: rcb={ReportControl.Reference}, dataset={Plan.DataSetReference}, mode={Plan.Mode}, " +
+        $"traffic={TrafficState}, routedReports={RoutedReportCount}, drainedReports={ReportCount}, stopped={IsStopped}";
+
+    private static DateTimeOffset? ToUtcTimestamp(long ticks)
+        => ticks <= 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
 }
 
 public sealed class MmsPersistentReportMonitorStartResult
@@ -596,6 +632,7 @@ public sealed partial class MmsClientSession
         }
 
         var frame = MmsReportFrameMapper.Map(decoded, target.Plan.Members, DateTimeOffset.UtcNow);
+        target.ObserveRoutedReport(frame);
         target.PendingReports.Enqueue(frame);
         LastReceiveRoutingSummary =
             $"Routed InformationReport to {target.ReportControl.Reference} by {evidence}. RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}.";

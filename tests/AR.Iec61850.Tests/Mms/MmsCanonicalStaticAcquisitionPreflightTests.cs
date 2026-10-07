@@ -237,7 +237,7 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
                     0,
                     selectedSignal[..selectedSignal.LastIndexOf('.')],
                     selectedSignal.Contains("MMXU", StringComparison.Ordinal) ? "MX" : "ST",
-                    new CanonicalProvenance(CanonicalEvidenceSource.Scl, CanonicalConfidence.Exact))
+                    new CanonicalProvenance(CanonicalEvidenceSource.SclDeclared, CanonicalConfidence.Exact))
             ],
             ReportControls =
             [

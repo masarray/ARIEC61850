@@ -47,4 +47,40 @@ public sealed class G11MmsWriteAccessErrorTests
     [Fact]
     public void VendorSpecificUnknownAccessError_RemainsNumericallyVisible()
         => Assert.Equal("data-access-error-99", MmsWriteResponseDecoder.NameDataAccessError(99));
+    [Theory]
+    [InlineData(2, MmsInteropFailureKind.TemporarilyUnavailable, MmsInteropRecoveryHint.RetryLaterAfterStateRefresh)]
+    [InlineData(3, MmsInteropFailureKind.AccessDenied, MmsInteropRecoveryHint.FailClosed)]
+    [InlineData(6, MmsInteropFailureKind.TypeUnsupported, MmsInteropRecoveryHint.RevalidateType)]
+    [InlineData(7, MmsInteropFailureKind.TypeMismatch, MmsInteropRecoveryHint.RevalidateType)]
+    [InlineData(8, MmsInteropFailureKind.AttributeInconsistent, MmsInteropRecoveryHint.RevalidateRuntimeState)]
+    [InlineData(10, MmsInteropFailureKind.ObjectNotFound, MmsInteropRecoveryHint.RevalidateObjectIdentity)]
+    [InlineData(11, MmsInteropFailureKind.InvalidValue, MmsInteropRecoveryHint.FailClosed)]
+    public void DataAccessErrors_Map_To_Structured_Interop_Recovery(
+        int code,
+        MmsInteropFailureKind expectedKind,
+        MmsInteropRecoveryHint expectedRecovery)
+    {
+        var access = new MmsWriteAccessResult
+        {
+            IsSuccess = false,
+            FailureCode = code,
+            FailureName = MmsWriteResponseDecoder.NameDataAccessError(code)
+        };
+
+        var classified = MmsInteropFailureClassifier.Classify(access);
+
+        Assert.Equal(expectedKind, classified.Kind);
+        Assert.Equal(expectedRecovery, classified.RecoveryHint);
+    }
+
+    [Fact]
+    public void Successful_Access_Has_No_Recovery_Action()
+    {
+        var classified = MmsInteropFailureClassifier.Classify(
+            new MmsWriteAccessResult { IsSuccess = true });
+
+        Assert.Equal(MmsInteropFailureKind.None, classified.Kind);
+        Assert.Equal(MmsInteropRecoveryHint.None, classified.RecoveryHint);
+    }
+
 }

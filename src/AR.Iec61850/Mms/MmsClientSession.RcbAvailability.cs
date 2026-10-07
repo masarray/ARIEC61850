@@ -93,7 +93,7 @@ public sealed partial class MmsClientSession
             TargetFilterApplied = selection.TargetFilterApplied,
             RequestedTargetReportControlCount = selection.RequestedTargetCount,
             MatchedTargetReportControlCount = selection.MatchedTargetCount,
-            RcbStateLogicalReadCount = rcbStateLogicalReads,
+            TargetedRcbStateLogicalReadCount = rcbStateLogicalReads,
             DataSetDirectoryNetworkReadCount = dataSetDirectoryNetworkReads,
             DataSetDirectoryCacheHitCount = dataSetDirectoryCacheHits,
             ReportControls = snapshots

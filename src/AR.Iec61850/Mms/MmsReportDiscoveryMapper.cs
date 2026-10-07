@@ -12,7 +12,10 @@ public static class MmsReportDiscoveryMapper
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        var inventory = new MmsReportInventory();
+        var inventory = new MmsReportInventory
+        {
+            Authority = MmsReportInventoryAuthority.LiveMmsObserved
+        };
         inventory.DataSets.AddRange(BuildDataSets(snapshot.DomainVariableLists));
         inventory.ReportControls.AddRange(BuildReportControls(snapshot.DomainVariables));
         return inventory;

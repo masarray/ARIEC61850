@@ -123,6 +123,23 @@ public sealed partial class MmsClientSession
                 };
             }
 
+            var normalPathWrites = new List<MmsReportControlSemanticWrite>
+            {
+                MmsReportControlSemanticWrite.ReportEnable(true)
+            };
+            if (!rcb.Buffered &&
+                rcb.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase))
+            {
+                normalPathWrites.Add(MmsReportControlSemanticWrite.Reservation(true));
+            }
+            if (triggerGeneralInterrogation)
+                normalPathWrites.Add(MmsReportControlSemanticWrite.GeneralInterrogation(true));
+
+            await PrimeReportSemanticTypeEvidenceFromStructureAsync(
+                rcb,
+                normalPathWrites,
+                cancellationToken).ConfigureAwait(false);
+
             monitor = new MmsPersistentReportMonitorSession(
                 plan,
                 rcb,

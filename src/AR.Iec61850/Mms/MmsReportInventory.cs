@@ -4,7 +4,8 @@ public enum MmsReportInventoryAuthority
 {
     Unknown,
     LiveMmsObserved,
-    SclDesignProjection
+    SclDesignProjection,
+    CanonicalModelProjection
 }
 
 public enum MmsRcbDataSetProbeState

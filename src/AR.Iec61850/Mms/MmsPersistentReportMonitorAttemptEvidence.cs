@@ -98,12 +98,22 @@ public sealed partial class MmsClientSession
             }
         }
 
-        var start = await StartPersistentReportMonitorAsync(
-            plan,
-            triggerGeneralInterrogation,
-            deleteDynamicDataSetOnStop,
-            directory,
-            cancellationToken).ConfigureAwait(false);
+        // A fresh configured static plan must use the same source-neutral activation
+        // lifecycle regardless of whether its model originated from live Discovery or SCL:
+        // receiver registration -> direct RptEna -> bounded BRCB ResvTms fallback ->
+        // readback -> optional GI. Dynamic plans retain the dynamic transaction path below.
+        var start = !isDynamic &&
+                    plan.Status == MmsReportSubscriptionPlanStatus.ReadyRequiresWrite
+            ? await StartConfiguredStaticReportMonitorAsync(
+                plan,
+                triggerGeneralInterrogation,
+                cancellationToken).ConfigureAwait(false)
+            : await StartPersistentReportMonitorAsync(
+                plan,
+                triggerGeneralInterrogation,
+                deleteDynamicDataSetOnStop,
+                directory,
+                cancellationToken).ConfigureAwait(false);
 
         if (probe is not null)
             start = MergeProbeEvidence(start, probe);

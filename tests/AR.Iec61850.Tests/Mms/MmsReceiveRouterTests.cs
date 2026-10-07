@@ -100,6 +100,54 @@ public sealed class MmsReceiveRouterTests
     }
 
     [Fact]
+    public async Task WaitForInformationReportAsync_ReturnsImmediately_WhenQueueAlreadyHasReport()
+    {
+        var router = new MmsReceiveRouter();
+        router.Route(BuildInformationReport());
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        var available = await router.WaitForInformationReportAsync(
+            TimeSpan.FromSeconds(1),
+            timeout.Token);
+
+        Assert.True(available);
+        Assert.True(router.TryDequeueInformationReport(out var queued));
+        Assert.True(queued.IsInformationReport);
+    }
+
+    [Fact]
+    public async Task WaitForInformationReportAsync_WakesFromFutureReport_WithoutPolling()
+    {
+        var router = new MmsReceiveRouter();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        var wait = router.WaitForInformationReportAsync(
+            TimeSpan.FromSeconds(1),
+            timeout.Token);
+
+        await Task.Yield();
+        Assert.False(wait.IsCompleted);
+
+        router.Route(BuildInformationReport());
+
+        Assert.True(await wait);
+        Assert.True(router.TryDequeueInformationReport(out var queued));
+        Assert.True(queued.IsInformationReport);
+    }
+
+    [Fact]
+    public async Task WaitForInformationReportAsync_TimesOut_WhenNoReportArrives()
+    {
+        var router = new MmsReceiveRouter();
+
+        var available = await router.WaitForInformationReportAsync(
+            TimeSpan.FromMilliseconds(20));
+
+        Assert.False(available);
+        Assert.Equal(0, router.QueuedInformationReportCount);
+    }
+
+    [Fact]
     public async Task Clear_FaultsActiveInformationReportSubscribers()
     {
         var router = new MmsReceiveRouter();

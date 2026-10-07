@@ -149,7 +149,7 @@ public static class MmsReportSemanticTypePolicy
 public sealed partial class MmsClientSession
 {
     private readonly ConcurrentDictionary<string, MmsReportSemanticTypeEvidence> _reportSemanticTypeEvidence =
-        new(StringComparer.OrdinalIgnoreCase);
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Association-stable type evidence must never cross an MMS re-association.
@@ -284,8 +284,6 @@ public sealed partial class MmsClientSession
             FailureCode = step.FailureCode,
             FailureName = step.FailureName,
             TypeEvidence = typeEvidence,
-            Message = step.IsSuccess
-                ? $"{step.Message} Type evidence: {typeEvidence.Message}"
-                : $"{step.Message} Type evidence: {typeEvidence.Message}"
+            Message = $"{step.Message} Type evidence: {typeEvidence.Message}"
         };
 }

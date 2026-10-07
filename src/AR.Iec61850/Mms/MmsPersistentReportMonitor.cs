@@ -575,9 +575,26 @@ public sealed partial class MmsClientSession
 
             if (IsReceivePumpRunning)
             {
-                var delay = remaining < TimeSpan.FromMilliseconds(25) ? remaining : TimeSpan.FromMilliseconds(25);
-                if (delay > TimeSpan.Zero)
-                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                // The association-owned receive pump already blocks on the transport.
+                // Do not add a 25 ms application polling loop on top of it. Wait for the
+                // router's binary InformationReport signal, bounded by the next legitimate
+                // scheduler deadline (residual polling) or this receive slice deadline.
+                var wakeAt = deadline;
+                if (pollDirectory != null &&
+                    references.Length > 0 &&
+                    nextPollAt < wakeAt)
+                {
+                    wakeAt = nextPollAt;
+                }
+
+                var waitFor = wakeAt - DateTimeOffset.UtcNow;
+                if (waitFor > TimeSpan.Zero)
+                {
+                    await _receiveRouter.WaitForInformationReportAsync(
+                        waitFor,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
                 continue;
             }
 

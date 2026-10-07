@@ -159,6 +159,80 @@ public sealed partial class MmsClientSession
         => _reportSemanticTypeEvidence.Clear();
 
     /// <summary>
+    /// Primes multiple scalar-field type contracts from one complete RCB
+    /// GetVariableAccessAttributes response when the server exposes named structure
+    /// components. This is an optimization only: missing/unsupported structure evidence
+    /// leaves the normal exact-leaf preflight unchanged.
+    /// </summary>
+    private async Task PrimeReportSemanticTypeEvidenceFromStructureAsync(
+        MmsReportControlCandidate rcb,
+        IReadOnlyCollection<MmsReportControlSemanticWrite> writes,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(rcb);
+        ArgumentNullException.ThrowIfNull(writes);
+
+        var pending = writes
+            .DistinctBy(write => write.Attribute, StringComparer.OrdinalIgnoreCase)
+            .Where(write =>
+            {
+                var reference = BuildReportAttributeReference(rcb, write.Attribute);
+                return !_reportSemanticTypeEvidence.ContainsKey(ReportSemanticTypeCacheKey(reference));
+            })
+            .ToArray();
+
+        // A single field gains nothing from a structure probe because its normal leaf
+        // preflight costs the same one confirmed service request.
+        if (pending.Length < 2)
+            return;
+
+        MmsVariableAccessAttributesResult structure;
+        try
+        {
+            var baseReference = MmsObjectReference.Parse(rcb.Reference, rcb.FunctionalConstraint);
+            structure = await GetVariableAccessAttributesAsync(
+                baseReference,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return;
+        }
+
+        if (!structure.IsSuccess ||
+            structure.TypeSpecification is not { MmsType: "structure" } type ||
+            type.Children.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var write in pending)
+        {
+            var child = type.Children.FirstOrDefault(component =>
+                string.Equals(component.Name, write.Attribute, StringComparison.OrdinalIgnoreCase));
+            if (child is null)
+                continue;
+
+            var reference = BuildReportAttributeReference(rcb, write.Attribute);
+            var live = new MmsVariableAccessAttributesResult
+            {
+                IsSuccess = true,
+                Reference = reference,
+                TypeSpecification = child,
+                Source = "GetVariableAccessAttributes(RCB structure)",
+                Message = $"RCB structure TypeSpecification supplied exact component {write.Attribute}:{child.MmsType}."
+            };
+            var evidence = MmsReportSemanticTypePolicy.Evaluate(
+                write,
+                reference.ToString(),
+                live);
+
+            if (evidence.IsExact)
+                _reportSemanticTypeEvidence[ReportSemanticTypeCacheKey(reference)] = evidence;
+        }
+    }
+
+    /// <summary>
     /// Normal RCB scalar mutation path. The first mutation of each exact field on an
     /// association performs a bounded exact GetVariableAccessAttributes check. Exact
     /// matching evidence is cached for that association; missing evidence does not become

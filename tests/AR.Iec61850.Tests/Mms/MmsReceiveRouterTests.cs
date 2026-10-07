@@ -136,6 +136,21 @@ public sealed class MmsReceiveRouterTests
     }
 
     [Fact]
+    public async Task WaitForInformationReportAsync_CoalescesBurstIntoSingleWake()
+    {
+        var router = new MmsReceiveRouter();
+        router.Route(BuildInformationReport());
+        router.Route(BuildInformationReport());
+
+        Assert.True(await router.WaitForInformationReportAsync(TimeSpan.FromSeconds(1)));
+        Assert.True(router.TryDequeueInformationReport(out _));
+        Assert.True(router.TryDequeueInformationReport(out _));
+
+        var staleWake = await router.WaitForInformationReportAsync(TimeSpan.FromMilliseconds(20));
+        Assert.False(staleWake);
+    }
+
+    [Fact]
     public async Task WaitForInformationReportAsync_TimesOut_WhenNoReportArrives()
     {
         var router = new MmsReceiveRouter();

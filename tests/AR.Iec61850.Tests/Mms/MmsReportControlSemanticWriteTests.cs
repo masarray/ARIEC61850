@@ -21,11 +21,13 @@ public sealed class MmsReportControlSemanticWriteTests
     }
 
     [Theory]
+    [InlineData(-32768)]
+    [InlineData(-1)]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(60)]
     [InlineData(32767)]
-    public void ResvTms_Accepts_NonNegative_Int16_Range(int seconds)
+    public void ResvTms_Accepts_Signed_Int16_Range(int seconds)
     {
         var write = MmsReportControlSemanticWrite.ReservationTime(seconds);
 
@@ -34,9 +36,9 @@ public sealed class MmsReportControlSemanticWriteTests
     }
 
     [Theory]
-    [InlineData(-1)]
+    [InlineData(-32769)]
     [InlineData(32768)]
-    public void ResvTms_Rejects_Values_Outside_NonNegative_Int16_Range(int seconds)
+    public void ResvTms_Rejects_Values_Outside_Signed_Int16_Range(int seconds)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => MmsReportControlSemanticWrite.ReservationTime(seconds));

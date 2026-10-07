@@ -113,7 +113,7 @@ public sealed class MmsCanonicalReportInventoryProjectionTests
                             "ST",
                             new CanonicalProvenance(
                                 ingress == CanonicalIngressKind.SclFile
-                                    ? CanonicalEvidenceSource.Scl
+                                    ? CanonicalEvidenceSource.SclDeclared
                                     : CanonicalEvidenceSource.LiveMms,
                                 CanonicalConfidence.Exact))
                     ]
@@ -137,7 +137,7 @@ public sealed class MmsCanonicalReportInventoryProjectionTests
                     IntegrityPeriodMs = "0",
                     Provenance = new CanonicalProvenance(
                         ingress == CanonicalIngressKind.SclFile
-                            ? CanonicalEvidenceSource.Scl
+                            ? CanonicalEvidenceSource.SclDeclared
                             : CanonicalEvidenceSource.LiveMms,
                         CanonicalConfidence.Exact)
                 }

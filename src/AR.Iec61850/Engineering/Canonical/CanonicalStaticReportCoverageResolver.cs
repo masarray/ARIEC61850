@@ -89,11 +89,6 @@ public static class CanonicalStaticReportCoverageResolver
         for (var index = 0; index < requested.Length; index++)
             results[index] = ResolveSignal(model, requested[index], signalIndex, reportByDataSet);
 
-        var coveredReferences = results
-            .Where(result => result.IsCovered)
-            .Select(result => result.CanonicalReference)
-            .ToHashSet(StringComparer.Ordinal);
-
         var segmentDataSets = results
             .Where(result => result.IsCovered)
             .SelectMany(result => result.DataSetCandidates)

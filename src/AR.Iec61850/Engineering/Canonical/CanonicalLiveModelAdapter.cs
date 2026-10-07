@@ -150,7 +150,7 @@ public static class CanonicalLiveModelAdapter
 
             dataSets[i] = new CanonicalDataSet
             {
-                Reference = RemapReference(dataSet.Reference, context.DomainAliases),
+                Reference = NormalizeConfiguredReference(dataSet.Reference, context.DomainAliases),
                 MmsDomain = RemapDomain(dataSet.Domain, context.DomainAliases),
                 LogicalNode = dataSet.LogicalNode,
                 Name = dataSet.Name,
@@ -167,12 +167,12 @@ public static class CanonicalLiveModelAdapter
             var report = source.ReportControls[i];
             reportControls[i] = new CanonicalReportControl
             {
-                Reference = RemapReference(report.Reference, context.DomainAliases),
+                Reference = NormalizeConfiguredReference(report.Reference, context.DomainAliases),
                 MmsDomain = RemapDomain(report.Domain, context.DomainAliases),
                 LogicalNode = report.LogicalNode,
                 Name = report.Name,
                 Buffered = report.Buffered,
-                DataSetReference = RemapReference(report.DataSetReference, context.DomainAliases),
+                DataSetReference = NormalizeConfiguredReference(report.DataSetReference, context.DomainAliases),
                 ReportId = report.ReportId,
                 ConfRev = report.ConfRev,
                 TriggerOptions = report.TriggerOptions,
@@ -231,6 +231,17 @@ public static class CanonicalLiveModelAdapter
             Diagnostics = diagnostics
         };
     }
+
+    /// <summary>
+    /// Canonical DataSet/ReportControl identity uses one source-neutral dotted form.
+    /// SCL commonly carries '$' MMS component separators while live discovery may expose
+    /// the same configured resource with dots. Source projections retain their original
+    /// spelling; the shared CanonicalIedModel does not.
+    /// </summary>
+    private static string NormalizeConfiguredReference(
+        string value,
+        IReadOnlyDictionary<string, string> aliases)
+        => RemapReference(value, aliases).Replace('$', '.');
 
     private static string RemapDomain(string value, IReadOnlyDictionary<string, string> aliases)
     {

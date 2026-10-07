@@ -234,106 +234,14 @@ public static class CanonicalLiveModelAdapter
 
     /// <summary>
     /// Canonical DataSet/ReportControl identity uses one source-neutral dotted form.
-    /// SCL commonly carries '    {
-        var normalized = value?.Trim() ?? string.Empty;
-        return aliases.TryGetValue(normalized, out var exact) ? exact : normalized;
-    }
-
-    private static string RemapReference(string value, IReadOnlyDictionary<string, string> aliases)
-    {
-        var normalized = value?.Trim() ?? string.Empty;
-        if (normalized.Length == 0 || aliases.Count == 0)
-            return normalized;
-
-        var slash = normalized.IndexOf('/');
-        var domain = slash >= 0 ? normalized[..slash] : normalized;
-        if (!aliases.TryGetValue(domain, out var exact))
-            return normalized;
-
-        return slash >= 0 ? exact + normalized[slash..] : exact;
-    }
-
-    private static CanonicalConfidence MapConfidence(LiveIedDiscoveryConfidenceLevel confidence)
-        => confidence switch
-        {
-            LiveIedDiscoveryConfidenceLevel.Exact => CanonicalConfidence.Exact,
-            LiveIedDiscoveryConfidenceLevel.High => CanonicalConfidence.High,
-            LiveIedDiscoveryConfidenceLevel.Medium => CanonicalConfidence.Medium,
-            LiveIedDiscoveryConfidenceLevel.Low => CanonicalConfidence.Low,
-            _ => CanonicalConfidence.Unknown
-        };
-
-    private sealed class CanonicalIngressContext
-    {
-        public CanonicalIngressKind Ingress { get; init; }
-        public string SourceName { get; init; } = string.Empty;
-        public string SourceEdition { get; init; } = string.Empty;
-        public string IedName { get; init; } = string.Empty;
-        public string AccessPointName { get; init; } = string.Empty;
-        public CanonicalEvidenceSource IdentitySource { get; init; }
-        public CanonicalConfidence IdentityConfidence { get; init; }
-        public bool IdentityAmbiguous { get; init; }
-        public string[] IdentityCandidates { get; init; } = Array.Empty<string>();
-        public string[] IdentityEvidence { get; init; } = Array.Empty<string>();
-        public CanonicalEvidenceSource FactSource { get; init; }
-        public IReadOnlyDictionary<string, string> DomainAliases { get; init; } = EmptyAliases;
-        public string[] OriginalTypeAliases { get; init; } = Array.Empty<string>();
-    }
-}
- MMS component separators while live discovery may expose
+    /// SCL commonly carries '$' MMS component separators while live discovery may expose
     /// the same configured resource with dots. Source projections retain their original
     /// spelling; the shared CanonicalIedModel does not.
     /// </summary>
     private static string NormalizeConfiguredReference(
         string value,
         IReadOnlyDictionary<string, string> aliases)
-        => RemapReference(value, aliases).Replace('    {
-        var normalized = value?.Trim() ?? string.Empty;
-        return aliases.TryGetValue(normalized, out var exact) ? exact : normalized;
-    }
-
-    private static string RemapReference(string value, IReadOnlyDictionary<string, string> aliases)
-    {
-        var normalized = value?.Trim() ?? string.Empty;
-        if (normalized.Length == 0 || aliases.Count == 0)
-            return normalized;
-
-        var slash = normalized.IndexOf('/');
-        var domain = slash >= 0 ? normalized[..slash] : normalized;
-        if (!aliases.TryGetValue(domain, out var exact))
-            return normalized;
-
-        return slash >= 0 ? exact + normalized[slash..] : exact;
-    }
-
-    private static CanonicalConfidence MapConfidence(LiveIedDiscoveryConfidenceLevel confidence)
-        => confidence switch
-        {
-            LiveIedDiscoveryConfidenceLevel.Exact => CanonicalConfidence.Exact,
-            LiveIedDiscoveryConfidenceLevel.High => CanonicalConfidence.High,
-            LiveIedDiscoveryConfidenceLevel.Medium => CanonicalConfidence.Medium,
-            LiveIedDiscoveryConfidenceLevel.Low => CanonicalConfidence.Low,
-            _ => CanonicalConfidence.Unknown
-        };
-
-    private sealed class CanonicalIngressContext
-    {
-        public CanonicalIngressKind Ingress { get; init; }
-        public string SourceName { get; init; } = string.Empty;
-        public string SourceEdition { get; init; } = string.Empty;
-        public string IedName { get; init; } = string.Empty;
-        public string AccessPointName { get; init; } = string.Empty;
-        public CanonicalEvidenceSource IdentitySource { get; init; }
-        public CanonicalConfidence IdentityConfidence { get; init; }
-        public bool IdentityAmbiguous { get; init; }
-        public string[] IdentityCandidates { get; init; } = Array.Empty<string>();
-        public string[] IdentityEvidence { get; init; } = Array.Empty<string>();
-        public CanonicalEvidenceSource FactSource { get; init; }
-        public IReadOnlyDictionary<string, string> DomainAliases { get; init; } = EmptyAliases;
-        public string[] OriginalTypeAliases { get; init; } = Array.Empty<string>();
-    }
-}
-, '.');
+        => RemapReference(value, aliases).Replace('$', '.');
 
     private static string RemapDomain(string value, IReadOnlyDictionary<string, string> aliases)
     {

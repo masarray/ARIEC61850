@@ -81,4 +81,78 @@ public sealed class MmsReportControlSemanticWriteTests
         Assert.False(rptEna.IsCompatibleWith(integer));
         Assert.False(rptEna.IsCompatibleWith(null));
     }
+    [Fact]
+    public void Exact_Live_Type_Mismatch_Is_A_Positive_Blocker()
+    {
+        var write = MmsReportControlSemanticWrite.ReservationTime(60);
+        var live = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("LD0", "LLN0$BR$Brcb01$ResvTms", "BR"),
+            TypeSpecification = new MmsTypeSpecificationNode
+            {
+                MmsType = "unsigned",
+                SclBType = "INT32U"
+            }
+        };
+
+        var evidence = MmsReportSemanticTypePolicy.Evaluate(
+            write,
+            "LD0/LLN0.BR.Brcb01.ResvTms [BR]",
+            live);
+
+        Assert.Equal(MmsReportSemanticTypeEvidenceStatus.ExactMismatch, evidence.Status);
+        Assert.True(evidence.IsExact);
+        Assert.False(evidence.AllowsMutation);
+        Assert.Equal("integer", evidence.ExpectedMmsType);
+        Assert.Equal("unsigned", evidence.LiveMmsType);
+    }
+
+    [Fact]
+    public void Missing_Live_Type_Evidence_Does_Not_Become_A_False_Blocker()
+    {
+        var write = MmsReportControlSemanticWrite.ReportEnable(true);
+        var live = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = false,
+            Reference = new MmsObjectReference("LD0", "LLN0$BR$Brcb01$RptEna", "BR"),
+            Message = "GetVariableAccessAttributes unsupported by this server."
+        };
+
+        var evidence = MmsReportSemanticTypePolicy.Evaluate(
+            write,
+            "LD0/LLN0.BR.Brcb01.RptEna [BR]",
+            live);
+
+        Assert.Equal(MmsReportSemanticTypeEvidenceStatus.Unavailable, evidence.Status);
+        Assert.False(evidence.IsExact);
+        Assert.True(evidence.AllowsMutation);
+        Assert.Contains("IEC semantic contract", evidence.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Exact_Live_Type_Match_Confirms_Semantic_Mutation()
+    {
+        var write = MmsReportControlSemanticWrite.ReportEnable(true);
+        var live = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("LD0", "LLN0$BR$Brcb01$RptEna", "BR"),
+            TypeSpecification = new MmsTypeSpecificationNode
+            {
+                MmsType = "boolean",
+                SclBType = "BOOLEAN"
+            }
+        };
+
+        var evidence = MmsReportSemanticTypePolicy.Evaluate(
+            write,
+            "LD0/LLN0.BR.Brcb01.RptEna [BR]",
+            live);
+
+        Assert.Equal(MmsReportSemanticTypeEvidenceStatus.ExactMatch, evidence.Status);
+        Assert.True(evidence.IsExact);
+        Assert.True(evidence.AllowsMutation);
+    }
+
 }

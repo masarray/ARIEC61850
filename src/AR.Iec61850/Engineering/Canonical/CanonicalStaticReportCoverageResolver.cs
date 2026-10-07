@@ -18,6 +18,7 @@ public sealed class CanonicalStaticReportSelection
 public sealed class CanonicalStaticReportDataSetCandidate
 {
     public string DataSetReference { get; init; } = string.Empty;
+    public string SourceDataSetReference { get; init; } = string.Empty;
     public int[] MemberIndexes { get; init; } = Array.Empty<int>();
     public string[] ReportControlReferences { get; init; } = Array.Empty<string>();
 }
@@ -37,6 +38,7 @@ public sealed class CanonicalStaticReportSignalCoverage
 public sealed class CanonicalStaticReportCoverageSegment
 {
     public string DataSetReference { get; init; } = string.Empty;
+    public string SourceDataSetReference { get; init; } = string.Empty;
     public CanonicalDataSetMember[] OrderedMembers { get; init; } = Array.Empty<CanonicalDataSetMember>();
     public CanonicalReportControl[] ReportControls { get; init; } = Array.Empty<CanonicalReportControl>();
     public string[] SelectedSignalReferences { get; init; } = Array.Empty<string>();
@@ -79,10 +81,12 @@ public static class CanonicalStaticReportCoverageResolver
         var signalIndex = BuildSignalIndex(model);
         var reportByDataSet = model.ReportControls
             .Where(report => !string.IsNullOrWhiteSpace(report.DataSetReference))
-            .GroupBy(report => report.DataSetReference, StringComparer.Ordinal)
+            .GroupBy(report => NormalizeConfiguredReference(report.DataSetReference), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group.OrderBy(report => report.Reference, StringComparer.Ordinal).ToArray(),
+                group => group
+                    .OrderBy(report => NormalizeConfiguredReference(report.Reference), StringComparer.Ordinal)
+                    .ToArray(),
                 StringComparer.Ordinal);
 
         var results = new CanonicalStaticReportSignalCoverage[requested.Length];
@@ -171,12 +175,16 @@ public static class CanonicalStaticReportCoverageResolver
                 continue;
 
             anyDataSet = true;
-            reportByDataSet.TryGetValue(dataSet.Reference, out var reports);
+            var canonicalDataSetReference = NormalizeConfiguredReference(dataSet.Reference);
+            reportByDataSet.TryGetValue(canonicalDataSetReference, out var reports);
             candidates.Add(new CanonicalStaticReportDataSetCandidate
             {
-                DataSetReference = dataSet.Reference,
+                DataSetReference = canonicalDataSetReference,
+                SourceDataSetReference = dataSet.Reference,
                 MemberIndexes = memberIndexes,
-                ReportControlReferences = reports?.Select(report => report.Reference).ToArray() ?? Array.Empty<string>()
+                ReportControlReferences = reports?
+                    .Select(report => NormalizeConfiguredReference(report.Reference))
+                    .ToArray() ?? Array.Empty<string>()
             });
         }
 
@@ -209,7 +217,10 @@ public static class CanonicalStaticReportCoverageResolver
         IReadOnlyDictionary<string, CanonicalReportControl[]> reportByDataSet)
     {
         var dataSet = model.DataSets.SingleOrDefault(candidate =>
-            string.Equals(candidate.Reference, dataSetReference, StringComparison.Ordinal));
+            string.Equals(
+                NormalizeConfiguredReference(candidate.Reference),
+                dataSetReference,
+                StringComparison.Ordinal));
         if (dataSet is null)
             return null;
 
@@ -228,6 +239,7 @@ public static class CanonicalStaticReportCoverageResolver
         return new CanonicalStaticReportCoverageSegment
         {
             DataSetReference = dataSetReference,
+            SourceDataSetReference = dataSet.Reference,
             OrderedMembers = dataSet.Members.OrderBy(member => member.Index).ToArray(),
             ReportControls = reports,
             SelectedSignalReferences = selected
@@ -257,6 +269,13 @@ public static class CanonicalStaticReportCoverageResolver
 
         return string.Equals(signalReference, memberReference, StringComparison.Ordinal) ||
                signalReference.StartsWith(memberReference + ".", StringComparison.Ordinal);
+    }
+
+    private static string NormalizeConfiguredReference(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        return text.Length == 0 ? string.Empty : text.Replace('
+, '.');
     }
 
     private static string NormalizeFc(string? value)

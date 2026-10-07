@@ -6,6 +6,9 @@ public sealed class MmsReportAttributeWriteStep
     public string Reference { get; init; } = string.Empty;
     public bool Attempted { get; init; }
     public bool IsSuccess { get; init; }
+    public int? FailureCode { get; init; }
+    public string FailureName { get; init; } = string.Empty;
+    public MmsReportSemanticTypeEvidence? TypeEvidence { get; init; }
     public string Message { get; init; } = string.Empty;
 }
 
@@ -1917,14 +1920,17 @@ public sealed partial class MmsClientSession
         MmsDataValue value,
         CancellationToken cancellationToken)
     {
-        var reference = MmsObjectReference.Parse($"{rcb.Reference}.{attribute}", rcb.FunctionalConstraint);
+        var reference = BuildReportAttributeReference(rcb, attribute);
         var result = await WriteSingleVariableAsync(reference, value, cancellationToken).ConfigureAwait(false);
+        var failure = result.AccessResults.FirstOrDefault(access => !access.IsSuccess);
         return new MmsReportAttributeWriteStep
         {
             Attribute = attribute,
             Reference = reference.ToString(),
             Attempted = true,
             IsSuccess = result.IsSuccess,
+            FailureCode = failure?.FailureCode,
+            FailureName = failure?.FailureName ?? string.Empty,
             Message = result.Message
         };
     }
@@ -1950,6 +1956,9 @@ public sealed partial class MmsClientSession
                     Reference = first.Reference,
                     Attempted = true,
                     IsSuccess = false,
+                    FailureCode = first.FailureCode,
+                    FailureName = first.FailureName,
+                    TypeEvidence = first.TypeEvidence,
                     Message = $"cleanup reconnect failed. First attempt: {first.Message}"
                 };
             }
@@ -1961,6 +1970,9 @@ public sealed partial class MmsClientSession
                 Reference = retry.Reference,
                 Attempted = true,
                 IsSuccess = retry.IsSuccess,
+                FailureCode = retry.FailureCode,
+                FailureName = retry.FailureName,
+                TypeEvidence = retry.TypeEvidence,
                 Message = retry.IsSuccess
                     ? $"cleanup retry after reconnect succeeded. First attempt: {first.Message}"
                     : $"cleanup retry after reconnect failed: {retry.Message}. First attempt: {first.Message}"
@@ -1979,6 +1991,9 @@ public sealed partial class MmsClientSession
                         Reference = retry.Reference,
                         Attempted = true,
                         IsSuccess = retry.IsSuccess,
+                        FailureCode = retry.FailureCode,
+                        FailureName = retry.FailureName,
+                        TypeEvidence = retry.TypeEvidence,
                         Message = retry.IsSuccess
                             ? $"cleanup retry after reconnect succeeded. First exception: {ex.GetType().Name}: {ex.Message}"
                             : $"cleanup retry after reconnect failed: {retry.Message}. First exception: {ex.GetType().Name}: {ex.Message}"

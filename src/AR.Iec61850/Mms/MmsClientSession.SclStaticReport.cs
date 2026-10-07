@@ -101,10 +101,44 @@ public sealed partial class MmsClientSession
 
         try
         {
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
+            var beforeSnapshot = await CaptureConfiguredStaticActivationSnapshotAsync(
                 rcb,
-                "scl-static-before-enable",
-                cancellationToken).ConfigureAwait(false));
+                "configured-static-before-enable",
+                includeReservationEvidence: true,
+                cancellationToken).ConfigureAwait(false);
+            snapshots.Add(beforeSnapshot);
+
+            var beforeProof = MmsConfiguredStaticActivationVerifier.VerifyBeforeWrite(
+                beforeSnapshot,
+                plan.DataSetReference);
+            if (!beforeProof.IsProven)
+            {
+                return new MmsPersistentReportMonitorStartResult
+                {
+                    IsSuccess = false,
+                    WriteSteps = writes,
+                    Warnings = warnings,
+                    RcbSnapshots = snapshots,
+                    Message = $"Configured static activation failed JIT pre-write proof: {beforeProof.Kind}: {beforeProof.Message}"
+                };
+            }
+
+            var normalPathWrites = new List<MmsReportControlSemanticWrite>
+            {
+                MmsReportControlSemanticWrite.ReportEnable(true)
+            };
+            if (!rcb.Buffered &&
+                rcb.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase))
+            {
+                normalPathWrites.Add(MmsReportControlSemanticWrite.Reservation(true));
+            }
+            if (triggerGeneralInterrogation)
+                normalPathWrites.Add(MmsReportControlSemanticWrite.GeneralInterrogation(true));
+
+            await PrimeReportSemanticTypeEvidenceFromStructureAsync(
+                rcb,
+                normalPathWrites,
+                cancellationToken).ConfigureAwait(false);
 
             monitor = new MmsPersistentReportMonitorSession(
                 plan,
@@ -185,14 +219,51 @@ public sealed partial class MmsClientSession
 
             monitor.EnabledByThisClient = true;
 
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
+            var afterEnable = await CaptureConfiguredStaticActivationSnapshotAsync(
                 rcb,
-                "scl-static-after-enable-1",
-                cancellationToken).ConfigureAwait(false));
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
-                rcb,
-                "scl-static-after-enable-2",
-                cancellationToken).ConfigureAwait(false));
+                "configured-static-after-enable",
+                includeReservationEvidence: false,
+                cancellationToken).ConfigureAwait(false);
+            snapshots.Add(afterEnable);
+
+            var enableProof = MmsConfiguredStaticActivationVerifier.VerifyAfterEnable(
+                afterEnable,
+                plan.DataSetReference);
+            if (!enableProof.IsProven)
+            {
+                UnregisterPersistentReportMonitor(monitor);
+
+                writes.Add(await TryWriteReportSemanticAttributeForCleanupAsync(
+                    rcb,
+                    MmsReportControlSemanticWrite.ReportEnable(false),
+                    CancellationToken.None).ConfigureAwait(false));
+                enabled = false;
+                monitor.EnabledByThisClient = false;
+
+                if (reservationTouched)
+                {
+                    writes.Add(rcb.Buffered
+                        ? await TryWriteReportSemanticAttributeForCleanupAsync(
+                            rcb,
+                            MmsReportControlSemanticWrite.ReservationTime(0),
+                            CancellationToken.None).ConfigureAwait(false)
+                        : await TryWriteReportSemanticAttributeForCleanupAsync(
+                            rcb,
+                            MmsReportControlSemanticWrite.Reservation(false),
+                            CancellationToken.None).ConfigureAwait(false));
+                    reservationTouched = false;
+                    monitor.ReservationTouched = false;
+                }
+
+                return new MmsPersistentReportMonitorStartResult
+                {
+                    IsSuccess = false,
+                    WriteSteps = writes,
+                    Warnings = warnings,
+                    RcbSnapshots = snapshots,
+                    Message = $"Configured static activation failed post-enable proof: {enableProof.Kind}: {enableProof.Message}"
+                };
+            }
 
             if (triggerGeneralInterrogation)
             {

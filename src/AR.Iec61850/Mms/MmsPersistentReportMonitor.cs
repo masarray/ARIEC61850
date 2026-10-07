@@ -233,14 +233,14 @@ public sealed partial class MmsClientSession
             }
             else if (!rcb.Buffered && rcb.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase))
             {
-                var reserve = await WriteReportAttributeAsync(rcb, "Resv", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+                var reserve = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.Reservation(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(reserve);
                 reservationTouched = reserve.IsSuccess;
                 if (!reserve.IsSuccess)
                     warnings.Add("URCB Resv write failed. Continuing only if RptEna=true is accepted by the IED.");
             }
 
-            var enable = await WriteReportAttributeAsync(rcb, "RptEna", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+            var enable = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.ReportEnable(true), cancellationToken).ConfigureAwait(false);
             writes.Add(enable);
             enabledByThisClient = enable.IsSuccess;
             if (!enable.IsSuccess)
@@ -261,7 +261,7 @@ public sealed partial class MmsClientSession
 
             if (triggerGeneralInterrogation)
             {
-                var gi = await WriteReportAttributeAsync(rcb, "GI", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+                var gi = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.GeneralInterrogation(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(gi);
                 if (!gi.IsSuccess)
                     warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
@@ -363,7 +363,7 @@ public sealed partial class MmsClientSession
 
         if (session.EnabledByThisClient)
         {
-            var disable = await TryWriteReportAttributeForCleanupAsync(session.ReportControl, "RptEna", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+            var disable = await TryWriteReportSemanticAttributeForCleanupAsync(session.ReportControl, MmsReportControlSemanticWrite.ReportEnable(false), CancellationToken.None).ConfigureAwait(false);
             writes.Add(disable);
             success &= disable.IsSuccess;
         }
@@ -410,8 +410,8 @@ public sealed partial class MmsClientSession
         if (session.ReservationTouched)
         {
             var release = session.ReportControl.Buffered
-                ? await TryWriteReportAttributeForCleanupAsync(session.ReportControl, "ResvTms", MmsDataValue.Unsigned(0), CancellationToken.None).ConfigureAwait(false)
-                : await TryWriteReportAttributeForCleanupAsync(session.ReportControl, "Resv", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+                ? await TryWriteReportSemanticAttributeForCleanupAsync(session.ReportControl, MmsReportControlSemanticWrite.ReservationTime(0), CancellationToken.None).ConfigureAwait(false)
+                : await TryWriteReportSemanticAttributeForCleanupAsync(session.ReportControl, MmsReportControlSemanticWrite.Reservation(false), CancellationToken.None).ConfigureAwait(false);
             writes.Add(release);
             success &= release.IsSuccess;
         }
@@ -509,10 +509,8 @@ public sealed partial class MmsClientSession
 
             if (giPending)
             {
-                writes.Add(await WriteReportAttributeAsync(
-                    requestedSession.ReportControl,
-                    "GI",
-                    MmsDataValue.Boolean(true),
+                writes.Add(await WriteReportSemanticAttributeAsync(
+                    requestedSession.ReportControl, MmsReportControlSemanticWrite.GeneralInterrogation(true),
                     cancellationToken).ConfigureAwait(false));
                 giPending = false;
                 continue;

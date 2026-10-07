@@ -2,17 +2,6 @@ using AR.Iec61850.Engineering.Canonical;
 
 namespace AR.Iec61850.Mms;
 
-/// <summary>
-/// Declares where a ReportControl inventory came from. Operational target selection must
-/// never mistake an SCL/design projection for live MMS evidence.
-/// </summary>
-public enum MmsReportInventoryAuthority
-{
-    Unknown,
-    LiveMmsObserved,
-    SclDesignProjection
-}
-
 public enum MmsCanonicalStaticAcquisitionProbeStatus
 {
     NoSelection,
@@ -86,8 +75,7 @@ public static class MmsCanonicalStaticAcquisitionPreflightPlanner
     public static MmsCanonicalStaticAcquisitionProbePlan Build(
         CanonicalIedModel model,
         IEnumerable<CanonicalStaticReportSelection> selections,
-        MmsReportInventory inventory,
-        MmsReportInventoryAuthority inventoryAuthority)
+        MmsReportInventory inventory)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(selections);
@@ -95,13 +83,12 @@ public static class MmsCanonicalStaticAcquisitionPreflightPlanner
 
         var requested = selections.ToArray();
         var coverage = CanonicalStaticReportCoverageResolver.Resolve(model, requested);
-        return Build(coverage, inventory, inventoryAuthority);
+        return Build(coverage, inventory);
     }
 
     public static MmsCanonicalStaticAcquisitionProbePlan Build(
         CanonicalStaticReportCoveragePlan coverage,
-        MmsReportInventory inventory,
-        MmsReportInventoryAuthority inventoryAuthority)
+        MmsReportInventory inventory)
     {
         ArgumentNullException.ThrowIfNull(coverage);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -112,7 +99,7 @@ public static class MmsCanonicalStaticAcquisitionPreflightPlanner
         {
             return Result(
                 coverage,
-                inventoryAuthority,
+                inventory.Authority,
                 new MmsCanonicalStaticRcbTargetResolution(),
                 MmsCanonicalStaticAcquisitionProbeStatus.NoSelection,
                 warnings);
@@ -123,20 +110,20 @@ public static class MmsCanonicalStaticAcquisitionPreflightPlanner
             warnings.Add("No selected signal has configured static DataSet/RCB coverage; no operational RCB probe is required.");
             return Result(
                 coverage,
-                inventoryAuthority,
+                inventory.Authority,
                 new MmsCanonicalStaticRcbTargetResolution(),
                 MmsCanonicalStaticAcquisitionProbeStatus.NoConfiguredStaticCoverage,
                 warnings);
         }
 
-        if (inventoryAuthority != MmsReportInventoryAuthority.LiveMmsObserved)
+        if (inventory.Authority != MmsReportInventoryAuthority.LiveMmsObserved)
         {
             warnings.Add(
                 "Configured static coverage exists, but operational RCB targeting requires a live MMS-observed report inventory. " +
                 "SCL/design inventory is structural evidence only and was not promoted to live target evidence.");
             return Result(
                 coverage,
-                inventoryAuthority,
+                inventory.Authority,
                 new MmsCanonicalStaticRcbTargetResolution(),
                 MmsCanonicalStaticAcquisitionProbeStatus.LiveInventoryRequired,
                 warnings);
@@ -151,7 +138,7 @@ public static class MmsCanonicalStaticAcquisitionPreflightPlanner
                 "Configured static coverage exists but no exact live RCB target was proven. No broad diagnostic scan or sibling-name guess was started.");
             return Result(
                 coverage,
-                inventoryAuthority,
+                inventory.Authority,
                 targetResolution,
                 MmsCanonicalStaticAcquisitionProbeStatus.ExactTargetsUnresolved,
                 warnings);
@@ -163,18 +150,18 @@ public static class MmsCanonicalStaticAcquisitionPreflightPlanner
             ? MmsCanonicalStaticAcquisitionProbeStatus.PartialExactTargetsReady
             : MmsCanonicalStaticAcquisitionProbeStatus.ExactTargetsReady;
 
-        return Result(coverage, inventoryAuthority, targetResolution, status, warnings);
+        return Result(coverage, inventory.Authority, targetResolution, status, warnings);
     }
 
     private static MmsCanonicalStaticAcquisitionProbePlan Result(
         CanonicalStaticReportCoveragePlan coverage,
-        MmsReportInventoryAuthority inventoryAuthority,
+        MmsReportInventoryAuthority inventory.Authority,
         MmsCanonicalStaticRcbTargetResolution targetResolution,
         MmsCanonicalStaticAcquisitionProbeStatus status,
         IReadOnlyList<string> warnings)
         => new()
         {
-            InventoryAuthority = inventoryAuthority,
+            InventoryAuthority = inventory.Authority,
             Coverage = coverage,
             TargetResolution = targetResolution,
             Status = status,

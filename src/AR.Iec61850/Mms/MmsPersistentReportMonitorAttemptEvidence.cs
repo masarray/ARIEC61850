@@ -19,7 +19,10 @@ public enum MmsReportActivationFailureReason
     DynamicDataSetBindFailed,
     TriggerOptionsUnavailable,
     TriggerOptionsWriteFailed,
+    RcbFieldTypeConflict,
+    ReservationWriteFailed,
     ReportEnableFailed,
+    GeneralInterrogationFailed,
     ActivationException,
     OtherActivationFailure
 }
@@ -274,9 +277,15 @@ public sealed partial class MmsClientSession
 
     private static MmsReportActivationFailureReason ClassifyFailure(MmsPersistentReportMonitorStartResult result)
     {
-        var failed = result.WriteSteps.LastOrDefault(step => step.Attempted && !step.IsSuccess);
+        var failed = result.WriteSteps.LastOrDefault(step => !step.IsSuccess);
         if (failed is not null)
         {
+            if (failed.TypeEvidence?.Status == MmsReportSemanticTypeEvidenceStatus.ExactMismatch ||
+                failed.FailureKind is MmsInteropFailureKind.TypeMismatch or MmsInteropFailureKind.TypeUnsupported)
+            {
+                return MmsReportActivationFailureReason.RcbFieldTypeConflict;
+            }
+
             if (failed.Attribute.Equals("Probe.DefineNamedVariableList", StringComparison.OrdinalIgnoreCase))
                 return MmsReportActivationFailureReason.DynamicDataSetProbeDefineFailed;
             if (failed.Attribute.Equals("Probe.GetNamedVariableListAttributes", StringComparison.OrdinalIgnoreCase))
@@ -289,8 +298,13 @@ public sealed partial class MmsClientSession
                 return MmsReportActivationFailureReason.DynamicDataSetBindFailed;
             if (failed.Attribute.Equals("TrgOps", StringComparison.OrdinalIgnoreCase))
                 return MmsReportActivationFailureReason.TriggerOptionsWriteFailed;
+            if (failed.Attribute.Equals("Resv", StringComparison.OrdinalIgnoreCase) ||
+                failed.Attribute.Equals("ResvTms", StringComparison.OrdinalIgnoreCase))
+                return MmsReportActivationFailureReason.ReservationWriteFailed;
             if (failed.Attribute.Equals("RptEna", StringComparison.OrdinalIgnoreCase))
                 return MmsReportActivationFailureReason.ReportEnableFailed;
+            if (failed.Attribute.Equals("GI", StringComparison.OrdinalIgnoreCase))
+                return MmsReportActivationFailureReason.GeneralInterrogationFailed;
         }
 
         if (result.Message.Contains("requires a writable TrgOps", StringComparison.OrdinalIgnoreCase))

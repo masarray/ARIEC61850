@@ -58,6 +58,17 @@ public sealed class SclStaticReportActivationPolicyTests
     }
 
     [Fact]
+    public void ConfiguredStaticActivation_Is_SourceNeutral_PublicEntryPoint()
+    {
+        var configured = typeof(MmsClientSession).GetMethod(nameof(MmsClientSession.StartConfiguredStaticReportMonitorAsync));
+        var scl = typeof(MmsClientSession).GetMethod(nameof(MmsClientSession.StartStaticSclReportMonitorAsync));
+
+        Assert.NotNull(configured);
+        Assert.NotNull(scl);
+        Assert.Equal(configured!.ReturnType, scl!.ReturnType);
+    }
+
+    [Fact]
     public void Urcb_Has_No_Brcb_Reservation_Fallback()
     {
         var fallback = SclStaticReportActivationPolicy.BuildBrcbEnableFallback(

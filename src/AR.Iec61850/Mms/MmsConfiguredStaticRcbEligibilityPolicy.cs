@@ -4,7 +4,7 @@ public enum MmsConfiguredStaticRcbEligibilityKind
 {
     Blocked,
     CallerOwned,
-    ExactFree,
+    ExplicitFree,
     ReducedMissingReservationEvidence
 }
 
@@ -14,7 +14,7 @@ public sealed class MmsConfiguredStaticRcbEligibility
     public string Reason { get; init; } = string.Empty;
     public bool IsEligible => Kind != MmsConfiguredStaticRcbEligibilityKind.Blocked;
     public bool RequiresWrite => Kind is
-        MmsConfiguredStaticRcbEligibilityKind.ExactFree or
+        MmsConfiguredStaticRcbEligibilityKind.ExplicitFree or
         MmsConfiguredStaticRcbEligibilityKind.ReducedMissingReservationEvidence;
     public bool UsesReducedEvidence =>
         Kind == MmsConfiguredStaticRcbEligibilityKind.ReducedMissingReservationEvidence;
@@ -61,12 +61,11 @@ public static class MmsConfiguredStaticRcbEligibilityPolicy
             return Blocked("Positive RCB ownership/reservation evidence indicates the configured static RCB is not free.");
 
         if (snapshot.Availability == MmsRcbOperationalAvailability.Available &&
-            snapshot.Confidence == MmsRcbAvailabilityConfidence.Exact &&
             HasExplicitFreeReservation(snapshot))
         {
             return Eligible(
-                MmsConfiguredStaticRcbEligibilityKind.ExactFree,
-                "Fresh exact evidence confirms a populated configured DataSet, RptEna=false, and explicit free reservation state.");
+                MmsConfiguredStaticRcbEligibilityKind.ExplicitFree,
+                $"Fresh evidence confirms a populated configured DataSet, RptEna=false, and explicit free reservation state (confidence={snapshot.Confidence}).");
         }
 
         if (!allowReducedMissingReservationEvidence)

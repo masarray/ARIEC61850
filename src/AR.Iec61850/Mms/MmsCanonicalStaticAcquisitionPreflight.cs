@@ -155,13 +155,13 @@ public static class MmsCanonicalStaticAcquisitionPreflightPlanner
 
     private static MmsCanonicalStaticAcquisitionProbePlan Result(
         CanonicalStaticReportCoveragePlan coverage,
-        MmsReportInventoryAuthority inventory.Authority,
+        MmsReportInventoryAuthority inventoryAuthority,
         MmsCanonicalStaticRcbTargetResolution targetResolution,
         MmsCanonicalStaticAcquisitionProbeStatus status,
         IReadOnlyList<string> warnings)
         => new()
         {
-            InventoryAuthority = inventory.Authority,
+            InventoryAuthority = inventoryAuthority,
             Coverage = coverage,
             TargetResolution = targetResolution,
             Status = status,
@@ -176,6 +176,35 @@ public static class MmsCanonicalStaticAcquisitionPreflightPlanner
 public sealed partial class MmsClientSession
 {
     /// <summary>
+    /// Preferred one-shot runtime entry point. Planning and execution consume the same
+    /// inventory instance so callers cannot accidentally plan from one evidence source
+    /// and execute against another.
+    /// </summary>
+    public Task<MmsCanonicalStaticAcquisitionProbeResult> PrepareCanonicalStaticAcquisitionAsync(
+        CanonicalIedModel model,
+        IEnumerable<CanonicalStaticReportSelection> selections,
+        MmsReportInventory inventory,
+        MmsIedModelDirectory? directory = null,
+        MmsCanonicalStaticAcquisitionProbeOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(selections);
+        ArgumentNullException.ThrowIfNull(inventory);
+
+        var plan = MmsCanonicalStaticAcquisitionPreflightPlanner.Build(
+            model,
+            selections,
+            inventory);
+        return ProbeCanonicalStaticAcquisitionAsync(
+            plan,
+            inventory,
+            directory,
+            options,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Executes only the exact-target availability work authorized by the pure preflight
     /// planner. There is intentionally no implicit broad fallback.
     /// </summary>
@@ -189,6 +218,23 @@ public sealed partial class MmsClientSession
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(liveInventory);
         options ??= new MmsCanonicalStaticAcquisitionProbeOptions();
+
+        if (liveInventory.Authority != MmsReportInventoryAuthority.LiveMmsObserved)
+        {
+            return new MmsCanonicalStaticAcquisitionProbeResult
+            {
+                Plan = plan,
+                Status = MmsCanonicalStaticAcquisitionProbeStatus.LiveInventoryRequired,
+                NetworkProbePerformed = false,
+                Warnings = plan.Warnings
+                    .Concat(new[]
+                    {
+                        "The execution inventory is not marked LiveMmsObserved; the exact-target plan was not allowed to touch the network."
+                    })
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+            };
+        }
 
         if (!plan.HasExactOperationalTargets)
         {

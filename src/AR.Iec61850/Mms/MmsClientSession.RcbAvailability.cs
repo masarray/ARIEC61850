@@ -16,39 +16,49 @@ public sealed partial class MmsClientSession
         var warnings = new List<string>();
         var snapshots = new List<MmsRcbAvailabilitySnapshot>();
         var dataSetDirectories = new Dictionary<string, MmsDataSetDirectoryResult>(StringComparer.OrdinalIgnoreCase);
+        var rcbStateLogicalReads = 0;
+        var dataSetDirectoryNetworkReads = 0;
+        var dataSetDirectoryCacheHits = 0;
+
         var callerOwned = options.CallerOwnedRcbReferences
             .Select(MmsRcbAvailabilityEvaluator.NormalizeReference)
             .Where(reference => reference.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var max = Math.Clamp(options.MaxReportControls, 1, 4096);
-        var candidates = inventory.ReportControls
-            .OrderByDescending(candidate => !string.IsNullOrWhiteSpace(candidate.DataSetReference))
-            .ThenByDescending(candidate => candidate.Buffered)
-            .ThenBy(candidate => candidate.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(candidate => candidate.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
-            .Take(max)
-            .ToArray();
 
-        if (inventory.ReportControls.Count > candidates.Length)
-            warnings.Add($"Availability check was bounded to {candidates.Length} of {inventory.ReportControls.Count} discovered RCBs.");
+        var selection = MmsRcbAvailabilityTargetSelector.Select(inventory, options);
+        warnings.AddRange(selection.Warnings);
 
-        foreach (var source in candidates)
+        foreach (var source in selection.Candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var candidate = CloneReportControl(source);
 
-            // Preserve discovery/SCL-derived binding only as fallback evidence. Clear the
-            // candidate before the forced live probe so a successful empty DatSet read can
-            // be distinguished from a failed read that merely left an old value in memory.
+            // Preserve discovery/SCL-derived binding only as fallback evidence. Volatile
+            // runtime state is cleared before every live check so stale discovery values
+            // can never masquerade as just-in-time availability evidence.
             var previouslyKnownDataSetReference = candidate.DataSetReference;
             candidate.DataSetReference = string.Empty;
             candidate.DataSetProbeState = MmsRcbDataSetProbeState.NotAttempted;
             candidate.DataSetProbeMessage = string.Empty;
+            candidate.EnabledState = string.Empty;
+            candidate.ReservationState = string.Empty;
+            candidate.ReservationTimeSeconds = string.Empty;
+            candidate.Owner = string.Empty;
 
-            await ProbeReportControlAttributesAsync(candidate, cancellationToken).ConfigureAwait(false);
+            if (selection.TargetFilterApplied)
+            {
+                rcbStateLogicalReads += await ProbeTargetedReportControlAvailabilityAsync(
+                    candidate,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await ProbeReportControlAttributesAsync(candidate, cancellationToken).ConfigureAwait(false);
+                // Broad diagnostic mode intentionally retains full attribute/Owner evidence.
+                await ProbeOwnerReadOnlyAsync(candidate, cancellationToken).ConfigureAwait(false);
+            }
+
             CaptureDataSetProbeEvidence(candidate, previouslyKnownDataSetReference);
-            await ProbeOwnerReadOnlyAsync(candidate, cancellationToken).ConfigureAwait(false);
 
             MmsDataSetDirectoryResult? dataSetDirectory = null;
             var dataSetReference = MmsRcbAvailabilityEvaluator.NormalizeReference(candidate.DataSetReference);
@@ -56,7 +66,15 @@ public sealed partial class MmsClientSession
             {
                 if (!dataSetDirectories.TryGetValue(dataSetReference, out dataSetDirectory))
                 {
-                    dataSetDirectory = await GetDataSetDirectoryAsync(candidate.DataSetReference, directory, cancellationToken).ConfigureAwait(false);
+                    var directoryEvidence = await GetAvailabilityDataSetDirectoryAsync(
+                        candidate.DataSetReference,
+                        directory,
+                        cancellationToken).ConfigureAwait(false);
+                    dataSetDirectory = directoryEvidence.Result;
+                    if (directoryEvidence.CacheHit)
+                        dataSetDirectoryCacheHits++;
+                    else
+                        dataSetDirectoryNetworkReads++;
                     dataSetDirectories[dataSetReference] = dataSetDirectory;
                 }
             }
@@ -71,6 +89,13 @@ public sealed partial class MmsClientSession
         return new MmsRcbAvailabilityResult
         {
             CheckedAtUtc = checkedAt,
+            InventoryReportControlCount = inventory.ReportControls.Count,
+            TargetFilterApplied = selection.TargetFilterApplied,
+            RequestedTargetReportControlCount = selection.RequestedTargetCount,
+            MatchedTargetReportControlCount = selection.MatchedTargetCount,
+            TargetedRcbStateLogicalReadCount = rcbStateLogicalReads,
+            DataSetDirectoryNetworkReadCount = dataSetDirectoryNetworkReads,
+            DataSetDirectoryCacheHitCount = dataSetDirectoryCacheHits,
             ReportControls = snapshots
                 .OrderByDescending(item => item.DataSetMemberCount > 0)
                 .ThenBy(item => AvailabilityRank(item.Availability))

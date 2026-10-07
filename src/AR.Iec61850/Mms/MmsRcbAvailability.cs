@@ -83,6 +83,7 @@ public sealed class MmsRcbAvailabilityResult
     public bool TargetFilterApplied { get; init; }
     public int RequestedTargetReportControlCount { get; init; }
     public int MatchedTargetReportControlCount { get; init; }
+    public int RcbStateLogicalReadCount { get; init; }
     public int DataSetDirectoryNetworkReadCount { get; init; }
     public int DataSetDirectoryCacheHitCount { get; init; }
 
@@ -92,7 +93,7 @@ public sealed class MmsRcbAvailabilityResult
     public string Summary =>
         $"RCB availability checked: inventory={InventoryReportControlCount}, probed={ReportControls.Count}, " +
         $"targeted={TargetFilterApplied.ToString().ToLowerInvariant()}, available={AvailableCount}, in-use={InUseCount}, unknown={UnknownCount}, " +
-        $"datasetReads={DataSetDirectoryNetworkReadCount}, datasetCacheHits={DataSetDirectoryCacheHitCount}.";
+        $"rcbStateReads={RcbStateLogicalReadCount}, datasetReads={DataSetDirectoryNetworkReadCount}, datasetCacheHits={DataSetDirectoryCacheHitCount}.";
 }
 
 public static class MmsRcbAvailabilityEvaluator

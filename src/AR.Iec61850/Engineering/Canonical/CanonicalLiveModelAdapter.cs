@@ -150,7 +150,7 @@ public static class CanonicalLiveModelAdapter
 
             dataSets[i] = new CanonicalDataSet
             {
-                Reference = RemapReference(dataSet.Reference, context.DomainAliases),
+                Reference = NormalizeConfiguredReference(dataSet.Reference, context.DomainAliases),
                 MmsDomain = RemapDomain(dataSet.Domain, context.DomainAliases),
                 LogicalNode = dataSet.LogicalNode,
                 Name = dataSet.Name,
@@ -167,12 +167,12 @@ public static class CanonicalLiveModelAdapter
             var report = source.ReportControls[i];
             reportControls[i] = new CanonicalReportControl
             {
-                Reference = RemapReference(report.Reference, context.DomainAliases),
+                Reference = NormalizeConfiguredReference(report.Reference, context.DomainAliases),
                 MmsDomain = RemapDomain(report.Domain, context.DomainAliases),
                 LogicalNode = report.LogicalNode,
                 Name = report.Name,
                 Buffered = report.Buffered,
-                DataSetReference = RemapReference(report.DataSetReference, context.DomainAliases),
+                DataSetReference = NormalizeConfiguredReference(report.DataSetReference, context.DomainAliases),
                 ReportId = report.ReportId,
                 ConfRev = report.ConfRev,
                 TriggerOptions = report.TriggerOptions,
@@ -231,6 +231,109 @@ public static class CanonicalLiveModelAdapter
             Diagnostics = diagnostics
         };
     }
+
+    /// <summary>
+    /// Canonical DataSet/ReportControl identity uses one source-neutral dotted form.
+    /// SCL commonly carries '    {
+        var normalized = value?.Trim() ?? string.Empty;
+        return aliases.TryGetValue(normalized, out var exact) ? exact : normalized;
+    }
+
+    private static string RemapReference(string value, IReadOnlyDictionary<string, string> aliases)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (normalized.Length == 0 || aliases.Count == 0)
+            return normalized;
+
+        var slash = normalized.IndexOf('/');
+        var domain = slash >= 0 ? normalized[..slash] : normalized;
+        if (!aliases.TryGetValue(domain, out var exact))
+            return normalized;
+
+        return slash >= 0 ? exact + normalized[slash..] : exact;
+    }
+
+    private static CanonicalConfidence MapConfidence(LiveIedDiscoveryConfidenceLevel confidence)
+        => confidence switch
+        {
+            LiveIedDiscoveryConfidenceLevel.Exact => CanonicalConfidence.Exact,
+            LiveIedDiscoveryConfidenceLevel.High => CanonicalConfidence.High,
+            LiveIedDiscoveryConfidenceLevel.Medium => CanonicalConfidence.Medium,
+            LiveIedDiscoveryConfidenceLevel.Low => CanonicalConfidence.Low,
+            _ => CanonicalConfidence.Unknown
+        };
+
+    private sealed class CanonicalIngressContext
+    {
+        public CanonicalIngressKind Ingress { get; init; }
+        public string SourceName { get; init; } = string.Empty;
+        public string SourceEdition { get; init; } = string.Empty;
+        public string IedName { get; init; } = string.Empty;
+        public string AccessPointName { get; init; } = string.Empty;
+        public CanonicalEvidenceSource IdentitySource { get; init; }
+        public CanonicalConfidence IdentityConfidence { get; init; }
+        public bool IdentityAmbiguous { get; init; }
+        public string[] IdentityCandidates { get; init; } = Array.Empty<string>();
+        public string[] IdentityEvidence { get; init; } = Array.Empty<string>();
+        public CanonicalEvidenceSource FactSource { get; init; }
+        public IReadOnlyDictionary<string, string> DomainAliases { get; init; } = EmptyAliases;
+        public string[] OriginalTypeAliases { get; init; } = Array.Empty<string>();
+    }
+}
+ MMS component separators while live discovery may expose
+    /// the same configured resource with dots. Source projections retain their original
+    /// spelling; the shared CanonicalIedModel does not.
+    /// </summary>
+    private static string NormalizeConfiguredReference(
+        string value,
+        IReadOnlyDictionary<string, string> aliases)
+        => RemapReference(value, aliases).Replace('    {
+        var normalized = value?.Trim() ?? string.Empty;
+        return aliases.TryGetValue(normalized, out var exact) ? exact : normalized;
+    }
+
+    private static string RemapReference(string value, IReadOnlyDictionary<string, string> aliases)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (normalized.Length == 0 || aliases.Count == 0)
+            return normalized;
+
+        var slash = normalized.IndexOf('/');
+        var domain = slash >= 0 ? normalized[..slash] : normalized;
+        if (!aliases.TryGetValue(domain, out var exact))
+            return normalized;
+
+        return slash >= 0 ? exact + normalized[slash..] : exact;
+    }
+
+    private static CanonicalConfidence MapConfidence(LiveIedDiscoveryConfidenceLevel confidence)
+        => confidence switch
+        {
+            LiveIedDiscoveryConfidenceLevel.Exact => CanonicalConfidence.Exact,
+            LiveIedDiscoveryConfidenceLevel.High => CanonicalConfidence.High,
+            LiveIedDiscoveryConfidenceLevel.Medium => CanonicalConfidence.Medium,
+            LiveIedDiscoveryConfidenceLevel.Low => CanonicalConfidence.Low,
+            _ => CanonicalConfidence.Unknown
+        };
+
+    private sealed class CanonicalIngressContext
+    {
+        public CanonicalIngressKind Ingress { get; init; }
+        public string SourceName { get; init; } = string.Empty;
+        public string SourceEdition { get; init; } = string.Empty;
+        public string IedName { get; init; } = string.Empty;
+        public string AccessPointName { get; init; } = string.Empty;
+        public CanonicalEvidenceSource IdentitySource { get; init; }
+        public CanonicalConfidence IdentityConfidence { get; init; }
+        public bool IdentityAmbiguous { get; init; }
+        public string[] IdentityCandidates { get; init; } = Array.Empty<string>();
+        public string[] IdentityEvidence { get; init; } = Array.Empty<string>();
+        public CanonicalEvidenceSource FactSource { get; init; }
+        public IReadOnlyDictionary<string, string> DomainAliases { get; init; } = EmptyAliases;
+        public string[] OriginalTypeAliases { get; init; } = Array.Empty<string>();
+    }
+}
+, '.');
 
     private static string RemapDomain(string value, IReadOnlyDictionary<string, string> aliases)
     {

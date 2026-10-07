@@ -38,17 +38,18 @@ public readonly record struct MmsReportControlSemanticWrite
         => Boolean("Resv", reserved);
 
     /// <summary>
-    /// IEC 61850 BRCB ResvTms is mapped to MMS INTEGER (signed INT16 semantics).
-    /// Reservation time is semantically non-negative even though the wire type is signed.
+    /// IEC 61850 BRCB ResvTms is mapped to MMS INTEGER with signed INT16 wire semantics.
+    /// Policy about particular reservation-time values belongs above this codec; this
+    /// boundary validates only the standardized scalar representation and width.
     /// </summary>
     public static MmsReportControlSemanticWrite ReservationTime(int seconds)
     {
-        if (seconds is < 0 or > short.MaxValue)
+        if (seconds is < short.MinValue or > short.MaxValue)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(seconds),
                 seconds,
-                $"BRCB ResvTms must be in the IEC INT16 non-negative range 0..{short.MaxValue} seconds.");
+                $"BRCB ResvTms must fit the signed IEC INT16 range {short.MinValue}..{short.MaxValue}.");
         }
 
         return new MmsReportControlSemanticWrite(

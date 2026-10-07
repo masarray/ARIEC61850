@@ -231,12 +231,16 @@ public sealed class MmsReportRcbSnapshot
     public string Message { get; init; } = string.Empty;
     public string Reference { get; init; } = string.Empty;
     public string Mode { get; init; } = string.Empty;
+    public bool Buffered { get; init; }
     public string DataSetReference { get; init; } = string.Empty;
+    public MmsRcbDataSetProbeState DataSetProbeState { get; init; } = MmsRcbDataSetProbeState.NotAttempted;
+    public string DataSetProbeMessage { get; init; } = string.Empty;
     public string ReportId { get; init; } = string.Empty;
     public string ConfRev { get; init; } = string.Empty;
     public string EnabledState { get; init; } = string.Empty;
     public string ReservationState { get; init; } = string.Empty;
     public string ReservationTimeSeconds { get; init; } = string.Empty;
+    public string Owner { get; init; } = string.Empty;
     public string BufferTimeMs { get; init; } = string.Empty;
     public string IntegrityPeriodMs { get; init; } = string.Empty;
     public string TriggerOptions { get; init; } = string.Empty;
@@ -256,12 +260,16 @@ public sealed class MmsReportRcbSnapshot
             Message = message,
             Reference = candidate.Reference,
             Mode = candidate.Mode,
+            Buffered = candidate.Buffered,
             DataSetReference = candidate.DataSetReference,
+            DataSetProbeState = candidate.DataSetProbeState,
+            DataSetProbeMessage = candidate.DataSetProbeMessage,
             ReportId = candidate.ReportId,
             ConfRev = candidate.ConfRev,
             EnabledState = candidate.EnabledState,
             ReservationState = candidate.ReservationState,
             ReservationTimeSeconds = candidate.ReservationTimeSeconds,
+            Owner = candidate.Owner,
             BufferTimeMs = candidate.BufferTimeMs,
             IntegrityPeriodMs = candidate.IntegrityPeriodMs,
             TriggerOptions = candidate.TriggerOptions,

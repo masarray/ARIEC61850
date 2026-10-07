@@ -52,6 +52,22 @@ public sealed class CanonicalStaticReportCoverageResolverTests
         Assert.True(imported.IsSuccess, string.Join(" | ", imported.Errors));
         var sclModel = Assert.IsType<CanonicalIedModel>(imported.Model);
 
+        Assert.Equal(
+            discoveryModel.DataSets.Single().Reference,
+            sclModel.DataSets.Single().Reference);
+        Assert.Equal(
+            "IEDALD0/LLN0.Indications",
+            sclModel.DataSets.Single().Reference);
+        Assert.Equal(
+            discoveryModel.ReportControls.Single().Reference,
+            sclModel.ReportControls.Single().Reference);
+        Assert.Equal(
+            "IEDALD0/LLN0.BR.Rpt01",
+            sclModel.ReportControls.Single().Reference);
+        Assert.Equal(
+            discoveryModel.ReportControls.Single().DataSetReference,
+            sclModel.ReportControls.Single().DataSetReference);
+
         var selection = new[]
         {
             new CanonicalStaticReportSelection

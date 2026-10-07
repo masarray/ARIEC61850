@@ -765,6 +765,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
                 {
                     State = MmsAssociationState.MmsInitiated;
                     LastHandshakeMessage = result.Message;
+                    ResetReportSemanticTypeEvidence();
                     _receivePump.Start(cancellationToken);
                     return;
                 }

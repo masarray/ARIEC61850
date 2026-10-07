@@ -1,4 +1,5 @@
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Scl.Workspace;
 
 namespace AR.Iec61850.Engineering.Canonical;
 
@@ -32,6 +33,24 @@ public static class CanonicalLiveModelAdapter
                 FactSource = CanonicalEvidenceSource.LiveMms,
                 DomainAliases = EmptyAliases
             });
+    }
+
+    /// <summary>
+    /// Public source-correct canonical ingress for an already opened SCL IED workspace.
+    /// Applications should use this instead of re-labeling the workspace DesignModel as
+    /// live discovery merely to reuse canonical planning.
+    /// </summary>
+    public static CanonicalIedModel FromSclWorkspace(SclIedWorkspace workspace)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+
+        return FromSclProjection(
+            workspace.DesignModel,
+            sourceName: "SCL workspace",
+            sourceEdition: string.Empty,
+            iedName: workspace.IedName,
+            accessPointName: workspace.AccessPointName,
+            domainAliases: EmptyAliases);
     }
 
     internal static CanonicalIedModel FromSclProjection(

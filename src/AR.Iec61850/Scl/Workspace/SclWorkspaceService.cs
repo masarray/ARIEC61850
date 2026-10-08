@@ -208,6 +208,25 @@ public sealed class SclWorkspaceService
 
         if (!string.IsNullOrWhiteSpace(accessPointName))
         {
+            var selectedAccessPoint = selectedIed.Elements()
+                .FirstOrDefault(x => Is(x, "AccessPoint") && Same(Attr(x, "name"), accessPointName));
+            if (selectedAccessPoint is not null &&
+                !selectedAccessPoint.Elements().Any(x => Is(x, "Server")))
+            {
+                // ServerAt points at another AP's server model, while this AP keeps
+                // its own Communication/ConnectedAP address. Materialize that model
+                // ONLY in the isolated projection (never modify the source SCD).
+                // This allows an AP like Siemens 7SX85/F -> J to retain LD/LN,
+                // DataSets and RCBs without misrepresenting its MMS endpoint.
+                var owner = SclServerAtModelResolver.ResolveOwner(selectedIed, selectedAccessPoint);
+                var server = owner?.Elements().FirstOrDefault(x => Is(x, "Server"));
+                if (server is not null)
+                {
+                    selectedAccessPoint.Elements().Where(x => Is(x, "ServerAt")).Remove();
+                    selectedAccessPoint.AddFirst(new XElement(server));
+                }
+            }
+
             foreach (var otherAccessPoint in selectedIed.Elements()
                          .Where(x => Is(x, "AccessPoint") && !Same(Attr(x, "name"), accessPointName))
                          .ToArray())

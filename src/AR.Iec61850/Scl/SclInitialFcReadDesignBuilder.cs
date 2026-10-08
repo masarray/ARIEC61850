@@ -63,7 +63,11 @@ public static class SclInitialFcReadDesignBuilder
         var selectedAp = selectedIed.Elements()
             .Where(element => Is(element, "AccessPoint"))
             .First(element => string.Equals(Attr(element, "name"), accessPointName, StringComparison.Ordinal));
-        var server = selectedAp.Elements().First(element => Is(element, "Server"));
+        // Initial FC-read must use the same canonical ServerAt model authority as
+        // offline browsing. Keep the selected AP identity for its own MMS address.
+        var serverOwner = SclServerAtModelResolver.ResolveOwner(selectedIed, selectedAp);
+        var server = serverOwner?.Elements().FirstOrDefault(element => Is(element, "Server"))
+            ?? throw new InvalidDataException("Selected AccessPoint has no resolvable Server/ServerAt model.");
 
         var domainByInst = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var lDevice in server.Elements().Where(element => Is(element, "LDevice")))
@@ -105,6 +109,17 @@ public static class SclInitialFcReadDesignBuilder
             {
                 otherIed.Remove();
                 continue;
+            }
+
+            var scopedSelectedAp = otherIed.Elements().First(element =>
+                Is(element, "AccessPoint") &&
+                string.Equals(Attr(element, "name"), accessPointName, StringComparison.Ordinal));
+            if (!scopedSelectedAp.Elements().Any(element => Is(element, "Server")))
+            {
+                // Only the disposable projection receives a cloned server. No source
+                // SCD change, no second server address, no cross-IED inheritance.
+                scopedSelectedAp.Elements().Where(element => Is(element, "ServerAt")).Remove();
+                scopedSelectedAp.AddFirst(new XElement(server));
             }
 
             foreach (var otherAp in otherIed.Elements().Where(element => Is(element, "AccessPoint")).ToArray())

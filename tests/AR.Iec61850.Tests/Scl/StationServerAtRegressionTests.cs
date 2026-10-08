@@ -53,6 +53,30 @@ public sealed class StationServerAtRegressionTests
     }
 
     [Fact]
+    public void SclAssisted_Preparation_Resolves_F_ServerAt_To_J_Domains_And_Fc_Roots()
+    {
+        var xml = StationFixture();
+        var domainsJ = SclMmsDomainInventoryReader.Read(xml, "GR_X_7SX85", "J");
+        var domainsF = SclMmsDomainInventoryReader.Read(xml, "GR_X_7SX85", "F");
+
+        Assert.True(domainsJ.IsSuccess);
+        Assert.True(domainsF.IsSuccess);
+        Assert.Equal(domainsJ.ExpectedDomains, domainsF.ExpectedDomains);
+        Assert.Equal("F", domainsF.AccessPointName);
+        Assert.Single(domainsF.ExpectedDomains);
+
+        var initialJ = SclInitialFcReadDesignBuilder.Read(xml, "GR_X_7SX85", "J");
+        var initialF = SclInitialFcReadDesignBuilder.Read(xml, "GR_X_7SX85", "F");
+        Assert.True(initialJ.IsSuccess, string.Join(" | ", initialJ.Errors));
+        Assert.True(initialF.IsSuccess, string.Join(" | ", initialF.Errors));
+        Assert.Equal("F", initialF.Model.AccessPointName);
+        Assert.Equal(initialJ.Model.LogicalDevices.Count, initialF.Model.LogicalDevices.Count);
+        Assert.Equal(initialJ.Model.DataSets.Count, initialF.Model.DataSets.Count);
+        Assert.Equal(initialJ.Model.ReportControls.Count, initialF.Model.ReportControls.Count);
+        Assert.Single(initialF.Model.LogicalDevices);
+    }
+
+    [Fact]
     public void Dangling_ServerAt_Fails_Closed_Without_Fabricating_Mms_Model_Or_Losing_Ip()
     {
         var broken = StationFixture().Replace(
@@ -68,6 +92,11 @@ public sealed class StationServerAtRegressionTests
         Assert.Equal("198.51.100.12", f.PreferredEndpoint!.IpAddress);
         Assert.Contains(document.Findings, finding =>
             finding.Code == "SCL_SERVER_AT_UNRESOLVED" && finding.Severity == "High");
+        var invalidDomains = SclMmsDomainInventoryReader.Read(broken, "GR_X_7SX85", "F");
+        var invalidInitial = SclInitialFcReadDesignBuilder.Read(broken, "GR_X_7SX85", "F");
+        Assert.False(invalidDomains.IsSuccess);
+        Assert.False(invalidInitial.IsSuccess);
+        Assert.Empty(invalidDomains.ExpectedDomains);
     }
 
     private static string StationFixture() => """

@@ -91,10 +91,11 @@ public static class SclMmsDomainInventoryReader
             return Build(canonicalIedName, accessPointName, domains, errors, warnings);
         }
 
-        var server = accessPoint.Elements().FirstOrDefault(element => Is(element, "Server"));
+        var serverOwner = SclServerAtModelResolver.ResolveOwner(ied, accessPoint);
+        var server = serverOwner?.Elements().FirstOrDefault(element => Is(element, "Server"));
         if (server is null)
         {
-            errors.Add($"SCL IED '{canonicalIedName}' AccessPoint '{accessPointName}' has no direct Server model.");
+            errors.Add($"SCL IED '{canonicalIedName}' AccessPoint '{accessPointName}' has no resolvable Server/ServerAt model.");
             return Build(canonicalIedName, accessPointName, domains, errors, warnings);
         }
 

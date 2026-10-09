@@ -25,6 +25,7 @@ public sealed class MmsReceiveRouter
     private readonly Queue<MmsPduEnvelope> _unconfirmed = new();
     private readonly Queue<MmsPduEnvelope> _unmatched = new();
     private readonly Dictionary<Guid, Channel<MmsPduEnvelope>> _informationReportSubscriptions = new();
+    private readonly SemaphoreSlim _informationReportAvailable = new(0, 1);
 
     public int QueuedConfirmedResultCount
     {
@@ -88,6 +89,7 @@ public sealed class MmsReceiveRouter
             if (envelope.IsInformationReport)
             {
                 _informationReports.Enqueue(envelope);
+                SignalInformationReportAvailable();
                 foreach (var subscription in _informationReportSubscriptions.Values)
                     subscription.Writer.TryWrite(envelope);
 
@@ -152,6 +154,31 @@ public sealed class MmsReceiveRouter
         return false;
     }
 
+    /// <summary>
+    /// Waits until the canonical InformationReport queue has work without polling.
+    /// The signal is binary: multiple reports coalesce into one wake because callers
+    /// drain the queue after waking. Queue contents remain the single routing authority.
+    /// </summary>
+    internal async Task<bool> WaitForInformationReportAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (QueuedInformationReportCount > 0)
+        {
+            _informationReportAvailable.Wait(0);
+            return true;
+        }
+
+        if (timeout <= TimeSpan.Zero)
+            return false;
+
+        return await _informationReportAvailable
+            .WaitAsync(timeout, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     internal MmsInformationReportSubscription SubscribeInformationReports(int capacity = 32)
     {
         var boundedCapacity = Math.Clamp(capacity, 1, 1024);
@@ -197,6 +224,18 @@ public sealed class MmsReceiveRouter
             subscription.Writer.TryComplete(exception);
     }
 
+    private void SignalInformationReportAvailable()
+    {
+        try
+        {
+            _informationReportAvailable.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+            // A wake is already pending. The queue remains authoritative and will be drained.
+        }
+    }
+
     public void Clear()
     {
         Channel<MmsPduEnvelope>[] subscriptions;
@@ -208,6 +247,10 @@ public sealed class MmsReceiveRouter
             _unmatched.Clear();
             subscriptions = _informationReportSubscriptions.Values.ToArray();
             _informationReportSubscriptions.Clear();
+        }
+
+        while (_informationReportAvailable.Wait(0))
+        {
         }
 
         foreach (var subscription in subscriptions)

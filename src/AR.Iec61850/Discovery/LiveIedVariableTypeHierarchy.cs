@@ -31,6 +31,30 @@ public static class LiveIedVariableTypeProbePlanner
 /// </summary>
 public static class LiveIedVariableTypeProbeExecutor
 {
+    /// <summary>
+    /// Proven DataSet members expand the association-scoped type-probe directory
+    /// before the existing one-pass LN -> DO -> leaf hierarchy ladder. This
+    /// resolves static report members omitted by capped GetNameList enumeration
+    /// without rescanning name pages or repeating prior LN probes.
+    /// </summary>
+    public static Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ProbeSmartAsync(
+        MmsClientSession session,
+        MmsDiscoveryResult discovery,
+        MmsSmartDiscoveryOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(discovery);
+        options ??= new MmsSmartDiscoveryOptions();
+
+        var verified = LiveIedDataSetTypeProbePlanner.BuildVerifiedMemberHints(
+            discovery,
+            options.MaxDataSetTypeExtraLogicalNodes,
+            options.MaxDataSetTypeMemberHints);
+        discovery.IedDirectory.AddSupplementalPoints(verified);
+        return ProbeSmartAsync(session, discovery.IedDirectory, options, cancellationToken);
+    }
+
     public static Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ProbeSmartAsync(
         MmsClientSession session,
         MmsIedModelDirectory directory,

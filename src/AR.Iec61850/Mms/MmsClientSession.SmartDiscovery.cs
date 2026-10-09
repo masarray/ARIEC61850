@@ -47,6 +47,19 @@ public sealed class MmsSmartDiscoveryOptions
 
     public bool ReadDataSetDirectories { get; init; }
     public int MaxDataSetDirectoryReads { get; init; } = 64;
+
+    /// <summary>
+    /// Maximum additional, verified DataSet-member LN roots eligible for the
+    /// same type-probe pass when capped GetNameList omitted those roots.
+    /// This does not change the name-list budget or issue value reads.
+    /// </summary>
+    public int MaxDataSetTypeExtraLogicalNodes { get; init; } = 48;
+
+    /// <summary>
+    /// Bound on positional DataSet membership hints contributing type coverage.
+    /// Repeated exact MMS items are indexed once.
+    /// </summary>
+    public int MaxDataSetTypeMemberHints { get; init; } = 2048;
 }
 
 public sealed partial class MmsClientSession

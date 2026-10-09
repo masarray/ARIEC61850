@@ -124,10 +124,8 @@ internal static class MmsSmartTypeProbePolicy
 
 
     /// <summary>
-    /// Builds bounded type roots exclusively from successful wire-observed DataSet
-    /// members, even when the fast NamedVariable pagination did not reach that LN.
-    /// Never probe SCL guesses, repeat a failed/successful LN root, or expand
-    /// unrelated service metadata on the critical path.
+    /// Wire-authoritative ST/MX LN candidates from successful DataSet directories.
+    /// No SCL guesses, no duplicate GVA requests, no extra name-list crawl.
     /// </summary>
     public static MmsObjectReference[] SelectUnprobedDataSetLogicalNodeRoots(
         MmsIedModelDirectory directory,
@@ -137,110 +135,14 @@ internal static class MmsSmartTypeProbePolicy
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(directories);
         ArgumentNullException.ThrowIfNull(attemptedTypes);
+
         var domains = directory.LogicalDevices.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var attempted = attemptedTypes
-            .Where(x => !x.Reference.Item.Contains('
-    {
-        ArgumentNullException.ThrowIfNull(point);
-
-        var parts = Split(point.MmsItemName);
-        var item = parts.Length >= 3
-            ? string.Join('$', parts.Take(3))
-            : point.MmsItemName;
-        return new MmsObjectReference(point.Domain, item, point.FunctionalConstraint);
-    }
-
-    /// <summary>
-    /// Builds exact fallback probes without ever reissuing an exact GVA reference that
-    /// was already attempted earlier in the same hierarchy ladder. This matters for
-    /// flat inventories containing LN$FC$DO roots: after a DO-root GVA fails or is
-    /// shallow, treating that same root as a leaf fallback would otherwise send the
-    /// identical request twice with no new evidence boundary.
-    /// </summary>
-    public static MmsObjectReference[] BuildUnprobedExactFallbacks(
-        IEnumerable<MmsFcResolvedPoint> unresolvedPoints,
-        IEnumerable<MmsObjectReference> alreadyProbed)
-    {
-        ArgumentNullException.ThrowIfNull(unresolvedPoints);
-        ArgumentNullException.ThrowIfNull(alreadyProbed);
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var reference in alreadyProbed)
-        {
-            if (string.IsNullOrWhiteSpace(reference.Domain) || string.IsNullOrWhiteSpace(reference.Item))
-                continue;
-            seen.Add(BuildReferenceKey(reference.Domain.Trim(), reference.Item.Trim()));
-        }
-
-        var fallback = new List<MmsObjectReference>();
-        foreach (var point in unresolvedPoints
-                     .Where(point => !string.IsNullOrWhiteSpace(point.Domain) &&
-                                     !string.IsNullOrWhiteSpace(point.MmsItemName))
-                     .OrderBy(point => point.Domain, StringComparer.OrdinalIgnoreCase)
-                     .ThenBy(point => point.MmsItemName, StringComparer.OrdinalIgnoreCase))
-        {
-            var reference = point.ToObjectReference();
-            var key = BuildReferenceKey(reference.Domain, reference.Item);
-            if (!seen.Add(key))
-                continue;
-
-            fallback.Add(reference);
-        }
-
-        return fallback.ToArray();
-    }
-
-    /// <summary>
-    /// Returns true only when the supplied GVA result can prove the requested MMS
-    /// item through its TypeSpecification hierarchy. A successful but shallow result
-    /// is deliberately not treated as coverage for descendants.
-    /// </summary>
-    public static bool Covers(
-        MmsVariableAccessAttributesResult result,
-        string targetMmsItemName)
-    {
-        if (!result.IsSuccess || result.TypeSpecification is null || string.IsNullOrWhiteSpace(targetMmsItemName))
-            return false;
-
-        var rootParts = Split(result.Reference.Item);
-        var targetParts = Split(targetMmsItemName);
-        if (rootParts.Length == 0 || targetParts.Length < rootParts.Length)
-            return false;
-
-        for (var index = 0; index < rootParts.Length; index++)
-        {
-            if (!string.Equals(rootParts[index], targetParts[index], StringComparison.OrdinalIgnoreCase))
-                return false;
-        }
-
-        var current = result.TypeSpecification;
-        for (var index = rootParts.Length; index < targetParts.Length; index++)
-        {
-            var part = targetParts[index];
-            var next = current.Children.FirstOrDefault(child =>
-                string.Equals(child.Name, part, StringComparison.OrdinalIgnoreCase));
-            if (next is null)
-                return false;
-
-            current = next;
-        }
-
-        return true;
-    }
-
-    private static string BuildReferenceKey(string domain, string item)
-        => string.Concat(domain ?? string.Empty, CompositeKeySeparator, item ?? string.Empty);
-
-    private static string[] Split(string value)
-        => (value ?? string.Empty).Split(
-            '$',
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-}
-))
-            .Select(x => BuildReferenceKey(x.Reference.Domain, x.Reference.Item))
+            .Where(result => !result.Reference.Item.Contains('$'))
+            .Select(result => BuildReferenceKey(result.Reference.Domain, result.Reference.Item))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var roots = new Dictionary<string, MmsObjectReference>(StringComparer.OrdinalIgnoreCase);
-        foreach (var dataSet in directories.Where(x => x.IsSuccess))
+        var targets = new Dictionary<string, MmsObjectReference>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dataSet in directories.Where(dataSet => dataSet.IsSuccess))
         foreach (var member in dataSet.Members)
         {
             if (!domains.Contains(member.Domain) ||
@@ -248,104 +150,7 @@ internal static class MmsSmartTypeProbePolicy
                   member.FunctionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase)))
                 continue;
 
-            var parts = member.MmsItemName.Split('
-    {
-        ArgumentNullException.ThrowIfNull(point);
-
-        var parts = Split(point.MmsItemName);
-        var item = parts.Length >= 3
-            ? string.Join('$', parts.Take(3))
-            : point.MmsItemName;
-        return new MmsObjectReference(point.Domain, item, point.FunctionalConstraint);
-    }
-
-    /// <summary>
-    /// Builds exact fallback probes without ever reissuing an exact GVA reference that
-    /// was already attempted earlier in the same hierarchy ladder. This matters for
-    /// flat inventories containing LN$FC$DO roots: after a DO-root GVA fails or is
-    /// shallow, treating that same root as a leaf fallback would otherwise send the
-    /// identical request twice with no new evidence boundary.
-    /// </summary>
-    public static MmsObjectReference[] BuildUnprobedExactFallbacks(
-        IEnumerable<MmsFcResolvedPoint> unresolvedPoints,
-        IEnumerable<MmsObjectReference> alreadyProbed)
-    {
-        ArgumentNullException.ThrowIfNull(unresolvedPoints);
-        ArgumentNullException.ThrowIfNull(alreadyProbed);
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var reference in alreadyProbed)
-        {
-            if (string.IsNullOrWhiteSpace(reference.Domain) || string.IsNullOrWhiteSpace(reference.Item))
-                continue;
-            seen.Add(BuildReferenceKey(reference.Domain.Trim(), reference.Item.Trim()));
-        }
-
-        var fallback = new List<MmsObjectReference>();
-        foreach (var point in unresolvedPoints
-                     .Where(point => !string.IsNullOrWhiteSpace(point.Domain) &&
-                                     !string.IsNullOrWhiteSpace(point.MmsItemName))
-                     .OrderBy(point => point.Domain, StringComparer.OrdinalIgnoreCase)
-                     .ThenBy(point => point.MmsItemName, StringComparer.OrdinalIgnoreCase))
-        {
-            var reference = point.ToObjectReference();
-            var key = BuildReferenceKey(reference.Domain, reference.Item);
-            if (!seen.Add(key))
-                continue;
-
-            fallback.Add(reference);
-        }
-
-        return fallback.ToArray();
-    }
-
-    /// <summary>
-    /// Returns true only when the supplied GVA result can prove the requested MMS
-    /// item through its TypeSpecification hierarchy. A successful but shallow result
-    /// is deliberately not treated as coverage for descendants.
-    /// </summary>
-    public static bool Covers(
-        MmsVariableAccessAttributesResult result,
-        string targetMmsItemName)
-    {
-        if (!result.IsSuccess || result.TypeSpecification is null || string.IsNullOrWhiteSpace(targetMmsItemName))
-            return false;
-
-        var rootParts = Split(result.Reference.Item);
-        var targetParts = Split(targetMmsItemName);
-        if (rootParts.Length == 0 || targetParts.Length < rootParts.Length)
-            return false;
-
-        for (var index = 0; index < rootParts.Length; index++)
-        {
-            if (!string.Equals(rootParts[index], targetParts[index], StringComparison.OrdinalIgnoreCase))
-                return false;
-        }
-
-        var current = result.TypeSpecification;
-        for (var index = rootParts.Length; index < targetParts.Length; index++)
-        {
-            var part = targetParts[index];
-            var next = current.Children.FirstOrDefault(child =>
-                string.Equals(child.Name, part, StringComparison.OrdinalIgnoreCase));
-            if (next is null)
-                return false;
-
-            current = next;
-        }
-
-        return true;
-    }
-
-    private static string BuildReferenceKey(string domain, string item)
-        => string.Concat(domain ?? string.Empty, CompositeKeySeparator, item ?? string.Empty);
-
-    private static string[] Split(string value)
-        => (value ?? string.Empty).Split(
-            '$',
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-}
-);
+            var parts = member.MmsItemName.Split('$');
             if (parts.Length < 3 ||
                 !parts[1].Equals(member.FunctionalConstraint, StringComparison.OrdinalIgnoreCase))
                 continue;
@@ -357,10 +162,13 @@ internal static class MmsSmartTypeProbePolicy
 
             var key = BuildReferenceKey(member.Domain, ln);
             if (!attempted.Contains(key))
-                roots.TryAdd(key, new MmsObjectReference(member.Domain, ln, string.Empty));
+                targets.TryAdd(key, new MmsObjectReference(member.Domain, ln, string.Empty));
         }
-        return roots.Values.OrderBy(x => x.Domain, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.Item, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        return targets.Values
+            .OrderBy(root => root.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(root => root.Item, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     public static MmsObjectReference BuildDataObjectRoot(MmsFcResolvedPoint point)

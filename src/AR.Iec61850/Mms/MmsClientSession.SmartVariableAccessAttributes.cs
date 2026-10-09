@@ -263,6 +263,30 @@ public sealed partial class MmsClientSession
         return results;
     }
 
+
+    /// <summary>
+    /// Exact static DataSet-member LN type closure. Shares the negotiated invoke
+    /// window and KPI accounting with smart hierarchy probes. This never reads
+    /// process values, mutates DataSets, or opens another MMS association.
+    /// </summary>
+    public async Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ProbeDataSetMemberTypesSmartAsync(
+        MmsDiscoveryResult discovery,
+        IReadOnlyList<MmsVariableAccessAttributesResult> previousTypes,
+        MmsSmartDiscoveryOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureMmsReady();
+        ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(previousTypes);
+        var roots = MmsSmartTypeProbePolicy.SelectUnprobedDataSetLogicalNodeRoots(
+            discovery.IedDirectory, discovery.DataSetDirectories, previousTypes);
+        if (roots.Length == 0)
+            return Array.Empty<MmsVariableAccessAttributesResult>();
+        return await RunVariableAttributeBatchAsync(
+            roots, ResolveSmartDiscoveryWindow(options ?? new MmsSmartDiscoveryOptions()),
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private void PublishSmartTypeProbeBudget(MmsSmartTypeProbeBudgetSnapshot snapshot)
         => Volatile.Write(ref _lastSmartTypeProbeBudget, snapshot);
 

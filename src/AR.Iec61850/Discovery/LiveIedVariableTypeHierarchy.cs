@@ -84,11 +84,11 @@ internal static class LiveIedTypeHierarchyPointMaterializer
         {
             var domain = result.Reference.Domain.Trim();
             var logicalNode = result.Reference.Item.Trim();
-            if (!directory.LogicalDevices.TryGetValue(domain, out var logicalDevice) ||
-                !logicalDevice.LogicalNodes.ContainsKey(logicalNode))
-            {
+            // A successful wire-observed exact LN GVA proves the LN even when
+            // GetNameList stopped before reaching its lexical page. Never create
+            // an unobserved MMS domain from an arbitrary type result.
+            if (!directory.LogicalDevices.ContainsKey(domain))
                 continue;
-            }
 
             foreach (var fcNode in result.TypeSpecification!.Children)
             {

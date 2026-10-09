@@ -192,6 +192,54 @@ public sealed class MmsSmartDiscoveryPolicyTests
         Assert.Equal("MX", root.FunctionalConstraint);
     }
 
+
+    [Fact]
+    public void DataSetClosure_SelectsOnlyObservedMissingStMxRoots_NoDuplicateOrForeignLn()
+    {
+        var directory = BuildDirectory();
+        var dataset = new MmsDataSetDirectoryResult
+        {
+            IsSuccess = true,
+            Members =
+            [
+                Member("LD0", "eveGGIO1", "ST", "Ind11"),
+                Member("LD0", "eveGGIO1", "ST", "Ind13"),
+                Member("LD0", "CSWI1", "ST", "Pos"),
+                Member("LD0", "CSWI16", "ST", "Pos"),
+                Member("LD0", "MMXU1", "MX", "A"),
+                Member("LD0", "FOREIGN1", "CO", "Oper"),
+                Member("FAKE", "eveGGIO2", "ST", "Ind1")
+            ]
+        };
+        var already = new[]
+        {
+            new MmsVariableAccessAttributesResult
+            {
+                IsSuccess = true,
+                Reference = new MmsObjectReference("LD0", "MMXU1", "")
+            },
+            new MmsVariableAccessAttributesResult
+            {
+                IsSuccess = false,
+                Reference = new MmsObjectReference("LD0", "CSWI1", "")
+            }
+        };
+        var selected = MmsSmartTypeProbePolicy.SelectUnprobedDataSetLogicalNodeRoots(
+            directory, [dataset], already);
+        Assert.Equal(2, selected.Length);
+        Assert.Equal(["CSWI16", "eveGGIO1"], selected.Select(x => x.Item).ToArray());
+    }
+
+    private static MmsDataSetDirectoryMember Member(
+        string domain, string ln, string fc, string dataObject) => new()
+    {
+        Domain = domain,
+        LogicalNode = ln,
+        FunctionalConstraint = fc,
+        DataObjectPath = dataObject,
+        MmsItemName = ln + "$" + fc + "$" + dataObject,
+        UserReference = domain + "/" + ln + "." + dataObject
+    };
     private static MmsIedModelDirectory BuildDirectory()
     {
         var snapshot = new MmsDiscoverySnapshot

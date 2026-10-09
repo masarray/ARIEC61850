@@ -84,11 +84,14 @@ internal static class LiveIedTypeHierarchyPointMaterializer
         {
             var domain = result.Reference.Domain.Trim();
             var logicalNode = result.Reference.Item.Trim();
-            // A successful wire-observed exact LN GVA proves the LN even when
-            // GetNameList stopped before reaching its lexical page. Never create
-            // an unobserved MMS domain from an arbitrary type result.
-            if (!directory.LogicalDevices.ContainsKey(domain))
+            // Fail closed: only known directory LN roots are materialized.
+            // DataSet-root closure first promotes confirmed MMS member references
+            // into this directory, after a successful exact LN type probe.
+            if (!directory.LogicalDevices.TryGetValue(domain, out var logicalDevice) ||
+                !logicalDevice.LogicalNodes.ContainsKey(logicalNode))
+            {
                 continue;
+            }
 
             foreach (var fcNode in result.TypeSpecification!.Children)
             {

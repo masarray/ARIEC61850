@@ -282,9 +282,38 @@ public sealed partial class MmsClientSession
             discovery.IedDirectory, discovery.DataSetDirectories, previousTypes);
         if (roots.Length == 0)
             return Array.Empty<MmsVariableAccessAttributesResult>();
-        return await RunVariableAttributeBatchAsync(
+        var results = await RunVariableAttributeBatchAsync(
             roots, ResolveSmartDiscoveryWindow(options ?? new MmsSmartDiscoveryOptions()),
             cancellationToken).ConfigureAwait(false);
+
+        // Authorize previously unseen LN roots only when two independent live MMS
+        // observations agree: an exact configured DataSet FCDA/FCD member and a
+        // successful typed GetVariableAccessAttributes response for that LN.
+        // Never materialize a foreign LN from an unsolicited GVA result.
+        var successfulRoots = results
+            .Where(result => result.IsSuccess && result.TypeSpecification is not null)
+            .Select(result => result.Reference.Domain + "/" + result.Reference.Item)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var membershipSeeds = discovery.DataSetDirectories
+            .Where(dataSet => dataSet.IsSuccess)
+            .SelectMany(dataSet => dataSet.Members)
+            .Where(member => successfulRoots.Contains(member.Domain + "/" + member.LogicalNode) &&
+                !string.IsNullOrWhiteSpace(member.DataObjectPath) &&
+                (member.FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase) ||
+                 member.FunctionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase)))
+            .Select(member => new MmsFcResolvedPoint
+            {
+                Domain = member.Domain,
+                LogicalNode = member.LogicalNode,
+                FunctionalConstraint = member.FunctionalConstraint,
+                DataObjectPath = member.DataObjectPath,
+                MmsItemName = member.MmsItemName,
+                Source = "GetNamedVariableListAttributes+GetVariableAccessAttributes",
+                Confidence = 100
+            })
+            .ToArray();
+        discovery.IedDirectory.AddSupplementalPoints(membershipSeeds);
+        return results;
     }
 
     private void PublishSmartTypeProbeBudget(MmsSmartTypeProbeBudgetSnapshot snapshot)

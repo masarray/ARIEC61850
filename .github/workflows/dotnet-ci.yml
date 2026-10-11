@@ -20,7 +20,7 @@ on:
       - "*.slnx"
       - "Directory.Build.props"
   pull_request:
-    branches: [ main ]
+    branches: [ main, feat/495-dataset-type-closure ]
   workflow_dispatch:
 
 permissions:

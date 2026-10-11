@@ -122,6 +122,55 @@ internal static class MmsSmartTypeProbePolicy
             .ToArray();
     }
 
+
+    /// <summary>
+    /// Wire-authoritative ST/MX LN candidates from successful DataSet directories.
+    /// No SCL guesses, no duplicate GVA requests, no extra name-list crawl.
+    /// </summary>
+    public static MmsObjectReference[] SelectUnprobedDataSetLogicalNodeRoots(
+        MmsIedModelDirectory directory,
+        IReadOnlyList<MmsDataSetDirectoryResult> directories,
+        IReadOnlyList<MmsVariableAccessAttributesResult> attemptedTypes)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(directories);
+        ArgumentNullException.ThrowIfNull(attemptedTypes);
+
+        var domains = directory.LogicalDevices.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var attempted = attemptedTypes
+            .Where(result => !result.Reference.Item.Contains('$'))
+            .Select(result => BuildReferenceKey(result.Reference.Domain, result.Reference.Item))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targets = new Dictionary<string, MmsObjectReference>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dataSet in directories.Where(dataSet => dataSet.IsSuccess))
+        foreach (var member in dataSet.Members)
+        {
+            if (!domains.Contains(member.Domain) ||
+                !(member.FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase) ||
+                  member.FunctionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var parts = member.MmsItemName.Split('$');
+            if (parts.Length < 3 ||
+                !parts[1].Equals(member.FunctionalConstraint, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var ln = parts[0].Trim();
+            if (ln.Length == 0 || ln.Length > 64 ||
+                !ln.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '_'))
+                continue;
+
+            var key = BuildReferenceKey(member.Domain, ln);
+            if (!attempted.Contains(key))
+                targets.TryAdd(key, new MmsObjectReference(member.Domain, ln, string.Empty));
+        }
+
+        return targets.Values
+            .OrderBy(root => root.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(root => root.Item, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     public static MmsObjectReference BuildDataObjectRoot(MmsFcResolvedPoint point)
     {
         ArgumentNullException.ThrowIfNull(point);

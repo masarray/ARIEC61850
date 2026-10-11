@@ -11,6 +11,69 @@ public sealed class CanonicalLiveIedSclExporterTests
     private static readonly XNamespace Scl = "http://www.iec.ch/61850/2003/SCL";
 
     [Fact]
+    public void VerifiedSclIdentity_KeepsAcceptedMmsAssociationWhileMappingLogicalDevice()
+    {
+        var accepted = CreateCanonical();
+        const string observedDomain = "IEDLD0";
+        var canonical = new LiveIedCanonicalModel
+        {
+            Discovery = new LiveIedModelDiscoveryDocument
+            {
+                Host = "10.20.30.40", IedName = "IED", AccessPointName = "AP1",
+                LogicalDevices = [
+                    new LiveIedLogicalDeviceModel
+                    {
+                        MmsDomain = observedDomain, Inst = observedDomain,
+                        LogicalNodes = [
+                            new LiveIedLogicalNodeModel
+                            {
+                                Name = "LLN0", LnClass = "LLN0",
+                                ProposedLnTypeId = "LN_LLN0"
+                            }
+                        ]
+                    }
+                ]
+            },
+            Communication = accepted.Communication
+        };
+        XNamespace ns = Scl;
+        var trusted = new XDocument(new XElement(ns+"SCL",
+            new XElement(ns+"Communication",new XElement(ns+"SubNetwork",
+                new XElement(ns+"ConnectedAP",
+                    new XAttribute("iedName","BCUGE"),new XAttribute("apName","AP1"),
+                    new XElement(ns+"Address",
+                        new XElement(ns+"P",new XAttribute("type","IP"),"10.20.30.40"))))),
+            new XElement(ns+"IED",new XAttribute("name","BCUGE"),
+                new XElement(ns+"AccessPoint",new XAttribute("name","AP1"),
+                    new XElement(ns+"Server",new XElement(ns+"LDevice",
+                        new XAttribute("inst","F650"),
+                        new XAttribute("ldName",observedDomain)))))));
+        var proof = TrustedSclIedIdentityMatcher.TryMatch(
+            trusted,[observedDomain],"10.20.30.40","BCUGE");
+        Assert.NotNull(proof);
+
+        var dir=Path.Combine(Path.GetTempPath(),"ariec-p10-canonical-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var result=CanonicalLiveIedSclExporter.WriteFiles(canonical,
+                Path.Combine(dir,"BCUGE.iid"),SclSchemaProfile.Edition1V16,
+                verifiedIdentity:proof);
+            var doc=XDocument.Load(result.SclPath);
+            Assert.Equal("BCUGE",(string?)Assert.Single(doc.Descendants(ns+"IED")).Attribute("name"));
+            var ld=Assert.Single(doc.Descendants(ns+"LDevice"));
+            Assert.Equal("F650",(string?)ld.Attribute("inst"));
+            Assert.Equal(observedDomain,(string?)ld.Attribute("ldName"));
+            Assert.Equal("BCUGE",(string?)Assert.Single(doc.Descendants(ns+"ConnectedAP")).Attribute("iedName"));
+            Assert.NotNull(SclMmsAssociationProfileReader.Read(doc).Find("BCUGE",canonical.AccessPointName));
+        }
+        finally
+        {
+            Directory.Delete(dir,true);
+        }
+    }
+
+    [Fact]
     public void CanonicalBuilder_Preserves_CaseDistinct_InitialFcLeafEvidence()
     {
         var discovery = CreateCaseDistinctTrackingDiscovery();

@@ -13,8 +13,29 @@ public sealed class CanonicalLiveIedSclExporterTests
     [Fact]
     public void VerifiedSclIdentity_KeepsAcceptedMmsAssociationWhileMappingLogicalDevice()
     {
-        var canonical = CreateCanonical();
-        var observedDomain = canonical.Discovery.LogicalDevices.Single().MmsDomain;
+        var accepted = CreateCanonical();
+        const string observedDomain = "IEDLD0";
+        var canonical = new LiveIedCanonicalModel
+        {
+            Discovery = new LiveIedModelDiscoveryDocument
+            {
+                Host = "10.20.30.40", IedName = "IED", AccessPointName = "AP1",
+                LogicalDevices = [
+                    new LiveIedLogicalDeviceModel
+                    {
+                        MmsDomain = observedDomain, Inst = observedDomain,
+                        LogicalNodes = [
+                            new LiveIedLogicalNodeModel
+                            {
+                                Name = "LLN0", LnClass = "LLN0",
+                                ProposedLnTypeId = "LN_LLN0"
+                            }
+                        ]
+                    }
+                ]
+            },
+            Communication = accepted.Communication
+        };
         XNamespace ns = Scl;
         var trusted = new XDocument(new XElement(ns+"SCL",
             new XElement(ns+"Communication",new XElement(ns+"SubNetwork",

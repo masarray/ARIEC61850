@@ -90,8 +90,25 @@ public sealed class MmsReceiveRouter
             {
                 _informationReports.Enqueue(envelope);
                 SignalInformationReportAvailable();
-                foreach (var subscription in _informationReportSubscriptions.Values)
-                    subscription.Writer.TryWrite(envelope);
+                // A subscriber cannot silently discard SOE on burst pressure.
+                // Preserve the canonical FIFO regardless of subscriber capacity;
+                // isolate and fault only consumers which cannot keep up.
+                List<Guid>? overflowed = null;
+                foreach (var (id, subscription) in _informationReportSubscriptions)
+                {
+                    if (!subscription.Writer.TryWrite(envelope))
+                    {
+                        (overflowed ??= new List<Guid>()).Add(id);
+                        subscription.Writer.TryComplete(new IOException(
+                            "MMS InformationReport subscriber exceeded its bounded capacity; " +
+                            "continuity is unverified. Resubscribe/re-establish the report stream."));
+                    }
+                }
+                if (overflowed is not null)
+                {
+                    foreach (var id in overflowed)
+                        _informationReportSubscriptions.Remove(id);
+                }
 
                 return new MmsReceiveRouteResult
                 {
@@ -184,7 +201,9 @@ public sealed class MmsReceiveRouter
         var boundedCapacity = Math.Clamp(capacity, 1, 1024);
         var channel = Channel.CreateBounded<MmsPduEnvelope>(new BoundedChannelOptions(boundedCapacity)
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
+            // Never silently throw away the oldest event (SOE data loss).
+            // TryWrite=false is handled by explicitly faulting this subscriber.
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
             SingleWriter = false,
             AllowSynchronousContinuations = false

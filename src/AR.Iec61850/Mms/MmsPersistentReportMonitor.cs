@@ -669,6 +669,22 @@ public sealed partial class MmsClientSession
             return null;
         }
 
+        var dataSet = NormalizeRoutingReference(header.DataSetReference);
+
+        // Report identity is a two-field contract whenever the peer provides
+        // a domain-qualified DatSet. A matching RptID is not sufficient to
+        // project another DataSet's payload using this monitor's member order.
+        // Keep the existing RptID-only compatibility for omitted or abbreviated
+        // DatSet fields (some supported peers do not advertise a full path).
+        bool ConflictsWithAdvertisedDataSet(MmsPersistentReportMonitorSession candidate)
+        {
+            if (string.IsNullOrWhiteSpace(dataSet) || !dataSet.Contains('/'))
+                return false;
+            var expected = NormalizeRoutingReference(candidate.Plan.DataSetReference);
+            return !string.IsNullOrWhiteSpace(expected) &&
+                   !expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase);
+        }
+
         var reportId = NormalizeRoutingReference(header.ReportId);
         if (!string.IsNullOrWhiteSpace(reportId))
         {
@@ -677,6 +693,11 @@ public sealed partial class MmsClientSession
                 .ToArray();
             if (exactRptId.Length == 1)
             {
+                if (ConflictsWithAdvertisedDataSet(exactRptId[0]))
+                {
+                    evidence = "RptID/DatSet conflict: report was quarantined before process-value projection";
+                    return null;
+                }
                 evidence = "exact RptID";
                 return exactRptId[0];
             }
@@ -684,12 +705,16 @@ public sealed partial class MmsClientSession
             var rcbAffinity = candidates.Where(x => HasRcbNameAffinity(reportId, x.ReportControl)).ToArray();
             if (rcbAffinity.Length == 1)
             {
+                if (ConflictsWithAdvertisedDataSet(rcbAffinity[0]))
+                {
+                    evidence = "RptID/DatSet conflict: report was quarantined before process-value projection";
+                    return null;
+                }
                 evidence = "RptID-to-RCB name affinity";
                 return rcbAffinity[0];
             }
         }
 
-        var dataSet = NormalizeRoutingReference(header.DataSetReference);
         if (!string.IsNullOrWhiteSpace(dataSet))
         {
             var exactDataSet = candidates
@@ -714,6 +739,11 @@ public sealed partial class MmsClientSession
 
         if (candidates.Length == 1)
         {
+            if (ConflictsWithAdvertisedDataSet(candidates[0]))
+            {
+                evidence = "single-monitor DatSet conflict: report was quarantined before process-value projection";
+                return null;
+            }
             evidence = "single active monitor fallback";
             return candidates[0];
         }

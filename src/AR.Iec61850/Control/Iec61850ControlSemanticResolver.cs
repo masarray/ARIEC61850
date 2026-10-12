@@ -66,7 +66,7 @@ public static class Iec61850ControlSemanticResolver
             $"Verified CDC={cdc}; live ctlModel={descriptor.ControlModel}; ctlVal={descriptor.CtlValSpecification.Signature}; status={status}.");
     }
 
-    private static bool IsStandardPosition(string reference)
+    internal static bool IsStandardPosition(string reference)
     {
         var suffix = reference[(reference.LastIndexOf('/') + 1)..];
         var dot = suffix.IndexOf('.');

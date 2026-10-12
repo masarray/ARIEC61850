@@ -244,6 +244,9 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             cancellationToken).ConfigureAwait(false);
 
         var status = await FindStatusReferenceAsync(transport, references, domainNames, cancellationToken).ConfigureAwait(false);
+        evidence.Add(string.IsNullOrWhiteSpace(status.Reference)
+            ? "status=not-verified"
+            : "status=live-confirmed:" + status.Reference);
         var supportsTimeActivated = operSpecification.Children.Any(x => NormalizeName(x.Name) == "opertm");
         var descriptor = new Iec61850ControlObjectDescriptor
         {
@@ -378,23 +381,39 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         if (!string.IsNullOrWhiteSpace(exact.Reference))
             return exact;
         var root = references.LogicalNode + "$ST$" + references.MmsDataObjectPath;
-        if (!names.Any(name => name.Equals(root, StringComparison.OrdinalIgnoreCase) ||
-                               name.StartsWith(root + "$", StringComparison.OrdinalIgnoreCase)))
+        var hasListedStatusRoot = names.Any(name =>
+            name.Equals(root, StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith(root + "$", StringComparison.OrdinalIgnoreCase));
+        var standardPosition = Iec61850ControlSemanticResolver.IsStandardPosition(references.ObjectReference);
+
+        // Some servers cap their MMS NamedVariable NameList (e.g. 6400
+        // variables) before CSWI.Pos.stVal is enumerated. The absence of a
+        // NameList entry is NOT proof that the scalar does not exist. For
+        // standard CSWI/XCBR/XSWI.Pos only, attempt exactly one ST.stVal Read.
+        // Never guess an arbitrary object's control semantics or send Operate.
+        if (!hasListedStatusRoot && !standardPosition)
             return exact;
-        var candidates = new[]
-        {
-            (Suffix: "$valWTr$posVal", Path: ".valWTr.posVal", IsStep: true),
-            (Suffix: "$stVal", Path: ".stVal", IsStep: false)
-        };
+
+        var candidates = standardPosition
+            ? new[] { (Suffix: "$stVal", Path: ".stVal", IsStep: false) }
+            : new[]
+            {
+                (Suffix: "$valWTr$posVal", Path: ".valWTr.posVal", IsStep: true),
+                (Suffix: "$stVal", Path: ".stVal", IsStep: false)
+            };
         foreach (var candidate in candidates)
         {
             var item = new MmsObjectReference(references.Domain, root + candidate.Suffix, "ST");
             var read = await transport.ReadAsync(item, cancellationToken).ConfigureAwait(false);
             if (!read.IsSuccess || read.Value == null)
                 continue;
+            var value = read.Value;
+            var isExactTwoBitStatus = value.Kind == MmsDataKind.BitString &&
+                value.RawValue.Count == 2 && value.RawValue[0] == 6;
             var valid = candidate.IsStep
-                ? read.Value.Kind is MmsDataKind.Integer or MmsDataKind.Unsigned
-                : read.Value.Kind is MmsDataKind.BitString or MmsDataKind.Boolean;
+                ? value.Kind is MmsDataKind.Integer or MmsDataKind.Unsigned
+                : standardPosition ? isExactTwoBitStatus :
+                    isExactTwoBitStatus || value.Kind == MmsDataKind.Boolean;
             if (valid)
                 return (references.Domain + "/" + references.LogicalNode + "." +
                         references.MmsDataObjectPath.Replace('$', '.') + candidate.Path, "ST");

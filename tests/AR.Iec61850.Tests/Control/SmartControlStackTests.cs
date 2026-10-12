@@ -724,6 +724,74 @@ public sealed class SmartControlStackTests
     }
 
     [Fact]
+    public async Task TruncatedDomainNameList_StandardPosVerifiedByTargetedTypedRead()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.BitString(6, new byte[] { 0x80 }) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.Specifications["CSWI1$CO$Pos$Cancel"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" }; // 6400-item NameList cap omitted CSWI
+        await using var control = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/CSWI1.Pos");
+        Assert.Equal("LD0/CSWI1.Pos.stVal", control.Descriptor.StatusReference);
+        Assert.Equal("ST", control.Descriptor.StatusFunctionalConstraint);
+        Assert.True(control.Descriptor.IsOperationallyReady);
+        Assert.Equal("SPC", control.Descriptor.Cdc); // wire ctlVal is boolean, not the process CDC
+        Assert.True(Iec61850ControlSemanticResolver.Resolve(control.Descriptor, "DPC").IsCommandSafe);
+        Assert.Contains(transport.Reads, x => x.Item == "CSWI1$ST$Pos$stVal");
+        Assert.Single(transport.Reads.Where(x => x.Item.Contains("$ST$Pos$", StringComparison.Ordinal)));
+        Assert.Empty(transport.Writes);
+    }
+
+    [Theory]
+    [InlineData(7, 0x80)]
+    [InlineData(5, 0x80)]
+    public async Task TruncatedDomainNameList_InvalidPosBitWidthMustNotAuthorizeCommand(byte unusedBits, byte payload)
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.BitString(unusedBits, new byte[] { payload }) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        await using var control = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/CSWI1.Pos");
+        Assert.Equal("", control.Descriptor.StatusReference);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(control.Descriptor, "DPC").IsCommandSafe);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_UnreadablePosMustNotAuthorizeCommand()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        await using var control = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/CSWI1.Pos");
+        Assert.Equal("", control.Descriptor.StatusReference);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(control.Descriptor, "DPC").IsCommandSafe);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_NonPositionNoBlindScalarProbe()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.Specifications["GGIO1$CO$SomeCtrl$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        await using var control = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/GGIO1.SomeCtrl");
+        Assert.Empty(transport.Reads.Where(x => x.FunctionalConstraint == "ST"));
+        Assert.Equal("", control.Descriptor.StatusReference);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
     public async Task StructuredStatusInventory_VerifiesScalarViaLiveRead()
     {
         var transport = new FakeControlTransport();
@@ -811,6 +879,15 @@ public sealed class SmartControlStackTests
             Origin = Iec61850Origin.FromText("ARTEST"),
             InterlockCheck = true
         };
+
+    private static MmsTypeSpecificationNode CommandSpecificationWithBooleanCtlVal()
+        => Structure(string.Empty,
+            Type("ctlVal", "boolean"),
+            Structure("origin", Type("orCat", "integer"), Type("orIdent", "octet-string", size: 64)),
+            Type("ctlNum", "unsigned"),
+            Type("T", "utc-time"),
+            Type("Test", "boolean"),
+            Type("Check", "bit-string", size: 2));
 
     private static MmsTypeSpecificationNode CommandSpecification()
         => Structure(string.Empty,

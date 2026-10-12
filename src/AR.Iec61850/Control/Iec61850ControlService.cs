@@ -319,7 +319,8 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 }
 
-\n/// <summary>Read-only ctlModel evidence; not permission to send an MMS control write.</summary>
+
+/// <summary>Read-only ctlModel evidence; not permission to send an MMS control write.</summary>
 public sealed record Iec61850ControlModelProbe(
     string ObjectReference,
     string MmsReference,

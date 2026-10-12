@@ -126,7 +126,12 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         var descriptor = new Iec61850ControlObjectDescriptor
         {
             ObjectReference = references.ObjectReference,
-            Cdc = InferCdc(ctlValSpecification),
+            // The exact live status shape distinguishes BSC TapChg's Tcmd enum
+            // from DPC even when both ctlVal types have a two-bit MMS encoding.
+            // Never classify a step-position value as an Open/Close switch.
+            Cdc = status.Reference.EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase)
+                ? "BSC"
+                : InferCdc(ctlValSpecification),
             ControlModel = controlModel,
             CtlValSpecification = ctlValSpecification,
             OperSpecification = operSpecification,
@@ -220,6 +225,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
     {
         var prefixes = new[]
         {
+            $"{references.LogicalNode}$ST${references.MmsDataObjectPath}$valWTr$posVal",
             $"{references.LogicalNode}$ST${references.MmsDataObjectPath}$stVal",
             $"{references.LogicalNode}$ST${references.MmsDataObjectPath}$posVal",
             $"{references.LogicalNode}$MX${references.MmsDataObjectPath}$mag$f",

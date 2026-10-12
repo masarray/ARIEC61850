@@ -21,11 +21,29 @@ public sealed class MmsReceiveRouter
 {
     private readonly object _sync = new();
     private readonly Dictionary<int, Queue<MmsPduEnvelope>> _confirmedByInvoke = new();
+    // The canonical FIFO is the static report monitor authority. Bound both frame count
+    // and retained PDU bytes; never silently discard a buffered event on overload.
+    private const int DefaultCanonicalCapacity = 2048;
+    private const long DefaultCanonicalByteCapacity = 32L * 1024 * 1024;
+    private readonly int _canonicalCapacity;
+    private readonly long _canonicalByteCapacity;
+    private long _queuedCanonicalBytes;
+    private Exception? _canonicalReportFault;
     private readonly Queue<MmsPduEnvelope> _informationReports = new();
     private readonly Queue<MmsPduEnvelope> _unconfirmed = new();
     private readonly Queue<MmsPduEnvelope> _unmatched = new();
     private readonly Dictionary<Guid, Channel<MmsPduEnvelope>> _informationReportSubscriptions = new();
     private readonly SemaphoreSlim _informationReportAvailable = new(0, 1);
+
+    public MmsReceiveRouter(
+        int canonicalReportCapacity = DefaultCanonicalCapacity,
+        long canonicalReportByteCapacity = DefaultCanonicalByteCapacity)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(canonicalReportCapacity);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(canonicalReportByteCapacity);
+        _canonicalCapacity = canonicalReportCapacity;
+        _canonicalByteCapacity = canonicalReportByteCapacity;
+    }
 
     public int QueuedConfirmedResultCount
     {
@@ -69,6 +87,7 @@ public sealed class MmsReceiveRouter
 
         lock (_sync)
         {
+            ThrowIfCanonicalReportFaultLocked();
             if (envelope.IsConfirmedServiceResult && envelope.InvokeId.HasValue)
             {
                 if (!_confirmedByInvoke.TryGetValue(envelope.InvokeId.Value, out var queue))
@@ -88,10 +107,39 @@ public sealed class MmsReceiveRouter
 
             if (envelope.IsInformationReport)
             {
+                var retainedBytes = envelope.PresentationPayload.Length;
+                if (_informationReports.Count >= _canonicalCapacity ||
+                    retainedBytes > _canonicalByteCapacity - _queuedCanonicalBytes)
+                {
+                    _canonicalReportFault = new IOException(
+                        "Canonical MMS InformationReport FIFO exceeded its bounded frame/byte capacity; " +
+                        "SOE continuity is unverified. Re-establish the MMS association after addressing consumer lag.");
+                    SignalInformationReportAvailable();
+                    throw (IOException)_canonicalReportFault;
+                }
+
                 _informationReports.Enqueue(envelope);
+                _queuedCanonicalBytes += retainedBytes;
                 SignalInformationReportAvailable();
-                foreach (var subscription in _informationReportSubscriptions.Values)
-                    subscription.Writer.TryWrite(envelope);
+                // A subscriber cannot silently discard SOE on burst pressure.
+                // Preserve the canonical FIFO regardless of subscriber capacity;
+                // isolate and fault only consumers which cannot keep up.
+                List<Guid>? overflowed = null;
+                foreach (var (id, subscription) in _informationReportSubscriptions)
+                {
+                    if (!subscription.Writer.TryWrite(envelope))
+                    {
+                        (overflowed ??= new List<Guid>()).Add(id);
+                        subscription.Writer.TryComplete(new IOException(
+                            "MMS InformationReport subscriber exceeded its bounded capacity; " +
+                            "continuity is unverified. Resubscribe/re-establish the report stream."));
+                    }
+                }
+                if (overflowed is not null)
+                {
+                    foreach (var id in overflowed)
+                        _informationReportSubscriptions.Remove(id);
+                }
 
                 return new MmsReceiveRouteResult
                 {
@@ -146,9 +194,13 @@ public sealed class MmsReceiveRouter
             if (_informationReports.Count > 0)
             {
                 envelope = _informationReports.Dequeue();
+                _queuedCanonicalBytes -= envelope.PresentationPayload.Length;
                 return true;
             }
         }
+
+        lock (_sync)
+            ThrowIfCanonicalReportFaultLocked();
 
         envelope = new MmsPduEnvelope();
         return false;
@@ -165,18 +217,30 @@ public sealed class MmsReceiveRouter
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (QueuedInformationReportCount > 0)
+        lock (_sync)
         {
-            _informationReportAvailable.Wait(0);
-            return true;
+            if (_informationReports.Count > 0)
+            {
+                _informationReportAvailable.Wait(0);
+                return true;
+            }
+
+            ThrowIfCanonicalReportFaultLocked();
         }
 
         if (timeout <= TimeSpan.Zero)
             return false;
 
-        return await _informationReportAvailable
+        var signalled = await _informationReportAvailable
             .WaitAsync(timeout, cancellationToken)
             .ConfigureAwait(false);
+        lock (_sync)
+        {
+            if (_informationReports.Count == 0)
+                ThrowIfCanonicalReportFaultLocked();
+        }
+
+        return signalled;
     }
 
     internal MmsInformationReportSubscription SubscribeInformationReports(int capacity = 32)
@@ -184,7 +248,9 @@ public sealed class MmsReceiveRouter
         var boundedCapacity = Math.Clamp(capacity, 1, 1024);
         var channel = Channel.CreateBounded<MmsPduEnvelope>(new BoundedChannelOptions(boundedCapacity)
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
+            // Never silently throw away the oldest event (SOE data loss).
+            // TryWrite=false is handled by explicitly faulting this subscriber.
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
             SingleWriter = false,
             AllowSynchronousContinuations = false
@@ -224,6 +290,27 @@ public sealed class MmsReceiveRouter
             subscription.Writer.TryComplete(exception);
     }
 
+    // Called by the single receive pump on a terminal transport/decoder error.
+    // Existing canonical entries remain drainable in FIFO order; after the final
+    // entry the consumer observes the terminal error rather than a false clean slice.
+    internal void FaultCanonicalInformationReports(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        lock (_sync)
+        {
+            _canonicalReportFault ??= exception;
+            SignalInformationReportAvailable();
+        }
+    }
+
+    private void ThrowIfCanonicalReportFaultLocked()
+    {
+        if (_canonicalReportFault is not null)
+            throw new IOException(
+                "Canonical MMS InformationReport continuity is unverified; association receive routing has faulted.",
+                _canonicalReportFault);
+    }
+
     private void SignalInformationReportAvailable()
     {
         try
@@ -243,6 +330,8 @@ public sealed class MmsReceiveRouter
         {
             _confirmedByInvoke.Clear();
             _informationReports.Clear();
+            _queuedCanonicalBytes = 0;
+            _canonicalReportFault = null;
             _unconfirmed.Clear();
             _unmatched.Clear();
             subscriptions = _informationReportSubscriptions.Values.ToArray();

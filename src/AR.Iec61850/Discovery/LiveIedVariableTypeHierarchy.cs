@@ -84,6 +84,9 @@ internal static class LiveIedTypeHierarchyPointMaterializer
         {
             var domain = result.Reference.Domain.Trim();
             var logicalNode = result.Reference.Item.Trim();
+            // Fail closed: only known directory LN roots are materialized.
+            // DataSet-root closure first promotes confirmed MMS member references
+            // into this directory, after a successful exact LN type probe.
             if (!directory.LogicalDevices.TryGetValue(domain, out var logicalDevice) ||
                 !logicalDevice.LogicalNodes.ContainsKey(logicalNode))
             {

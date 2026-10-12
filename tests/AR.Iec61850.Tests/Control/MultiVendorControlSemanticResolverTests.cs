@@ -1,0 +1,66 @@
+using AR.Iec61850.Control;
+using AR.Iec61850.Mms;
+
+namespace AR.Iec61850.Tests.Control;
+
+public sealed class MultiVendorControlSemanticResolverTests
+{
+    [Theory]
+    [InlineData("BSC", "BSC", "bit-string", 2, "LD/ATCC1.TapChg.valWTr.posVal", true)]
+    [InlineData("DPC", "DPC", "bit-string", 2, "LD/CSWI1.Pos.stVal", true)]
+    [InlineData("SPC", "SPC", "boolean", 0, "LD/GGIO1.Enable.stVal", true)]
+    [InlineData("BSC", "DPC", "bit-string", 2, "LD/ATCC1.TapChg.stVal", false)]
+    [InlineData("DPC", "BSC", "bit-string", 2, "LD/CSWI1.Pos.valWTr.posVal", false)]
+    [InlineData("INC", "INC/ISC", "integer", 0, "LD/GGIO1.Set.stVal", true)]
+    [InlineData("", "INC/ISC", "integer", 0, "LD/GGIO1.Set.stVal", false)]
+    [InlineData("ISC", "INC/ISC", "bit-string", 2, "LD/ATCC1.Step.stVal", false)]
+    [InlineData("", "DPC", "bit-string", 2, "LD/CSWI1.Pos.stVal", true)]
+    public void ResolvesOnlyCorroboratedCommandSemantics(
+        string declared, string observed, string mmsType, int size, string status, bool safe)
+    {
+        var reference = status[..status.LastIndexOf('.')];
+        if (status.EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase))
+            reference = reference[..reference.LastIndexOf('.')];
+        var descriptor = NewDescriptor(reference, observed, mmsType, size, status);
+        var result = Iec61850ControlSemanticResolver.Resolve(descriptor, declared);
+        Assert.Equal(safe, result.IsCommandSafe);
+        Assert.False(string.IsNullOrWhiteSpace(result.Reason));
+    }
+
+    [Fact]
+    public void DisagreedPersistedBscFeedbackIsNotCommandAuthority()
+    {
+        var descriptor = NewDescriptor("LD/ATCC1.TapChg", "BSC", "bit-string", 2,
+            "LD/ATCC1.TapChg.valWTr.posVal");
+        var result = Iec61850ControlSemanticResolver.Resolve(
+            descriptor, "BSC", "LD/ATCC2.TapChg.valWTr.posVal");
+        Assert.False(result.IsCommandSafe);
+        Assert.Contains("disagrees", result.Reason);
+    }
+
+    [Fact]
+    public void RawTwoBitEncodingAloneCannotEstablishBscDirection()
+    {
+        var descriptor = NewDescriptor("LD/ATCC1.TapChg", "DPC", "bit-string", 2,
+            "LD/ATCC1.TapChg.stVal");
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(descriptor, "BSC").IsCommandSafe);
+    }
+
+    private static Iec61850ControlObjectDescriptor NewDescriptor(
+        string reference, string cdc, string type, int size, string status) => new()
+    {
+        ObjectReference = reference,
+        Cdc = cdc,
+        ControlModel = Iec61850ControlModel.DirectNormal,
+        CtlValSpecification = new MmsTypeSpecificationNode
+        {
+            Name = "ctlVal", MmsType = type, Size = size <= 0 ? null : size
+        },
+        StatusReference = status,
+        OperSpecification = new MmsTypeSpecificationNode
+        {
+            MmsType = "structure",
+            Children = new[] { new MmsTypeSpecificationNode { Name = "ctlVal", MmsType = type } }
+        }
+    };
+}

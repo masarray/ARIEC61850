@@ -600,6 +600,30 @@ public sealed class SmartControlStackTests
     }
 
     [Fact]
+    public async Task DescriptorDiscovery_RecognizesBscStepControl_FromExactLiveValWTrPosition()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(4) });
+        transport.Specifications["ATCC1$CO$TapChg$Oper"] = CommandSpecification();
+        transport.Specifications["ATCC1$CO$TapChg$SBOw"] = CommandSpecification();
+        transport.Specifications["ATCC1$CO$TapChg$Cancel"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[]
+        {
+            "ATCC1$ST$TapChg$valWTr$posVal",
+            "ATCC1$ST$TapChg$q"
+        };
+        var service = new Iec61850ControlService();
+
+        await using var session = await service.OpenCoreAsync(transport, "LD0/ATCC1.TapChg");
+
+        Assert.Equal("BSC", session.Descriptor.Cdc);
+        Assert.Equal(Iec61850ControlModel.SelectBeforeOperateEnhanced, session.Descriptor.ControlModel);
+        Assert.Equal("LD0/ATCC1.TapChg.valWTr.posVal", session.Descriptor.StatusReference);
+        Assert.Equal("ST", session.Descriptor.StatusFunctionalConstraint);
+        Assert.Equal("bit-string", session.Descriptor.CtlValSpecification.MmsType);
+    }
+
+    [Fact]
     public async Task DescriptorDiscovery_RejectsSboObjectWithoutCancelService()
     {
         var transport = new FakeControlTransport();

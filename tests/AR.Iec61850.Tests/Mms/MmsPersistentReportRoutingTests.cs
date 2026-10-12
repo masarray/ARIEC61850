@@ -20,6 +20,68 @@ public sealed class MmsPersistentReportRoutingTests
     }
 
     [Fact]
+    public void Selector_RejectsContradictoryDomainQualifiedDataSetWithExactReportId()
+    {
+        var first = CreateSession("URCBA01", "RPT_A", "IEDLD0/LLN0.DS_A");
+        var second = CreateSession("URCBA02", "RPT_B", "IEDLD0/LLN0.DS_B");
+
+        var selected = MmsClientSession.SelectPersistentReportMonitor(
+            [first, second],
+            new MmsReportHeader { ReportId = "RPT_A", DataSetReference = "IEDLD0/LLN0$DS_B" },
+            out var evidence);
+
+        Assert.Null(selected);
+        Assert.Contains("RptID/DatSet conflict", evidence);
+    }
+
+    [Fact]
+    public void Selector_RejectsUnknownFullDataSetDespiteMatchingReportId()
+    {
+        var first = CreateSession("URCBA01", "RPT_A", "IEDLD0/LLN0.DS_A");
+        var second = CreateSession("URCBA02", "RPT_B", "IEDLD0/LLN0.DS_B");
+
+        var selected = MmsClientSession.SelectPersistentReportMonitor(
+            [first, second],
+            new MmsReportHeader { ReportId = "RPT_A", DataSetReference = "OTHERLD/LLN0$DS_X" },
+            out var evidence);
+
+        Assert.Null(selected);
+        Assert.Contains("quarantined", evidence);
+    }
+
+    [Fact]
+    public void Selector_SingleActiveMonitor_DoesNotBypassDataSetConsistency()
+    {
+        var session = CreateSession("URCBA01", "RPT_A", "IEDLD0/LLN0.DS_A");
+
+        var selected = MmsClientSession.SelectPersistentReportMonitor(
+            [session],
+            new MmsReportHeader { ReportId = "UNRECOGNIZED", DataSetReference = "OTHERLD/LLN0.DS_X" },
+            out var evidence);
+
+        Assert.Null(selected);
+        Assert.Contains("single-monitor DatSet conflict", evidence);
+    }
+
+    [Fact]
+    public void Selector_PreservesValidNoDataSetAndVendorShortDataSetCompatibility()
+    {
+        var session = CreateSession("URCBA01", "RPT_A", "IEDLD0/LLN0.DS_A");
+
+        var missing = MmsClientSession.SelectPersistentReportMonitor(
+            [session], new MmsReportHeader { ReportId = "RPT_A" }, out var missingEvidence);
+        var shortName = MmsClientSession.SelectPersistentReportMonitor(
+            [session],
+            new MmsReportHeader { ReportId = "RPT_A", DataSetReference = "LLN0$DS_A" },
+            out var shortEvidence);
+
+        Assert.Same(session, missing);
+        Assert.Same(session, shortName);
+        Assert.Equal("exact RptID", missingEvidence);
+        Assert.Equal("exact RptID", shortEvidence);
+    }
+
+    [Fact]
     public void Selector_RoutesByExactDataSetWhenReportIdIsUnavailable()
     {
         var first = CreateSession("URCBA01", "", "IEDLD0/LLN0.DS_A");

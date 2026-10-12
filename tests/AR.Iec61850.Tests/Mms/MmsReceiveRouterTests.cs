@@ -266,6 +266,63 @@ public sealed class MmsReceiveRouterTests
             await subscription.Reader.Completion.WaitAsync(timeout.Token));
     }
 
+    [Fact]
+    public void CanonicalCapacityExceeded_PreservesOriginalFifoAndFailsClosedUntilClear()
+    {
+        var router = new MmsReceiveRouter(canonicalReportCapacity: 3);
+        var original = Enumerable.Range(1, 3).Select(BuildInformationReport).ToArray();
+        foreach (var report in original)
+            router.Route(report);
+
+        var failure = Assert.Throws<IOException>(() => router.Route(BuildInformationReport(4)));
+        Assert.Contains("bounded frame/byte capacity", failure.Message);
+        Assert.Equal(3, router.QueuedInformationReportCount);
+
+        for (var i = 0; i < original.Length; i++)
+        {
+            Assert.True(router.TryDequeueInformationReport(out var report));
+            Assert.Equal(original[i], report.PresentationPayload);
+        }
+
+        Assert.Throws<IOException>(() => router.TryDequeueInformationReport(out _));
+        Assert.Throws<IOException>(() => router.Route(BuildConfirmedReadResponse(42)));
+        router.Clear();
+
+        Assert.Equal(0, router.QueuedInformationReportCount);
+        router.Route(BuildInformationReport(5));
+        Assert.True(router.TryDequeueInformationReport(out _));
+        Assert.False(router.TryDequeueInformationReport(out _));
+    }
+
+    [Fact]
+    public void CanonicalByteCapacity_RejectsThirdReportWithoutUnboundedRetention()
+    {
+        var report = BuildInformationReport(1);
+        var router = new MmsReceiveRouter(
+            canonicalReportCapacity: 10,
+            canonicalReportByteCapacity: 2L * report.Length);
+        router.Route(report);
+        router.Route(report);
+
+        Assert.Throws<IOException>(() => router.Route(report));
+        Assert.Equal(2, router.QueuedInformationReportCount);
+        Assert.True(router.TryDequeueInformationReport(out _));
+        Assert.True(router.TryDequeueInformationReport(out _));
+        Assert.Throws<IOException>(() => router.TryDequeueInformationReport(out _));
+    }
+
+    [Fact]
+    public async Task CanonicalTerminalFault_WakesWaitingMonitorWithoutFalseTimeout()
+    {
+        var router = new MmsReceiveRouter();
+        var waiting = router.WaitForInformationReportAsync(TimeSpan.FromSeconds(2));
+        router.FaultCanonicalInformationReports(new IOException("scripted association failure"));
+
+        var failure = await Assert.ThrowsAsync<IOException>(() => waiting);
+        Assert.Contains("continuity is unverified", failure.Message);
+        Assert.Contains("scripted association failure", failure.InnerException?.Message);
+    }
+
     private static byte[] BuildConfirmedReadResponse(int invokeId)
     {
         var data = MmsDataCodec.Encode(MmsDataValue.Boolean(true));

@@ -796,7 +796,8 @@ public sealed class SmartControlStackTests
     {
         var transport = new FakeControlTransport();
         transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
-        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = false, Message = "step absent" });
+        // CSWI.Pos requires exactly one typed ST.stVal read, not a
+        // speculative valWTr probe first.
         transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
             Value = MmsDataValue.BitString(6, new byte[] { 0x40 }) });
         transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecification();

@@ -579,6 +579,38 @@ public sealed class SmartControlStackTests
         Assert.Contains("IIec61850ControlService", result.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(0L, Iec61850ControlModel.StatusOnly)]
+    [InlineData(3L, Iec61850ControlModel.DirectEnhanced)]
+    [InlineData(4L, Iec61850ControlModel.SelectBeforeOperateEnhanced)]
+    public async Task ReadOnlyCtlModelProbe_DecodesExactReference_NoCommandWrites(
+        long raw, Iec61850ControlModel expected)
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(raw) });
+        var probe = await new Iec61850ControlService().ProbeControlModelCoreAsync(
+            transport, "ZIVAVRLD1/ATCC1.TapChg");
+        Assert.True(probe.ReadSucceeded);
+        Assert.True(probe.Decoded);
+        Assert.Equal(expected, probe.ControlModel);
+        Assert.Equal("ATCC1$CF$TapChg$ctlModel", Assert.Single(transport.Reads).Item);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task ReadOnlyCtlModelProbe_FailedReadCannotMasqueradeAsStatusOnly()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = false, Message = "object-non-existent" });
+        var probe = await new Iec61850ControlService().ProbeControlModelCoreAsync(
+            transport, "ZIVAVRLD1/CSWI1.Pos");
+        Assert.False(probe.ReadSucceeded);
+        Assert.False(probe.Decoded);
+        Assert.Equal(Iec61850ControlModel.Unknown, probe.ControlModel);
+        Assert.Contains("object-non-existent", probe.Detail);
+        Assert.Empty(transport.Writes);
+    }
+
     [Fact]
     public async Task DescriptorDiscovery_UsesLiveCtlModelAndExactCtlValType()
     {

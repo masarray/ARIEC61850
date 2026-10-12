@@ -41,6 +41,60 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             cancellationToken);
     }
 
+    /// <summary>
+    /// Read-only exact CF ctlModel probe. An unsuccessful read, unknown encoding,
+    /// and an explicitly reported StatusOnly model are distinct outcomes.
+    /// Never discovers variable directories or writes any control service.
+    /// </summary>
+    public Task<Iec61850ControlModelProbe> ProbeControlModelAsync(
+        MmsClientSession session,
+        string objectReference,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return ProbeControlModelCoreAsync(new MmsClientControlTransport(session), objectReference, cancellationToken);
+    }
+
+    internal async Task<Iec61850ControlModelProbe> ProbeControlModelCoreAsync(
+        IIec61850ControlTransport transport,
+        string objectReference,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+        if (!transport.IsAssociated)
+            throw new InvalidOperationException("IEC 61850 ctlModel probe requires an active MMS association.");
+
+        var references = Iec61850ControlObjectReferences.Parse(objectReference);
+        var read = await transport.ReadAsync(references.CtlModel, cancellationToken).ConfigureAwait(false);
+        var kind = read.Value?.Kind.ToString() ?? "Unavailable";
+        var numeric = read.Value?.Kind is MmsDataKind.Integer or MmsDataKind.Unsigned
+            ? Convert.ToString(read.Value.Value, System.Globalization.CultureInfo.InvariantCulture) ?? ""
+            : "";
+        var model = read.IsSuccess && read.Value != null
+            ? DecodeControlModel(read.Value)
+            : Iec61850ControlModel.Unknown;
+        var decoded = read.IsSuccess && read.Value != null && model != Iec61850ControlModel.Unknown;
+        var detail = !read.IsSuccess || read.Value == null
+            ? $"MMS Read failed/unavailable: {read.Message}"
+            : !decoded
+                ? $"MMS Read returned unsupported ctlModel encoding/value ({kind}, {numeric})."
+                : $"Exact MMS Read returned ctlModel={numeric} ({model}).";
+        return new Iec61850ControlModelProbe(
+            references.ObjectReference,
+            references.CtlModel.ToString(),
+            read.IsSuccess && read.Value != null,
+            decoded,
+            model,
+            kind,
+            numeric,
+            detail,
+            BoundedHex(transport.LastRequestHex),
+            BoundedHex(transport.LastResponseHex));
+    }
+
+    private static string BoundedHex(string? hex)
+        => string.IsNullOrWhiteSpace(hex) ? "" : hex.Length <= 512 ? hex : hex[..512] + "… (truncated)";
+
     internal Task<Iec61850ControlObjectSession> OpenCoreAsync(
         IIec61850ControlTransport transport,
         string objectReference,
@@ -264,3 +318,16 @@ public sealed class Iec61850ControlService : IIec61850ControlService
     private static string NormalizeName(string value)
         => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 }
+
+\n/// <summary>Read-only ctlModel evidence; not permission to send an MMS control write.</summary>
+public sealed record Iec61850ControlModelProbe(
+    string ObjectReference,
+    string MmsReference,
+    bool ReadSucceeded,
+    bool Decoded,
+    Iec61850ControlModel ControlModel,
+    string RawKind,
+    string RawScalar,
+    string Detail,
+    string RequestHexPreview,
+    string ResponseHexPreview);

@@ -741,7 +741,7 @@ public sealed class SmartControlStackTests
         Assert.Equal("SPC", control.Descriptor.Cdc); // wire ctlVal is boolean, not the process CDC
         Assert.True(Iec61850ControlSemanticResolver.Resolve(control.Descriptor, "DPC").IsCommandSafe);
         Assert.Contains(transport.Reads, x => x.Item == "CSWI1$ST$Pos$stVal");
-        Assert.Single(transport.Reads.Where(x => x.Item.Contains("$ST$Pos$", StringComparison.Ordinal)));
+        Assert.Single(transport.Reads, x => x.Item.Contains("$ST$Pos$", StringComparison.Ordinal));
         Assert.Empty(transport.Writes);
     }
 
@@ -786,7 +786,7 @@ public sealed class SmartControlStackTests
         transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
         await using var control = await new Iec61850ControlService().OpenCoreAsync(
             transport, "LD0/GGIO1.SomeCtrl");
-        Assert.Empty(transport.Reads.Where(x => x.FunctionalConstraint == "ST"));
+        Assert.DoesNotContain(transport.Reads, x => x.FunctionalConstraint == "ST");
         Assert.Equal("", control.Descriptor.StatusReference);
         Assert.Empty(transport.Writes);
     }

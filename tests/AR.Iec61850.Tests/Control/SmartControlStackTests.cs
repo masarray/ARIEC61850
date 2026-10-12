@@ -724,7 +724,38 @@ public sealed class SmartControlStackTests
     }
 
     [Fact]
-    public async Task DescriptorDiscovery_RejectsSboObjectWithoutCancelService()
+    public async Task StructuredStatusInventory_VerifiesScalarViaLiveRead()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = false, Message = "step absent" });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.BitString(6, new byte[] { 0x40 }) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[] { "CSWI1$ST$Pos" };
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(transport, "LD0/CSWI1.Pos");
+        Assert.Equal("LD0/CSWI1.Pos.stVal", session.Descriptor.StatusReference);
+        Assert.Equal("ST", session.Descriptor.StatusFunctionalConstraint);
+        Assert.True(session.Descriptor.IsOperationallyReady);
+        Assert.Contains(transport.Reads, x => x.Item == "CSWI1$ST$Pos$stVal");
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task StructuredStatusInventory_UnreadableStatusNeverAuthorizesCommand()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[] { "CSWI1$ST$Pos" };
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(transport, "LD0/CSWI1.Pos");
+        Assert.Equal("", session.Descriptor.StatusReference);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(session.Descriptor, "DPC").IsCommandSafe);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task DescriptorDiscovery_AcceptsSboNormalWithoutCancelService()
     {
         var transport = new FakeControlTransport();
         transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
@@ -732,10 +763,10 @@ public sealed class SmartControlStackTests
         transport.DomainVariables["LD0"] = new[] { "CSWI1$ST$Pos$stVal" };
         var service = new Iec61850ControlService();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.OpenCoreAsync(transport, "LD0/CSWI1.Pos"));
-
-        Assert.Contains("incomplete", error.Message, StringComparison.OrdinalIgnoreCase);
+        await using var session = await service.OpenCoreAsync(transport, "LD0/CSWI1.Pos");
+        Assert.Equal(Iec61850ControlModel.SelectBeforeOperateNormal, session.Descriptor.ControlModel);
+        Assert.True(session.Descriptor.IsOperationallyReady);
+        Assert.Null(session.Descriptor.CancelSpecification);
     }
 
     private static Iec61850ControlObjectSession NewSession(

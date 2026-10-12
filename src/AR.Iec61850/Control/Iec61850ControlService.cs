@@ -243,7 +243,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             _options.DefaultOperateTimeout,
             cancellationToken).ConfigureAwait(false);
 
-        var status = FindStatusReference(references, domainNames);
+        var status = await FindStatusReferenceAsync(transport, references, domainNames, cancellationToken).ConfigureAwait(false);
         var supportsTimeActivated = operSpecification.Children.Any(x => NormalizeName(x.Name) == "opertm");
         var descriptor = new Iec61850ControlObjectDescriptor
         {
@@ -365,6 +365,83 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         // Hide the MMS functional-constraint segment in the user-facing IEC 61850
         // object reference: LD/LN.DO.DA instead of LD/LN.ST.DO.DA.
         return ($"{references.Domain}/{parts[0]}.{string.Join(".", parts.Skip(2))}", parts[1]);
+    }
+
+    // A structured ST DataObject can be listed without its scalar leaves.
+    // Corroborate status through a typed MMS read, not a guessed command type.
+    private static async Task<(string Reference, string FunctionalConstraint)> FindStatusReferenceAsync(
+        IIec61850ControlTransport transport, Iec61850ControlObjectReferences references,
+        IReadOnlyList<string> names, CancellationToken cancellationToken)
+    {
+        var exact = FindStatusReference(references, names);
+        if (!string.IsNullOrWhiteSpace(exact.Reference))
+            return exact;
+        var root = references.LogicalNode + "$ST$" + references.MmsDataObjectPath;
+        if (!names.Any(name => name.Equals(root, StringComparison.OrdinalIgnoreCase) ||
+                               name.StartsWith(root + "$", StringComparison.OrdinalIgnoreCase)))
+            return exact;
+        var candidates = new[]
+        {
+            (Suffix: "$valWTr$posVal", Path: ".valWTr.posVal", IsStep: true),
+            (Suffix: "$stVal", Path: ".stVal", IsStep: false)
+        };
+        foreach (var candidate in candidates)
+        {
+            var item = new MmsObjectReference(references.Domain, root + candidate.Suffix, "ST");
+            var read = await transport.ReadAsync(item, cancellationToken).ConfigureAwait(false);
+            if (!read.IsSuccess || read.Value == null)
+                continue;
+            var valid = candidate.IsStep
+                ? read.Value.Kind is MmsDataKind.Integer or MmsDataKind.Unsigned
+                : read.Value.Kind is MmsDataKind.BitString or MmsDataKind.Boolean;
+            if (valid)
+                return (references.Domain + "/" + references.LogicalNode + "." +
+                        references.MmsDataObjectPath.Replace('
+    {
+        var type = ctlVal.MmsType.Trim().ToLowerInvariant();
+        if (type == "boolean") return "SPC";
+        if (type == "bit-string") return "DPC";
+        if (type == "floating-point") return "APC";
+        if (type is "integer" or "unsigned" or "bcd") return "INC/ISC";
+        if (type == "structure")
+        {
+            var names = ctlVal.Children.Select(x => NormalizeName(x.Name)).ToArray();
+            if (names.Contains("posval") || names.Contains("transind")) return "BSC";
+            if (names.Contains("f") || names.Contains("i")) return "APC";
+        }
+        return "vendor-specific";
+    }
+
+    private static string NormalizeName(string value)
+        => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+}
+
+
+/// <summary>Read-only ctlModel evidence; not permission to send an MMS control write.</summary>
+public sealed record Iec61850ControlModelProbe(
+    string ObjectReference,
+    string MmsReference,
+    bool ReadSucceeded,
+    bool Decoded,
+    Iec61850ControlModel ControlModel,
+    string RawKind,
+    string RawScalar,
+    string Detail,
+    string RequestHexPreview,
+    string ResponseHexPreview);
+
+
+/// <summary>Configuration result is not permission to operate primary equipment.</summary>
+public sealed record Iec61850ControlModelConfigurationResult(
+    bool WriteAccepted,
+    bool ReadbackVerified,
+    Iec61850ControlModel BeforeModel,
+    Iec61850ControlModel AfterModel,
+    string MmsReference,
+    string Detail);
+, '.') + candidate.Path, "ST");
+        }
+        return exact;
     }
 
     private static string InferCdc(MmsTypeSpecificationNode ctlVal)

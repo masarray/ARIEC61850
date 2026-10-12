@@ -174,7 +174,9 @@ public sealed class Iec61850ControlObjectDescriptor
         ControlModel is not Iec61850ControlModel.StatusOnly and not Iec61850ControlModel.Unknown &&
         !string.IsNullOrWhiteSpace(ObjectReference) &&
         !string.IsNullOrWhiteSpace(CtlValSpecification.MmsType) &&
-        (!RequiresSelect || CancelSpecification != null) &&
+        // Normal SBO Select -> Operate does not depend on optional Cancel.
+        // Enhanced SBO still requires Cancel for sequence recovery.
+        (ControlModel != Iec61850ControlModel.SelectBeforeOperateEnhanced || CancelSpecification != null) &&
         (ControlModel != Iec61850ControlModel.SelectBeforeOperateEnhanced || SelectWithValueSpecification != null) &&
         (!IsEnhanced || SupportsCommandTermination);
 

@@ -612,6 +612,23 @@ public sealed class SmartControlStackTests
     }
 
     [Fact]
+    public async Task CtlModelCommissioning_AllowExplicitStatusOnlyZero_WithReadback()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(0) });
+        var result = await new Iec61850ControlService().ConfigureControlModelCoreAsync(
+            transport, "ZIVAVRLD1/CSWI1.Pos",
+            Iec61850ControlModel.SelectBeforeOperateNormal,
+            Iec61850ControlModel.StatusOnly);
+        Assert.True(result.WriteAccepted);
+        Assert.True(result.ReadbackVerified);
+        var write = Assert.Single(transport.Writes);
+        Assert.Equal("CSWI1$CF$Pos$ctlModel", write.Reference.Item);
+        Assert.Equal(0L, write.Value.Value);
+    }
+
+    [Fact]
     public async Task CtlModelCommissioning_DoesNotWriteUnknownOrNoChange()
     {
         var transport = new FakeControlTransport();

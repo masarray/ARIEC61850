@@ -117,12 +117,12 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         if (!transport.IsAssociated)
             throw new InvalidOperationException("Control model configuration requires an active MMS association.");
         if (expectedLiveModel == Iec61850ControlModel.Unknown ||
-            requestedModel is not (Iec61850ControlModel.DirectNormal or
+            requestedModel is not (Iec61850ControlModel.StatusOnly or Iec61850ControlModel.DirectNormal or
                 Iec61850ControlModel.SelectBeforeOperateNormal or
                 Iec61850ControlModel.DirectEnhanced or
                 Iec61850ControlModel.SelectBeforeOperateEnhanced))
             throw new ArgumentOutOfRangeException(nameof(requestedModel),
-                "Only exact, known control models 1-4 can be commissioned.");
+                "Only exact, known control models 0-4 can be commissioned.");
 
         var reference = Iec61850ControlObjectReferences.Parse(objectReference).CtlModel;
         var before = await ProbeControlModelCoreAsync(

@@ -579,6 +579,57 @@ public sealed class SmartControlStackTests
         Assert.Contains("IIec61850ControlService", result.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task CtlModelCommissioning_WritesExactCfOnce_AndVerifiesReadback()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(0) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
+        var result = await new Iec61850ControlService().ConfigureControlModelCoreAsync(
+            transport, "ZIVAVRLD1/CSWI1.Pos",
+            Iec61850ControlModel.StatusOnly, Iec61850ControlModel.SelectBeforeOperateNormal);
+        Assert.True(result.WriteAccepted);
+        Assert.True(result.ReadbackVerified);
+        var write = Assert.Single(transport.Writes);
+        Assert.Equal("CSWI1$CF$Pos$ctlModel", write.Reference.Item);
+        Assert.Equal(MmsDataKind.Integer, write.Value.Kind);
+        Assert.Equal(2L, write.Value.Value);
+        Assert.Equal(2, transport.Reads.Count);
+        Assert.DoesNotContain(transport.Writes, x => x.Reference.Item.Contains("$CO$", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CtlModelCommissioning_StaleExpectedValueNeverWrites()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(3) });
+        var result = await new Iec61850ControlService().ConfigureControlModelCoreAsync(
+            transport, "ZIVAVRLD1/CSWI2.Pos",
+            Iec61850ControlModel.StatusOnly, Iec61850ControlModel.SelectBeforeOperateEnhanced);
+        Assert.False(result.WriteAccepted);
+        Assert.False(result.ReadbackVerified);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task CtlModelCommissioning_DoesNotWriteUnknownOrNoChange()
+    {
+        var transport = new FakeControlTransport();
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            new Iec61850ControlService().ConfigureControlModelCoreAsync(
+                transport, "LD0/CSWI1.Pos",
+                Iec61850ControlModel.StatusOnly, Iec61850ControlModel.Unknown));
+        Assert.Empty(transport.Reads);
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
+        var result = await new Iec61850ControlService().ConfigureControlModelCoreAsync(
+            transport, "LD0/CSWI1.Pos",
+            Iec61850ControlModel.SelectBeforeOperateNormal,
+            Iec61850ControlModel.SelectBeforeOperateNormal);
+        Assert.False(result.WriteAccepted);
+        Assert.True(result.ReadbackVerified);
+        Assert.Empty(transport.Writes);
+    }
+
     [Theory]
     [InlineData(0L, Iec61850ControlModel.StatusOnly)]
     [InlineData(3L, Iec61850ControlModel.DirectEnhanced)]

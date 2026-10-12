@@ -92,6 +92,74 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             BoundedHex(transport.LastResponseHex));
     }
 
+    /// <summary>
+    /// Explicit commissioning-only ctlModel update. The caller must confirm
+    /// device authorization separately. One exact CF write at most; no fallback
+    /// sequence or implicit command Operate is attempted.
+    /// </summary>
+    public Task<Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(
+        MmsClientSession session, string objectReference,
+        Iec61850ControlModel expectedLiveModel, Iec61850ControlModel requestedModel,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return ConfigureControlModelCoreAsync(
+            new MmsClientControlTransport(session), objectReference,
+            expectedLiveModel, requestedModel, cancellationToken);
+    }
+
+    internal async Task<Iec61850ControlModelConfigurationResult> ConfigureControlModelCoreAsync(
+        IIec61850ControlTransport transport, string objectReference,
+        Iec61850ControlModel expectedLiveModel, Iec61850ControlModel requestedModel,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+        if (!transport.IsAssociated)
+            throw new InvalidOperationException("Control model configuration requires an active MMS association.");
+        if (expectedLiveModel == Iec61850ControlModel.Unknown ||
+            requestedModel is not (Iec61850ControlModel.DirectNormal or
+                Iec61850ControlModel.SelectBeforeOperateNormal or
+                Iec61850ControlModel.DirectEnhanced or
+                Iec61850ControlModel.SelectBeforeOperateEnhanced))
+            throw new ArgumentOutOfRangeException(nameof(requestedModel),
+                "Only exact, known control models 1-4 can be commissioned.");
+
+        var reference = Iec61850ControlObjectReferences.Parse(objectReference).CtlModel;
+        var before = await ProbeControlModelCoreAsync(
+            transport, objectReference, cancellationToken).ConfigureAwait(false);
+        if (!before.Decoded || before.ControlModel != expectedLiveModel)
+            return new Iec61850ControlModelConfigurationResult(
+                false, false, before.ControlModel, Iec61850ControlModel.Unknown,
+                reference.ToString(),
+                $"No Write: live ctlModel changed or could not be verified. Expected={expectedLiveModel}; {before.Detail}");
+
+        if (expectedLiveModel == requestedModel)
+            return new Iec61850ControlModelConfigurationResult(
+                false, true, before.ControlModel, before.ControlModel,
+                reference.ToString(), "No Write: requested ctlModel is already active.");
+
+        // Deliberate one-shot configuration: no retries, no auto-rollback.
+        var write = await transport.WriteControlAsync(
+            reference, MmsDataValue.Integer((long)requestedModel), cancellationToken)
+            .ConfigureAwait(false);
+        var writeAccepted = write.IsSuccess && write.AccessResults.All(x => x.IsSuccess);
+        if (!writeAccepted)
+            return new Iec61850ControlModelConfigurationResult(
+                false, false, before.ControlModel, Iec61850ControlModel.Unknown,
+                reference.ToString(),
+                $"MMS ctlModel Write rejected; readback not assumed. {write.Message}");
+
+        var after = await ProbeControlModelCoreAsync(
+            transport, objectReference, cancellationToken).ConfigureAwait(false);
+        var verified = after.Decoded && after.ControlModel == requestedModel;
+        return new Iec61850ControlModelConfigurationResult(
+            true, verified, before.ControlModel, after.ControlModel,
+            reference.ToString(),
+            verified
+                ? $"ctlModel Write accepted and exact MMS readback confirmed {requestedModel}."
+                : $"Write accepted but readback is not verified: {after.Detail}. Do not Operate until reinspection.");
+    }
+
     private static string BoundedHex(string? hex)
         => string.IsNullOrWhiteSpace(hex) ? "" : hex.Length <= 512 ? hex : hex[..512] + "… (truncated)";
 
@@ -332,3 +400,13 @@ public sealed record Iec61850ControlModelProbe(
     string Detail,
     string RequestHexPreview,
     string ResponseHexPreview);
+
+
+/// <summary>Configuration result is not permission to operate primary equipment.</summary>
+public sealed record Iec61850ControlModelConfigurationResult(
+    bool WriteAccepted,
+    bool ReadbackVerified,
+    Iec61850ControlModel BeforeModel,
+    Iec61850ControlModel AfterModel,
+    string MmsReference,
+    string Detail);

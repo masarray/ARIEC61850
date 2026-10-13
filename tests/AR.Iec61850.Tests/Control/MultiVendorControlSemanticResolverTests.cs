@@ -28,6 +28,65 @@ public sealed class MultiVendorControlSemanticResolverTests
     }
 
     [Fact]
+    public void VerifiedLiveTapBscSupersedesStaleProjectedSpc_WithoutBooleanFallback()
+    {
+        var reference = "LD/ATCC1.TapChg";
+        var feedback = reference + ".valWTr.posVal";
+        var descriptor = NewDescriptor(reference, "BSC", "bit-string", 2, feedback);
+
+        // Reinspect/refresh after a static DataSet projected SPC. The
+        // descriptor is generated from the live MMS ctlVal + step status.
+        var first = Iec61850ControlSemanticResolver.Resolve(descriptor, "SPC", feedback);
+        Assert.True(first.IsCommandSafe);
+        Assert.Equal("BSC", first.Cdc);
+        Assert.Contains("advisory", first.Reason, StringComparison.OrdinalIgnoreCase);
+
+        // Subsequent Operate validation uses the verified BSC authority.
+        var repeated = Iec61850ControlSemanticResolver.Resolve(descriptor, first.Cdc, feedback);
+        Assert.True(repeated.IsCommandSafe);
+        Assert.Equal("BSC", repeated.Cdc);
+    }
+
+    [Theory]
+    [InlineData("bit-string", 1)]
+    [InlineData("bit-string", 3)]
+    [InlineData("boolean", 0)]
+    public void ProjectedSpcConflictCannotAuthorizeWrongLiveCtlVal(string wireType, int width)
+    {
+        var reference = "LD/ATCC1.TapChg";
+        var descriptor = NewDescriptor(reference, "BSC", wireType, width,
+            reference + ".valWTr.posVal");
+        var resolution = Iec61850ControlSemanticResolver.Resolve(descriptor, "SPC");
+        Assert.False(resolution.IsCommandSafe);
+        Assert.NotEqual("BSC", resolution.Cdc);
+    }
+
+    [Fact]
+    public void ProjectedSpcConflictCannotOverrideDifferentObjectOrPersistedFeedback()
+    {
+        var reference = "LD/ATCC1.TapChg";
+        var exact = reference + ".valWTr.posVal";
+        var differentObject = NewDescriptor(reference, "BSC", "bit-string", 2,
+            "LD/ATCC2.TapChg.valWTr.posVal");
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(differentObject, "SPC").IsCommandSafe);
+
+        var live = NewDescriptor(reference, "BSC", "bit-string", 2, exact);
+        var conflict = Iec61850ControlSemanticResolver.Resolve(
+            live, "SPC", "LD/ATCC2.TapChg.valWTr.posVal");
+        Assert.False(conflict.IsCommandSafe);
+        Assert.Contains("disagrees", conflict.Reason);
+    }
+
+    [Fact]
+    public void UnrelatedDeclaredCdcDoesNotGainBscAuthority()
+    {
+        var descriptor = NewDescriptor("LD/ATCC1.TapChg", "BSC", "bit-string", 2,
+            "LD/ATCC1.TapChg.valWTr.posVal");
+        var result = Iec61850ControlSemanticResolver.Resolve(descriptor, "DPC");
+        Assert.False(result.IsCommandSafe);
+    }
+
+    [Fact]
     public void DisagreedPersistedBscFeedbackIsNotCommandAuthority()
     {
         var descriptor = NewDescriptor("LD/ATCC1.TapChg", "BSC", "bit-string", 2,

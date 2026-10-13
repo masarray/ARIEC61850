@@ -20,7 +20,19 @@ public static class Iec61850ControlSemanticResolver
         var status = descriptor.StatusReference ?? string.Empty;
         var mmsType = (descriptor.CtlValSpecification.MmsType ?? string.Empty).Trim().ToLowerInvariant();
         var size = descriptor.CtlValSpecification.Size;
-        var cdc = string.IsNullOrWhiteSpace(declared) ? inferred : declared;
+        // A saved SCL/DataSet SPC can describe a process projection, not the
+        // command payload. Only an EXACT same-object ST step status plus a
+        // typed two-bit MMS ctlVal establishes live directional BSC authority.
+        // A bit-string alone (or a similarly named object) proves nothing.
+        var exactLiveBsc =
+            inferred == "BSC" &&
+            mmsType == "bit-string" && size == 2 &&
+            status.Equals(descriptor.ObjectReference + ".valWTr.posVal",
+                StringComparison.OrdinalIgnoreCase);
+        var supersededAdvisorySpc = declared == "SPC" && exactLiveBsc;
+        var cdc = supersededAdvisorySpc
+            ? "BSC"
+            : string.IsNullOrWhiteSpace(declared) ? inferred : declared;
 
         Iec61850ControlSemanticResolution Deny(string reason)
             => new(false, cdc, reason);
@@ -62,8 +74,11 @@ public static class Iec61850ControlSemanticResolver
         if (!supported)
             return Deny($"CDC '{cdc}' cannot be safely bound to live ctlVal '{descriptor.CtlValSpecification.Signature}' and status '{status}'.");
 
+        var provenance = supersededAdvisorySpc
+            ? " Saved/DataSet CDC=SPC was advisory and superseded by exact live BSC control evidence."
+            : string.Empty;
         return new(true, cdc,
-            $"Verified CDC={cdc}; live ctlModel={descriptor.ControlModel}; ctlVal={descriptor.CtlValSpecification.Signature}; status={status}.");
+            $"Verified CDC={cdc}; live ctlModel={descriptor.ControlModel}; ctlVal={descriptor.CtlValSpecification.Signature}; status={status}.{provenance}");
     }
 
     internal static bool IsStandardPosition(string reference)

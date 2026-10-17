@@ -20,7 +20,9 @@ on:
       - "*.slnx"
       - "Directory.Build.props"
   pull_request:
-    branches: [ main, feat/495-dataset-type-closure ]
+    # The live ARSAS product pins PR #169 until targeted engine changes pass CI.
+    # Stacked engine PRs must run the exact same Windows build/test gate.
+    branches: [ main, feat/495-dataset-type-closure, fix/p10-9l-readonly-ctlmodel-probe ]
   workflow_dispatch:
 
 permissions:

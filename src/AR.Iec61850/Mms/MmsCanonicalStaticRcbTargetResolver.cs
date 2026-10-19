@@ -66,6 +66,15 @@ public static class MmsCanonicalStaticRcbTargetResolver
 
             var exactReferenceMatches = liveInventory.ReportControls
                 .Where(candidate => configuredReferences.Contains(Normalize(candidate.Reference)))
+                .Where(candidate =>
+                    configuredBufferedFamilies.Count == 0 ||
+                    configuredBufferedFamilies.Contains(candidate.Buffered))
+                .Where(candidate =>
+                    canonicalDataSet.Length == 0 ||
+                    string.IsNullOrWhiteSpace(candidate.DataSetReference) ||
+                    string.Equals(
+                        Normalize(candidate.DataSetReference),
+                        canonicalDataSet, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
 
             var exactDataSetMatches = canonicalDataSet.Length == 0

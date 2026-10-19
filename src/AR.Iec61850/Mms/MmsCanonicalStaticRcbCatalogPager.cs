@@ -29,7 +29,8 @@ public static class MmsCanonicalStaticRcbCatalogPager
         CanonicalStaticReportCoveragePlan coverage,
         MmsReportInventory inventory,
         int maxReads,
-        string? continuationToken = null)
+        string? continuationToken = null,
+        string? associationKey = null)
     {
         ArgumentNullException.ThrowIfNull(coverage);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -88,6 +89,7 @@ public static class MmsCanonicalStaticRcbCatalogPager
         // The token is bound to the exact catalog/selection. On a changed
         // inventory it fails closed instead of skipping an arbitrary RCB.
         var input = new StringBuilder();
+        input.Append("association=").Append(associationKey ?? "detached").Append('\n');
         foreach (var target in requested
                      .OrderBy(t => t.Domain, StringComparer.Ordinal)
                      .ThenBy(t => t.Configured, StringComparer.Ordinal)

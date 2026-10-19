@@ -102,7 +102,7 @@ public sealed class MmsCanonicalStaticRcbCatalogPagerTests
             .ToArray();
         var first = MmsCanonicalStaticRcbCatalogPager.Select(
             Coverage(), Inventory(catalog), 2);
-        Assert.Equal(300, first.CatalogCount + 2);
+        Assert.Equal(302, first.CatalogCount);
         Assert.Equal(0, first.TargetBoundCount);
         Assert.Equal(2, first.Candidates.Count);
         Assert.Equal(

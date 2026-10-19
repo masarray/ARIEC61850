@@ -89,13 +89,14 @@ public static class MmsCanonicalStaticRcbCatalogPager
                         configured.Any(reference =>
                             IsIndexedInstance(Normalize(c.Reference), reference)))
             .ToArray();
+        var indexedSet = indexedUnbound.ToHashSet();
 
         var probes = bound.Length > 0
             ? bound.Concat(exactUnbound).ToArray()
             : exactUnbound.Concat(indexedUnbound).Concat(catalog
                 .Where(c => string.IsNullOrWhiteSpace(c.DataSetReference) &&
                             !configured.Contains(Normalize(c.Reference)) &&
-                            !indexedUnbound.Contains(c))).ToArray();
+                            !indexedSet.Contains(c))).ToArray();
 
         // The token is bound to the exact catalog/selection. On a changed
         // inventory it fails closed instead of skipping an arbitrary RCB.

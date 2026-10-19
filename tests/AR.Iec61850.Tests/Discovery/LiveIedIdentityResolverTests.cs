@@ -106,6 +106,18 @@ public sealed class LiveIedIdentityResolverTests
     }
 
 
+
+    [Fact]
+    public void Resolve_Preserves_Case_Distinct_Mms_Domains_And_Alias_Keys()
+    {
+        var domains = new[] { "STATIONBCUCTRL", "stationbcuctrl" };
+        var identity = LiveIedIdentityResolver.Resolve(domains, "192.0.2.42");
+        Assert.Equal(2, identity.LogicalDeviceAliases.Count);
+        Assert.Equal("CTRL", identity.LogicalDeviceAliases["STATIONBCUCTRL"]);
+        Assert.Equal("ctrl", identity.LogicalDeviceAliases["stationbcuctrl"]);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
+    }
+
     [Fact]
     public void Resolve_Fully_Known_Ld_Suffixes_Is_Still_Provisional_Without_Scl()
     {

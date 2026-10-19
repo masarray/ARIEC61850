@@ -43,7 +43,10 @@ public sealed class MmsCanonicalStaticAcquisitionProbePlan
 
 public sealed class MmsCanonicalStaticAcquisitionProbeOptions
 {
+    /// <summary>Maximum exact RCBs inspected per page, not a global catalog cap.</summary>
     public int MaxExactTargets { get; init; } = 64;
+    public int MaxExactTargetPagesPerInvocation { get; init; } = 8;
+    public string? ExactTargetContinuationToken { get; init; }
     public bool ReadDataSetDirectories { get; init; } = true;
     public IReadOnlySet<string> CallerOwnedRcbReferences { get; init; }
         = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -54,6 +57,9 @@ public sealed class MmsCanonicalStaticAcquisitionProbeResult
     public MmsCanonicalStaticAcquisitionProbePlan Plan { get; init; } = new();
     public MmsCanonicalStaticAcquisitionProbeStatus Status { get; init; }
     public bool NetworkProbePerformed { get; init; }
+    public int ExactTargetPageCount { get; init; }
+    public int DeferredExactTargetCount { get; init; }
+    public string? ExactTargetContinuationToken { get; init; }
     public MmsRcbAvailabilityResult? Availability { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 
@@ -247,47 +253,99 @@ public sealed partial class MmsClientSession
             };
         }
 
-        var maxTargets = Math.Clamp(options.MaxExactTargets, 1, 512);
-        if (plan.ExactTargetReportControlReferences.Count > maxTargets)
-        {
-            return new MmsCanonicalStaticAcquisitionProbeResult
-            {
-                Plan = plan,
-                Status = MmsCanonicalStaticAcquisitionProbeStatus.TargetBudgetExceeded,
-                NetworkProbePerformed = false,
-                Warnings = plan.Warnings
-                    .Concat(new[]
-                    {
-                        $"Exact static RCB target count {plan.ExactTargetReportControlReferences.Count} exceeds the configured hot-path budget {maxTargets}; no partial probe was started."
-                    })
-                    .ToArray()
-            };
-        }
-
+        var maxPerPage = Math.Clamp(options.MaxExactTargets, 1, 512);
+        var maxPages = Math.Clamp(options.MaxExactTargetPagesPerInvocation, 1, 32);
         EnsureMmsReady();
 
-        var availability = await CheckReportControlAvailabilityAsync(
-            liveInventory,
-            directory,
-            new MmsRcbAvailabilityOptions
-            {
-                MaxReportControls = maxTargets,
-                ReadDataSetDirectories = options.ReadDataSetDirectories,
-                TargetReportControlReferences = plan.ExactTargetReportControlReferences,
-                CallerOwnedRcbReferences = options.CallerOwnedRcbReferences
-            },
-            cancellationToken).ConfigureAwait(false);
+        var snapshots = new List<MmsRcbAvailabilitySnapshot>();
+        var probeWarnings = new List<string>();
+        var continuation = options.ExactTargetContinuationToken;
+        var totalExact = 0;
+        var pages = 0;
+        var stateReads = 0;
+        var directoryReads = 0;
+        var directoryHits = 0;
 
-        var status = plan.UnresolvedSegmentCount > 0
-            ? MmsCanonicalStaticAcquisitionProbeStatus.PartialAvailabilityChecked
-            : MmsCanonicalStaticAcquisitionProbeStatus.AvailabilityChecked;
+        while (pages < maxPages && IsMmsInitiated)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var page = MmsCanonicalStaticExactTargetPager.Select(
+                plan, liveInventory, maxPerPage, continuation,
+                _canonicalStaticRcbAssociationKey);
+            totalExact = page.TotalExactTargets;
+            continuation = page.ContinuationToken;
+            if (page.References.Count == 0)
+                break;
+
+            pages++;
+            // Exact target list, never a broad RCB availability probe.
+            var batch = await CheckReportControlAvailabilityAsync(
+                liveInventory,
+                directory,
+                new MmsRcbAvailabilityOptions
+                {
+                    MaxReportControls = maxPerPage,
+                    ReadDataSetDirectories = options.ReadDataSetDirectories,
+                    TargetReportControlReferences = page.References,
+                    CallerOwnedRcbReferences = options.CallerOwnedRcbReferences
+                },
+                cancellationToken).ConfigureAwait(false);
+            snapshots.AddRange(batch.ReportControls);
+            probeWarnings.AddRange(batch.Warnings);
+            stateReads += batch.TargetedRcbStateLogicalReadCount;
+            directoryReads += batch.DataSetDirectoryNetworkReadCount;
+            directoryHits += batch.DataSetDirectoryCacheHitCount;
+
+            // Once each resolved DataSet segment has an independently eligible
+            // exact RCB, additional pages provide no benefit to this one-shot
+            // selected acquisition. Availability is READ-ONLY; the consumer
+            // still verifies ordered members and user authorization before writes.
+            var resolvedSegments = plan.TargetResolution.Segments
+                .Where(segment => segment.ExactLiveReportControlReferences.Count > 0)
+                .ToArray();
+            var allHaveEligible = resolvedSegments.Length > 0 &&
+                resolvedSegments.All(segment =>
+                    snapshots.Any(snapshot =>
+                        segment.ExactLiveReportControlReferences.Any(reference =>
+                            string.Equals(
+                                MmsRcbAvailabilityEvaluator.NormalizeReference(reference),
+                                MmsRcbAvailabilityEvaluator.NormalizeReference(snapshot.Reference),
+                                StringComparison.OrdinalIgnoreCase)) &&
+                        MmsConfiguredStaticRcbEligibilityPolicy.Evaluate(
+                            snapshot, allowCallerOwned: true,
+                            allowReducedMissingReservationEvidence: true).IsEligible));
+            if (allHaveEligible || continuation is null)
+                break;
+        }
+
+        var deferred = Math.Max(0, totalExact - snapshots.Count);
+        if (continuation is not null)
+            probeWarnings.Add(
+                $"Exact target availability deferred {deferred} RCB(s) after {pages} bounded page(s); resume using ExactTargetContinuationToken.");
+        var availability = new MmsRcbAvailabilityResult
+        {
+            ReportControls = snapshots,
+            Warnings = probeWarnings.Distinct(StringComparer.Ordinal).ToArray(),
+            InventoryReportControlCount = liveInventory.ReportControls.Count,
+            TargetFilterApplied = true,
+            RequestedTargetReportControlCount = plan.ExactTargetReportControlReferences.Count,
+            MatchedTargetReportControlCount = snapshots.Count,
+            TargetedRcbStateLogicalReadCount = stateReads,
+            DataSetDirectoryNetworkReadCount = directoryReads,
+            DataSetDirectoryCacheHitCount = directoryHits
+        };
 
         return new MmsCanonicalStaticAcquisitionProbeResult
         {
             Plan = plan,
-            Status = status,
-            NetworkProbePerformed = true,
-            Availability = availability,
+            Status = continuation is not null || plan.UnresolvedSegmentCount > 0
+                ? MmsCanonicalStaticAcquisitionProbeStatus.PartialAvailabilityChecked
+                : MmsCanonicalStaticAcquisitionProbeStatus.AvailabilityChecked,
+            NetworkProbePerformed = pages > 0,
+            Availability = pages > 0 ? availability : null,
+            ExactTargetPageCount = pages,
+            DeferredExactTargetCount = deferred,
+            ExactTargetContinuationToken = continuation,
             Warnings = plan.Warnings
                 .Concat(availability.Warnings)
                 .Distinct(StringComparer.Ordinal)

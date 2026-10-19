@@ -262,6 +262,7 @@ public sealed partial class MmsClientSession
         var continuation = options.ExactTargetContinuationToken;
         var totalExact = 0;
         var pages = 0;
+        var targetedProbes = 0;
         var stateReads = 0;
         var directoryReads = 0;
         var directoryHits = 0;
@@ -278,6 +279,7 @@ public sealed partial class MmsClientSession
                 break;
 
             pages++;
+            targetedProbes += page.References.Count;
             // Exact target list, never a broad RCB availability probe.
             var batch = await CheckReportControlAvailabilityAsync(
                 liveInventory,
@@ -318,7 +320,7 @@ public sealed partial class MmsClientSession
                 break;
         }
 
-        var deferred = Math.Max(0, totalExact - snapshots.Count);
+        var deferred = Math.Max(0, totalExact - targetedProbes);
         if (continuation is not null)
             probeWarnings.Add(
                 $"Exact target availability deferred {deferred} RCB(s) after {pages} bounded page(s); resume using ExactTargetContinuationToken.");
@@ -338,7 +340,7 @@ public sealed partial class MmsClientSession
         return new MmsCanonicalStaticAcquisitionProbeResult
         {
             Plan = plan,
-            Status = continuation is not null || plan.UnresolvedSegmentCount > 0
+            Status = !IsMmsInitiated || pages == 0 || continuation is not null || plan.UnresolvedSegmentCount > 0
                 ? MmsCanonicalStaticAcquisitionProbeStatus.PartialAvailabilityChecked
                 : MmsCanonicalStaticAcquisitionProbeStatus.AvailabilityChecked,
             NetworkProbePerformed = pages > 0,

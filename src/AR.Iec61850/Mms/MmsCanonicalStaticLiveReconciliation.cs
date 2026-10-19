@@ -55,6 +55,9 @@ public sealed class MmsCanonicalStaticLiveReconciliationOptions
     /// The operation fails closed rather than reading an arbitrary subset.
     /// </summary>
     public int MaxReportControlCandidates { get; init; } = 64;
+
+    /// <summary>Zero-based continuation offset for one bounded read-only candidate window.</summary>
+    public int CandidateOffset { get; init; }
 }
 
 public sealed class MmsCanonicalStaticLiveReconciliationResult
@@ -64,6 +67,9 @@ public sealed class MmsCanonicalStaticLiveReconciliationResult
     public MmsReportInventory Inventory { get; init; } = new();
     public int EnumeratedVariableCount { get; init; }
     public int CandidateReportControlCount { get; init; }
+    public int ExaminedCandidateCount { get; init; }
+    public int DeferredCandidateCount { get; init; }
+    public int? NextCandidateOffset { get; init; }
     public int DataSetBoundReportControlCount { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 
@@ -72,8 +78,8 @@ public sealed class MmsCanonicalStaticLiveReconciliationResult
 
     public string Summary =>
         $"targeted live RCB reconciliation: status={Status}, domains={Plan.Domains.Count}, " +
-        $"rawVariables={EnumeratedVariableCount}, candidates={CandidateReportControlCount}, " +
-        $"datasetBound={DataSetBoundReportControlCount}, authority={Inventory.Authority}.";
+        $"rawVariables={EnumeratedVariableCount}, eligibleCandidates={CandidateReportControlCount}, " +
+        $"examined={ExaminedCandidateCount}, deferred={DeferredCandidateCount}, next={NextCandidateOffset?.ToString() ?? "none"}, datasetBound={DataSetBoundReportControlCount}, authority={Inventory.Authority}.";
 }
 
 public sealed class MmsCanonicalStaticSmartPreparationResult
@@ -265,38 +271,15 @@ public sealed partial class MmsClientSession
             DomainVariableLists = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         });
 
-        var targetsByDomain = plan.Domains.ToDictionary(
-            target => target.Domain,
-            StringComparer.Ordinal);
-
-        var candidates = observed.ReportControls
-            .Where(candidate =>
-                targetsByDomain.TryGetValue(candidate.Domain, out var target) &&
-                ((candidate.Buffered && target.NeedsBuffered) ||
-                 (!candidate.Buffered && target.NeedsUnbuffered)))
-            .OrderBy(candidate => candidate.Domain, StringComparer.Ordinal)
-            .ThenByDescending(candidate => candidate.Buffered)
-            .ThenBy(candidate => candidate.Reference, StringComparer.Ordinal)
-            .ToArray();
-
-        var maxCandidates = Math.Clamp(options.MaxReportControlCandidates, 1, 512);
-        if (candidates.Length > maxCandidates)
-        {
-            return new MmsCanonicalStaticLiveReconciliationResult
-            {
-                Plan = plan,
-                Status = MmsCanonicalStaticLiveReconciliationStatus.CandidateBudgetExceeded,
-                Inventory = emptyInventory,
-                EnumeratedVariableCount = variables.Values.Sum(list => list.Count),
-                CandidateReportControlCount = candidates.Length,
-                Warnings = plan.Warnings
-                    .Concat(new[]
-                    {
-                        $"Target domains expose {candidates.Length} required-family RCB candidates, exceeding live reconciliation budget {maxCandidates}; no partial RCB read subset was started."
-                    })
-                    .ToArray()
-            };
-        }
+        // Only the selected static coverage determines the candidate scope.
+        // A large server-wide RCB catalog is not itself a failure. Unknown
+        // DatSet bindings are inspected in a bounded, resumable window.
+        var candidatePage = MmsCanonicalStaticRcbCandidatePager.BuildPage(
+            coverage,
+            observed.ReportControls,
+            options.MaxReportControlCandidates,
+            options.CandidateOffset);
+        var candidates = candidatePage.Candidates;
 
         var inventory = new MmsReportInventory
         {
@@ -326,11 +309,14 @@ public sealed partial class MmsClientSession
                 break;
         }
 
-        var complete = IsMmsInitiated && chains.All(chain => chain.IsComplete);
+        var complete = IsMmsInitiated && chains.All(chain => chain.IsComplete) && !candidatePage.HasContinuation;
         var warnings = plan.Warnings
             .Concat(chains
                 .Where(chain => !chain.IsComplete)
                 .Select(chain => $"Target domain '{chain.Domain}' NamedVariable enumeration is partial: {chain.Message}"))
+            .Concat(candidatePage.HasContinuation
+                ? new[] { $"Deferred {candidatePage.DeferredCandidateCount} target-scoped RCB candidates; resume at offset {candidatePage.NextOffset} with a new bounded read-only request." }
+                : Array.Empty<string>())
             .Concat(candidates
                 .Where(candidate => string.IsNullOrWhiteSpace(candidate.DataSetReference))
                 .Select(candidate => $"Live RCB '{candidate.Reference}' did not expose a usable DatSet binding."))
@@ -347,7 +333,10 @@ public sealed partial class MmsClientSession
                     : MmsCanonicalStaticLiveReconciliationStatus.Partial,
             Inventory = inventory,
             EnumeratedVariableCount = variables.Values.Sum(list => list.Count),
-            CandidateReportControlCount = candidates.Length,
+            CandidateReportControlCount = candidatePage.EligibleCandidateCount,
+            ExaminedCandidateCount = candidatePage.ExaminedCandidateCount,
+            DeferredCandidateCount = candidatePage.DeferredCandidateCount,
+            NextCandidateOffset = candidatePage.NextOffset,
             DataSetBoundReportControlCount = candidates.Count(candidate =>
                 !string.IsNullOrWhiteSpace(candidate.DataSetReference)),
             Warnings = warnings

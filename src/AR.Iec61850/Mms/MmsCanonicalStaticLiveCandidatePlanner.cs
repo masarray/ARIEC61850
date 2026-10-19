@@ -35,14 +35,17 @@ public static class MmsCanonicalStaticLiveCandidatePlanner
         // Discovery without an exact catalog reference is not evidence that an
         // arbitrary first RCB belongs to the selected DataSet. Only bounded
         // read-only DatSet checks may resolve it, and completion remains partial.
-        var selected = exact.Skip(Math.Min(continuationOffset, exact.Length))
-            .Concat(unknown.Skip(Math.Max(0, continuationOffset - exact.Length)))
-            .Take(maxReads)
-            .ToArray();
-        var next = Math.Min(ordered.Length, continuationOffset + selected.Length);
+        // If every configured target has an exact live catalog reference,
+        // never probe unrelated siblings. A failed DatSet verification remains
+        // unresolved rather than silently falling back to broad mutation.
+        var allTargetsMapped = expected.Count > 0 && expected.All(reference =>
+            exact.Any(candidate => candidate.Reference == reference));
+        var scope = allTargetsMapped ? exact : exact.Concat(unknown).ToArray();
+        var selected = scope.Skip(continuationOffset).Take(maxReads).ToArray();
+        var next = Math.Min(scope.Length, continuationOffset + selected.Length);
         return new MmsCanonicalStaticLiveCandidatePage(
             selected, ordered.Length, exact.Length,
-            next < ordered.Length ? next : null);
+            next < scope.Length ? next : null);
     }
 }
 

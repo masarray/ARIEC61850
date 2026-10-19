@@ -89,9 +89,7 @@ public static class LiveIedIdentityResolver
         var commonPrefix = InferCommonPrefix(materialized);
         if (!string.IsNullOrWhiteSpace(commonPrefix))
         {
-            var confidence = materialized.Length >= 3
-                ? LiveIedDiscoveryConfidenceLevel.High
-                : LiveIedDiscoveryConfidenceLevel.Medium;
+            var confidence = LiveIedDiscoveryConfidenceLevel.Medium;
             return Create(
                 commonPrefix,
                 "MmsDomainCommonPrefix",
@@ -235,18 +233,10 @@ public static class LiveIedIdentityResolver
                 return string.Empty;
         }
 
+        // The common prefix is evidence of the shared IED-name candidate, not a
+        // logical-device suffix. Removing a known LD stem here corrupts valid
+        // names such as SIEBCU, STATIONPROT and STATIONMU.
         prefix = TrimBoundary(prefix);
-        foreach (var stem in KnownLogicalDeviceStems)
-        {
-            if (prefix.EndsWith(stem, StringComparison.OrdinalIgnoreCase) && prefix.Length > stem.Length)
-            {
-                var withoutStem = TrimBoundary(prefix[..^stem.Length]);
-                if (IsViableName(withoutStem))
-                    prefix = withoutStem;
-                break;
-            }
-        }
-
         return IsViableName(prefix) ? prefix : string.Empty;
     }
 

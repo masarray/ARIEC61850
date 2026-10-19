@@ -55,6 +55,9 @@ public sealed class MmsCanonicalStaticLiveReconciliationOptions
     /// The operation fails closed rather than reading an arbitrary subset.
     /// </summary>
     public int MaxReportControlCandidates { get; init; } = 64;
+
+    /// <summary>Stable index for resuming deferred candidate READs in this inventory.</summary>
+    public int CandidateContinuationOffset { get; init; }
 }
 
 public sealed class MmsCanonicalStaticLiveReconciliationResult
@@ -65,6 +68,8 @@ public sealed class MmsCanonicalStaticLiveReconciliationResult
     public int EnumeratedVariableCount { get; init; }
     public int CandidateReportControlCount { get; init; }
     public int DataSetBoundReportControlCount { get; init; }
+    public int? NextCandidateOffset { get; init; }
+    public int CandidateReadCount { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 
     public bool HasLiveInventory =>
@@ -280,31 +285,18 @@ public sealed partial class MmsClientSession
             .ToArray();
 
         var maxCandidates = Math.Clamp(options.MaxReportControlCandidates, 1, 512);
-        if (candidates.Length > maxCandidates)
-        {
-            return new MmsCanonicalStaticLiveReconciliationResult
-            {
-                Plan = plan,
-                Status = MmsCanonicalStaticLiveReconciliationStatus.CandidateBudgetExceeded,
-                Inventory = emptyInventory,
-                EnumeratedVariableCount = variables.Values.Sum(list => list.Count),
-                CandidateReportControlCount = candidates.Length,
-                Warnings = plan.Warnings
-                    .Concat(new[]
-                    {
-                        $"Target domains expose {candidates.Length} required-family RCB candidates, exceeding live reconciliation budget {maxCandidates}; no partial RCB read subset was started."
-                    })
-                    .ToArray()
-            };
-        }
+        var page = MmsCanonicalStaticLiveCandidatePlanner.Select(
+            coverage, candidates, maxCandidates, options.CandidateContinuationOffset);
+        // A page is a work budget, not an inventory completeness claim.
+        // Discovery never performs RCB writes or steals another association's reservation.
 
         var inventory = new MmsReportInventory
         {
             Authority = MmsReportInventoryAuthority.LiveMmsObserved
         };
-        inventory.ReportControls.AddRange(candidates);
+        inventory.ReportControls.AddRange(page.Candidates);
 
-        foreach (var candidate in candidates)
+        foreach (var candidate in page.Candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -326,8 +318,10 @@ public sealed partial class MmsClientSession
                 break;
         }
 
-        var complete = IsMmsInitiated && chains.All(chain => chain.IsComplete);
+        var complete = IsMmsInitiated && chains.All(chain => chain.IsComplete) && page.NextOffset is null;
         var warnings = plan.Warnings
+            .Concat(page.NextOffset is null ? Array.Empty<string>() :
+                [$"RCB candidate checks deferred; resume from candidate offset {page.NextOffset.Value}."])
             .Concat(chains
                 .Where(chain => !chain.IsComplete)
                 .Select(chain => $"Target domain '{chain.Domain}' NamedVariable enumeration is partial: {chain.Message}"))
@@ -348,7 +342,9 @@ public sealed partial class MmsClientSession
             Inventory = inventory,
             EnumeratedVariableCount = variables.Values.Sum(list => list.Count),
             CandidateReportControlCount = candidates.Length,
-            DataSetBoundReportControlCount = candidates.Count(candidate =>
+            CandidateReadCount = page.Candidates.Count,
+            NextCandidateOffset = page.NextOffset,
+            DataSetBoundReportControlCount = page.Candidates.Count(candidate =>
                 !string.IsNullOrWhiteSpace(candidate.DataSetReference)),
             Warnings = warnings
         };

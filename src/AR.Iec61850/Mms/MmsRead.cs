@@ -16,6 +16,7 @@ public sealed class MmsReadResult
     public bool IsSuccess { get; init; }
     public MmsDataValue? Value { get; init; }
     public int? FailureCode { get; init; }
+    public MmsReadEvidenceFailureKind FailureKind { get; init; }
     public string Message { get; init; } = string.Empty;
     public string ResponseHexPreview { get; init; } = string.Empty;
 }
@@ -93,10 +94,10 @@ public static class MmsReadResponseDecoder
                 return Fail("Empty MMS response payload.", hex);
 
             if (mms[0] == 0xA2)
-                return Fail($"MMS Confirmed-Error PDU received: {HexDump.ToCompactString(mms)}", hex);
+                return Fail($"MMS Confirmed-Error PDU received: {HexDump.ToCompactString(mms)}", hex, kind: MmsReadEvidenceFailureKind.ProtocolRejected);
 
             if (mms[0] == 0xA3 || mms[0] == 0xA4)
-                return Fail($"MMS Reject/Abort PDU received: {HexDump.ToCompactString(mms)}", hex);
+                return Fail($"MMS Reject/Abort PDU received: {HexDump.ToCompactString(mms)}", hex, kind: MmsReadEvidenceFailureKind.ProtocolRejected);
 
             if (!TryValidateConfirmedResponse(mms, expectedInvokeId, out var message))
                 return Fail(message, hex);
@@ -113,7 +114,9 @@ public static class MmsReadResponseDecoder
             }
 
             if (!string.IsNullOrWhiteSpace(accessMessage))
-                return Fail(accessMessage, hex, failureCode);
+                return Fail(accessMessage, hex, failureCode, failureCode.HasValue
+                    ? MmsReadEvidenceClassifier.FromAccessCode(failureCode)
+                    : MmsReadEvidenceFailureKind.InvalidResponse);
 
             // Legacy fallback for tolerant decoding of non-standard/short responses.
             var values = new List<BerTlv>();
@@ -123,7 +126,8 @@ public static class MmsReadResponseDecoder
             if (failure.EncodedTag == 0x80)
             {
                 var code = BerReader.ReadUnsignedInteger(failure);
-                return Fail(FormatDataAccessFailure(code), hex, code.HasValue ? (int)code.Value : null);
+                return Fail(FormatDataAccessFailure(code), hex, code.HasValue ? (int)code.Value : null,
+                    MmsReadEvidenceClassifier.FromAccessCode(code.HasValue ? (int)code.Value : null));
             }
 
             foreach (var tlv in values.AsEnumerable().Reverse())
@@ -365,12 +369,14 @@ public static class MmsReadResponseDecoder
             _ => "unknown"
         };
 
-    private static MmsReadResult Fail(string message, string hex, int? failureCode = null)
+    private static MmsReadResult Fail(string message, string hex, int? failureCode = null,
+        MmsReadEvidenceFailureKind kind = MmsReadEvidenceFailureKind.InvalidResponse)
     {
         return new MmsReadResult
         {
             IsSuccess = false,
             FailureCode = failureCode,
+            FailureKind = kind,
             Message = message,
             ResponseHexPreview = hex
         };

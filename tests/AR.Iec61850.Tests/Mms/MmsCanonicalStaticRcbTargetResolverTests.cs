@@ -80,6 +80,26 @@ public sealed class MmsCanonicalStaticRcbTargetResolverTests
             warning => warning.Contains("No sibling/name-family guess", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void ConfiguredRcbWithContradictoryLiveDataSet_MustNotBecomeOperationalTarget()
+    {
+        var coverage = Coverage(
+            dataSet: "LD0/LLN0.Events",
+            configured: new CanonicalReportControl
+            {
+                Reference = "LD0/LLN0.BR.Rpt01",
+                DataSetReference = "LD0/LLN0.Events",
+                Buffered = true
+            });
+        var inventory = Inventory(
+            Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Unrelated", buffered: true));
+
+        var result = MmsCanonicalStaticRcbTargetResolver.Resolve(coverage, inventory);
+
+        Assert.False(result.HasTargets);
+        Assert.Equal("unresolved", Assert.Single(result.Segments).Resolution);
+    }
+
     private static CanonicalStaticReportCoveragePlan Coverage(
         string dataSet,
         CanonicalReportControl configured)

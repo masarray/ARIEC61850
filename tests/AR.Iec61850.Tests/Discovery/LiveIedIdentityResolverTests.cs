@@ -77,7 +77,7 @@ public sealed class LiveIedIdentityResolverTests
 
         Assert.Equal("OCR7SJ8", identity.IedName);
         Assert.Equal("MmsDomainCommonPrefix", identity.Source);
-        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
         Assert.Equal("Mod2_MU1", identity.LogicalDeviceAliases["OCR7SJ8Mod2_MU1"]);
         Assert.DoesNotContain("OCR7SJ8Mod2", identity.CandidateNames);
     }

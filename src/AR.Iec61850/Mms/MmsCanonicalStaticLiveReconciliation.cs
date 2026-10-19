@@ -352,6 +352,24 @@ public sealed partial class MmsClientSession
                 else
                     rejected++;
             }
+
+            // Stop additional catalog pages once every selected DataSet has
+            // one exact observed binding with explicit read-only "appears free"
+            // evidence. This is NOT activation authorization: the subsequent
+            // exact-target availability/owner/directory checks still decide.
+            // A busy or reservation-unknown RCB never prematurely ends search.
+            var allTargetsHaveFreeEvidence = expectedDataSets.Count > 0 &&
+                expectedDataSets.All(dataSet => inventory.ReportControls.Any(candidate =>
+                    string.Equals(
+                        MmsRcbAvailabilityEvaluator.NormalizeReference(candidate.DataSetReference),
+                        dataSet, StringComparison.Ordinal) &&
+                    MmsRcbAvailabilityEvaluator.ParseBool(candidate.EnabledState) == false &&
+                    !MmsRcbAvailabilityEvaluator.HasOwner(candidate.Owner) &&
+                    (candidate.Buffered
+                        ? MmsRcbAvailabilityEvaluator.ParseUnsigned(candidate.ReservationTimeSeconds) == 0
+                        : MmsRcbAvailabilityEvaluator.ParseBool(candidate.ReservationState) == false)));
+            if (allTargetsHaveFreeEvidence)
+                break;
         } while (continuation is not null &&
                  pages < maxReadPages &&
                  IsMmsInitiated);

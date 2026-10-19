@@ -93,31 +93,8 @@ public static class MmsCanonicalStaticRcbCandidatePager
         if (fc.Equals("RP", StringComparison.OrdinalIgnoreCase) && candidate.Buffered)
             return false;
 
-        // Reference and typed family must never contradict one another.
-        var reference = candidate.Reference.Replace('
-    {
-        if (!string.IsNullOrWhiteSpace(domain))
-            return domain.Trim();
-        var value = reference?.Trim() ?? string.Empty;
-        var slash = value.IndexOf('/');
-        return slash > 0 ? value[..slash] : string.Empty;
-    }
-
-    private static string FamilyKey(string domain, bool buffered)
-        => domain + (buffered ? "|BR" : "|RP");
-}
-
-public sealed class MmsCanonicalStaticRcbCandidatePage
-{
-    public IReadOnlyList<MmsReportControlCandidate> Candidates { get; init; }
-        = Array.Empty<MmsReportControlCandidate>();
-    public int EligibleCandidateCount { get; init; }
-    public int ExaminedCandidateCount { get; init; }
-    public int DeferredCandidateCount { get; init; }
-    public int? NextOffset { get; init; }
-    public bool HasContinuation => NextOffset.HasValue;
-}
-, '.');
+        // The MMS reference's RP/BR segment is stronger than a cached Boolean.
+        var reference = candidate.Reference.Replace('$', '.');
         if (reference.Contains(".BR.", StringComparison.OrdinalIgnoreCase))
             return candidate.Buffered;
         if (reference.Contains(".RP.", StringComparison.OrdinalIgnoreCase))

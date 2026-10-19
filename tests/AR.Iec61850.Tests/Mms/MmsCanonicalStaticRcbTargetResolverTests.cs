@@ -33,7 +33,7 @@ public sealed class MmsCanonicalStaticRcbTargetResolverTests
     }
 
     [Fact]
-    public void Exact_Configured_Reference_Can_Target_When_Live_Dataset_Binding_Is_Not_Yet_Populated()
+    public void Exact_Configured_Reference_Remains_Unresolved_Without_Live_Dataset_Binding()
     {
         var coverage = Coverage(
             dataSet: "LD0/LLN0.Events",
@@ -50,8 +50,9 @@ public sealed class MmsCanonicalStaticRcbTargetResolverTests
 
         var resolution = MmsCanonicalStaticRcbTargetResolver.Resolve(coverage, inventory);
 
-        Assert.Equal(new[] { "LD0/LLN0$BR$Rpt01" }, resolution.ExactLiveReportControlReferences);
-        Assert.Equal("exact-configured-rcb-reference", resolution.Segments.Single().Resolution);
+        Assert.False(resolution.HasTargets);
+        Assert.Empty(resolution.ExactLiveReportControlReferences);
+        Assert.Equal("unresolved", resolution.Segments.Single().Resolution);
     }
 
     [Fact]

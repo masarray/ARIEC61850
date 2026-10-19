@@ -169,6 +169,22 @@ public sealed class TrustedSclIedIdentityMatcherTests
             scl,wrongDomainCase,"192.0.2.30"));
     }
 
+
+    [Fact]
+    public void Selected_Ap_Name_Alone_Does_Not_Disambiguate_Identical_Unbound_Topology()
+    {
+        XNamespace ns=SclNs;
+        var scl=Design("STATIONBCU","CTRL","192.0.2.30");
+        var ied=Assert.Single(scl.Descendants(ns+"IED"));
+        var ap=Assert.Single(ied.Elements(ns+"AccessPoint"));
+        var copy=new XElement(ap);
+        copy.SetAttributeValue("name","S2");
+        ied.Add(copy);
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(
+            scl,["STATIONBCUCTRL"],"192.0.2.30",
+            selectedIedName:"STATIONBCU",selectedAccessPointName:"S1"));
+    }
+
     [Fact]
     public void Other_Devices_And_Already_Recognized_Multiple_Domains_Are_Unchanged()
     {

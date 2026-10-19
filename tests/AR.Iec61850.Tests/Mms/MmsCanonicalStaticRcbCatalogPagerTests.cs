@@ -66,6 +66,21 @@ public sealed class MmsCanonicalStaticRcbCatalogPagerTests
     }
 
     [Fact]
+    public void Reconnect_Must_Reject_Prior_Association_Cursor()
+    {
+        var catalog = Enumerable.Range(0, 66)
+            .Select(i => Candidate($"LD0/LLN0.BR.Unbound{i:000}", ""))
+            .ToArray();
+        var inventory = Inventory(catalog);
+        var old = MmsCanonicalStaticRcbCatalogPager.Select(
+            Coverage(), inventory, 16, associationKey: "epoch-a");
+        Assert.NotNull(old.ContinuationToken);
+        Assert.Throws<ArgumentException>(() =>
+            MmsCanonicalStaticRcbCatalogPager.Select(
+                Coverage(), inventory, 16, old.ContinuationToken, "epoch-b"));
+    }
+
+    [Fact]
     public void Wrong_Dataset_And_Different_Functional_Constraint_Are_Not_Admitted()
     {
         var inventory = Inventory(

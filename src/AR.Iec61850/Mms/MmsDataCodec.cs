@@ -39,7 +39,7 @@ public static class MmsDataCodec
         {
             1 => MmsDataValue.Array(DecodeAllData(tlv.Value)),
             2 => MmsDataValue.Structure(DecodeAllData(tlv.Value)),
-            3 => BerReader.ReadBoolean(tlv) is { } booleanValue
+            3 => tlv.Value.Length == 1 && BerReader.ReadBoolean(tlv) is { } booleanValue
                 ? MmsDataValue.Boolean(booleanValue) : MmsDataValue.Unknown(tlv.TagNumber, tlv.Value.Span),
             4 => DecodeBitString(tlv.Value.Span),
             5 => tlv.Value.Length is > 0 and <= 8 && BerReader.ReadSignedInteger(tlv) is { } signed

@@ -27,11 +27,10 @@ public sealed class MmsCanonicalStaticRcbTargetResolution
 /// inventing indexed names.
 ///
 /// Exact live identity is accepted from either:
-/// 1) an exact configured RCB reference match, or
-/// 2) a live RCB whose live DatSet binding exactly matches the canonical covered DataSet
-///    and whose BRCB/URCB family is declared for that segment.
+/// a live RCB whose live DatSet binding exactly matches the canonical covered DataSet
+/// and whose BRCB/URCB family is declared for that segment.
 ///
-/// If neither evidence path is available the segment remains unresolved. The caller may
+/// If that evidence is unavailable the segment remains unresolved. The caller may
 /// explicitly choose a broader diagnostic probe, but this resolver never guesses a sibling
 /// RCB merely because its name looks similar.
 /// </summary>
@@ -64,10 +63,6 @@ public static class MmsCanonicalStaticRcbTargetResolver
                 .Distinct()
                 .ToHashSet();
 
-            var exactReferenceMatches = liveInventory.ReportControls
-                .Where(candidate => configuredReferences.Contains(Normalize(candidate.Reference)))
-                .ToArray();
-
             var exactDataSetMatches = canonicalDataSet.Length == 0
                 ? Array.Empty<MmsReportControlCandidate>()
                 : liveInventory.ReportControls
@@ -81,8 +76,9 @@ public static class MmsCanonicalStaticRcbTargetResolver
                         configuredBufferedFamilies.Contains(candidate.Buffered))
                     .ToArray();
 
-            var matched = exactReferenceMatches
-                .Concat(exactDataSetMatches)
+            // A matching RCB name alone is insufficient for safe operational
+            // targeting. Require a live DatSet binding for every selected RCB.
+            var matched = exactDataSetMatches
                 .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Reference))
                 .DistinctBy(candidate => Normalize(candidate.Reference), StringComparer.OrdinalIgnoreCase)
                 .OrderBy(candidate => candidate.Reference, StringComparer.OrdinalIgnoreCase)
@@ -91,16 +87,12 @@ public static class MmsCanonicalStaticRcbTargetResolver
             foreach (var candidate in matched)
                 allTargets.Add(candidate.Reference);
 
-            var resolution = matched.Length > 0
-                ? exactDataSetMatches.Length > 0
-                    ? "exact-live-dataset-binding"
-                    : "exact-configured-rcb-reference"
-                : "unresolved";
+            var resolution = matched.Length > 0 ? "exact-live-dataset-binding" : "unresolved";
 
             if (matched.Length == 0)
             {
                 warnings.Add(
-                    $"Canonical static DataSet {segment.DataSetReference} covers selected signal(s), but no concrete live RCB could be proven by exact reference or exact live DatSet binding. No sibling/name-family guess was made.");
+                    $"Canonical static DataSet {segment.DataSetReference} covers selected signal(s), but no concrete live RCB has a verified exact live DatSet binding. No sibling/name-family guess was made.");
             }
 
             segments.Add(new MmsCanonicalStaticRcbTargetSegment

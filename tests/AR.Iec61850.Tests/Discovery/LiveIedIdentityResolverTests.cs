@@ -6,6 +6,38 @@ namespace AR.Iec61850.Tests.Discovery;
 
 public sealed class LiveIedIdentityResolverTests
 {
+
+    [Fact]
+    public void Resolve_Five_LogicalDevices_Preserves_Full_Common_Ied_Name_Without_Scl()
+    {
+        var domains = new[] { "SIEBCUCTRL", "SIEBCUMEAS", "SIEBCUPROT", "SIEBCUUD1", "SIEBCUUD2" };
+        var identity = LiveIedIdentityResolver.Resolve(domains, "192.0.2.20");
+
+        Assert.Equal("SIEBCU", identity.IedName);
+        Assert.Equal("MmsDomainCommonPrefix", identity.Source);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.Exact, identity.Confidence);
+        Assert.Equal("CTRL", identity.LogicalDeviceAliases["SIEBCUCTRL"]);
+        Assert.Equal("UD2", identity.LogicalDeviceAliases["SIEBCUUD2"]);
+    }
+
+    [Theory]
+    [InlineData("BCU")]
+    [InlineData("PROT")]
+    [InlineData("CTRL")]
+    [InlineData("MEAS")]
+    [InlineData("MU")]
+    public void Resolve_Common_Prefix_Does_Not_Remove_A_Valid_Ied_Name_Ending(string ending)
+    {
+        var fullName = "STATION" + ending;
+        var identity = LiveIedIdentityResolver.Resolve(
+            [fullName + "Application", fullName + "Reports", fullName + "Custom1"],
+            "192.0.2.21");
+
+        Assert.Equal(fullName, identity.IedName);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+    }
+
     [Fact]
     public void Resolve_Preserves_Digits_In_A_Single_Ld0_Domain()
     {

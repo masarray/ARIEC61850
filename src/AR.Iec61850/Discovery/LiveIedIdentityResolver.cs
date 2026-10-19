@@ -38,8 +38,8 @@ public static class LiveIedIdentityResolver
         if (!string.IsNullOrWhiteSpace(explicitIedName))
         {
             var name = explicitIedName.Trim();
-            return Create(name, "ExplicitOverride", LiveIedDiscoveryConfidenceLevel.Exact, false, [name], materialized,
-                [$"IED name was supplied explicitly as '{name}'."]);
+            return Create(name, "ExplicitOverride", LiveIedDiscoveryConfidenceLevel.Medium, false, [name], materialized,
+                [$"Operator-supplied IED display name '{name}' has not been independently verified against this MMS endpoint."]);
         }
 
         var suffixMatches = materialized
@@ -56,7 +56,7 @@ public static class LiveIedIdentityResolver
             .OrderBy(candidate => candidate, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        // A known LD suffix is authoritative only when it explains the complete domain set.
+        // A known LD suffix is only a provisional naming hint even when it explains the complete domain set.
         // A single nested domain such as OCR7SJ8Mod2_MU1 must never rename the physical IED
         // to OCR7SJ8Mod2 while sibling domains prove the shared OCR7SJ8 prefix.
         if (materialized.Length > 0 && suffixMatches.Length == materialized.Length)
@@ -64,9 +64,7 @@ public static class LiveIedIdentityResolver
             if (distinctSuffixCandidates.Length == 1)
             {
                 var name = distinctSuffixCandidates[0];
-                var confidence = materialized.Length > 1
-                    ? LiveIedDiscoveryConfidenceLevel.High
-                    : LiveIedDiscoveryConfidenceLevel.Medium;
+                var confidence = LiveIedDiscoveryConfidenceLevel.Medium;
                 var evidence = suffixMatches
                     .Select(match => $"MMS domain '{match.Domain}' matched the logical-device suffix pattern for IED '{name}'.")
                     .ToArray();
@@ -110,7 +108,7 @@ public static class LiveIedIdentityResolver
             return Create(
                 name,
                 "MmsDomainKnownLogicalDeviceSuffix",
-                materialized.Length == 1 ? LiveIedDiscoveryConfidenceLevel.Medium : LiveIedDiscoveryConfidenceLevel.High,
+                LiveIedDiscoveryConfidenceLevel.Medium,
                 false,
                 distinctSuffixCandidates,
                 materialized,

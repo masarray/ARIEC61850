@@ -39,11 +39,16 @@ public static class MmsDataCodec
         {
             1 => MmsDataValue.Array(DecodeAllData(tlv.Value)),
             2 => MmsDataValue.Structure(DecodeAllData(tlv.Value)),
-            3 => MmsDataValue.Boolean(BerReader.ReadBoolean(tlv) ?? false),
+            3 => BerReader.ReadBoolean(tlv) is { } booleanValue
+                ? MmsDataValue.Boolean(booleanValue) : MmsDataValue.Unknown(tlv.TagNumber, tlv.Value.Span),
             4 => DecodeBitString(tlv.Value.Span),
-            5 => MmsDataValue.Integer(BerReader.ReadSignedInteger(tlv) ?? 0),
-            6 => MmsDataValue.Unsigned(BerReader.ReadUnsignedInteger(tlv) ?? 0),
-            7 => MmsDataValue.FloatingPoint(DecodeFloatingPoint(tlv.Value.Span)),
+            5 => tlv.Value.Length is > 0 and <= 8 && BerReader.ReadSignedInteger(tlv) is { } signed
+                ? MmsDataValue.Integer(signed) : MmsDataValue.Unknown(tlv.TagNumber, tlv.Value.Span),
+            6 => tlv.Value.Length is > 0 and <= 8 && BerReader.ReadUnsignedInteger(tlv) is { } unsigned
+                ? MmsDataValue.Unsigned(unsigned) : MmsDataValue.Unknown(tlv.TagNumber, tlv.Value.Span),
+            7 => tlv.Value.Length is 4 or 5
+                ? MmsDataValue.FloatingPoint(DecodeFloatingPoint(tlv.Value.Span))
+                : MmsDataValue.Unknown(tlv.TagNumber, tlv.Value.Span),
             9 => MmsDataValue.OctetString(tlv.Value.Span),
             10 => MmsDataValue.VisibleString(BerReader.ReadAsciiString(tlv)),
             12 => MmsDataValue.BinaryTime(tlv.Value.Span),
@@ -126,8 +131,8 @@ public static class MmsDataCodec
 
     private static MmsDataValue DecodeBitString(ReadOnlySpan<byte> bytes)
     {
-        if (bytes.IsEmpty)
-            return MmsDataValue.BitString(0, ReadOnlySpan<byte>.Empty);
+        if (bytes.IsEmpty || bytes[0] > 7 || (bytes.Length == 1 && bytes[0] != 0))
+            return MmsDataValue.Unknown(4, bytes);
 
         return MmsDataValue.BitString(bytes[0], bytes[1..]);
     }

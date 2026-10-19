@@ -7,7 +7,7 @@ public sealed class LiveIedIdentity
     public LiveIedDiscoveryConfidenceLevel Confidence { get; init; } = LiveIedDiscoveryConfidenceLevel.Unknown;
     public bool IsAmbiguous { get; init; }
     public IReadOnlyList<string> CandidateNames { get; init; } = Array.Empty<string>();
-    public IReadOnlyDictionary<string, string> LogicalDeviceAliases { get; init; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, string> LogicalDeviceAliases { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
     public IReadOnlyList<string> Evidence { get; init; } = Array.Empty<string>();
 
     public string Summary => $"IED identity: name={IedName}, source={Source}, confidence={Confidence}, candidates={CandidateNames.Count}, ambiguous={IsAmbiguous.ToString().ToLowerInvariant()}";
@@ -31,8 +31,8 @@ public static class LiveIedIdentityResolver
         var materialized = domains
             .Where(domain => !string.IsNullOrWhiteSpace(domain))
             .Select(domain => domain.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(domain => domain, StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(domain => domain, StringComparer.Ordinal)
             .ToArray();
 
         if (!string.IsNullOrWhiteSpace(explicitIedName))

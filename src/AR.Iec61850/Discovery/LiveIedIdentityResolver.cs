@@ -168,7 +168,7 @@ public static class LiveIedIdentityResolver
         IReadOnlyList<string> domains,
         IReadOnlyList<string> evidence)
     {
-        var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var domain in domains)
         {
             var alias = domain.StartsWith(name, StringComparison.OrdinalIgnoreCase) && domain.Length > name.Length

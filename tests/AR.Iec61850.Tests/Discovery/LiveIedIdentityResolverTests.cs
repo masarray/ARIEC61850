@@ -38,6 +38,17 @@ public sealed class LiveIedIdentityResolverTests
         Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
     }
 
+
+    [Fact]
+    public void Mms_Domain_Names_Are_Case_Sensitive_And_Never_Coalesced()
+    {
+        var identity = LiveIedIdentityResolver.Resolve(
+            ["SIEBCUCTRL", "siebcuctrl", "SIEBCUMEAS"], "192.0.2.61");
+        Assert.Equal(3, identity.LogicalDeviceAliases.Count);
+        Assert.Contains("SIEBCUCTRL", identity.LogicalDeviceAliases.Keys);
+        Assert.Contains("siebcuctrl", identity.LogicalDeviceAliases.Keys);
+    }
+
     [Fact]
     public void Resolve_Preserves_Digits_In_A_Single_Ld0_Domain()
     {

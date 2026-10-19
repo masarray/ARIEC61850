@@ -47,6 +47,8 @@ public static class MmsCanonicalStaticRcbCandidatePager
         var eligible = liveCandidates
             .Where(candidate =>
             {
+                if (!HasConsistentReportFamily(candidate))
+                    return false;
                 var domain = DomainOf(candidate.Domain, candidate.Reference);
                 if (!targets.TryGetValue(FamilyKey(domain, candidate.Buffered), out var bindings))
                     return false;
@@ -81,6 +83,46 @@ public static class MmsCanonicalStaticRcbCandidatePager
             DeferredCandidateCount = eligible.Length - next,
             NextOffset = next < eligible.Length ? next : null
         };
+    }
+
+    private static bool HasConsistentReportFamily(MmsReportControlCandidate candidate)
+    {
+        var fc = candidate.FunctionalConstraint?.Trim() ?? string.Empty;
+        if (fc.Equals("BR", StringComparison.OrdinalIgnoreCase) && !candidate.Buffered)
+            return false;
+        if (fc.Equals("RP", StringComparison.OrdinalIgnoreCase) && candidate.Buffered)
+            return false;
+
+        // Reference and typed family must never contradict one another.
+        var reference = candidate.Reference.Replace('
+    {
+        if (!string.IsNullOrWhiteSpace(domain))
+            return domain.Trim();
+        var value = reference?.Trim() ?? string.Empty;
+        var slash = value.IndexOf('/');
+        return slash > 0 ? value[..slash] : string.Empty;
+    }
+
+    private static string FamilyKey(string domain, bool buffered)
+        => domain + (buffered ? "|BR" : "|RP");
+}
+
+public sealed class MmsCanonicalStaticRcbCandidatePage
+{
+    public IReadOnlyList<MmsReportControlCandidate> Candidates { get; init; }
+        = Array.Empty<MmsReportControlCandidate>();
+    public int EligibleCandidateCount { get; init; }
+    public int ExaminedCandidateCount { get; init; }
+    public int DeferredCandidateCount { get; init; }
+    public int? NextOffset { get; init; }
+    public bool HasContinuation => NextOffset.HasValue;
+}
+, '.');
+        if (reference.Contains(".BR.", StringComparison.OrdinalIgnoreCase))
+            return candidate.Buffered;
+        if (reference.Contains(".RP.", StringComparison.OrdinalIgnoreCase))
+            return !candidate.Buffered;
+        return true;
     }
 
     private static string DomainOf(string? domain, string? reference)

@@ -125,6 +125,14 @@ public static class MmsReadBatchCodec
                 return FailAll(references, "MMS Read response has no listOfAccessResult.", hex);
 
             var accessResults = BerReader.ReadChildren(accessList.Value);
+            // A Read response with missing/extra access results cannot be
+            // safely joined to requested FC tuples by ordinal. Retain the
+            // mismatch as failure evidence instead of accepting a prefix.
+            if (accessResults.Count != references.Count)
+                return FailAll(references,
+                    $"MMS Read AccessResult count mismatch: requested={references.Count}, received={accessResults.Count}.",
+                    hex, Math.Max(0, accessResults.Count - references.Count));
+
             var results = new List<MmsReadAccessResult>(references.Count);
             for (var index = 0; index < references.Count; index++)
             {
@@ -230,9 +238,11 @@ public static class MmsReadBatchCodec
     private static MmsReadBatchResult FailAll(
         IReadOnlyList<MmsObjectReference> references,
         string message,
-        string hex)
+        string hex,
+        int extraAccessResultCount = 0)
         => new()
         {
+            ExtraAccessResultCount = extraAccessResultCount,
             Results = references.Select(reference => new MmsReadAccessResult
             {
                 Reference = reference,

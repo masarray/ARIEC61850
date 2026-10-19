@@ -17,7 +17,8 @@ public static class TrustedSclIedIdentityMatcher
         XDocument trustedScl,
         IEnumerable<string> observedMmsDomains,
         string? connectedHost,
-        string? selectedIedName = null)
+        string? selectedIedName = null,
+        string? selectedAccessPointName = null)
     {
         ArgumentNullException.ThrowIfNull(trustedScl);
         ArgumentNullException.ThrowIfNull(observedMmsDomains);
@@ -25,8 +26,8 @@ public static class TrustedSclIedIdentityMatcher
         var observed = observedMmsDomains
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .Select(s => s.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .Distinct(StringComparer.Ordinal)
+            .ToHashSet(StringComparer.Ordinal);
         if (observed.Count == 0) return null;
 
         var matches = new List<(string Ied, string Ap, Dictionary<string,string> Aliases, string? Ip)>();
@@ -35,7 +36,7 @@ public static class TrustedSclIedIdentityMatcher
             var name = ((string?)ied.Attribute("name") ?? "").Trim();
             if (string.IsNullOrWhiteSpace(name) ||
                 (!string.IsNullOrWhiteSpace(selectedIedName) &&
-                 !name.Equals(selectedIedName.Trim(), StringComparison.OrdinalIgnoreCase)))
+                 !name.Equals(selectedIedName.Trim(), StringComparison.Ordinal)))
                 continue;
 
             foreach (var ap in ied.Elements(Scl + "AccessPoint"))
@@ -46,7 +47,7 @@ public static class TrustedSclIedIdentityMatcher
                     ?? Array.Empty<XElement>();
                 if (devices.Length != observed.Count) continue;
 
-                var aliases = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+                var aliases = new Dictionary<string,string>(StringComparer.Ordinal);
                 var invalid = false;
                 foreach (var ld in devices)
                 {
@@ -68,30 +69,32 @@ public static class TrustedSclIedIdentityMatcher
 
                 var connected = trustedScl.Root.Element(Scl + "Communication")?
                     .Descendants(Scl + "ConnectedAP")
-                    .Where(x => string.Equals((string?)x.Attribute("iedName"),name,StringComparison.OrdinalIgnoreCase)
-                        && string.Equals((string?)x.Attribute("apName"),apName,StringComparison.OrdinalIgnoreCase))
+                    .Where(x => string.Equals((string?)x.Attribute("iedName"),name,StringComparison.Ordinal)
+                        && string.Equals((string?)x.Attribute("apName"),apName,StringComparison.Ordinal))
                     .ToArray() ?? Array.Empty<XElement>();
-                if (connected.Length > 1) continue;
-                var ipValues = connected.SingleOrDefault()?
-                    .Element(Scl + "Address")?.Elements(Scl + "P")
+                // SCL topology alone is not endpoint evidence. Require exactly one
+                // declared ConnectedAP/IP and an exact observed association endpoint.
+                // Missing/ambiguous endpoints remain provisional, never verified.
+                if (connected.Length != 1 || string.IsNullOrWhiteSpace(connectedHost))
+                    continue;
+                var ipValues = connected[0].Element(Scl + "Address")?.Elements(Scl + "P")
                     .Where(x => string.Equals((string?)x.Attribute("type"),"IP",StringComparison.OrdinalIgnoreCase))
                     .Select(x => x.Value.Trim()).Take(2).ToArray() ?? Array.Empty<string>();
-                if (ipValues.Length > 1) continue;
-                var ip = ipValues.SingleOrDefault();
-                if (!string.IsNullOrWhiteSpace(ip) && !string.IsNullOrWhiteSpace(connectedHost))
-                {
-                    if (!IPAddress.TryParse(ip,out var designIp) ||
-                        !IPAddress.TryParse(connectedHost.Trim(),out var observedIp) ||
-                        !designIp.Equals(observedIp))
-                        continue; // never promote a model for a different endpoint
-                }
-                matches.Add((name, apName, aliases, ip));
+                if (ipValues.Length != 1 ||
+                    !IPAddress.TryParse(ipValues[0],out var designIp) ||
+                    !IPAddress.TryParse(connectedHost.Trim(),out var observedIp) ||
+                    !designIp.Equals(observedIp))
+                    continue;
+                matches.Add((name, apName, aliases, ipValues[0]));
             }
         }
         // A single IED can have multiple APs and the same LD topology. This
         // remains ambiguous until AP is independently selected/proven.
         if (matches.Count != 1) return null;
         var match=matches[0];
+        if (!string.IsNullOrWhiteSpace(selectedAccessPointName) &&
+            !string.Equals(match.Ap, selectedAccessPointName.Trim(), StringComparison.Ordinal))
+            return null;
         return new LiveIedIdentity
         {
             IedName=match.Ied,

@@ -146,11 +146,14 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
         Assert.Null(result.Availability);
     }
 
-    [Fact]
-    public async Task TargetBudgetFailsBeforeAnyNetworkWork_AndNeverRunsPartialProbe()
+    [Theory]
+    [InlineData(66, 2)]
+    [InlineData(300, 5)]
+    public void Exact_Targets_Are_Paged_Without_The_Previous_Global_Budget_Abort(
+        int count, int expectedPages)
     {
-        var targetSet = Enumerable.Range(1, 3)
-            .Select(index => $"LD0/LLN0.BR.Rpt{index:00}")
+        var targetSet = Enumerable.Range(1, count)
+            .Select(index => $"LD0/LLN0.BR.Rpt{index:000}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var targetResolution = new MmsCanonicalStaticRcbTargetResolution
         {
@@ -168,35 +171,41 @@ public sealed class MmsCanonicalStaticAcquisitionPreflightTests
         var plan = new MmsCanonicalStaticAcquisitionProbePlan
         {
             InventoryAuthority = MmsReportInventoryAuthority.LiveMmsObserved,
-            Coverage = Coverage(
-                Segment(
-                    "LD0/LLN0.Events",
-                    "LD0/LLN0.BR.Rpt01",
-                    buffered: true,
-                    "LD0/XCBR1.Pos.stVal")),
+            Coverage = Coverage(Segment(
+                "LD0/LLN0.Events", "LD0/LLN0.BR.Rpt",
+                buffered: true, "LD0/XCBR1.Pos.stVal")),
             TargetResolution = targetResolution,
             Status = MmsCanonicalStaticAcquisitionProbeStatus.ExactTargetsReady,
             ExactTargetReportControlReferences = targetSet
         };
+        var inventory = Inventory(
+            MmsReportInventoryAuthority.LiveMmsObserved,
+            targetSet.Select(r => Candidate(r, "LD0/LLN0.Events", true)).ToArray());
 
-        await using var session = new MmsClientSession();
-        var result = await session.ProbeCanonicalStaticAcquisitionAsync(
-            plan,
-            Inventory(
-                MmsReportInventoryAuthority.LiveMmsObserved,
-                Candidate("LD0/LLN0.BR.Rpt01", "LD0/LLN0.Events", true),
-                Candidate("LD0/LLN0.BR.Rpt02", "LD0/LLN0.Events", true),
-                Candidate("LD0/LLN0.BR.Rpt03", "LD0/LLN0.Events", true)),
-            options: new MmsCanonicalStaticAcquisitionProbeOptions
-            {
-                MaxExactTargets = 2
-            });
+        var examined = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string? cursor = null;
+        var pages = 0;
+        do
+        {
+            var page = MmsCanonicalStaticExactTargetPager.Select(
+                plan, inventory, 64, cursor, "active-association");
+            Assert.InRange(page.References.Count, 1, 64);
+            foreach (var reference in page.References)
+                Assert.True(examined.Add(reference), "Duplicate exact target across pages.");
+            cursor = page.ContinuationToken;
+            pages++;
+        } while (cursor is not null && pages < 10);
 
-        Assert.Equal(MmsCanonicalStaticAcquisitionProbeStatus.TargetBudgetExceeded, result.Status);
-        Assert.False(result.NetworkProbePerformed);
-        Assert.Null(result.Availability);
-        Assert.Contains(result.Warnings, warning =>
-            warning.Contains("no partial probe", StringComparison.OrdinalIgnoreCase));
+        Assert.Null(cursor);
+        Assert.Equal(count, examined.Count);
+        Assert.Equal(expectedPages, pages);
+
+        var first = MmsCanonicalStaticExactTargetPager.Select(
+            plan, inventory, 64, associationKey: "active-association");
+        Assert.NotNull(first.ContinuationToken);
+        Assert.Throws<ArgumentException>(() =>
+            MmsCanonicalStaticExactTargetPager.Select(
+                plan, inventory, 64, first.ContinuationToken, "reconnected-association"));
     }
 
     private static CanonicalStaticReportCoveragePlan Coverage(

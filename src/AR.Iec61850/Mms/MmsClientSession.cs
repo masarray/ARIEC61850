@@ -764,6 +764,8 @@ public sealed partial class MmsClientSession : IAsyncDisposable
                 if (result.IsAccepted)
                 {
                     State = MmsAssociationState.MmsInitiated;
+                    // Bind paged RCB discovery to this accepted association.
+                    _canonicalStaticRcbAssociationKey = Guid.NewGuid().ToString("N");
                     LastHandshakeMessage = result.Message;
                     ResetReportSemanticTypeEvidence();
                     ResetConfiguredStaticDataSetDirectoryEvidence();

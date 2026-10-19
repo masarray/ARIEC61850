@@ -55,6 +55,25 @@ public sealed class MmsCanonicalStaticRcbTargetResolverTests
     }
 
     [Fact]
+    public void Exact_Configured_Reference_With_Proven_Wrong_DataSet_Cannot_Be_Target()
+    {
+        var coverage = Coverage(
+            dataSet: "LD0/LLN0.Events",
+            configured: new CanonicalReportControl
+            {
+                Reference = "LD0/LLN0.BR.Events",
+                DataSetReference = "LD0/LLN0.Events",
+                Buffered = true
+            });
+        var inventory = Inventory(
+            Candidate("LD0/LLN0.BR.Events", "LD0/LLN0.Other", buffered: true));
+
+        var result = MmsCanonicalStaticRcbTargetResolver.Resolve(coverage, inventory);
+        Assert.False(result.HasTargets);
+        Assert.Equal("unresolved", Assert.Single(result.Segments).Resolution);
+    }
+
+    [Fact]
     public void Unresolved_Segment_Does_Not_Guess_Name_Family()
     {
         var coverage = Coverage(

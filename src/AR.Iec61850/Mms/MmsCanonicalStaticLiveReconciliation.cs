@@ -294,7 +294,10 @@ public sealed partial class MmsClientSession
         {
             Authority = MmsReportInventoryAuthority.LiveMmsObserved
         };
-        inventory.ReportControls.AddRange(page.Candidates);
+        var expectedDataSets = coverage.Segments
+            .Select(segment => segment.DataSetReference)
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.Ordinal);
 
         foreach (var candidate in page.Candidates)
         {
@@ -314,6 +317,11 @@ public sealed partial class MmsClientSession
                     .ConfigureAwait(false);
             }
 
+            // A catalog name alone never qualifies operational routing.
+            // DatSet must be read and match the selected static segment exactly.
+            if (expectedDataSets.Contains(candidate.DataSetReference))
+                inventory.ReportControls.Add(candidate);
+
             if (!IsMmsInitiated)
                 break;
         }
@@ -325,9 +333,9 @@ public sealed partial class MmsClientSession
             .Concat(chains
                 .Where(chain => !chain.IsComplete)
                 .Select(chain => $"Target domain '{chain.Domain}' NamedVariable enumeration is partial: {chain.Message}"))
-            .Concat(candidates
-                .Where(candidate => string.IsNullOrWhiteSpace(candidate.DataSetReference))
-                .Select(candidate => $"Live RCB '{candidate.Reference}' did not expose a usable DatSet binding."))
+            .Concat(page.Candidates
+                .Where(candidate => !expectedDataSets.Contains(candidate.DataSetReference))
+                .Select(candidate => $"Live RCB '{candidate.Reference}' is not proven bound to a selected exact DataSet."))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -344,8 +352,7 @@ public sealed partial class MmsClientSession
             CandidateReportControlCount = candidates.Length,
             CandidateReadCount = page.Candidates.Count,
             NextCandidateOffset = page.NextOffset,
-            DataSetBoundReportControlCount = page.Candidates.Count(candidate =>
-                !string.IsNullOrWhiteSpace(candidate.DataSetReference)),
+            DataSetBoundReportControlCount = inventory.ReportControls.Count,
             Warnings = warnings
         };
     }

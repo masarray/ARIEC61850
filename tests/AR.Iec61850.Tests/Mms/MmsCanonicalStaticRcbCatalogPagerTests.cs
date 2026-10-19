@@ -93,6 +93,26 @@ public sealed class MmsCanonicalStaticRcbCatalogPagerTests
     }
 
     [Fact]
+    public void Indexed_Configured_Family_Is_Read_Priority_Not_Trusted_DataSet_Proof()
+    {
+        var catalog = Enumerable.Range(0, 300)
+            .Select(i => Candidate($"LD0/LLN0.BR.Unrelated{i:000}", ""))
+            .Append(Candidate("LD0/LLN0.BR.Events01", ""))
+            .Append(Candidate("LD0/LLN0.BR.Events02", ""))
+            .ToArray();
+        var first = MmsCanonicalStaticRcbCatalogPager.Select(
+            Coverage(), Inventory(catalog), 2);
+        Assert.Equal(300, first.CatalogCount + 2);
+        Assert.Equal(0, first.TargetBoundCount);
+        Assert.Equal(2, first.Candidates.Count);
+        Assert.Equal(
+            new[] { "LD0/LLN0.BR.Events01", "LD0/LLN0.BR.Events02" },
+            first.Candidates.Select(c => c.Reference).ToArray());
+        Assert.True(first.HasMore);
+        Assert.All(first.Candidates, c => Assert.Equal("", c.DataSetReference));
+    }
+
+    [Fact]
     public void Catalog_Or_Target_Mutation_Invalidates_Continuation()
     {
         var catalog = Enumerable.Range(0, 66)

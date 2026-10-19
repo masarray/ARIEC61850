@@ -31,6 +31,7 @@ public static class TrustedSclIedIdentityMatcher
         if (observed.Count == 0) return null;
 
         var matches = new List<(string Ied, string Ap, Dictionary<string,string> Aliases, string? Ip)>();
+        var topologyMatches = 0;
         var ambiguousUnboundTopology = false;
         foreach (var ied in trustedScl.Root.Elements(Scl + "IED"))
         {
@@ -43,7 +44,10 @@ public static class TrustedSclIedIdentityMatcher
             foreach (var ap in ied.Elements(Scl + "AccessPoint"))
             {
                 var apName = ((string?)ap.Attribute("name") ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(apName)) continue;
+                if (string.IsNullOrWhiteSpace(apName) ||
+                    (!string.IsNullOrWhiteSpace(selectedAccessPointName) &&
+                     !string.Equals(apName, selectedAccessPointName.Trim(), StringComparison.Ordinal)))
+                    continue;
                 var devices = ap.Element(Scl + "Server")?.Elements(Scl + "LDevice").ToArray()
                     ?? Array.Empty<XElement>();
                 if (devices.Length != observed.Count) continue;
@@ -67,6 +71,10 @@ public static class TrustedSclIedIdentityMatcher
                     }
                 }
                 if (invalid || aliases.Count != observed.Count) continue;
+                // Count every topology-compatible AP before endpoint filtering.
+                // One AP lacking ConnectedAP is still a competing possibility
+                // when the operator has not selected a unique AP.
+                topologyMatches++;
 
                 var connected = trustedScl.Root.Element(Scl + "Communication")?
                     .Descendants(Scl + "ConnectedAP")

@@ -25,7 +25,47 @@ public sealed class MmsCanonicalStaticRcbCatalogPagerTests
         Assert.Equal(2, first.TargetBoundCount);
         Assert.DoesNotContain(first.Candidates, x => x.Name.StartsWith("Noise", StringComparison.Ordinal));
         Assert.All(first.Candidates, x => Assert.Equal("LD0/LLN0.Events", x.DataSetReference));
+
+        // Read-only discovery sees both matching RCBs; activation policy must
+        // reject the occupied one and choose the independently proven free one.
+        var occupied = first.Candidates.Single(x => x.EnabledState == "true");
+        var free = first.Candidates.Single(x => x.EnabledState == "false");
+        Assert.False(MmsConfiguredStaticRcbEligibilityPolicy.Evaluate(
+            VerifiedAvailability(occupied, MmsRcbOperationalAvailability.InUse, "60"),
+            allowCallerOwned: false,
+            allowReducedMissingReservationEvidence: false).IsEligible);
+        var eligibility = MmsConfiguredStaticRcbEligibilityPolicy.Evaluate(
+            VerifiedAvailability(free, MmsRcbOperationalAvailability.Available, "0"),
+            allowCallerOwned: false,
+            allowReducedMissingReservationEvidence: false);
+        Assert.Equal(MmsConfiguredStaticRcbEligibilityKind.ExplicitFree, eligibility.Kind);
     }
+
+    private static MmsRcbAvailabilitySnapshot VerifiedAvailability(
+        MmsReportControlCandidate candidate,
+        MmsRcbOperationalAvailability state,
+        string reservation)
+        => new()
+        {
+            Reference = candidate.Reference,
+            Domain = candidate.Domain,
+            LogicalNode = candidate.LogicalNode,
+            Buffered = candidate.Buffered,
+            DataSetReference = candidate.DataSetReference,
+            DataSetProbeState = MmsRcbDataSetProbeState.ReadSucceeded,
+            EnabledState = candidate.EnabledState,
+            ReservationTimeSeconds = reservation,
+            DataSetDirectorySuccess = true,
+            DataSetMembers = [new MmsDataSetDirectoryMember
+            {
+                Domain = "LD0",
+                MmsItemName = "XCBR1$ST$Pos",
+                UserReference = "LD0/XCBR1.Pos",
+                FunctionalConstraint = "ST"
+            }],
+            Availability = state,
+            Confidence = MmsRcbAvailabilityConfidence.Exact
+        };
 
     [Fact]
     public void Unresolved_300_Rcbs_Continues_In_Bounded_Deterministic_Pages_Without_Duplicates()

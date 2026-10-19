@@ -31,6 +31,7 @@ public static class TrustedSclIedIdentityMatcher
         if (observed.Count == 0) return null;
 
         var matches = new List<(string Ied, string Ap, Dictionary<string,string> Aliases, string? Ip)>();
+        var ambiguousUnboundTopology = false;
         foreach (var ied in trustedScl.Root.Elements(Scl + "IED"))
         {
             var name = ((string?)ied.Attribute("name") ?? "").Trim();
@@ -76,21 +77,28 @@ public static class TrustedSclIedIdentityMatcher
                 // declared ConnectedAP/IP and an exact observed association endpoint.
                 // Missing/ambiguous endpoints remain provisional, never verified.
                 if (connected.Length != 1 || string.IsNullOrWhiteSpace(connectedHost))
+                {
+                    ambiguousUnboundTopology = true;
                     continue;
+                }
                 var ipValues = connected[0].Element(Scl + "Address")?.Elements(Scl + "P")
                     .Where(x => string.Equals((string?)x.Attribute("type"),"IP",StringComparison.OrdinalIgnoreCase))
                     .Select(x => x.Value.Trim()).Take(2).ToArray() ?? Array.Empty<string>();
                 if (ipValues.Length != 1 ||
                     !IPAddress.TryParse(ipValues[0],out var designIp) ||
-                    !IPAddress.TryParse(connectedHost.Trim(),out var observedIp) ||
-                    !designIp.Equals(observedIp))
+                    !IPAddress.TryParse(connectedHost.Trim(),out var observedIp))
+                {
+                    ambiguousUnboundTopology = true;
+                    continue;
+                }
+                if (!designIp.Equals(observedIp))
                     continue;
                 matches.Add((name, apName, aliases, ipValues[0]));
             }
         }
         // A single IED can have multiple APs and the same LD topology. This
         // remains ambiguous until AP is independently selected/proven.
-        if (matches.Count != 1) return null;
+        if (matches.Count != 1 || ambiguousUnboundTopology) return null;
         var match=matches[0];
         if (!string.IsNullOrWhiteSpace(selectedAccessPointName) &&
             !string.Equals(match.Ap, selectedAccessPointName.Trim(), StringComparison.Ordinal))

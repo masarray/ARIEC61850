@@ -191,6 +191,8 @@ public static class MmsCanonicalStaticLiveReconciliationPlanner
 
 public sealed partial class MmsClientSession
 {
+    private string _canonicalStaticRcbAssociationKey = Guid.NewGuid().ToString("N");
+
     /// <summary>
     /// Performs bounded online reconciliation for configured static reporting without
     /// running full IED discovery.
@@ -306,7 +308,8 @@ public sealed partial class MmsClientSession
             // The pager binds its cursor to exact catalog content and coverage.
             // A changed/ambiguous cursor must fail closed, not silently skip RCBs.
             var page = MmsCanonicalStaticRcbCatalogPager.Select(
-                coverage, observed, maxReadsPerPage, continuation);
+                coverage, observed, maxReadsPerPage, continuation,
+                _canonicalStaticRcbAssociationKey);
             catalogCount = page.CatalogCount;
             eligibleProbeCount = page.EligibleProbeCount;
             continuation = page.ContinuationToken;

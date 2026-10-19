@@ -94,6 +94,28 @@ public sealed class LiveIedIdentityResolverTests
         Assert.Equal(["ALPHA", "BETA"], identity.CandidateNames);
     }
 
+
+    [Fact]
+    public void Resolve_Fully_Known_Ld_Suffixes_Is_Still_Provisional_Without_Scl()
+    {
+        var identity = LiveIedIdentityResolver.Resolve(
+            ["STATIONBCUCTRL", "STATIONBCUPROT", "STATIONBCUMEAS"],
+            "192.0.2.20");
+        Assert.Equal("STATIONBCU", identity.IedName);
+        Assert.Equal("MmsDomainKnownLogicalDeviceSuffix", identity.Source);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
+    }
+
+    [Fact]
+    public void Resolve_Explicit_Alias_Is_Operator_Supplied_Not_Wire_Verified()
+    {
+        var identity = LiveIedIdentityResolver.Resolve(
+            ["WIRELD0"], "192.0.2.20", explicitIedName: "OPERATOR_ALIAS");
+        Assert.Equal("OPERATOR_ALIAS", identity.IedName);
+        Assert.Equal("ExplicitOverride", identity.Source);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
+    }
+
     [Fact]
     public void Resolve_Uses_Explicit_Name_Over_Live_Heuristic()
     {

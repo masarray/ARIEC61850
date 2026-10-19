@@ -8,6 +8,39 @@ public sealed class TrustedSclIedIdentityMatcherTests
 {
     private const string SclNs = "http://www.iec.ch/61850/2003/SCL";
 
+
+    [Fact]
+    public void Five_Ld_Scl_Uniquely_Verifies_Full_Ied_Name_Not_A_Stripped_Prefix()
+    {
+        XNamespace ns = SclNs;
+        var scl = Design("SIEBCU", "CTRL", "192.0.2.55");
+        var server = Assert.Single(scl.Descendants(ns + "Server"));
+        foreach (var inst in new[] { "MEAS", "PROT", "UD1", "UD2" })
+            server.Add(new XElement(ns + "LDevice", new XAttribute("inst", inst)));
+
+        var domains = new[] { "SIEBCUCTRL", "SIEBCUMEAS", "SIEBCUPROT", "SIEBCUUD1", "SIEBCUUD2" };
+        var identity = TrustedSclIedIdentityMatcher.TryMatch(scl, domains, "192.0.2.55", "SIEBCU");
+
+        Assert.NotNull(identity);
+        Assert.Equal("SIEBCU", identity.IedName);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.Equal("UD2", identity.LogicalDeviceAliases["SIEBCUUD2"]);
+        Assert.Equal(5, identity.LogicalDeviceAliases.Count);
+    }
+
+    [Fact]
+    public void Engineering_Topology_Without_Unique_Confirmed_Endpoint_Cannot_Promote_Identity()
+    {
+        XNamespace ns = SclNs;
+        var scl = Design("SIEBCU", "CTRL", "192.0.2.55");
+        scl.Root!.Element(ns + "Communication")!.Remove();
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(scl, ["SIEBCUCTRL"], "192.0.2.55"));
+
+        var validScl = Design("SIEBCU", "CTRL", "192.0.2.55");
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(validScl, ["SIEBCUCTRL"], null));
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(validScl, ["SIEBCUCTRL"], "not-an-ip"));
+    }
+
     [Fact]
     public void GE_F650_Single_Domain_Uses_SCL_Evidence_Not_Vendor_Suffix_Heuristic()
     {

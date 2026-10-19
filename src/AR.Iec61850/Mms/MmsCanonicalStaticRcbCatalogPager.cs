@@ -80,11 +80,22 @@ public static class MmsCanonicalStaticRcbCatalogPager
         // A proven DataSet scope does not trigger a blind read of other,
         // still-unbound RCBs. Without proof, an unknown candidate requires
         // a real read of DatSet; exact configured references are probed first.
+        // A concrete indexed RCB instance (e.g. Events01 for declared
+        // Events) is ONLY a prioritization hint for a read-only DatSet probe.
+        // This never constitutes exact DataSet identity or activation proof.
+        var indexedUnbound = catalog
+            .Where(c => string.IsNullOrWhiteSpace(c.DataSetReference) &&
+                        !configured.Contains(Normalize(c.Reference)) &&
+                        configured.Any(reference =>
+                            IsIndexedInstance(Normalize(c.Reference), reference)))
+            .ToArray();
+
         var probes = bound.Length > 0
             ? bound.Concat(exactUnbound).ToArray()
-            : exactUnbound.Concat(catalog
+            : exactUnbound.Concat(indexedUnbound).Concat(catalog
                 .Where(c => string.IsNullOrWhiteSpace(c.DataSetReference) &&
-                            !configured.Contains(Normalize(c.Reference)))).ToArray();
+                            !configured.Contains(Normalize(c.Reference)) &&
+                            !indexedUnbound.Contains(c))).ToArray();
 
         // The token is bound to the exact catalog/selection. On a changed
         // inventory it fails closed instead of skipping an arbitrary RCB.
@@ -124,6 +135,19 @@ public static class MmsCanonicalStaticRcbCatalogPager
             Candidates = probes.Skip(start).Take(size).ToArray(),
             ContinuationToken = next < probes.Length ? $"{fingerprint}:{next}" : null
         };
+    }
+
+    private static bool IsIndexedInstance(string candidate, string configured)
+    {
+        if (configured.Length == 0 || candidate.Length <= configured.Length ||
+            !candidate.StartsWith(configured, StringComparison.Ordinal))
+            return false;
+        // Exact numeric instance suffix only: no arbitrary text similarity,
+        // and still no usable target until the live DatSet read succeeds.
+        for (var i = configured.Length; i < candidate.Length; i++)
+            if (candidate[i] is < '0' or > '9')
+                return false;
+        return true;
     }
 
     private static string Normalize(string? reference)

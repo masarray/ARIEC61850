@@ -93,6 +93,49 @@ public sealed class TrustedSclIedIdentityMatcherTests
                 model,unverified));
     }
 
+
+    [Fact]
+    public void Five_Domain_Bcu_Scl_Promotes_Exact_Identity_With_Logical_Device_Aliases()
+    {
+        var scl=Design("SIEBCU","CTRL","192.0.2.20");
+        XNamespace ns=SclNs;
+        var server=Assert.Single(scl.Descendants(ns+"Server"));
+        foreach (var suffix in new[] {"MEAS","PROT","UD1","UD2"})
+            server.Add(new XElement(ns+"LDevice",new XAttribute("inst",suffix),
+                new XElement(ns+"LN0",new XAttribute("lnType","LLN0_type"))));
+        var domains=new[] {"SIEBCUCTRL","SIEBCUMEAS","SIEBCUPROT","SIEBCUUD1","SIEBCUUD2"};
+        var verified=TrustedSclIedIdentityMatcher.TryMatch(
+            scl,domains,"192.0.2.20",selectedIedName:"SIEBCU",selectedAccessPointName:"S1");
+        Assert.NotNull(verified);
+        Assert.Equal("SIEBCU",verified.IedName);
+        Assert.Equal("TrustedSclExactDomainMatch",verified.Source);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High,verified.Confidence);
+        Assert.Equal("UD2",verified.LogicalDeviceAliases["SIEBCUUD2"]);
+        Assert.Equal(5,verified.LogicalDeviceAliases.Count);
+    }
+
+    [Fact]
+    public void Scl_Endpoint_Address_And_AccessPoint_Are_Mandatory_For_Verified_Identity()
+    {
+        XNamespace ns=SclNs;
+        var scl=Design("STATIONBCU","CTRL","192.0.2.30");
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(
+            scl,["STATIONBCUCTRL"],"192.0.2.30",selectedAccessPointName:"S2"));
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(
+            scl,["STATIONBCUCTRL"],null));
+        var noIp=new XDocument(scl);
+        Assert.Single(noIp.Descendants(ns+"P")).Remove();
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(
+            noIp,["STATIONBCUCTRL"],"192.0.2.30"));
+        var noConnectedAp=new XDocument(scl);
+        Assert.Single(noConnectedAp.Descendants(ns+"ConnectedAP")).Remove();
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(
+            noConnectedAp,["STATIONBCUCTRL"],"192.0.2.30"));
+        var wrongDomainCase=new[] {"stationBCUCTRL"};
+        Assert.Null(TrustedSclIedIdentityMatcher.TryMatch(
+            scl,wrongDomainCase,"192.0.2.30"));
+    }
+
     [Fact]
     public void Other_Devices_And_Already_Recognized_Multiple_Domains_Are_Unchanged()
     {

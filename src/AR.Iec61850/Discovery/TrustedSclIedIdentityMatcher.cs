@@ -71,20 +71,18 @@ public static class TrustedSclIedIdentityMatcher
                     .Where(x => string.Equals((string?)x.Attribute("iedName"),name,StringComparison.OrdinalIgnoreCase)
                         && string.Equals((string?)x.Attribute("apName"),apName,StringComparison.OrdinalIgnoreCase))
                     .ToArray() ?? Array.Empty<XElement>();
-                if (connected.Length > 1) continue;
+                // A uniquely matched endpoint is required before promoting SCL identity.
+                if (connected.Length != 1 || string.IsNullOrWhiteSpace(connectedHost)) continue;
                 var ipValues = connected.SingleOrDefault()?
                     .Element(Scl + "Address")?.Elements(Scl + "P")
                     .Where(x => string.Equals((string?)x.Attribute("type"),"IP",StringComparison.OrdinalIgnoreCase))
                     .Select(x => x.Value.Trim()).Take(2).ToArray() ?? Array.Empty<string>();
-                if (ipValues.Length > 1) continue;
+                if (ipValues.Length != 1) continue;
                 var ip = ipValues.SingleOrDefault();
-                if (!string.IsNullOrWhiteSpace(ip) && !string.IsNullOrWhiteSpace(connectedHost))
-                {
-                    if (!IPAddress.TryParse(ip,out var designIp) ||
-                        !IPAddress.TryParse(connectedHost.Trim(),out var observedIp) ||
-                        !designIp.Equals(observedIp))
-                        continue; // never promote a model for a different endpoint
-                }
+                if (!IPAddress.TryParse(ip, out var designIp) ||
+                    !IPAddress.TryParse(connectedHost!.Trim(), out var observedIp) ||
+                    !designIp.Equals(observedIp))
+                    continue; // Never promote a model with an unverified endpoint.
                 matches.Add((name, apName, aliases, ip));
             }
         }

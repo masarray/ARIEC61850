@@ -25,7 +25,7 @@ public sealed class LiveIedIdentityResolverTests
             "192.0.2.10");
 
         Assert.Equal("OLSF501", identity.IedName);
-        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
         Assert.False(identity.IsAmbiguous);
         Assert.Equal("PROT", identity.LogicalDeviceAliases["OLSF501PROT"]);
     }
@@ -45,7 +45,7 @@ public sealed class LiveIedIdentityResolverTests
 
         Assert.Equal("OCR7SJ8", identity.IedName);
         Assert.Equal("MmsDomainCommonPrefix", identity.Source);
-        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
         Assert.Equal("Mod2_MU1", identity.LogicalDeviceAliases["OCR7SJ8Mod2_MU1"]);
         Assert.DoesNotContain("OCR7SJ8Mod2", identity.CandidateNames);
     }
@@ -69,7 +69,7 @@ public sealed class LiveIedIdentityResolverTests
 
         Assert.Equal("COMMISSIONED_IED", identity.IedName);
         Assert.Equal("ExplicitOverride", identity.Source);
-        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Exact, identity.Confidence);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class LiveIedIdentityResolverTests
 
         Assert.Equal("OLSF501", identity.DisplayName);
         Assert.Equal("MmsDomainKnownLogicalDeviceSuffix", identity.Source);
-        Assert.Equal("High", identity.Confidence);
+        Assert.Equal("Medium", identity.Confidence);
         Assert.Equal("LD1", identity.LogicalDeviceAliases["OLSF501LD1"]);
     }
 

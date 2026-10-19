@@ -38,7 +38,7 @@ public static class LiveIedIdentityResolver
         if (!string.IsNullOrWhiteSpace(explicitIedName))
         {
             var name = explicitIedName.Trim();
-            return Create(name, "ExplicitOverride", LiveIedDiscoveryConfidenceLevel.Exact, false, [name], materialized,
+            return Create(name, "ExplicitOverride", LiveIedDiscoveryConfidenceLevel.Medium, false, [name], materialized,
                 [$"IED name was supplied explicitly as '{name}'."]);
         }
 
@@ -64,9 +64,7 @@ public static class LiveIedIdentityResolver
             if (distinctSuffixCandidates.Length == 1)
             {
                 var name = distinctSuffixCandidates[0];
-                var confidence = materialized.Length > 1
-                    ? LiveIedDiscoveryConfidenceLevel.High
-                    : LiveIedDiscoveryConfidenceLevel.Medium;
+                var confidence = LiveIedDiscoveryConfidenceLevel.Medium;
                 var evidence = suffixMatches
                     .Select(match => $"MMS domain '{match.Domain}' matched the logical-device suffix pattern for IED '{name}'.")
                     .ToArray();
@@ -89,9 +87,7 @@ public static class LiveIedIdentityResolver
         var commonPrefix = InferCommonPrefix(materialized);
         if (!string.IsNullOrWhiteSpace(commonPrefix))
         {
-            var confidence = materialized.Length >= 3
-                ? LiveIedDiscoveryConfidenceLevel.High
-                : LiveIedDiscoveryConfidenceLevel.Medium;
+            var confidence = LiveIedDiscoveryConfidenceLevel.Medium;
             return Create(
                 commonPrefix,
                 "MmsDomainCommonPrefix",
@@ -99,7 +95,7 @@ public static class LiveIedIdentityResolver
                 false,
                 [commonPrefix],
                 materialized,
-                [$"IED name '{commonPrefix}' was derived from the common prefix of {materialized.Length} MMS domain(s)."]);
+                [$"Provisional IED-name candidate '{commonPrefix}' comes from {materialized.Length} MMS domains; this is not verified wire identity."]);
         }
 
         // Retain the useful single-domain behavior (for example OLSF501LD0), but do not
@@ -112,7 +108,7 @@ public static class LiveIedIdentityResolver
             return Create(
                 name,
                 "MmsDomainKnownLogicalDeviceSuffix",
-                materialized.Length == 1 ? LiveIedDiscoveryConfidenceLevel.Medium : LiveIedDiscoveryConfidenceLevel.High,
+                LiveIedDiscoveryConfidenceLevel.Medium,
                 false,
                 distinctSuffixCandidates,
                 materialized,
@@ -235,18 +231,9 @@ public static class LiveIedIdentityResolver
                 return string.Empty;
         }
 
+        // An exact shared prefix can itself end in a common logical-device stem.
+        // Only verified model evidence can justify removing that stem.
         prefix = TrimBoundary(prefix);
-        foreach (var stem in KnownLogicalDeviceStems)
-        {
-            if (prefix.EndsWith(stem, StringComparison.OrdinalIgnoreCase) && prefix.Length > stem.Length)
-            {
-                var withoutStem = TrimBoundary(prefix[..^stem.Length]);
-                if (IsViableName(withoutStem))
-                    prefix = withoutStem;
-                break;
-            }
-        }
-
         return IsViableName(prefix) ? prefix : string.Empty;
     }
 

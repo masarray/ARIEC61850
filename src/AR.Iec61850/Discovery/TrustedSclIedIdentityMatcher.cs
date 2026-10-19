@@ -30,6 +30,7 @@ public static class TrustedSclIedIdentityMatcher
         if (observed.Count == 0) return null;
 
         var matches = new List<(string Ied, string Ap, Dictionary<string,string> Aliases, string? Ip)>();
+        var topologyMatchCount = 0;
         foreach (var ied in trustedScl.Root.Elements(Scl + "IED"))
         {
             var name = ((string?)ied.Attribute("name") ?? "").Trim();
@@ -65,6 +66,7 @@ public static class TrustedSclIedIdentityMatcher
                     }
                 }
                 if (invalid || aliases.Count != observed.Count) continue;
+                topologyMatchCount++; // AP ambiguity is structural even if another AP lacks endpoint evidence.
 
                 var connected = trustedScl.Root.Element(Scl + "Communication")?
                     .Descendants(Scl + "ConnectedAP")
@@ -88,7 +90,7 @@ public static class TrustedSclIedIdentityMatcher
         }
         // A single IED can have multiple APs and the same LD topology. This
         // remains ambiguous until AP is independently selected/proven.
-        if (matches.Count != 1) return null;
+        if (topologyMatchCount != 1 || matches.Count != 1) return null;
         var match=matches[0];
         return new LiveIedIdentity
         {

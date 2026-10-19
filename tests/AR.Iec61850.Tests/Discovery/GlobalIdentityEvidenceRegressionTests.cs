@@ -19,7 +19,8 @@ public sealed class GlobalIdentityEvidenceRegressionTests
         var inferred = LiveIedIdentityResolver.Resolve(Domains, "192.0.2.20");
         Assert.Equal("SIEBCU", inferred.IedName);
         Assert.Equal("MmsDomainCommonPrefix", inferred.Source);
-        Assert.True(inferred.Confidence < LiveIedDiscoveryConfidenceLevel.High);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.High, inferred.Confidence);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.Exact, inferred.Confidence);
         Assert.Equal("CTRL", inferred.LogicalDeviceAliases["SIEBCUCTRL"]);
         Assert.Equal("UD2", inferred.LogicalDeviceAliases["SIEBCUUD2"]);
         Assert.Equal(Domains.Length, inferred.LogicalDeviceAliases.Count);
@@ -31,7 +32,8 @@ public sealed class GlobalIdentityEvidenceRegressionTests
         var inferred = LiveIedIdentityResolver.Resolve(
             ["LABCTRLLD0", "LABCTRLPROT", "LABCTRLMEAS"], "192.0.2.20");
         Assert.Equal("LABCTRL", inferred.IedName);
-        Assert.True(inferred.Confidence < LiveIedDiscoveryConfidenceLevel.High);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.High, inferred.Confidence);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.Exact, inferred.Confidence);
         Assert.Equal("MmsDomainKnownLogicalDeviceSuffix", inferred.Source);
     }
 
@@ -42,7 +44,8 @@ public sealed class GlobalIdentityEvidenceRegressionTests
             explicitIedName: "OPERATOR_LABEL");
         Assert.Equal("OPERATOR_LABEL", inferred.IedName);
         Assert.Equal("ExplicitOverride", inferred.Source);
-        Assert.True(inferred.Confidence < LiveIedDiscoveryConfidenceLevel.High);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.High, inferred.Confidence);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.Exact, inferred.Confidence);
     }
 
     [Fact]

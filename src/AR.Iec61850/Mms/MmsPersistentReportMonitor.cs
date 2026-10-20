@@ -637,6 +637,12 @@ public sealed partial class MmsClientSession
             return;
         }
 
+        // Control termination / LastApplError use the same MMS service but are
+        // not RCB reports. Never feed them to the single-monitor fallback.
+        // Their independent control subscribers already received the envelope.
+        if (!HasRcbReportHeader(decoded))
+            return;
+
         var header = MmsReportFrameMapper.DecodeHeader(decoded);
         var active = SnapshotPersistentReportMonitors();
         var target = SelectPersistentReportMonitor(active, header, out var evidence);
@@ -654,6 +660,11 @@ public sealed partial class MmsClientSession
         LastReceiveRoutingSummary =
             $"Routed InformationReport to {target.ReportControl.Reference} by {evidence}. RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}.";
     }
+
+    internal static bool HasRcbReportHeader(MmsInformationReport report)
+        => report.IsSuccess && report.Items.Count >= 2 &&
+           report.Items[0].Value?.Kind is MmsDataKind.VisibleString or MmsDataKind.MmsString &&
+           report.Items[1].Value?.Kind == MmsDataKind.BitString;
 
     internal static MmsPersistentReportMonitorSession? SelectPersistentReportMonitor(
         IReadOnlyList<MmsPersistentReportMonitorSession> active,

@@ -69,6 +69,14 @@ public sealed class G1OrderedWireEvidenceTests
         Assert.True(result.WireSteps[1].RequestAccepted);
         Assert.Contains("positive CommandTermination", result.WireSteps[1].Detail, StringComparison.OrdinalIgnoreCase);
 
+        foreach (var step in result.WireSteps)
+        {
+            Assert.Contains("serviceStartedUtc=", step.Detail);
+            Assert.Contains("serviceMs=", step.Detail);
+            Assert.Contains("postResponseWaitMs=", step.Detail);
+            Assert.Contains("timingScope=local-service-not-wire", step.Detail);
+        }
+
         Assert.Equal(2, transport.Writes.Count);
         Assert.EndsWith("$SBOw", transport.Writes[0].Reference.Item, StringComparison.Ordinal);
         Assert.EndsWith("$Oper", transport.Writes[1].Reference.Item, StringComparison.Ordinal);

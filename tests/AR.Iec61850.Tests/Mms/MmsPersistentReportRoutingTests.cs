@@ -4,6 +4,53 @@ namespace AR.Iec61850.Tests.Mms;
 
 public sealed class MmsPersistentReportRoutingTests
 {
+    // Synthetic typed MMS evidence: no external packet capture or station data.
+    [Fact]
+    public void ControlInformationReportsCannotEnterSingleRcbFallback()
+    {
+        foreach (var value in new[]
+        {
+            MmsDataValue.Boolean(true),
+            MmsDataValue.Structure(new[] { MmsDataValue.VisibleString("LD0/CSWI1$CO$Pos$Oper"), MmsDataValue.Integer(0) })
+        })
+        {
+            var report = new MmsInformationReport
+            {
+                IsSuccess = true,
+                VariableReferences = new[] { "LD0/CSWI1$CO$Pos$Oper" },
+                Items = new[] { new MmsInformationReportItem { Value = value } }
+            };
+            Assert.False(MmsClientSession.HasRcbReportHeader(report));
+        }
+    }
+
+    [Fact]
+    public void RcbHeaderDoesNotRequireOptionalSequenceOrDatasetFields()
+    {
+        var report = new MmsInformationReport
+        {
+            IsSuccess = true,
+            Items = new[]
+            {
+                new MmsInformationReportItem { Value = MmsDataValue.VisibleString("RPT_A") },
+                new MmsInformationReportItem { Value = MmsDataValue.BitString(6, new byte[] { 0, 0 }) },
+                new MmsInformationReportItem { Value = MmsDataValue.BitString(7, new byte[] { 0x80 }) },
+                new MmsInformationReportItem { Value = MmsDataValue.Boolean(true) }
+            }
+        };
+        Assert.True(MmsClientSession.HasRcbReportHeader(report));
+        Assert.False(MmsClientSession.HasRcbReportHeader(new MmsInformationReport()));
+        Assert.False(MmsClientSession.HasRcbReportHeader(new MmsInformationReport
+        {
+            IsSuccess = true,
+            Items = new[]
+            {
+                new MmsInformationReportItem { Value = MmsDataValue.Boolean(true) },
+                new MmsInformationReportItem { Value = MmsDataValue.BitString(6, new byte[] { 0, 0 }) }
+            }
+        }));
+    }
+
     [Fact]
     public void Selector_RoutesByExactReportIdBeforeDataSetProjection()
     {

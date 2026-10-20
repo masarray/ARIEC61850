@@ -74,12 +74,87 @@ public sealed class G1OrderedWireEvidenceTests
             Assert.Contains("serviceStartedUtc=", step.Detail);
             Assert.Contains("serviceMs=", step.Detail);
             Assert.Contains("postResponseWaitMs=", step.Detail);
+            Assert.Contains("postResponseStage=", step.Detail);
+            Assert.Contains("configuredApplicationErrorGraceMs=", step.Detail);
             Assert.Contains("timingScope=local-service-not-wire", step.Detail);
         }
 
         Assert.Equal(2, transport.Writes.Count);
         Assert.EndsWith("$SBOw", transport.Writes[0].Reference.Item, StringComparison.Ordinal);
         Assert.EndsWith("$Oper", transport.Writes[1].Reference.Item, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(35)]
+    public async Task SboEnhanced_AsyncNegativeApplicationError_QuarantinesOperate(
+        int rejectionDelayMs)
+    {
+        // Synthetic independently constructed MMS indication; deliberately
+        // arrives AFTER successful SBOw service acceptance. A faster UI must
+        // not bypass this asynchronous rejection or emit the Operate write.
+        var transport = new WireEvidenceTransport();
+        Task? rejection = null;
+        transport.OnWrite = (reference, _) =>
+        {
+            if (!reference.Item.EndsWith("$SBOw", StringComparison.Ordinal))
+                return;
+            rejection = Task.Run(async () =>
+            {
+                await Task.Delay(rejectionDelayMs);
+                transport.EmitReport(reference, MmsDataValue.Structure(
+                [
+                    MmsDataValue.VisibleString("LD0/CSWI1.Pos"),
+                    MmsDataValue.Integer(1), // control-error
+                    MmsDataValue.Integer(10) // blocked-by-interlocking
+                ]));
+            });
+        };
+
+        var references = Iec61850ControlObjectReferences.Parse("LD0/CSWI1.Pos");
+        await using var session = new Iec61850ControlObjectSession(
+            transport,
+            new Iec61850ControlObjectDescriptor
+            {
+                ObjectReference = references.ObjectReference,
+                Cdc = "DPC",
+                ControlModel = Iec61850ControlModel.SelectBeforeOperateEnhanced,
+                CtlValSpecification = Type("ctlVal", "bit-string", 2),
+                OperSpecification = CommandSpecification(),
+                SelectWithValueSpecification = CommandSpecification(),
+                CancelSpecification = CommandSpecification(),
+                StatusReference = "LD0/CSWI1.Pos.stVal",
+                StatusFunctionalConstraint = "ST",
+                SboTimeout = TimeSpan.FromSeconds(2),
+                OperTimeout = TimeSpan.FromMilliseconds(250),
+                SupportsCommandTermination = true,
+                References = references
+            },
+            new Iec61850ControlServiceOptions
+            {
+                DefaultOperateTimeout = TimeSpan.FromMilliseconds(250),
+                ApplicationErrorGracePeriod = TimeSpan.FromMilliseconds(120)
+            });
+        var result = await session.OperateAsync(new Iec61850ControlRequest
+        {
+            ControlValue = Iec61850ControlValue.Close(),
+            Origin = Iec61850Origin.FromText("ARG1"),
+            InterlockCheck = true,
+            AutoSelect = true,
+            CommandTerminationTimeout = TimeSpan.FromMilliseconds(250)
+        });
+        if (rejection is not null)
+            await rejection;
+
+        Assert.Equal(Iec61850ControlCompletionState.Rejected, result.CompletionState);
+        Assert.True(result.RequestAccepted); // SBOw service did respond positively
+        Assert.False(result.CommandTerminationReceived);
+        Assert.Equal("blocked-by-interlocking", result.AddCause);
+        Assert.Single(transport.Writes); // no Operate, even with a delayed rejection
+        Assert.EndsWith("$SBOw", transport.Writes[0].Reference.Item, StringComparison.Ordinal);
+        var wire = Assert.Single(result.WireSteps);
+        Assert.Contains("postResponseStage=sbo-application-error-observation", wire.Detail);
+        Assert.Contains("configuredApplicationErrorGraceMs=120", wire.Detail);
     }
 
     private static MmsTypeSpecificationNode CommandSpecification()

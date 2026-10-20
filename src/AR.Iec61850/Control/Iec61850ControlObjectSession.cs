@@ -814,6 +814,19 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             _ => Descriptor.References.Oper
         };
 
+        // Distinguish protocol service response time from the selection
+        // negative-indication observation gate. The latter dominates the
+        // field sample (~400 ms); it must not be misreported as slow MMS I/O.
+        // This is telemetry only: do not reduce the grace period or bypass
+        // LastApplError and enhanced-security CommandTermination.
+        var postResponseStage = action switch
+        {
+            Iec61850ControlAction.SelectWithValue => "sbo-application-error-observation",
+            Iec61850ControlAction.Operate => "operate-termination-observation",
+            _ => "post-service-completion"
+        };
+        var graceBudget = action == Iec61850ControlAction.SelectWithValue
+            ? _options.ApplicationErrorGracePeriod.TotalMilliseconds : 0d;
         return new Iec61850ControlWireStep
         {
             Action = action,
@@ -822,7 +835,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             RequestHex = _transport.LastRequestHex,
             ResponseHex = _transport.LastResponseHex,
             Detail = FormattableString.Invariant(
-                $"{detail} serviceStartedUtc={_serviceStartedUtc:O}; serviceMs={_serviceElapsed.TotalMilliseconds:0.###}; postResponseWaitMs={Stopwatch.GetElapsedTime(_serviceCompletedTimestamp).TotalMilliseconds:0.###}; timingScope=local-service-not-wire")
+                $"{detail} serviceStartedUtc={_serviceStartedUtc:O}; serviceMs={_serviceElapsed.TotalMilliseconds:0.###}; postResponseWaitMs={Stopwatch.GetElapsedTime(_serviceCompletedTimestamp).TotalMilliseconds:0.###}; postResponseStage={postResponseStage}; configuredApplicationErrorGraceMs={graceBudget:0.###}; timingScope=local-service-not-wire")
         };
     }
 

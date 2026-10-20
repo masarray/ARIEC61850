@@ -1,5 +1,9 @@
 name: .NET CI
 
+# Always attest the immutable triggering source, not the mutable PR branch tip.
+env:
+  ARIEC_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 on:
   push:
     branches: [ main ]
@@ -22,7 +26,7 @@ on:
   pull_request:
     # The live ARSAS product pins PR #169 until targeted engine changes pass CI.
     # Stacked engine PRs must run the exact same Windows build/test gate.
-    branches: [ main, feat/495-dataset-type-closure, fix/p10-9l-readonly-ctlmodel-probe, fix/p0-b-target-scoped-rcb-pager-20261019 ]
+    branches: [ main, feat/495-dataset-type-closure, fix/p10-9l-readonly-ctlmodel-probe, fix/p0-b-target-scoped-rcb-pager-20261019, fix/p0-c-typed-read-trace-20261019 ]
   workflow_dispatch:
 
 permissions:
@@ -38,7 +42,21 @@ jobs:
         shell: pwsh
         run: |
           $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
+          $sourceSha = $env:ARIEC_SOURCE_SHA
+          if ($sourceSha -notmatch '^[0-9a-f]{40}$') {
+            throw "Missing immutable source commit SHA for this workflow."
+          }
           git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" source
+          if ($LASTEXITCODE -ne 0) { throw "Engine source checkout failed." }
+          git -C source fetch --quiet --depth 1 origin $sourceSha
+          if ($LASTEXITCODE -ne 0) { throw "Exact source SHA fetch failed." }
+          git -C source checkout --quiet --detach $sourceSha
+          if ($LASTEXITCODE -ne 0) { throw "Exact source SHA checkout failed." }
+          $verifiedSha = (git -C source rev-parse HEAD).Trim()
+          if ($verifiedSha -ne $sourceSha) {
+            throw "Source SHA drift: expected $sourceSha, got $verifiedSha."
+          }
+          Write-Host "Verified exact ARIEC source commit $verifiedSha"
 
       - name: Verify source, provenance, wording and license boundaries
         shell: pwsh
@@ -94,7 +112,7 @@ jobs:
 
           @(
             "ARIEC61850 PR #134 smart-discovery test build",
-            "Commit: $env:GITHUB_SHA",
+            "Commit: $env:ARIEC_SOURCE_SHA",
             "Branch: $env:GITHUB_HEAD_REF",
             "Run: $env:GITHUB_RUN_NUMBER",
             "TargetFramework: net8.0",

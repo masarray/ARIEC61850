@@ -269,7 +269,8 @@ public sealed partial class MmsClientSession
 
         // The association's negotiatedCalling is authoritative. Never create
         // speculative associations or exceed the transport's existing window.
-        var workers = Math.Min(Math.Clamp(effectiveWindow, 1, 8), candidates.Length);
+        var workers = MmsSmartDiscoveryPolicy.ResolveReportEnrichmentWorkers(
+            effectiveWindow, candidates.Length);
         var next = -1;
         async Task WorkerAsync()
         {

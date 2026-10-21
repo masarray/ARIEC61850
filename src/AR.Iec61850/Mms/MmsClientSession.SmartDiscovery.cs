@@ -274,12 +274,18 @@ public sealed partial class MmsClientSession
         var next = -1;
         async Task WorkerAsync()
         {
-            while (IsMmsInitiated)
+            while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var index = Interlocked.Increment(ref next);
                 if (index >= candidates.Length)
                     return;
+                // An association loss must not silently present a partial RCB
+                // enrichment as completed. The outer smart-discovery handler
+                // will mark an interrupted/partial evidence window instead.
+                if (!IsMmsInitiated)
+                    throw new OperationCanceledException(
+                        "MMS association stopped during bounded RCB enrichment.");
                 await EnrichSingleReportControlSmartAsync(candidates[index], cancellationToken)
                     .ConfigureAwait(false);
             }

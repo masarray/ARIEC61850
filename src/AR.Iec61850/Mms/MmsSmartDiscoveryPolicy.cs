@@ -19,6 +19,16 @@ internal static class MmsSmartDiscoveryPolicy
     }
 
     /// <summary>
+    /// Independent RCB read-only enrichment may fill the negotiated window,
+    /// but cannot exceed the peer's confirmed outstanding-calling capacity,
+    /// the finite report candidate count, or the existing hard worker cap.
+    /// Per-RCB fallback reads themselves remain ordered and serial.
+    /// </summary>
+    public static int ResolveReportEnrichmentWorkers(int effectiveWindow, int candidateCount)
+        => candidateCount <= 0 ? 0 :
+            Math.Min(Math.Clamp(effectiveWindow, 1, 8), candidateCount);
+
+    /// <summary>
     /// Selects the live domain set independently from any SCL hint. This is important:
     /// SCL may prioritize online work, but it must never manufacture or suppress live
     /// MMS evidence. Case-only collisions are collapsed deterministically because the

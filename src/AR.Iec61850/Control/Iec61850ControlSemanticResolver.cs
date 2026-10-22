@@ -65,7 +65,7 @@ public static class Iec61850ControlSemanticResolver
                       (mmsType == "boolean" &&
                        IsStandardPosition(descriptor.ObjectReference) &&
                        status.Equals(descriptor.ObjectReference + ".stVal",
-                           StringComparison.OrdinalIgnoreCase)))),
+                           StringComparison.OrdinalIgnoreCase))),
             "SPC" => statusIsState && mmsType == "boolean",
             "INC" or "ISC" => declared == cdc && statusIsState &&
                                mmsType is "integer" or "unsigned" or "bcd",

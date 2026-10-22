@@ -57,7 +57,7 @@ public sealed class SclAssistedMmsOnlineTests
 
         Assert.False(inventory.IsSuccess);
         Assert.Empty(inventory.ExpectedDomains);
-        Assert.Contains(inventory.Errors, error => error.Contains("no direct Server", StringComparison.Ordinal));
+        Assert.Contains(inventory.Errors, error => error.Contains("no resolvable Server/ServerAt model", StringComparison.Ordinal));
     }
 
     [Fact]

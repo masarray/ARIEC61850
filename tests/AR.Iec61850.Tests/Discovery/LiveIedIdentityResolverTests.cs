@@ -6,6 +6,49 @@ namespace AR.Iec61850.Tests.Discovery;
 
 public sealed class LiveIedIdentityResolverTests
 {
+
+    [Fact]
+    public void Resolve_Five_LogicalDevices_Preserves_Full_Common_Ied_Name_Without_Scl()
+    {
+        var domains = new[] { "SIEBCUCTRL", "SIEBCUMEAS", "SIEBCUPROT", "SIEBCUUD1", "SIEBCUUD2" };
+        var identity = LiveIedIdentityResolver.Resolve(domains, "192.0.2.20");
+
+        Assert.Equal("SIEBCU", identity.IedName);
+        Assert.Equal("MmsDomainCommonPrefix", identity.Source);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.Exact, identity.Confidence);
+        Assert.Equal("CTRL", identity.LogicalDeviceAliases["SIEBCUCTRL"]);
+        Assert.Equal("UD2", identity.LogicalDeviceAliases["SIEBCUUD2"]);
+    }
+
+    [Theory]
+    [InlineData("BCU")]
+    [InlineData("PROT")]
+    [InlineData("CTRL")]
+    [InlineData("MEAS")]
+    [InlineData("MU")]
+    public void Resolve_Common_Prefix_Does_Not_Remove_A_Valid_Ied_Name_Ending(string ending)
+    {
+        var fullName = "STATION" + ending;
+        var identity = LiveIedIdentityResolver.Resolve(
+            [fullName + "Application", fullName + "Reports", fullName + "Custom1"],
+            "192.0.2.21");
+
+        Assert.Equal(fullName, identity.IedName);
+        Assert.NotEqual(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+    }
+
+
+    [Fact]
+    public void Mms_Domain_Names_Are_Case_Sensitive_And_Never_Coalesced()
+    {
+        var identity = LiveIedIdentityResolver.Resolve(
+            ["SIEBCUCTRL", "siebcuctrl", "SIEBCUMEAS"], "192.0.2.61");
+        Assert.Equal(3, identity.LogicalDeviceAliases.Count);
+        Assert.Contains("SIEBCUCTRL", identity.LogicalDeviceAliases.Keys);
+        Assert.Contains("siebcuctrl", identity.LogicalDeviceAliases.Keys);
+    }
+
     [Fact]
     public void Resolve_Preserves_Digits_In_A_Single_Ld0_Domain()
     {
@@ -25,7 +68,7 @@ public sealed class LiveIedIdentityResolverTests
             "192.0.2.10");
 
         Assert.Equal("OLSF501", identity.IedName);
-        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
         Assert.False(identity.IsAmbiguous);
         Assert.Equal("PROT", identity.LogicalDeviceAliases["OLSF501PROT"]);
     }
@@ -45,7 +88,7 @@ public sealed class LiveIedIdentityResolverTests
 
         Assert.Equal("OCR7SJ8", identity.IedName);
         Assert.Equal("MmsDomainCommonPrefix", identity.Source);
-        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High, identity.Confidence);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
         Assert.Equal("Mod2_MU1", identity.LogicalDeviceAliases["OCR7SJ8Mod2_MU1"]);
         Assert.DoesNotContain("OCR7SJ8Mod2", identity.CandidateNames);
     }
@@ -62,6 +105,40 @@ public sealed class LiveIedIdentityResolverTests
         Assert.Equal(["ALPHA", "BETA"], identity.CandidateNames);
     }
 
+
+
+    [Fact]
+    public void Resolve_Preserves_Case_Distinct_Mms_Domains_And_Alias_Keys()
+    {
+        var domains = new[] { "STATIONBCUCTRL", "stationbcuctrl" };
+        var identity = LiveIedIdentityResolver.Resolve(domains, "192.0.2.42");
+        Assert.Equal(2, identity.LogicalDeviceAliases.Count);
+        Assert.Equal("CTRL", identity.LogicalDeviceAliases["STATIONBCUCTRL"]);
+        Assert.Equal("ctrl", identity.LogicalDeviceAliases["stationbcuctrl"]);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
+    }
+
+    [Fact]
+    public void Resolve_Fully_Known_Ld_Suffixes_Is_Still_Provisional_Without_Scl()
+    {
+        var identity = LiveIedIdentityResolver.Resolve(
+            ["STATIONBCUCTRL", "STATIONBCUPROT", "STATIONBCUMEAS"],
+            "192.0.2.20");
+        Assert.Equal("STATIONBCU", identity.IedName);
+        Assert.Equal("MmsDomainKnownLogicalDeviceSuffix", identity.Source);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
+    }
+
+    [Fact]
+    public void Resolve_Explicit_Alias_Is_Operator_Supplied_Not_Wire_Verified()
+    {
+        var identity = LiveIedIdentityResolver.Resolve(
+            ["WIRELD0"], "192.0.2.20", explicitIedName: "OPERATOR_ALIAS");
+        Assert.Equal("OPERATOR_ALIAS", identity.IedName);
+        Assert.Equal("ExplicitOverride", identity.Source);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
+    }
+
     [Fact]
     public void Resolve_Uses_Explicit_Name_Over_Live_Heuristic()
     {
@@ -69,7 +146,18 @@ public sealed class LiveIedIdentityResolverTests
 
         Assert.Equal("COMMISSIONED_IED", identity.IedName);
         Assert.Equal("ExplicitOverride", identity.Source);
-        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Exact, identity.Confidence);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
+        Assert.Equal("ExplicitOverride", identity.Source);
+    }
+
+    [Fact]
+    public void Heuristic_Suffix_Is_Never_A_Verified_Identity_Even_With_Five_Lds()
+    {
+        var identity = LiveIedIdentityResolver.Resolve(
+            ["PLANTCTRL", "PLANTMEAS", "PLANTPROT", "PLANTLD0", "PLANTMU1"], "192.0.2.90");
+        Assert.Equal("PLANT", identity.IedName);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Medium, identity.Confidence);
+        Assert.DoesNotContain(identity.CandidateNames, name => name.Equals("PLANTCTRL", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -81,7 +169,7 @@ public sealed class LiveIedIdentityResolverTests
 
         Assert.Equal("OLSF501", identity.DisplayName);
         Assert.Equal("MmsDomainKnownLogicalDeviceSuffix", identity.Source);
-        Assert.Equal("High", identity.Confidence);
+        Assert.Equal("Medium", identity.Confidence);
         Assert.Equal("LD1", identity.LogicalDeviceAliases["OLSF501LD1"]);
     }
 

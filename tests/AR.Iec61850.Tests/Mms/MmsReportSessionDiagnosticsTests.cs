@@ -108,4 +108,70 @@ public sealed class MmsReportSessionDiagnosticsTests
         Assert.Contains(diagnostics.WarningMessages, x => x.Contains("reset-to-zero", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void Diagnostics_surfaces_structured_RCB_type_and_preflight_failures()
+    {
+        var writes = new[]
+        {
+            new MmsReportAttributeWriteStep
+            {
+                Attribute = "ResvTms",
+                Reference = "LD0/LLN0.BR.B01.ResvTms",
+                Attempted = true,
+                IsSuccess = false,
+                FailureCode = 7,
+                FailureName = "type-inconsistent",
+                FailureKind = MmsInteropFailureKind.TypeMismatch,
+                RecoveryHint = MmsInteropRecoveryHint.RevalidateType,
+                TypeEvidence = new MmsReportSemanticTypeEvidence
+                {
+                    Status = MmsReportSemanticTypeEvidenceStatus.Unavailable,
+                    Attribute = "ResvTms",
+                    ExpectedMmsType = "integer",
+                    Message = "Live TypeSpecification unavailable."
+                }
+            },
+            new MmsReportAttributeWriteStep
+            {
+                Attribute = "RptEna",
+                Reference = "LD0/LLN0.BR.B01.RptEna",
+                Attempted = false,
+                IsSuccess = false,
+                TypeEvidence = new MmsReportSemanticTypeEvidence
+                {
+                    Status = MmsReportSemanticTypeEvidenceStatus.ExactMismatch,
+                    Attribute = "RptEna",
+                    ExpectedMmsType = "boolean",
+                    LiveMmsType = "integer"
+                }
+            },
+            new MmsReportAttributeWriteStep
+            {
+                Attribute = "GI",
+                Reference = "LD0/LLN0.BR.B01.GI",
+                Attempted = true,
+                IsSuccess = false,
+                FailureCode = 3,
+                FailureName = "object-access-denied",
+                FailureKind = MmsInteropFailureKind.AccessDenied,
+                RecoveryHint = MmsInteropRecoveryHint.FailClosed
+            }
+        };
+
+        var diagnostics = MmsReportSessionDiagnostics.Analyze(
+            Array.Empty<MmsReportFrame>(),
+            writeSteps: writes);
+
+        Assert.Equal("FAIL", diagnostics.OverallStatus);
+        Assert.Equal(3, diagnostics.WriteFailureCount);
+        Assert.Equal(1, diagnostics.WritePreflightBlockedCount);
+        Assert.Equal(1, diagnostics.WriteTypeMismatchCount);
+        Assert.Equal(1, diagnostics.WriteAccessDeniedCount);
+        Assert.Equal(1, diagnostics.WriteTypeEvidenceConflictCount);
+        Assert.Equal(1, diagnostics.WriteTypeEvidenceUnavailableCount);
+        Assert.Contains("typeMismatch=1", diagnostics.Summary, StringComparison.Ordinal);
+        Assert.Contains("preflightBlocked=1", diagnostics.Summary, StringComparison.Ordinal);
+    }
+
+
 }

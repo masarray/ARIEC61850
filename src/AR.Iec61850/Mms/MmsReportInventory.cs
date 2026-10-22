@@ -1,5 +1,13 @@
 namespace AR.Iec61850.Mms;
 
+public enum MmsReportInventoryAuthority
+{
+    Unknown,
+    LiveMmsObserved,
+    SclDesignProjection,
+    CanonicalModelProjection
+}
+
 public enum MmsRcbDataSetProbeState
 {
     NotAttempted,
@@ -47,6 +55,11 @@ public sealed class MmsReportControlCandidate
 
 public sealed class MmsReportInventory
 {
+    /// <summary>
+    /// Provenance of the inventory itself. Operational planners must not infer live
+    /// authority merely from the presence of plausible RCB names or DataSet bindings.
+    /// </summary>
+    public MmsReportInventoryAuthority Authority { get; set; } = MmsReportInventoryAuthority.Unknown;
     public List<MmsDataSetCandidate> DataSets { get; } = new();
     public List<MmsReportControlCandidate> ReportControls { get; } = new();
 

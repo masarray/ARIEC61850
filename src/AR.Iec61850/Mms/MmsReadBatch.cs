@@ -9,6 +9,7 @@ public sealed class MmsReadAccessResult
     public bool IsSuccess { get; init; }
     public MmsDataValue? Value { get; init; }
     public int? FailureCode { get; init; }
+    public MmsReadEvidenceFailureKind FailureKind { get; init; }
     public string Message { get; init; } = string.Empty;
 }
 
@@ -124,6 +125,14 @@ public static class MmsReadBatchCodec
                 return FailAll(references, "MMS Read response has no listOfAccessResult.", hex);
 
             var accessResults = BerReader.ReadChildren(accessList.Value);
+            // A Read response with missing/extra access results cannot be
+            // safely joined to requested FC tuples by ordinal. Retain the
+            // mismatch as failure evidence instead of accepting a prefix.
+            if (accessResults.Count != references.Count)
+                return FailAll(references,
+                    $"MMS Read AccessResult count mismatch: requested={references.Count}, received={accessResults.Count}.",
+                    hex, Math.Max(0, accessResults.Count - references.Count));
+
             var results = new List<MmsReadAccessResult>(references.Count);
             for (var index = 0; index < references.Count; index++)
             {
@@ -133,6 +142,7 @@ public static class MmsReadBatchCodec
                     {
                         Reference = references[index],
                         IsSuccess = false,
+                        FailureKind = MmsReadEvidenceFailureKind.InvalidResponse,
                         Message = $"MMS Read response ended before access result {index}."
                     });
                     continue;
@@ -166,6 +176,7 @@ public static class MmsReadBatchCodec
                 Reference = reference,
                 IsSuccess = false,
                 FailureCode = code.HasValue ? (int)code.Value : null,
+                FailureKind = MmsReadEvidenceClassifier.FromAccessCode(code.HasValue ? (int)code.Value : null),
                 Message = code.HasValue
                     ? $"MMS Read AccessResult.failure code {code.Value}."
                     : "MMS Read AccessResult.failure code is undecodable."
@@ -180,6 +191,7 @@ public static class MmsReadBatchCodec
                 Reference = reference,
                 IsSuccess = value.Kind != MmsDataKind.Unknown,
                 Value = value.Kind == MmsDataKind.Unknown ? null : value,
+                FailureKind = value.Kind == MmsDataKind.Unknown ? MmsReadEvidenceFailureKind.InvalidResponse : MmsReadEvidenceFailureKind.None,
                 Message = value.Kind == MmsDataKind.Unknown ? "MMS Data value is unknown." : "MMS Data value decoded."
             };
         }
@@ -195,6 +207,7 @@ public static class MmsReadBatchCodec
                     Reference = reference,
                     IsSuccess = value.Kind != MmsDataKind.Unknown,
                     Value = value.Kind == MmsDataKind.Unknown ? null : value,
+                    FailureKind = value.Kind == MmsDataKind.Unknown ? MmsReadEvidenceFailureKind.InvalidResponse : MmsReadEvidenceFailureKind.None,
                     Message = value.Kind == MmsDataKind.Unknown ? "Wrapped MMS Data value is unknown." : "Wrapped MMS Data value decoded."
                 };
             }
@@ -204,6 +217,7 @@ public static class MmsReadBatchCodec
         {
             Reference = reference,
             IsSuccess = false,
+            FailureKind = MmsReadEvidenceFailureKind.InvalidResponse,
             Message = $"Unsupported MMS AccessResult tag 0x{accessResult.EncodedTag:X2}."
         };
     }
@@ -224,13 +238,16 @@ public static class MmsReadBatchCodec
     private static MmsReadBatchResult FailAll(
         IReadOnlyList<MmsObjectReference> references,
         string message,
-        string hex)
+        string hex,
+        int extraAccessResultCount = 0)
         => new()
         {
+            ExtraAccessResultCount = extraAccessResultCount,
             Results = references.Select(reference => new MmsReadAccessResult
             {
                 Reference = reference,
                 IsSuccess = false,
+                FailureKind = MmsReadEvidenceFailureKind.InvalidResponse,
                 Message = message
             }).ToArray(),
             Message = message,

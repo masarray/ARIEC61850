@@ -7,7 +7,7 @@ public sealed class LiveIedIdentity
     public LiveIedDiscoveryConfidenceLevel Confidence { get; init; } = LiveIedDiscoveryConfidenceLevel.Unknown;
     public bool IsAmbiguous { get; init; }
     public IReadOnlyList<string> CandidateNames { get; init; } = Array.Empty<string>();
-    public IReadOnlyDictionary<string, string> LogicalDeviceAliases { get; init; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, string> LogicalDeviceAliases { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
     public IReadOnlyList<string> Evidence { get; init; } = Array.Empty<string>();
 
     public string Summary => $"IED identity: name={IedName}, source={Source}, confidence={Confidence}, candidates={CandidateNames.Count}, ambiguous={IsAmbiguous.ToString().ToLowerInvariant()}";
@@ -31,15 +31,15 @@ public static class LiveIedIdentityResolver
         var materialized = domains
             .Where(domain => !string.IsNullOrWhiteSpace(domain))
             .Select(domain => domain.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(domain => domain, StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(domain => domain, StringComparer.Ordinal)
             .ToArray();
 
         if (!string.IsNullOrWhiteSpace(explicitIedName))
         {
             var name = explicitIedName.Trim();
-            return Create(name, "ExplicitOverride", LiveIedDiscoveryConfidenceLevel.Exact, false, [name], materialized,
-                [$"IED name was supplied explicitly as '{name}'."]);
+            return Create(name, "ExplicitOverride", LiveIedDiscoveryConfidenceLevel.Medium, false, [name], materialized,
+                [$"Operator-supplied IED display name '{name}' has not been independently verified against this MMS endpoint."]);
         }
 
         var suffixMatches = materialized
@@ -56,7 +56,7 @@ public static class LiveIedIdentityResolver
             .OrderBy(candidate => candidate, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        // A known LD suffix is authoritative only when it explains the complete domain set.
+        // A known LD suffix is only a provisional naming hint even when it explains the complete domain set.
         // A single nested domain such as OCR7SJ8Mod2_MU1 must never rename the physical IED
         // to OCR7SJ8Mod2 while sibling domains prove the shared OCR7SJ8 prefix.
         if (materialized.Length > 0 && suffixMatches.Length == materialized.Length)
@@ -64,9 +64,7 @@ public static class LiveIedIdentityResolver
             if (distinctSuffixCandidates.Length == 1)
             {
                 var name = distinctSuffixCandidates[0];
-                var confidence = materialized.Length > 1
-                    ? LiveIedDiscoveryConfidenceLevel.High
-                    : LiveIedDiscoveryConfidenceLevel.Medium;
+                var confidence = LiveIedDiscoveryConfidenceLevel.Medium;
                 var evidence = suffixMatches
                     .Select(match => $"MMS domain '{match.Domain}' matched the logical-device suffix pattern for IED '{name}'.")
                     .ToArray();
@@ -89,9 +87,7 @@ public static class LiveIedIdentityResolver
         var commonPrefix = InferCommonPrefix(materialized);
         if (!string.IsNullOrWhiteSpace(commonPrefix))
         {
-            var confidence = materialized.Length >= 3
-                ? LiveIedDiscoveryConfidenceLevel.High
-                : LiveIedDiscoveryConfidenceLevel.Medium;
+            var confidence = LiveIedDiscoveryConfidenceLevel.Medium;
             return Create(
                 commonPrefix,
                 "MmsDomainCommonPrefix",
@@ -112,7 +108,7 @@ public static class LiveIedIdentityResolver
             return Create(
                 name,
                 "MmsDomainKnownLogicalDeviceSuffix",
-                materialized.Length == 1 ? LiveIedDiscoveryConfidenceLevel.Medium : LiveIedDiscoveryConfidenceLevel.High,
+                LiveIedDiscoveryConfidenceLevel.Medium,
                 false,
                 distinctSuffixCandidates,
                 materialized,
@@ -172,7 +168,7 @@ public static class LiveIedIdentityResolver
         IReadOnlyList<string> domains,
         IReadOnlyList<string> evidence)
     {
-        var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var domain in domains)
         {
             var alias = domain.StartsWith(name, StringComparison.OrdinalIgnoreCase) && domain.Length > name.Length
@@ -235,18 +231,10 @@ public static class LiveIedIdentityResolver
                 return string.Empty;
         }
 
+        // The common prefix is evidence of the shared IED-name candidate, not a
+        // logical-device suffix. Removing a known LD stem here corrupts valid
+        // names such as SIEBCU, STATIONPROT and STATIONMU.
         prefix = TrimBoundary(prefix);
-        foreach (var stem in KnownLogicalDeviceStems)
-        {
-            if (prefix.EndsWith(stem, StringComparison.OrdinalIgnoreCase) && prefix.Length > stem.Length)
-            {
-                var withoutStem = TrimBoundary(prefix[..^stem.Length]);
-                if (IsViableName(withoutStem))
-                    prefix = withoutStem;
-                break;
-            }
-        }
-
         return IsViableName(prefix) ? prefix : string.Empty;
     }
 

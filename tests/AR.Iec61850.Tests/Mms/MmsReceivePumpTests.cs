@@ -84,6 +84,30 @@ public sealed class MmsReceivePumpTests
         Assert.Equal(0, pump.PendingOperationCount);
     }
 
+    [Fact]
+    public async Task Pump_CanonicalOverflow_FaultsPendingConfirmedWorkAndRetainsQueuedReports()
+    {
+        var channel = Channel.CreateUnbounded<byte[]>();
+        for (var i = 0; i < 4; i++)
+            await channel.Writer.WriteAsync(BuildInformationReport());
+
+        var router = new MmsReceiveRouter(canonicalReportCapacity: 2);
+        var pump = new MmsReceivePump(router, token => channel.Reader.ReadAsync(token).AsTask());
+        using var pending = pump.RegisterConfirmedOperation(9);
+        pump.Start();
+
+        var failure = await Assert.ThrowsAsync<IOException>(
+            () => pending.WaitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token));
+        await pump.StopAsync();
+
+        Assert.Contains("bounded frame/byte capacity", failure.Message);
+        Assert.Equal(2, router.QueuedInformationReportCount);
+        Assert.True(router.TryDequeueInformationReport(out _));
+        Assert.True(router.TryDequeueInformationReport(out _));
+        Assert.Throws<IOException>(() => router.TryDequeueInformationReport(out _));
+        Assert.Contains("IOException", pump.LastFaultMessage);
+    }
+
     private static byte[] BuildConfirmedReadResponse(int invokeId)
     {
         var data = MmsDataCodec.Encode(MmsDataValue.Boolean(true));

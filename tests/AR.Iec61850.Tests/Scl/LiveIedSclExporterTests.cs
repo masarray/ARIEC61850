@@ -103,6 +103,109 @@ public sealed class LiveIedSclExporterTests
     }
 
     [Fact]
+    public void Exact_Integer_StVal_Refines_Generic_Status_To_Ins_And_Preserves_Int32()
+    {
+        var discovery = new MmsDiscoveryResult
+        {
+            IedDirectory = new MmsIedModelDirectory(
+            [
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDADD",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "UserStatus.stVal",
+                    MmsItemName = "GGIO1$ST$UserStatus$stVal"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDADD",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "UserStatus.q",
+                    MmsItemName = "GGIO1$ST$UserStatus$q"
+                },
+                new MmsFcResolvedPoint
+                {
+                    Domain = "IEDADD",
+                    LogicalNode = "GGIO1",
+                    FunctionalConstraint = "ST",
+                    DataObjectPath = "UserStatus.t",
+                    MmsItemName = "GGIO1$ST$UserStatus$t"
+                }
+            ])
+        };
+        var typeResult = new MmsVariableAccessAttributesResult
+        {
+            IsSuccess = true,
+            Reference = new MmsObjectReference("IEDADD", "GGIO1", string.Empty),
+            TypeSpecification = new MmsTypeSpecificationNode
+            {
+                MmsType = "structure",
+                SclBType = "Struct",
+                Children =
+                [
+                    new MmsTypeSpecificationNode
+                    {
+                        Name = "ST",
+                        MmsType = "structure",
+                        SclBType = "Struct",
+                        Children =
+                        [
+                            new MmsTypeSpecificationNode
+                            {
+                                Name = "UserStatus",
+                                MmsType = "structure",
+                                SclBType = "Struct",
+                                Children =
+                                [
+                                    new MmsTypeSpecificationNode { Name = "stVal", MmsType = "integer", SclBType = "INT32" },
+                                    new MmsTypeSpecificationNode { Name = "q", MmsType = "bit-string", SclBType = "Quality" },
+                                    new MmsTypeSpecificationNode { Name = "t", MmsType = "utc-time", SclBType = "Timestamp" }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+
+        var model = LiveIedModelDiscoveryBuilder.Build(
+            discovery,
+            new LiveIedModelDiscoveryBuildOptions { IedName = "IED" },
+            variableTypeAttributes: [typeResult]);
+
+        var dataObject = Assert.Single(
+            model.LogicalDevices
+                .SelectMany(device => device.LogicalNodes)
+                .SelectMany(node => node.DataObjects),
+            item => item.Name == "UserStatus");
+        Assert.Equal("INS", dataObject.InferredCdc);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.Exact,
+            Assert.Single(dataObject.Attributes, attribute => attribute.AttributePath == "stVal").TypeConfidence);
+
+        var document = LiveIedSclExporter.BuildDocument(
+            model,
+            new LiveIedSclExportOptions { Profile = "full-model" });
+        var ns = document.Root!.Name.Namespace;
+        var lNodeType = Assert.Single(
+            document.Descendants(ns + "LNodeType"),
+            element => (string?)element.Attribute("lnClass") == "GGIO");
+        var doRef = Assert.Single(
+            lNodeType.Elements(ns + "DO"),
+            element => (string?)element.Attribute("name") == "UserStatus");
+        var doType = Assert.Single(
+            document.Descendants(ns + "DOType"),
+            element => (string?)element.Attribute("id") == (string?)doRef.Attribute("type"));
+
+        Assert.Equal("INS", (string?)doType.Attribute("cdc"));
+        var stVal = Assert.Single(
+            doType.Elements(ns + "DA"),
+            element => (string?)element.Attribute("name") == "stVal");
+        Assert.Equal("INT32", (string?)stVal.Attribute("bType"));
+    }
+
+    [Fact]
     public void Exporter_Preserves_CaseDistinct_Ltrk_Cts_Members_From_Root_TypeSpecification()
     {
         var discovery = new MmsDiscoveryResult

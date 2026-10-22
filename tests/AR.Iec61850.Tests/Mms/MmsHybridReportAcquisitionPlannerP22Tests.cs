@@ -214,6 +214,76 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
     }
 
     [Fact]
+    public void ConfiguredStatic_WithMissingReservationEvidence_RemainsPollingByDefault()
+    {
+        var signal = Signal(
+            "LD0/GGIO1.Ind1.stVal",
+            "LD0/GGIO1$ST$Ind1$stVal",
+            "ST",
+            "LD0/LLN0.dsA",
+            "LD0/GGIO1.Ind1");
+        var inventory = Inventory(Rcb("LD0/LLN0.BR.B01", true, "LD0/LLN0.dsA"));
+        var unknown = Copy(
+            StaticAvailable(
+                "LD0/LLN0.BR.B01",
+                true,
+                "LD0/LLN0.dsA",
+                Member("LD0", "GGIO1$ST$Ind1", "LD0/GGIO1.Ind1", "ST")),
+            availability: MmsRcbOperationalAvailability.Unknown,
+            reservationTimeSeconds: string.Empty,
+            confidence: MmsRcbAvailabilityConfidence.Reduced);
+
+        var plan = Build([signal], inventory, Availability(unknown), EmptyDirectory());
+
+        Assert.Equal(MmsHybridAcquisitionPlanStatus.PollingOnly, plan.Status);
+        Assert.Equal(0, plan.StaticBrcbSignalCount);
+        Assert.Equal(1, plan.PollingFallbackSignalCount);
+        Assert.Equal(0, plan.Capability.StaticUsableCount);
+    }
+
+    [Fact]
+    public void Explicit_Reduced_Static_OptIn_Uses_ConfiguredBrcb_BeforePolling()
+    {
+        var signal = Signal(
+            "LD0/GGIO1.Ind1.stVal",
+            "LD0/GGIO1$ST$Ind1$stVal",
+            "ST",
+            "LD0/LLN0.dsA",
+            "LD0/GGIO1.Ind1");
+        var inventory = Inventory(Rcb("LD0/LLN0.BR.B01", true, "LD0/LLN0.dsA"));
+        var unknown = Copy(
+            StaticAvailable(
+                "LD0/LLN0.BR.B01",
+                true,
+                "LD0/LLN0.dsA",
+                Member("LD0", "GGIO1$ST$Ind1", "LD0/GGIO1.Ind1", "ST")),
+            availability: MmsRcbOperationalAvailability.Unknown,
+            reservationTimeSeconds: string.Empty,
+            confidence: MmsRcbAvailabilityConfidence.Reduced);
+
+        var plan = Build(
+            [signal],
+            inventory,
+            Availability(unknown),
+            EmptyDirectory(),
+            new MmsHybridReportAcquisitionOptions
+            {
+                AllowConfiguredStaticWithMissingReservationEvidence = true
+            });
+
+        Assert.Equal(MmsHybridAcquisitionPlanStatus.FullReportCoverage, plan.Status);
+        Assert.Equal(1, plan.StaticBrcbSignalCount);
+        Assert.Equal(0, plan.PollingFallbackSignalCount);
+        Assert.Equal(1, plan.Capability.StaticUsableCount);
+        var segment = Assert.Single(plan.Segments);
+        Assert.Equal(MmsHybridAcquisitionKind.StaticBrcb, segment.Kind);
+        Assert.True(segment.RequiresWrite);
+        Assert.Contains("reduced", segment.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(plan.Warnings, warning =>
+            warning.Contains("reduced reservation-evidence", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Capability_DistinguishesDiscoveredCheckedUsableBusyAndUnknownRcbs()
     {
         var signal = Signal("LD0/GGIO1.Ind1.stVal", "LD0/GGIO1$ST$Ind1$stVal", "ST");
@@ -389,7 +459,10 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
         MmsRcbAvailabilitySnapshot source,
         MmsRcbOperationalAvailability? availability = null,
         string? enabledState = null,
-        string? reservationState = null)
+        string? reservationState = null,
+        string? reservationTimeSeconds = null,
+        string? owner = null,
+        MmsRcbAvailabilityConfidence? confidence = null)
         => new()
         {
             CheckedAtUtc = source.CheckedAtUtc,
@@ -410,15 +483,15 @@ public sealed class MmsHybridReportAcquisitionPlannerP22Tests
             OptionalFields = source.OptionalFields,
             EnabledState = enabledState ?? source.EnabledState,
             ReservationState = reservationState ?? source.ReservationState,
-            ReservationTimeSeconds = source.ReservationTimeSeconds,
-            Owner = source.Owner,
+            ReservationTimeSeconds = reservationTimeSeconds ?? source.ReservationTimeSeconds,
+            Owner = owner ?? source.Owner,
             DataSetDirectoryRead = source.DataSetDirectoryRead,
             DataSetDirectorySuccess = source.DataSetDirectorySuccess,
             DataSetIsDeletable = source.DataSetIsDeletable,
             DataSetMemberCount = source.DataSetMemberCount,
             DataSetMembers = source.DataSetMembers,
             Availability = availability ?? source.Availability,
-            Confidence = source.Confidence,
+            Confidence = confidence ?? source.Confidence,
             Reason = source.Reason,
             ProbeDiagnostics = source.ProbeDiagnostics
         };

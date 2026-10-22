@@ -17,6 +17,12 @@ public sealed class MmsWriteResult
     public IReadOnlyList<MmsWriteAccessResult> AccessResults { get; init; } = Array.Empty<MmsWriteAccessResult>();
     public string Message { get; init; } = string.Empty;
     public string ResponseHexPreview { get; init; } = string.Empty;
+
+    // Time inside the client process, not on-the-wire latency. Populated
+    // only when this write has a confirmed MMS response.
+    public TimeSpan? TpktSendElapsed { get; internal set; }
+    public TimeSpan? ConfirmedResponseWaitElapsed { get; internal set; }
+    public TimeSpan? ResponseDecodeElapsed { get; internal set; }
 }
 
 public static class MmsWriteRequest

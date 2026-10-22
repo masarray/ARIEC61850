@@ -580,6 +580,106 @@ public sealed class SmartControlStackTests
     }
 
     [Fact]
+    public async Task CtlModelCommissioning_WritesExactCfOnce_AndVerifiesReadback()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(0) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
+        var result = await new Iec61850ControlService().ConfigureControlModelCoreAsync(
+            transport, "ZIVAVRLD1/CSWI1.Pos",
+            Iec61850ControlModel.StatusOnly, Iec61850ControlModel.SelectBeforeOperateNormal);
+        Assert.True(result.WriteAccepted);
+        Assert.True(result.ReadbackVerified);
+        var write = Assert.Single(transport.Writes);
+        Assert.Equal("CSWI1$CF$Pos$ctlModel", write.Reference.Item);
+        Assert.Equal(MmsDataKind.Integer, write.Value.Kind);
+        Assert.Equal(2L, write.Value.Value);
+        Assert.Equal(2, transport.Reads.Count);
+        Assert.DoesNotContain(transport.Writes, x => x.Reference.Item.Contains("$CO$", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CtlModelCommissioning_StaleExpectedValueNeverWrites()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(3) });
+        var result = await new Iec61850ControlService().ConfigureControlModelCoreAsync(
+            transport, "ZIVAVRLD1/CSWI2.Pos",
+            Iec61850ControlModel.StatusOnly, Iec61850ControlModel.SelectBeforeOperateEnhanced);
+        Assert.False(result.WriteAccepted);
+        Assert.False(result.ReadbackVerified);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task CtlModelCommissioning_AllowExplicitStatusOnlyZero_WithReadback()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(0) });
+        var result = await new Iec61850ControlService().ConfigureControlModelCoreAsync(
+            transport, "ZIVAVRLD1/CSWI1.Pos",
+            Iec61850ControlModel.SelectBeforeOperateNormal,
+            Iec61850ControlModel.StatusOnly);
+        Assert.True(result.WriteAccepted);
+        Assert.True(result.ReadbackVerified);
+        var write = Assert.Single(transport.Writes);
+        Assert.Equal("CSWI1$CF$Pos$ctlModel", write.Reference.Item);
+        Assert.Equal(0L, write.Value.Value);
+    }
+
+    [Fact]
+    public async Task CtlModelCommissioning_DoesNotWriteUnknownOrNoChange()
+    {
+        var transport = new FakeControlTransport();
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            new Iec61850ControlService().ConfigureControlModelCoreAsync(
+                transport, "LD0/CSWI1.Pos",
+                Iec61850ControlModel.StatusOnly, Iec61850ControlModel.Unknown));
+        Assert.Empty(transport.Reads);
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
+        var result = await new Iec61850ControlService().ConfigureControlModelCoreAsync(
+            transport, "LD0/CSWI1.Pos",
+            Iec61850ControlModel.SelectBeforeOperateNormal,
+            Iec61850ControlModel.SelectBeforeOperateNormal);
+        Assert.False(result.WriteAccepted);
+        Assert.True(result.ReadbackVerified);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Theory]
+    [InlineData(0L, Iec61850ControlModel.StatusOnly)]
+    [InlineData(3L, Iec61850ControlModel.DirectEnhanced)]
+    [InlineData(4L, Iec61850ControlModel.SelectBeforeOperateEnhanced)]
+    public async Task ReadOnlyCtlModelProbe_DecodesExactReference_NoCommandWrites(
+        long raw, Iec61850ControlModel expected)
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(raw) });
+        var probe = await new Iec61850ControlService().ProbeControlModelCoreAsync(
+            transport, "ZIVAVRLD1/ATCC1.TapChg");
+        Assert.True(probe.ReadSucceeded);
+        Assert.True(probe.Decoded);
+        Assert.Equal(expected, probe.ControlModel);
+        Assert.Equal("ATCC1$CF$TapChg$ctlModel", Assert.Single(transport.Reads).Item);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task ReadOnlyCtlModelProbe_FailedReadCannotMasqueradeAsStatusOnly()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = false, Message = "object-non-existent" });
+        var probe = await new Iec61850ControlService().ProbeControlModelCoreAsync(
+            transport, "ZIVAVRLD1/CSWI1.Pos");
+        Assert.False(probe.ReadSucceeded);
+        Assert.False(probe.Decoded);
+        Assert.Equal(Iec61850ControlModel.Unknown, probe.ControlModel);
+        Assert.Contains("object-non-existent", probe.Detail);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
     public async Task DescriptorDiscovery_UsesLiveCtlModelAndExactCtlValType()
     {
         var transport = new FakeControlTransport();
@@ -600,7 +700,223 @@ public sealed class SmartControlStackTests
     }
 
     [Fact]
-    public async Task DescriptorDiscovery_RejectsSboObjectWithoutCancelService()
+    public async Task DescriptorDiscovery_RecognizesBscStepControl_FromExactLiveValWTrPosition()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(4) });
+        transport.Specifications["ATCC1$CO$TapChg$Oper"] = CommandSpecification();
+        transport.Specifications["ATCC1$CO$TapChg$SBOw"] = CommandSpecification();
+        transport.Specifications["ATCC1$CO$TapChg$Cancel"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[]
+        {
+            "ATCC1$ST$TapChg$valWTr$posVal",
+            "ATCC1$ST$TapChg$q"
+        };
+        var service = new Iec61850ControlService();
+
+        await using var session = await service.OpenCoreAsync(transport, "LD0/ATCC1.TapChg");
+
+        Assert.Equal("BSC", session.Descriptor.Cdc);
+        Assert.Equal(Iec61850ControlModel.SelectBeforeOperateEnhanced, session.Descriptor.ControlModel);
+        Assert.Equal("LD0/ATCC1.TapChg.valWTr.posVal", session.Descriptor.StatusReference);
+        Assert.Equal("ST", session.Descriptor.StatusFunctionalConstraint);
+        Assert.Equal("bit-string", session.Descriptor.CtlValSpecification.MmsType);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_StandardPosVerifiedByTargetedTypedRead()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.BitString(6, new byte[] { 0x80 }) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.Specifications["CSWI1$CO$Pos$Cancel"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" }; // 6400-item NameList cap omitted CSWI
+        await using var control = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/CSWI1.Pos");
+        Assert.Equal("LD0/CSWI1.Pos.stVal", control.Descriptor.StatusReference);
+        Assert.Equal("ST", control.Descriptor.StatusFunctionalConstraint);
+        Assert.True(control.Descriptor.IsOperationallyReady);
+        Assert.Equal("DPC", control.Descriptor.Cdc); // typed two-bit stVal proves DPC despite Boolean Oper
+        Assert.True(control.Descriptor.LiveStatusIsDoublePoint);
+        Assert.True(Iec61850ControlSemanticResolver.Resolve(control.Descriptor, "DPC").IsCommandSafe);
+        Assert.Contains(transport.Reads, x => x.Item == "CSWI1$ST$Pos$stVal");
+        Assert.Single(transport.Reads, x => x.Item.Contains("$ST$Pos$", StringComparison.Ordinal));
+        Assert.Empty(transport.Writes);
+    }
+
+    [Theory]
+    [InlineData(7, 0x80)]
+    [InlineData(5, 0x80)]
+    public async Task TruncatedDomainNameList_InvalidPosBitWidthMustNotAuthorizeCommand(byte unusedBits, byte payload)
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.BitString(unusedBits, new byte[] { payload }) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        await using var control = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/CSWI1.Pos");
+        Assert.Equal("", control.Descriptor.StatusReference);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(control.Descriptor, "DPC").IsCommandSafe);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_UnreadablePosMustNotAuthorizeCommand()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        await using var control = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/CSWI1.Pos");
+        Assert.Equal("", control.Descriptor.StatusReference);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(control.Descriptor, "DPC").IsCommandSafe);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Theory]
+    [InlineData("Bkr0XCBR2", "Pos")]
+    [InlineData("AnyVendorLN1", "SomeCtrl")]
+    [InlineData("CustomGGIO2", "RemoteSwitch")]
+    public async Task TruncatedDomainNameList_BooleanOperHasOneExactReadOnlyStValProbe(
+        string logicalNode, string dataObject)
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.BitString(6, new byte[] { 0x40 }) });
+        transport.Specifications[$"{logicalNode}$CO${dataObject}$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        var reference = $"LD0/{logicalNode}.{dataObject}";
+
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(
+            transport, reference);
+
+        Assert.Equal(reference + ".stVal", session.Descriptor.StatusReference);
+        Assert.True(session.Descriptor.LiveStatusIsDoublePoint);
+        Assert.Equal("DPC", session.Descriptor.Cdc);
+        Assert.True(Iec61850ControlSemanticResolver.Resolve(
+            session.Descriptor, "DPC").IsCommandSafe);
+        Assert.Single(transport.Reads, x => x.FunctionalConstraint == "ST");
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_UnknownBooleanStatusCannotMasqueradeAsDpc()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Boolean(true) });
+        transport.Specifications["VendorLN1$CO$RemoteSwitch$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/VendorLN1.RemoteSwitch");
+        Assert.False(session.Descriptor.LiveStatusIsDoublePoint);
+        Assert.Equal("SPC", session.Descriptor.Cdc);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(session.Descriptor, "DPC").IsCommandSafe);
+        Assert.Single(transport.Reads, x => x.FunctionalConstraint == "ST");
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_UnlistedTapChgBscHasExactTypedStepProof()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(4) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(12) });
+        transport.Specifications["UnusualLN2$CO$TapChg$Oper"] = CommandSpecification();
+        transport.Specifications["UnusualLN2$CO$TapChg$SBOw"] = CommandSpecification();
+        transport.Specifications["UnusualLN2$CO$TapChg$Cancel"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/UnusualLN2.TapChg");
+        Assert.Equal("LD0/UnusualLN2.TapChg.valWTr.posVal", session.Descriptor.StatusReference);
+        Assert.Equal("BSC", session.Descriptor.Cdc);
+        Assert.True(Iec61850ControlSemanticResolver.Resolve(
+            session.Descriptor, "BSC").IsCommandSafe);
+        Assert.Single(transport.Reads, r =>
+            r.Item == "UnusualLN2$ST$TapChg$valWTr$posVal");
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_UnlistedTapChgBadStatusNeverGrantsBsc()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Boolean(true) });
+        transport.Specifications["ArbitraryLN3$CO$TapChg$Oper"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/ArbitraryLN3.TapChg");
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(
+            session.Descriptor, "BSC").IsCommandSafe);
+        Assert.Empty(transport.Writes);
+        Assert.InRange(transport.Reads.Count(r => r.FunctionalConstraint == "ST"), 1, 2);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_NonPositionNonBooleanNoBlindScalarProbe()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.Specifications["GGIO1$CO$SomeCtrl$Oper"] =
+            Structure(string.Empty, Type("ctlVal", "octet-string", size: 64));
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        await using var control = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/GGIO1.SomeCtrl");
+        Assert.DoesNotContain(transport.Reads, x => x.FunctionalConstraint == "ST");
+        Assert.Equal("", control.Descriptor.StatusReference);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task StructuredStatusInventory_VerifiesScalarViaLiveRead()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        // CSWI.Pos requires exactly one typed ST.stVal read, not a
+        // speculative valWTr probe first.
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.BitString(6, new byte[] { 0x40 }) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[] { "CSWI1$ST$Pos" };
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(transport, "LD0/CSWI1.Pos");
+        Assert.Equal("LD0/CSWI1.Pos.stVal", session.Descriptor.StatusReference);
+        Assert.Equal("ST", session.Descriptor.StatusFunctionalConstraint);
+        Assert.True(session.Descriptor.IsOperationallyReady);
+        Assert.Contains(transport.Reads, x => x.Item == "CSWI1$ST$Pos$stVal");
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task StructuredStatusInventory_UnreadableStatusNeverAuthorizesCommand()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
+        transport.Specifications["CSWI1$CO$Pos$Oper"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[] { "CSWI1$ST$Pos" };
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(transport, "LD0/CSWI1.Pos");
+        Assert.Equal("", session.Descriptor.StatusReference);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(session.Descriptor, "DPC").IsCommandSafe);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task DescriptorDiscovery_AcceptsSboNormalWithoutCancelService()
     {
         var transport = new FakeControlTransport();
         transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(2) });
@@ -608,10 +924,10 @@ public sealed class SmartControlStackTests
         transport.DomainVariables["LD0"] = new[] { "CSWI1$ST$Pos$stVal" };
         var service = new Iec61850ControlService();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.OpenCoreAsync(transport, "LD0/CSWI1.Pos"));
-
-        Assert.Contains("incomplete", error.Message, StringComparison.OrdinalIgnoreCase);
+        await using var session = await service.OpenCoreAsync(transport, "LD0/CSWI1.Pos");
+        Assert.Equal(Iec61850ControlModel.SelectBeforeOperateNormal, session.Descriptor.ControlModel);
+        Assert.True(session.Descriptor.IsOperationallyReady);
+        Assert.Null(session.Descriptor.CancelSpecification);
     }
 
     private static Iec61850ControlObjectSession NewSession(
@@ -656,6 +972,15 @@ public sealed class SmartControlStackTests
             Origin = Iec61850Origin.FromText("ARTEST"),
             InterlockCheck = true
         };
+
+    private static MmsTypeSpecificationNode CommandSpecificationWithBooleanCtlVal()
+        => Structure(string.Empty,
+            Type("ctlVal", "boolean"),
+            Structure("origin", Type("orCat", "integer"), Type("orIdent", "octet-string", size: 64)),
+            Type("ctlNum", "unsigned"),
+            Type("T", "utc-time"),
+            Type("Test", "boolean"),
+            Type("Check", "bit-string", size: 2));
 
     private static MmsTypeSpecificationNode CommandSpecification()
         => Structure(string.Empty,

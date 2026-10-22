@@ -191,6 +191,107 @@ public sealed class MmsSemanticReportValueProjectorTests
             update.ProjectionStatus.Equals("semantic-structured-leaf", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void C264_Incomplete_Live_Schema_Still_Projects_Strictly_Typed_Mod_FCD()
+    {
+        // C264 smart discovery can expose stVal without type-probing every
+        // sibling. That partial model must not suppress a fully typed ST
+        // Report containing stVal, q, t and stSeld.
+        const string root = "C264CONTROL/CILO1.Mod";
+        const string dataSet = "C264CONTROL/LLN0.LLN0BRptStDs";
+        var schema = new LiveIedModelDiscoveryDocument
+        {
+            IedName = "C264",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "C264CONTROL",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "CILO1",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = root,
+                                    Name = "Mod",
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = root + ".stVal",
+                                            AttributePath = "stVal",
+                                            FunctionalConstraint = "ST"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            DataSets =
+            [
+                new LiveIedDataSetModel
+                {
+                    Reference = dataSet,
+                    Domain = "C264CONTROL",
+                    LogicalNode = "LLN0",
+                    Name = "LLN0BRptStDs",
+                    MemberCount = 1,
+                    Members =
+                    [
+                        new LiveIedDataSetMemberModel
+                        {
+                            Index = 0,
+                            Reference = root,
+                            FunctionalConstraint = "ST",
+                            Confidence = LiveIedDiscoveryConfidenceLevel.Exact
+                        }
+                    ]
+                }
+            ]
+        };
+        var at = new DateTimeOffset(2026, 10, 17, 2, 24, 5, TimeSpan.Zero);
+        var frame = new MmsReportFrame
+        {
+            ReceivedAt = at,
+            Header = new MmsReportHeader { DataSetReference = dataSet },
+            Values =
+            [
+                new MmsReportValue
+                {
+                    Index = 0,
+                    Member = new MmsDataSetDirectoryMember
+                    {
+                        UserReference = root,
+                        FunctionalConstraint = "ST"
+                    },
+                    Value = MmsDataValue.Structure([
+                        MmsDataValue.Integer(1),
+                        MmsDataValue.BitString(3, [0x00, 0x00]),
+                        MmsDataValue.UtcTime(new Iec61850UtcTime(at, 0)),
+                        MmsDataValue.Boolean(false)
+                    ])
+                }
+            ]
+        };
+
+        var projected = MmsSemanticReportValueProjector.Project(
+            frame, MmsReportSemanticProjectionContext.Create(schema));
+        var scalar = Assert.Single(projected.Updates);
+        Assert.Equal(root + ".stVal", scalar.Reference);
+        Assert.Equal("good", scalar.Quality);
+        Assert.True(scalar.HasTimestamp);
+        Assert.DoesNotContain(projected.Warnings,
+            x => x.StartsWith("REPORT_RAW_STRUCT:", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projected.Updates,
+            x => x.Value.StartsWith("Structure(", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static LiveIedModelDiscoveryDocument BuildThreePhaseModel(
         string objectReference,
         string dataSetReference)

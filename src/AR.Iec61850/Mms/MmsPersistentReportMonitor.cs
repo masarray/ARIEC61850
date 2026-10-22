@@ -2,8 +2,19 @@ using System.Collections.Concurrent;
 
 namespace AR.Iec61850.Mms;
 
+public enum MmsPersistentReportTrafficState
+{
+    ArmedAwaitingTraffic,
+    TrafficProven,
+    Stopped
+}
+
 public sealed class MmsPersistentReportMonitorSession
 {
+    private long _firstRoutedReportUtcTicks;
+    private long _lastRoutedReportUtcTicks;
+    private int _routedReportCount;
+
     internal MmsPersistentReportMonitorSession(
         MmsReportSubscriptionPlan plan,
         MmsReportControlCandidate reportControl,
@@ -38,10 +49,35 @@ public sealed class MmsPersistentReportMonitorSession
     public int ReportCount { get; internal set; }
     public int PollReadCount { get; internal set; }
     public bool IsStopped { get; internal set; }
+    public int RoutedReportCount => Volatile.Read(ref _routedReportCount);
+    public DateTimeOffset? FirstRoutedReportAt => ToUtcTimestamp(Volatile.Read(ref _firstRoutedReportUtcTicks));
+    public DateTimeOffset? LastRoutedReportAt => ToUtcTimestamp(Volatile.Read(ref _lastRoutedReportUtcTicks));
+    public MmsPersistentReportTrafficState TrafficState => IsStopped
+        ? MmsPersistentReportTrafficState.Stopped
+        : RoutedReportCount > 0
+            ? MmsPersistentReportTrafficState.TrafficProven
+            : MmsPersistentReportTrafficState.ArmedAwaitingTraffic;
+    public TimeSpan? FirstReportLatency => FirstRoutedReportAt.HasValue
+        ? FirstRoutedReportAt.Value - StartedAt
+        : null;
+
     internal ConcurrentQueue<MmsReportFrame> PendingReports { get; } = new();
 
+    internal void ObserveRoutedReport(MmsReportFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        var ticks = frame.ReceivedAt.UtcDateTime.Ticks;
+        Interlocked.CompareExchange(ref _firstRoutedReportUtcTicks, ticks, 0);
+        Interlocked.Exchange(ref _lastRoutedReportUtcTicks, ticks);
+        Interlocked.Increment(ref _routedReportCount);
+    }
+
     public string Summary =>
-        $"persistent report monitor: rcb={ReportControl.Reference}, dataset={Plan.DataSetReference}, mode={Plan.Mode}, reports={ReportCount}, stopped={IsStopped}";
+        $"persistent report monitor: rcb={ReportControl.Reference}, dataset={Plan.DataSetReference}, mode={Plan.Mode}, " +
+        $"traffic={TrafficState}, routedReports={RoutedReportCount}, drainedReports={ReportCount}, stopped={IsStopped}";
+
+    private static DateTimeOffset? ToUtcTimestamp(long ticks)
+        => ticks <= 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
 }
 
 public sealed class MmsPersistentReportMonitorStartResult
@@ -233,14 +269,14 @@ public sealed partial class MmsClientSession
             }
             else if (!rcb.Buffered && rcb.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase))
             {
-                var reserve = await WriteReportAttributeAsync(rcb, "Resv", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+                var reserve = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.Reservation(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(reserve);
                 reservationTouched = reserve.IsSuccess;
                 if (!reserve.IsSuccess)
                     warnings.Add("URCB Resv write failed. Continuing only if RptEna=true is accepted by the IED.");
             }
 
-            var enable = await WriteReportAttributeAsync(rcb, "RptEna", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+            var enable = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.ReportEnable(true), cancellationToken).ConfigureAwait(false);
             writes.Add(enable);
             enabledByThisClient = enable.IsSuccess;
             if (!enable.IsSuccess)
@@ -261,7 +297,7 @@ public sealed partial class MmsClientSession
 
             if (triggerGeneralInterrogation)
             {
-                var gi = await WriteReportAttributeAsync(rcb, "GI", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+                var gi = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.GeneralInterrogation(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(gi);
                 if (!gi.IsSuccess)
                     warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
@@ -363,7 +399,7 @@ public sealed partial class MmsClientSession
 
         if (session.EnabledByThisClient)
         {
-            var disable = await TryWriteReportAttributeForCleanupAsync(session.ReportControl, "RptEna", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+            var disable = await TryWriteReportSemanticAttributeForCleanupAsync(session.ReportControl, MmsReportControlSemanticWrite.ReportEnable(false), CancellationToken.None).ConfigureAwait(false);
             writes.Add(disable);
             success &= disable.IsSuccess;
         }
@@ -410,8 +446,8 @@ public sealed partial class MmsClientSession
         if (session.ReservationTouched)
         {
             var release = session.ReportControl.Buffered
-                ? await TryWriteReportAttributeForCleanupAsync(session.ReportControl, "ResvTms", MmsDataValue.Unsigned(0), CancellationToken.None).ConfigureAwait(false)
-                : await TryWriteReportAttributeForCleanupAsync(session.ReportControl, "Resv", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+                ? await TryWriteReportSemanticAttributeForCleanupAsync(session.ReportControl, MmsReportControlSemanticWrite.ReservationTime(0), CancellationToken.None).ConfigureAwait(false)
+                : await TryWriteReportSemanticAttributeForCleanupAsync(session.ReportControl, MmsReportControlSemanticWrite.Reservation(false), CancellationToken.None).ConfigureAwait(false);
             writes.Add(release);
             success &= release.IsSuccess;
         }
@@ -509,10 +545,8 @@ public sealed partial class MmsClientSession
 
             if (giPending)
             {
-                writes.Add(await WriteReportAttributeAsync(
-                    requestedSession.ReportControl,
-                    "GI",
-                    MmsDataValue.Boolean(true),
+                writes.Add(await WriteReportSemanticAttributeAsync(
+                    requestedSession.ReportControl, MmsReportControlSemanticWrite.GeneralInterrogation(true),
                     cancellationToken).ConfigureAwait(false));
                 giPending = false;
                 continue;
@@ -541,9 +575,26 @@ public sealed partial class MmsClientSession
 
             if (IsReceivePumpRunning)
             {
-                var delay = remaining < TimeSpan.FromMilliseconds(25) ? remaining : TimeSpan.FromMilliseconds(25);
-                if (delay > TimeSpan.Zero)
-                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                // The association-owned receive pump already blocks on the transport.
+                // Do not add a 25 ms application polling loop on top of it. Wait for the
+                // router's binary InformationReport signal, bounded by the next legitimate
+                // scheduler deadline (residual polling) or this receive slice deadline.
+                var wakeAt = deadline;
+                if (pollDirectory != null &&
+                    references.Length > 0 &&
+                    nextPollAt < wakeAt)
+                {
+                    wakeAt = nextPollAt;
+                }
+
+                var waitFor = wakeAt - DateTimeOffset.UtcNow;
+                if (waitFor > TimeSpan.Zero)
+                {
+                    await _receiveRouter.WaitForInformationReportAsync(
+                        waitFor,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
                 continue;
             }
 
@@ -586,6 +637,12 @@ public sealed partial class MmsClientSession
             return;
         }
 
+        // Control termination / LastApplError use the same MMS service but are
+        // not RCB reports. Never feed them to the single-monitor fallback.
+        // Their independent control subscribers already received the envelope.
+        if (!HasRcbReportHeader(decoded))
+            return;
+
         var header = MmsReportFrameMapper.DecodeHeader(decoded);
         var active = SnapshotPersistentReportMonitors();
         var target = SelectPersistentReportMonitor(active, header, out var evidence);
@@ -598,10 +655,16 @@ public sealed partial class MmsClientSession
         }
 
         var frame = MmsReportFrameMapper.Map(decoded, target.Plan.Members, DateTimeOffset.UtcNow);
+        target.ObserveRoutedReport(frame);
         target.PendingReports.Enqueue(frame);
         LastReceiveRoutingSummary =
             $"Routed InformationReport to {target.ReportControl.Reference} by {evidence}. RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}.";
     }
+
+    internal static bool HasRcbReportHeader(MmsInformationReport report)
+        => report.IsSuccess && report.Items.Count >= 2 &&
+           report.Items[0].Value?.Kind is MmsDataKind.VisibleString or MmsDataKind.MmsString &&
+           report.Items[1].Value?.Kind == MmsDataKind.BitString;
 
     internal static MmsPersistentReportMonitorSession? SelectPersistentReportMonitor(
         IReadOnlyList<MmsPersistentReportMonitorSession> active,
@@ -617,6 +680,22 @@ public sealed partial class MmsClientSession
             return null;
         }
 
+        var dataSet = NormalizeRoutingReference(header.DataSetReference);
+
+        // Report identity is a two-field contract whenever the peer provides
+        // a domain-qualified DatSet. A matching RptID is not sufficient to
+        // project another DataSet's payload using this monitor's member order.
+        // Keep the existing RptID-only compatibility for omitted or abbreviated
+        // DatSet fields (some supported peers do not advertise a full path).
+        bool ConflictsWithAdvertisedDataSet(MmsPersistentReportMonitorSession candidate)
+        {
+            if (string.IsNullOrWhiteSpace(dataSet) || !dataSet.Contains('/'))
+                return false;
+            var expected = NormalizeRoutingReference(candidate.Plan.DataSetReference);
+            return !string.IsNullOrWhiteSpace(expected) &&
+                   !expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase);
+        }
+
         var reportId = NormalizeRoutingReference(header.ReportId);
         if (!string.IsNullOrWhiteSpace(reportId))
         {
@@ -625,6 +704,11 @@ public sealed partial class MmsClientSession
                 .ToArray();
             if (exactRptId.Length == 1)
             {
+                if (ConflictsWithAdvertisedDataSet(exactRptId[0]))
+                {
+                    evidence = "RptID/DatSet conflict: report was quarantined before process-value projection";
+                    return null;
+                }
                 evidence = "exact RptID";
                 return exactRptId[0];
             }
@@ -632,12 +716,16 @@ public sealed partial class MmsClientSession
             var rcbAffinity = candidates.Where(x => HasRcbNameAffinity(reportId, x.ReportControl)).ToArray();
             if (rcbAffinity.Length == 1)
             {
+                if (ConflictsWithAdvertisedDataSet(rcbAffinity[0]))
+                {
+                    evidence = "RptID/DatSet conflict: report was quarantined before process-value projection";
+                    return null;
+                }
                 evidence = "RptID-to-RCB name affinity";
                 return rcbAffinity[0];
             }
         }
 
-        var dataSet = NormalizeRoutingReference(header.DataSetReference);
         if (!string.IsNullOrWhiteSpace(dataSet))
         {
             var exactDataSet = candidates
@@ -662,6 +750,11 @@ public sealed partial class MmsClientSession
 
         if (candidates.Length == 1)
         {
+            if (ConflictsWithAdvertisedDataSet(candidates[0]))
+            {
+                evidence = "single-monitor DatSet conflict: report was quarantined before process-value projection";
+                return null;
+            }
             evidence = "single active monitor fallback";
             return candidates[0];
         }

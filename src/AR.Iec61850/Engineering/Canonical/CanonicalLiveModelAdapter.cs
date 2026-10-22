@@ -1,4 +1,5 @@
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Scl.Workspace;
 
 namespace AR.Iec61850.Engineering.Canonical;
 
@@ -32,6 +33,24 @@ public static class CanonicalLiveModelAdapter
                 FactSource = CanonicalEvidenceSource.LiveMms,
                 DomainAliases = EmptyAliases
             });
+    }
+
+    /// <summary>
+    /// Public source-correct canonical ingress for an already opened SCL IED workspace.
+    /// Applications should use this instead of re-labeling the workspace DesignModel as
+    /// live discovery merely to reuse canonical planning.
+    /// </summary>
+    public static CanonicalIedModel FromSclWorkspace(SclIedWorkspace workspace)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+
+        return FromSclProjection(
+            workspace.DesignModel,
+            sourceName: "SCL workspace",
+            sourceEdition: string.Empty,
+            iedName: workspace.IedName,
+            accessPointName: workspace.AccessPointName,
+            domainAliases: EmptyAliases);
     }
 
     internal static CanonicalIedModel FromSclProjection(
@@ -150,7 +169,7 @@ public static class CanonicalLiveModelAdapter
 
             dataSets[i] = new CanonicalDataSet
             {
-                Reference = RemapReference(dataSet.Reference, context.DomainAliases),
+                Reference = NormalizeConfiguredReference(dataSet.Reference, context.DomainAliases),
                 MmsDomain = RemapDomain(dataSet.Domain, context.DomainAliases),
                 LogicalNode = dataSet.LogicalNode,
                 Name = dataSet.Name,
@@ -167,12 +186,12 @@ public static class CanonicalLiveModelAdapter
             var report = source.ReportControls[i];
             reportControls[i] = new CanonicalReportControl
             {
-                Reference = RemapReference(report.Reference, context.DomainAliases),
+                Reference = NormalizeConfiguredReference(report.Reference, context.DomainAliases),
                 MmsDomain = RemapDomain(report.Domain, context.DomainAliases),
                 LogicalNode = report.LogicalNode,
                 Name = report.Name,
                 Buffered = report.Buffered,
-                DataSetReference = RemapReference(report.DataSetReference, context.DomainAliases),
+                DataSetReference = NormalizeConfiguredReference(report.DataSetReference, context.DomainAliases),
                 ReportId = report.ReportId,
                 ConfRev = report.ConfRev,
                 TriggerOptions = report.TriggerOptions,
@@ -231,6 +250,17 @@ public static class CanonicalLiveModelAdapter
             Diagnostics = diagnostics
         };
     }
+
+    /// <summary>
+    /// Canonical DataSet/ReportControl identity uses one source-neutral dotted form.
+    /// SCL commonly carries '$' MMS component separators while live discovery may expose
+    /// the same configured resource with dots. Source projections retain their original
+    /// spelling; the shared CanonicalIedModel does not.
+    /// </summary>
+    private static string NormalizeConfiguredReference(
+        string value,
+        IReadOnlyDictionary<string, string> aliases)
+        => RemapReference(value, aliases).Replace('$', '.');
 
     private static string RemapDomain(string value, IReadOnlyDictionary<string, string> aliases)
     {

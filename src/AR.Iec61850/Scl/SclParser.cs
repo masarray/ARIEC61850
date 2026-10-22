@@ -435,39 +435,60 @@ public sealed class SclParser
         var release = Attr(root, "release");
         var ns = root.Name.NamespaceName.ToLowerInvariant();
 
-        // IEC 61850 SCL keeps the historical namespace URI http://www.iec.ch/61850/2003/SCL
-        // even for Edition 2 family files.  Do not classify by namespace alone.
-        if (string.Equals(version, "2007", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(revision, "B", StringComparison.OrdinalIgnoreCase) &&
-            (string.Equals(release, "4", StringComparison.OrdinalIgnoreCase) || string.Equals(release, "4A", StringComparison.OrdinalIgnoreCase)))
-            return SclEdition.Edition21;
+        // IEC 61850-6 uses the SAME historical XML namespace URI for
+        // Editions 1/2/2.1/2.2. Root version/revision/release, not an invented
+        // namespace URI or vendor signature, identifies the SCL edition.
+        if (string.Equals(version, "2007", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(revision, "C", StringComparison.OrdinalIgnoreCase))
+                return string.Equals(release, "5", StringComparison.OrdinalIgnoreCase)
+                    ? SclEdition.Edition22 : SclEdition.Unknown;
 
-        if (string.Equals(version, "2007", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(revision, "B", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(revision, "B", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(release, "4", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(release, "4A", StringComparison.OrdinalIgnoreCase))
+                    return SclEdition.Edition21;
+                // Edition 2 legacy files may omit release or use an earlier
+                // integer release. Future/contradictory releases stay Unknown.
+                if (string.IsNullOrWhiteSpace(release) ||
+                    int.TryParse(release, NumberStyles.None, CultureInfo.InvariantCulture,
+                        out var olderRelease) && olderRelease <= 3)
+                    return SclEdition.Edition2;
+                return SclEdition.Unknown;
+            }
+
+            return string.IsNullOrWhiteSpace(revision) &&
+                   string.IsNullOrWhiteSpace(release)
+                ? SclEdition.Edition2 : SclEdition.Unknown;
+        }
+
+        if (string.Equals(version, "2003", StringComparison.OrdinalIgnoreCase))
+            return string.IsNullOrWhiteSpace(revision) ||
+                   string.Equals(revision, "A", StringComparison.OrdinalIgnoreCase)
+                ? SclEdition.Edition1 : SclEdition.Unknown;
+
+        // An explicit unsupported release/version is not safe to downgrade to
+        // Edition 2 using the shared 2003 namespace.
+        if (!string.IsNullOrWhiteSpace(version) || !string.IsNullOrWhiteSpace(release))
+            return SclEdition.Unknown;
+
+        // Retain the limited historical no-version classification for older
+        // IED capability files; never infer Edition 2.1/2.2 without root proof.
+        if (string.Equals(revision, "B", StringComparison.OrdinalIgnoreCase))
             return SclEdition.Edition2;
-
-        if (string.Equals(version, "2003", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(revision, "A", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(revision, "A", StringComparison.OrdinalIgnoreCase))
             return SclEdition.Edition1;
-
-        // Edition 1 IED capability files commonly use the historical SCL namespace
-        // without root version/revision attributes. Edition 2 identifies itself with
-        // version="2007" and revision="B" while retaining the same namespace URI.
-        if (string.IsNullOrWhiteSpace(version) &&
-            string.IsNullOrWhiteSpace(revision) &&
-            string.IsNullOrWhiteSpace(release) &&
-            ns.Contains("/2003/scl", StringComparison.Ordinal))
+        if (!string.IsNullOrWhiteSpace(revision))
+            return SclEdition.Unknown;
+        if (ns.Contains("/2003/scl", StringComparison.Ordinal))
             return SclEdition.Edition1;
-
         if (ns.Contains("2007b4", StringComparison.Ordinal) ||
             ns.Contains("ed2.1", StringComparison.Ordinal) ||
             ns.Contains("edition2.1", StringComparison.Ordinal))
             return SclEdition.Edition21;
-
-        if (ns.Contains("scl", StringComparison.Ordinal))
-            return SclEdition.Edition2;
-
-        return SclEdition.Unknown;
+        return ns.Contains("scl", StringComparison.Ordinal)
+            ? SclEdition.Edition2 : SclEdition.Unknown;
     }
 
     private static string DataSetKey(string iedName, string ldInst, string lnPath, string dataSetName)

@@ -62,7 +62,10 @@ public static class Iec61850ControlSemanticResolver
                       (mmsType == "bit-string" && size == 2)),
             "DPC" => statusIsState &&
                      ((mmsType == "bit-string" && size == 2) ||
-                      (mmsType == "boolean" && IsStandardPosition(descriptor.ObjectReference))),
+                      (mmsType == "boolean" &&
+                       IsStandardPosition(descriptor.ObjectReference) &&
+                       status.Equals(descriptor.ObjectReference + ".stVal",
+                           StringComparison.OrdinalIgnoreCase)))),
             "SPC" => statusIsState && mmsType == "boolean",
             "INC" or "ISC" => declared == cdc && statusIsState &&
                                mmsType is "integer" or "unsigned" or "bcd",
@@ -87,10 +90,21 @@ public static class Iec61850ControlSemanticResolver
         var dot = suffix.IndexOf('.');
         if (dot <= 0 || !suffix[(dot + 1)..].Equals("Pos", StringComparison.OrdinalIgnoreCase))
             return false;
-        var ln = suffix[..dot].ToUpperInvariant();
-        return ln.StartsWith("CSWI", StringComparison.Ordinal) ||
-               ln.StartsWith("XCBR", StringComparison.Ordinal) ||
-               ln.StartsWith("XSWI", StringComparison.Ordinal);
+        var ln = suffix[..dot];
+        // IEC 61850 LN identity is <prefix><lnClass><inst>, not necessarily
+        // <lnClass><inst>. Examples: Bkr0XCBR2, Disc0XSWI1, BkrCSWI4.
+        // Class is the final four letters before the REQUIRED instance digits,
+        // regardless of the vendor/operator-configured prefix. Never infer a
+        // position control from a substring or a DO name alone.
+        var instanceStart = ln.Length;
+        while (instanceStart > 0 && char.IsAsciiDigit(ln[instanceStart - 1]))
+            instanceStart--;
+        if (instanceStart == ln.Length || instanceStart < 4)
+            return false;
+        var classEnd = ln.AsSpan(0, instanceStart);
+        return classEnd.EndsWith("CSWI".AsSpan(), StringComparison.OrdinalIgnoreCase) ||
+               classEnd.EndsWith("XCBR".AsSpan(), StringComparison.OrdinalIgnoreCase) ||
+               classEnd.EndsWith("XSWI".AsSpan(), StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsAnalogStructure(MmsTypeSpecificationNode ctlVal)

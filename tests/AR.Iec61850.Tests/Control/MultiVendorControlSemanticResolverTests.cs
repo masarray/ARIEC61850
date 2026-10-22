@@ -105,6 +105,91 @@ public sealed class MultiVendorControlSemanticResolverTests
         Assert.False(Iec61850ControlSemanticResolver.Resolve(descriptor, "BSC").IsCommandSafe);
     }
 
+
+    [Theory]
+    [InlineData("SG7_BCUSystem/Bkr0XCBR2.Pos")]
+    [InlineData("SG7_BCUSystem/Disc0XSWI1.Pos")]
+    [InlineData("SG7_BCUSystem/BkrCSWI4.Pos")]
+    [InlineData("LD/CSWI1.Pos")]
+    [InlineData("LD/XCBR1.Pos")]
+    [InlineData("LD/XSWI1.Pos")]
+    public void Edition2PrefixedLogicalNode_BooleanOperAndDbposFeedback_ResolvesDpc(
+        string reference)
+    {
+        // The DPC control value may be MMS Boolean although Pos.stVal is
+        // double-point. Class identity comes from <prefix><LNClass><inst>.
+        var descriptor = NewDescriptor(reference, "SPC", "boolean", 0,
+            reference + ".stVal");
+        descriptor = new Iec61850ControlObjectDescriptor
+        {
+            ObjectReference = descriptor.ObjectReference,
+            Cdc = descriptor.Cdc,
+            ControlModel = Iec61850ControlModel.SelectBeforeOperateEnhanced,
+            CtlValSpecification = descriptor.CtlValSpecification,
+            OperSpecification = descriptor.OperSpecification,
+            StatusReference = descriptor.StatusReference,
+            SelectWithValueSpecification = new MmsTypeSpecificationNode { MmsType = "structure" },
+            CancelSpecification = new MmsTypeSpecificationNode { MmsType = "structure" },
+            SupportsCommandTermination = true
+        };
+        var result = Iec61850ControlSemanticResolver.Resolve(descriptor, "DPC");
+        Assert.True(result.IsCommandSafe, result.Reason);
+        Assert.Equal("DPC", result.Cdc);
+        // StatusOnly and missing enhanced SBO components must still fail.
+        var blocked = new Iec61850ControlObjectDescriptor
+        {
+            ObjectReference = reference, Cdc = "SPC",
+            ControlModel = Iec61850ControlModel.SelectBeforeOperateEnhanced,
+            CtlValSpecification = new MmsTypeSpecificationNode { MmsType = "boolean" },
+            StatusReference = reference + ".stVal",
+            SupportsCommandTermination = true
+        };
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(blocked, "DPC").IsCommandSafe);
+    }
+
+    [Theory]
+    [InlineData("LD/Bkr0XCBR.Pos")]
+    [InlineData("LD/Bkr0XCBR2.Mode")]
+    [InlineData("LD/Bkr0XCBR2.PosExtra")]
+    [InlineData("LD/Bkr0GGIO2.Pos")]
+    [InlineData("LD/XCBR1Extra.Pos")]
+    [InlineData("LD/NotASwitch1.Pos")]
+    public void PositionSemantics_NotInferredWithoutExactPrefixedLnClassInstance(
+        string reference)
+    {
+        var descriptor = NewDescriptor(reference, "SPC", "boolean", 0,
+            reference + ".stVal");
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(
+            descriptor, "DPC").IsCommandSafe);
+    }
+
+    [Fact]
+    public void DpcBooleanRejectsOtherObjectsStatus_AndWrongWireType()
+    {
+        var reference = "LD/Bkr0XCBR2.Pos";
+        var otherStatus = NewDescriptor(reference, "SPC", "boolean", 0,
+            "LD/Bkr0XCBR3.Pos.stVal");
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(
+            otherStatus, "DPC").IsCommandSafe);
+        var invalidShape = NewDescriptor(reference, "SPC", "integer", 0,
+            reference + ".stVal");
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(
+            invalidShape, "DPC").IsCommandSafe);
+    }
+
+    [Fact]
+    public void PrefixedSwitch_SpcDeclarationNeverGrantsUnverifiedDpc()
+    {
+        const string reference = "LD/Disc0XSWI9.Pos";
+        var descriptor = NewDescriptor(reference, "SPC", "boolean", 0,
+            reference + ".stVal");
+        var result = Iec61850ControlSemanticResolver.Resolve(descriptor, "SPC");
+        Assert.True(result.IsCommandSafe); // A genuinely SPC declaration stays SPC.
+        Assert.Equal("SPC", result.Cdc);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(
+            descriptor, "APC").IsCommandSafe);
+    }
+
     private static Iec61850ControlObjectDescriptor NewDescriptor(
         string reference, string cdc, string type, int size, string status) => new()
     {

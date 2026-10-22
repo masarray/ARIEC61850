@@ -251,7 +251,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         var status = await FindStatusReferenceAsync(transport, references, domainNames,
             isBooleanControl, isStepShapedControl, cancellationToken).ConfigureAwait(false);
         var liveDoublePoint = status.TypedDoublePoint;
-        if (!liveDoublePoint &&
+        if (!status.TypedStatusRead && !liveDoublePoint &&
             ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase) &&
             status.Reference.Equals(references.ObjectReference + ".stVal",
                 StringComparison.OrdinalIgnoreCase))
@@ -404,14 +404,14 @@ public sealed class Iec61850ControlService : IIec61850ControlService
     // DataObject exists, regardless of arbitrary LN prefix/class/name. Allow
     // exactly one additional *read-only* ST.stVal probe of that same DO.
     // Only live two-bit evidence can authorize DPC; no name-only promotion.
-    private static async Task<(string Reference, string FunctionalConstraint, bool TypedDoublePoint)> FindStatusReferenceAsync(
+    private static async Task<(string Reference, string FunctionalConstraint, bool TypedDoublePoint, bool TypedStatusRead)> FindStatusReferenceAsync(
         IIec61850ControlTransport transport, Iec61850ControlObjectReferences references,
         IReadOnlyList<string> names, bool booleanControl, bool stepControl,
         CancellationToken cancellationToken)
     {
         var exact = FindStatusReference(references, names);
         if (!string.IsNullOrWhiteSpace(exact.Reference))
-            return (exact.Reference, exact.FunctionalConstraint, false);
+            return (exact.Reference, exact.FunctionalConstraint, false, false);
         var root = references.LogicalNode + "$ST$" + references.MmsDataObjectPath;
         var hasListedStatusRoot = names.Any(name =>
             name.Equals(root, StringComparison.OrdinalIgnoreCase) ||
@@ -422,7 +422,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         // control structures may be SPC or DPC: only a typed ST read
         // distinguishes them. Other unknown objects stay fail-closed.
         if (!hasListedStatusRoot && !standardPosition && !booleanControl && !stepControl)
-            return (exact.Reference, exact.FunctionalConstraint, false);
+            return (exact.Reference, exact.FunctionalConstraint, false, false);
 
         // Boolean controls have one ST.stVal candidate. A typed two-bit
         // step command may be BSC (valWTr.posVal) or DPC (stVal): try these
@@ -450,9 +450,9 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             if (valid)
                 return (references.Domain + "/" + references.LogicalNode + "." +
                         references.MmsDataObjectPath.Replace('$', '.') + candidate.Path,
-                        "ST", isExactTwoBitStatus);
+                        "ST", isExactTwoBitStatus, true);
         }
-        return (exact.Reference, exact.FunctionalConstraint, false);
+        return (exact.Reference, exact.FunctionalConstraint, false, false);
     }
 
     private static string InferCdc(MmsTypeSpecificationNode ctlVal)

@@ -244,8 +244,10 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             cancellationToken).ConfigureAwait(false);
 
         var status = await FindStatusReferenceAsync(transport, references, domainNames, cancellationToken).ConfigureAwait(false);
-        var liveDoublePoint = false;
-        if (status.Reference.Equals(references.ObjectReference + ".stVal",
+        var liveDoublePoint = status.TypedDoublePoint;
+        if (!liveDoublePoint &&
+            ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase) &&
+            status.Reference.Equals(references.ObjectReference + ".stVal",
                 StringComparison.OrdinalIgnoreCase))
         {
             // A standard DPC can use a Boolean Oper.ctlVal while returning
@@ -394,13 +396,13 @@ public sealed class Iec61850ControlService : IIec61850ControlService
     // An MMS NameList can contain a structured ST DataObject without all
     // scalar descendants. Resolve a standard status only with a successful
     // typed MMS Read. This remains read-only; it never authorizes Operate alone.
-    private static async Task<(string Reference, string FunctionalConstraint)> FindStatusReferenceAsync(
+    private static async Task<(string Reference, string FunctionalConstraint, bool TypedDoublePoint)> FindStatusReferenceAsync(
         IIec61850ControlTransport transport, Iec61850ControlObjectReferences references,
         IReadOnlyList<string> names, CancellationToken cancellationToken)
     {
         var exact = FindStatusReference(references, names);
         if (!string.IsNullOrWhiteSpace(exact.Reference))
-            return exact;
+            return (exact.Reference, exact.FunctionalConstraint, false);
         var root = references.LogicalNode + "$ST$" + references.MmsDataObjectPath;
         var hasListedStatusRoot = names.Any(name =>
             name.Equals(root, StringComparison.OrdinalIgnoreCase) ||
@@ -413,7 +415,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         // standard CSWI/XCBR/XSWI.Pos only, attempt exactly one ST.stVal Read.
         // Never guess an arbitrary object's control semantics or send Operate.
         if (!hasListedStatusRoot && !standardPosition)
-            return exact;
+            return (exact.Reference, exact.FunctionalConstraint, false);
 
         var candidates = standardPosition
             ? new[] { (Suffix: "$stVal", Path: ".stVal", IsStep: false) }
@@ -437,9 +439,10 @@ public sealed class Iec61850ControlService : IIec61850ControlService
                     isExactTwoBitStatus || value.Kind == MmsDataKind.Boolean;
             if (valid)
                 return (references.Domain + "/" + references.LogicalNode + "." +
-                        references.MmsDataObjectPath.Replace('$', '.') + candidate.Path, "ST");
+                        references.MmsDataObjectPath.Replace('$', '.') + candidate.Path,
+                        "ST", isExactTwoBitStatus);
         }
-        return exact;
+        return (exact.Reference, exact.FunctionalConstraint, false);
     }
 
     private static string InferCdc(MmsTypeSpecificationNode ctlVal)

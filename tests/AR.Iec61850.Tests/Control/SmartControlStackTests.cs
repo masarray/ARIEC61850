@@ -738,7 +738,8 @@ public sealed class SmartControlStackTests
         Assert.Equal("LD0/CSWI1.Pos.stVal", control.Descriptor.StatusReference);
         Assert.Equal("ST", control.Descriptor.StatusFunctionalConstraint);
         Assert.True(control.Descriptor.IsOperationallyReady);
-        Assert.Equal("SPC", control.Descriptor.Cdc); // wire ctlVal is boolean, not the process CDC
+        Assert.Equal("DPC", control.Descriptor.Cdc); // typed two-bit stVal proves DPC despite Boolean Oper
+        Assert.True(control.Descriptor.LiveStatusIsDoublePoint);
         Assert.True(Iec61850ControlSemanticResolver.Resolve(control.Descriptor, "DPC").IsCommandSafe);
         Assert.Contains(transport.Reads, x => x.Item == "CSWI1$ST$Pos$stVal");
         Assert.Single(transport.Reads, x => x.Item.Contains("$ST$Pos$", StringComparison.Ordinal));

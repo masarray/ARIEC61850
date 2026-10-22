@@ -30,6 +30,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
     private DateTimeOffset _serviceStartedUtc;
     private TimeSpan _serviceElapsed;
     private long _serviceCompletedTimestamp;
+    private MmsWriteResult? _lastMeasuredWrite;
 
 
     internal Iec61850ControlObjectSession(
@@ -792,7 +793,16 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
     {
         _serviceStartedUtc = DateTimeOffset.UtcNow;
         var started = Stopwatch.GetTimestamp();
-        try { return await service().ConfigureAwait(false); }
+        _lastMeasuredWrite = null;
+        try
+        {
+            var result = await service().ConfigureAwait(false);
+            // Only the exact MMS write result which produced this step can
+            // supply transport timing. Never borrow another invoke ID's stats.
+            if (result is MmsWriteResult write)
+                _lastMeasuredWrite = write;
+            return result;
+        }
         finally
         {
             _serviceElapsed = Stopwatch.GetElapsedTime(started);
@@ -827,6 +837,12 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
         };
         var graceBudget = action == Iec61850ControlAction.SelectWithValue
             ? _options.ApplicationErrorGracePeriod.TotalMilliseconds : 0d;
+        var transportStages = _lastMeasuredWrite is
+            { TpktSendElapsed: { } send, ConfirmedResponseWaitElapsed: { } response,
+              ResponseDecodeElapsed: { } decode }
+            ? FormattableString.Invariant(
+                $"tpktSendMs={send.TotalMilliseconds:0.###}; confirmedResponseWaitMs={response.TotalMilliseconds:0.###}; mmsDecodeMs={decode.TotalMilliseconds:0.###}")
+            : "transportStages=unavailable";
         return new Iec61850ControlWireStep
         {
             Action = action,
@@ -835,7 +851,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             RequestHex = _transport.LastRequestHex,
             ResponseHex = _transport.LastResponseHex,
             Detail = FormattableString.Invariant(
-                $"{detail} serviceStartedUtc={_serviceStartedUtc:O}; serviceMs={_serviceElapsed.TotalMilliseconds:0.###}; postResponseWaitMs={Stopwatch.GetElapsedTime(_serviceCompletedTimestamp).TotalMilliseconds:0.###}; postResponseStage={postResponseStage}; configuredApplicationErrorGraceMs={graceBudget:0.###}; timingScope=local-service-not-wire")
+                $"{detail} serviceStartedUtc={_serviceStartedUtc:O}; serviceMs={_serviceElapsed.TotalMilliseconds:0.###}; postResponseWaitMs={Stopwatch.GetElapsedTime(_serviceCompletedTimestamp).TotalMilliseconds:0.###}; postResponseStage={postResponseStage}; configuredApplicationErrorGraceMs={graceBudget:0.###}; {transportStages}; timingScope=local-service-not-wire")
         };
     }
 

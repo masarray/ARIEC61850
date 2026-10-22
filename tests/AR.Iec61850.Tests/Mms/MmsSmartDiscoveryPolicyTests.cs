@@ -26,6 +26,49 @@ public sealed class MmsSmartDiscoveryPolicyTests
         Assert.Equal(1, MmsSmartDiscoveryPolicy.ResolveWindow(0, 0, null));
     }
 
+    [Theory]
+    [InlineData(5, 64, 5)]
+    [InlineData(8, 64, 8)]
+    [InlineData(16, 64, 8)]
+    [InlineData(1, 64, 1)]
+    [InlineData(5, 2, 2)]
+    [InlineData(5, 0, 0)]
+    [InlineData(0, 64, 1)]
+    public void ReportEnrichment_UsesOnlyNegotiatedWindowAndFiniteCandidateCount(
+        int effectiveWindow, int candidates, int expected)
+    {
+        Assert.Equal(expected,
+            MmsSmartDiscoveryPolicy.ResolveReportEnrichmentWorkers(
+                effectiveWindow, candidates));
+    }
+
+    [Fact]
+    public void ReportEnrichment_PreservesExactSequentialPerRcbFieldsAndKpiCapture()
+    {
+        // Contract locks the high-throughput change to read-only RCBs.
+        // Any change to required attributes, single-RCB order, or the
+        // existing observable MMS request accounting must be reviewed.
+        var path = new DirectoryInfo(AppContext.BaseDirectory);
+        string? source = null;
+        while (path is not null)
+        {
+            var file = Path.Combine(path.FullName,
+                "src", "AR.Iec61850", "Mms", "MmsClientSession.SmartDiscovery.cs");
+            if (File.Exists(file)) { source = File.ReadAllText(file); break; }
+            path = path.Parent;
+        }
+        Assert.NotNull(source);
+        Assert.Contains("EnrichSingleReportControlSmartAsync", source);
+        Assert.Contains("ResolveReportEnrichmentWorkers(", source);
+        Assert.Contains("await Task.WhenAll(", source);
+        foreach (var field in new[] {
+            "DatSet", "RptID", "ConfRev", "IntgPd",
+            "BufTm", "TrgOps", "OptFlds", "ResvTms", "Resv" })
+            Assert.Contains($"TryReadReportAttributeSmartAsync(reportControl, \"{field}\"", source);
+        Assert.Contains("ObserveSmartDiscoveryRequest(", source);
+        Assert.DoesNotContain("WriteSingleVariableAsync(", source);
+    }
+
     [Fact]
     public void DomainPriority_ReordersOnlyAlreadyObservedDomains()
     {

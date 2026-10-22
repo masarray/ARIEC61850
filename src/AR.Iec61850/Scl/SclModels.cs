@@ -24,7 +24,10 @@ public enum SclEdition
     Unknown,
     Edition1,
     Edition2,
-    Edition21
+    Edition21,
+    // IEC 61850-6 Edition 2.2 (SCL namespace identification 2007/C/5).
+    // Append to preserve the existing public enum numeric identities.
+    Edition22
 }
 
 public sealed class SclIed

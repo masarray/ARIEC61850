@@ -243,7 +243,9 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             _options.DefaultOperateTimeout,
             cancellationToken).ConfigureAwait(false);
 
-        var status = await FindStatusReferenceAsync(transport, references, domainNames, cancellationToken).ConfigureAwait(false);
+        var status = await FindStatusReferenceAsync(transport, references, domainNames,
+            ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase),
+            cancellationToken).ConfigureAwait(false);
         var liveDoublePoint = status.TypedDoublePoint;
         if (!liveDoublePoint &&
             ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase) &&
@@ -393,12 +395,14 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         return ($"{references.Domain}/{parts[0]}.{string.Join(".", parts.Skip(2))}", parts[1]);
     }
 
-    // An MMS NameList can contain a structured ST DataObject without all
-    // scalar descendants. Resolve a standard status only with a successful
-    // typed MMS Read. This remains read-only; it never authorizes Operate alone.
+    // Some MMS NameLists omit ST scalar children or are truncated. A positive
+    // typed ctlModel and Boolean Oper.ctlVal already prove an actual control
+    // DataObject exists, regardless of arbitrary LN prefix/class/name. Allow
+    // exactly one additional *read-only* ST.stVal probe of that same DO.
+    // Only live two-bit evidence can authorize DPC; no name-only promotion.
     private static async Task<(string Reference, string FunctionalConstraint, bool TypedDoublePoint)> FindStatusReferenceAsync(
         IIec61850ControlTransport transport, Iec61850ControlObjectReferences references,
-        IReadOnlyList<string> names, CancellationToken cancellationToken)
+        IReadOnlyList<string> names, bool booleanControl, CancellationToken cancellationToken)
     {
         var exact = FindStatusReference(references, names);
         if (!string.IsNullOrWhiteSpace(exact.Reference))
@@ -409,15 +413,13 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             name.StartsWith(root + "$", StringComparison.OrdinalIgnoreCase));
         var standardPosition = Iec61850ControlSemanticResolver.IsStandardPosition(references.ObjectReference);
 
-        // Some servers cap their MMS NamedVariable NameList (e.g. 6400
-        // variables) before CSWI.Pos.stVal is enumerated. The absence of a
-        // NameList entry is NOT proof that the scalar does not exist. For
-        // standard CSWI/XCBR/XSWI.Pos only, attempt exactly one ST.stVal Read.
-        // Never guess an arbitrary object's control semantics or send Operate.
-        if (!hasListedStatusRoot && !standardPosition)
+        // A sparse NameList cannot hide a real renamed control. Boolean
+        // control structures may be SPC or DPC: only a typed ST read
+        // distinguishes them. Other unknown objects stay fail-closed.
+        if (!hasListedStatusRoot && !standardPosition && !booleanControl)
             return (exact.Reference, exact.FunctionalConstraint, false);
 
-        var candidates = standardPosition
+        var candidates = booleanControl || standardPosition
             ? new[] { (Suffix: "$stVal", Path: ".stVal", IsStep: false) }
             : new[]
             {
@@ -435,7 +437,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
                 value.RawValue.Count == 2 && value.RawValue[0] == 6;
             var valid = candidate.IsStep
                 ? value.Kind is MmsDataKind.Integer or MmsDataKind.Unsigned
-                : standardPosition ? isExactTwoBitStatus :
+                : standardPosition && !booleanControl ? isExactTwoBitStatus :
                     isExactTwoBitStatus || value.Kind == MmsDataKind.Boolean;
             if (valid)
                 return (references.Domain + "/" + references.LogicalNode + "." +

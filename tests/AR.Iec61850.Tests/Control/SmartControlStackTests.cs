@@ -778,12 +778,59 @@ public sealed class SmartControlStackTests
         Assert.Empty(transport.Writes);
     }
 
+    [Theory]
+    [InlineData("Bkr0XCBR2", "Pos")]
+    [InlineData("AnyVendorLN1", "SomeCtrl")]
+    [InlineData("CustomGGIO2", "RemoteSwitch")]
+    public async Task TruncatedDomainNameList_BooleanOperHasOneExactReadOnlyStValProbe(
+        string logicalNode, string dataObject)
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.BitString(6, new byte[] { 0x40 }) });
+        transport.Specifications[$"{logicalNode}$CO${dataObject}$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        var reference = $"LD0/{logicalNode}.{dataObject}";
+
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(
+            transport, reference);
+
+        Assert.Equal(reference + ".stVal", session.Descriptor.StatusReference);
+        Assert.True(session.Descriptor.LiveStatusIsDoublePoint);
+        Assert.Equal("DPC", session.Descriptor.Cdc);
+        Assert.True(Iec61850ControlSemanticResolver.Resolve(
+            session.Descriptor, "DPC").IsCommandSafe);
+        Assert.Single(transport.Reads, x => x.FunctionalConstraint == "ST");
+        Assert.Empty(transport.Writes);
+    }
+
     [Fact]
-    public async Task TruncatedDomainNameList_NonPositionNoBlindScalarProbe()
+    public async Task TruncatedDomainNameList_UnknownBooleanStatusCannotMasqueradeAsDpc()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Boolean(true) });
+        transport.Specifications["VendorLN1$CO$RemoteSwitch$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/VendorLN1.RemoteSwitch");
+        Assert.False(session.Descriptor.LiveStatusIsDoublePoint);
+        Assert.Equal("SPC", session.Descriptor.Cdc);
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(session.Descriptor, "DPC").IsCommandSafe);
+        Assert.Single(transport.Reads, x => x.FunctionalConstraint == "ST");
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_NonPositionNonBooleanNoBlindScalarProbe()
     {
         var transport = new FakeControlTransport();
         transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
-        transport.Specifications["GGIO1$CO$SomeCtrl$Oper"] = CommandSpecificationWithBooleanCtlVal();
+        transport.Specifications["GGIO1$CO$SomeCtrl$Oper"] = CommandSpecification();
         transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
         await using var control = await new Iec61850ControlService().OpenCoreAsync(
             transport, "LD0/GGIO1.SomeCtrl");

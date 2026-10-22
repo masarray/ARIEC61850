@@ -243,9 +243,13 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             _options.DefaultOperateTimeout,
             cancellationToken).ConfigureAwait(false);
 
+        var isBooleanControl = ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase);
+        var isStepShapedControl =
+            (ctlValSpecification.MmsType.Equals("bit-string", StringComparison.OrdinalIgnoreCase) &&
+             ctlValSpecification.Size == 2) ||
+            ctlValSpecification.MmsType is "integer" or "unsigned";
         var status = await FindStatusReferenceAsync(transport, references, domainNames,
-            ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase),
-            cancellationToken).ConfigureAwait(false);
+            isBooleanControl, isStepShapedControl, cancellationToken).ConfigureAwait(false);
         var liveDoublePoint = status.TypedDoublePoint;
         if (!liveDoublePoint &&
             ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase) &&
@@ -402,7 +406,8 @@ public sealed class Iec61850ControlService : IIec61850ControlService
     // Only live two-bit evidence can authorize DPC; no name-only promotion.
     private static async Task<(string Reference, string FunctionalConstraint, bool TypedDoublePoint)> FindStatusReferenceAsync(
         IIec61850ControlTransport transport, Iec61850ControlObjectReferences references,
-        IReadOnlyList<string> names, bool booleanControl, CancellationToken cancellationToken)
+        IReadOnlyList<string> names, bool booleanControl, bool stepControl,
+        CancellationToken cancellationToken)
     {
         var exact = FindStatusReference(references, names);
         if (!string.IsNullOrWhiteSpace(exact.Reference))
@@ -416,9 +421,12 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         // A sparse NameList cannot hide a real renamed control. Boolean
         // control structures may be SPC or DPC: only a typed ST read
         // distinguishes them. Other unknown objects stay fail-closed.
-        if (!hasListedStatusRoot && !standardPosition && !booleanControl)
+        if (!hasListedStatusRoot && !standardPosition && !booleanControl && !stepControl)
             return (exact.Reference, exact.FunctionalConstraint, false);
 
+        // Boolean controls have one ST.stVal candidate. A typed two-bit
+        // step command may be BSC (valWTr.posVal) or DPC (stVal): try these
+        // two exact leaves at most, never broaden to wildcard NameList reads.
         var candidates = booleanControl || standardPosition
             ? new[] { (Suffix: "$stVal", Path: ".stVal", IsStep: false) }
             : new[]

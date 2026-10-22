@@ -826,11 +826,55 @@ public sealed class SmartControlStackTests
     }
 
     [Fact]
+    public async Task TruncatedDomainNameList_UnlistedTapChgBscHasExactTypedStepProof()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(4) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(12) });
+        transport.Specifications["UnusualLN2$CO$TapChg$Oper"] = CommandSpecification();
+        transport.Specifications["UnusualLN2$CO$TapChg$SBOw"] = CommandSpecification();
+        transport.Specifications["UnusualLN2$CO$TapChg$Cancel"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/UnusualLN2.TapChg");
+        Assert.Equal("LD0/UnusualLN2.TapChg.valWTr.posVal", session.Descriptor.StatusReference);
+        Assert.Equal("BSC", session.Descriptor.Cdc);
+        Assert.True(Iec61850ControlSemanticResolver.Resolve(
+            session.Descriptor, "BSC").IsCommandSafe);
+        Assert.Single(transport.Reads, r =>
+            r.Item == "UnusualLN2$ST$TapChg$valWTr$posVal");
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task TruncatedDomainNameList_UnlistedTapChgBadStatusNeverGrantsBsc()
+    {
+        var transport = new FakeControlTransport();
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Integer(1) });
+        transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true,
+            Value = MmsDataValue.Boolean(true) });
+        transport.Specifications["ArbitraryLN3$CO$TapChg$Oper"] = CommandSpecification();
+        transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
+
+        await using var session = await new Iec61850ControlService().OpenCoreAsync(
+            transport, "LD0/ArbitraryLN3.TapChg");
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(
+            session.Descriptor, "BSC").IsCommandSafe);
+        Assert.Empty(transport.Writes);
+        Assert.InRange(transport.Reads.Count(r => r.FunctionalConstraint == "ST"), 1, 2);
+    }
+
+    [Fact]
     public async Task TruncatedDomainNameList_NonPositionNonBooleanNoBlindScalarProbe()
     {
         var transport = new FakeControlTransport();
         transport.ReadResults.Enqueue(new MmsReadResult { IsSuccess = true, Value = MmsDataValue.Integer(1) });
-        transport.Specifications["GGIO1$CO$SomeCtrl$Oper"] = CommandSpecification();
+        transport.Specifications["GGIO1$CO$SomeCtrl$Oper"] =
+            Structure(string.Empty, Type("ctlVal", "octet-string", size: 64));
         transport.DomainVariables["LD0"] = new[] { "LLN0$ST$Beh$stVal" };
         await using var control = await new Iec61850ControlService().OpenCoreAsync(
             transport, "LD0/GGIO1.SomeCtrl");

@@ -47,6 +47,15 @@ public sealed class MmsSmartDiscoveryOptions
 
     public bool ReadDataSetDirectories { get; init; }
     public int MaxDataSetDirectoryReads { get; init; } = 64;
+
+    /// <summary>
+    /// Limit on additional live DataSet-verified logical-node roots in the opt-in
+    /// type-probe overload (no additional GetNameList pages or cyclic polls).
+    /// </summary>
+    public int MaxDataSetTypeExtraLogicalNodes { get; init; } = 48;
+
+    /// <summary>Hard cap on admitted positional DataSet member type hints.</summary>
+    public int MaxDataSetTypeMemberHints { get; init; } = 2048;
 }
 
 public sealed partial class MmsClientSession

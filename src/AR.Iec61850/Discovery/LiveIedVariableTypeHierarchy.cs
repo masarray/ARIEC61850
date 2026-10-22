@@ -31,6 +31,29 @@ public static class LiveIedVariableTypeProbePlanner
 /// </summary>
 public static class LiveIedVariableTypeProbeExecutor
 {
+    /// <summary>
+    /// Optional DataSet-first late-root recovery from successful live MMS directory
+    /// evidence. Retains current single-pass LN hierarchy probing and existing
+    /// negotiated-window policies; never changes the legacy directory overload.
+    /// </summary>
+    public static Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ProbeSmartAsync(
+        MmsClientSession session,
+        MmsDiscoveryResult discovery,
+        MmsSmartDiscoveryOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(discovery);
+        options ??= new MmsSmartDiscoveryOptions();
+
+        var verified = LiveIedDataSetTypeProbePlanner.BuildVerifiedMemberHints(
+            discovery,
+            options.MaxDataSetTypeExtraLogicalNodes,
+            options.MaxDataSetTypeMemberHints);
+        discovery.IedDirectory.AddSupplementalPoints(verified);
+        return ProbeSmartAsync(session, discovery.IedDirectory, options, cancellationToken);
+    }
+
     public static Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ProbeSmartAsync(
         MmsClientSession session,
         MmsIedModelDirectory directory,

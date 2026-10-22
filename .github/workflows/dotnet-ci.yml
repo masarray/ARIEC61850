@@ -20,7 +20,8 @@ on:
       - "*.slnx"
       - "Directory.Build.props"
   pull_request:
-    branches: [ main ]
+    # All PR target branches, including stacked engine reviews, receive full CI.
+    branches: [ '**' ]
   workflow_dispatch:
 
 permissions:
@@ -32,11 +33,12 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout source
-        shell: pwsh
-        run: |
-          $ref = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF_NAME }
-          git clone --quiet --depth 1 --branch $ref "https://github.com/$env:GITHUB_REPOSITORY.git" source
+      - name: Checkout source at event commit (PR synthetic merge ref)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          path: source
 
       - name: Verify source, provenance, wording and license boundaries
         shell: pwsh

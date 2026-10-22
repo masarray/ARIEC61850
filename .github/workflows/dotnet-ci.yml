@@ -20,7 +20,7 @@ on:
       - "*.slnx"
       - "Directory.Build.props"
   pull_request:
-    # Validate main and stacked PRs on GitHub's synthetic merge commit.
+    # All PR target branches, including stacked engine reviews, receive full CI.
     branches: [ '**' ]
   workflow_dispatch:
 

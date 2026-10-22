@@ -244,6 +244,24 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             cancellationToken).ConfigureAwait(false);
 
         var status = await FindStatusReferenceAsync(transport, references, domainNames, cancellationToken).ConfigureAwait(false);
+        var liveDoublePoint = false;
+        if (status.Reference.Equals(references.ObjectReference + ".stVal",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            // A standard DPC can use a Boolean Oper.ctlVal while returning
+            // two-bit coded stVal. Verify the actual wire shape, not a prefix,
+            // a DO called Pos, or a remembered SCL CDC.
+            var statusRead = await transport.ReadAsync(
+                MmsObjectReference.Parse(status.Reference, "ST"),
+                cancellationToken).ConfigureAwait(false);
+            var actual = statusRead.Value;
+            liveDoublePoint = statusRead.IsSuccess && actual != null &&
+                actual.Kind == MmsDataKind.BitString &&
+                actual.RawValue.Count == 2 && actual.RawValue[0] == 6;
+            evidence.Add(liveDoublePoint
+                ? "statusShape=live-two-bit-double-point"
+                : "statusShape=not-proven-two-bit-double-point");
+        }
         evidence.Add(string.IsNullOrWhiteSpace(status.Reference)
             ? "status=not-verified"
             : "status=live-confirmed:" + status.Reference);
@@ -256,7 +274,9 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             // Never classify a step-position value as an Open/Close switch.
             Cdc = status.Reference.EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase)
                 ? "BSC"
-                : InferCdc(ctlValSpecification),
+                : liveDoublePoint && ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase)
+                    ? "DPC"
+                    : InferCdc(ctlValSpecification),
             ControlModel = controlModel,
             CtlValSpecification = ctlValSpecification,
             OperSpecification = operSpecification,
@@ -264,6 +284,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             CancelSpecification = cancelSpecification,
             StatusReference = status.Reference,
             StatusFunctionalConstraint = status.FunctionalConstraint,
+            LiveStatusIsDoublePoint = liveDoublePoint,
             SboTimeout = sboTimeout,
             OperTimeout = operTimeout,
             SupportsTimeActivatedOperate = supportsTimeActivated,

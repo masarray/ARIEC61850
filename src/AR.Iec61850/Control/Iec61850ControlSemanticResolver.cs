@@ -29,9 +29,14 @@ public static class Iec61850ControlSemanticResolver
             mmsType == "bit-string" && size == 2 &&
             status.Equals(descriptor.ObjectReference + ".valWTr.posVal",
                 StringComparison.OrdinalIgnoreCase);
+        var liveBooleanDpc = inferred == "DPC" &&
+            mmsType == "boolean" && descriptor.LiveStatusIsDoublePoint &&
+            status.Equals(descriptor.ObjectReference + ".stVal", StringComparison.OrdinalIgnoreCase);
         var supersededAdvisorySpc = declared == "SPC" && exactLiveBsc;
+        var supersededAdvisoryDpcSpc = declared == "SPC" && liveBooleanDpc;
         var cdc = supersededAdvisorySpc
             ? "BSC"
+            : supersededAdvisoryDpcSpc ? "DPC"
             : string.IsNullOrWhiteSpace(declared) ? inferred : declared;
 
         Iec61850ControlSemanticResolution Deny(string reason)
@@ -50,7 +55,8 @@ public static class Iec61850ControlSemanticResolver
 
         if (cdc != inferred &&
             !(inferred == "INC/ISC" && cdc is "INC" or "ISC") &&
-            !(cdc == "DPC" && inferred == "SPC" && IsStandardPosition(descriptor.ObjectReference)))
+            !(cdc == "DPC" && inferred == "SPC" &&
+              descriptor.LiveStatusIsDoublePoint && mmsType == "boolean"))
             return Deny($"Declared CDC '{cdc}' conflicts with live CDC evidence '{inferred}'.");
 
         var statusIsStep = status.EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase);
@@ -63,7 +69,7 @@ public static class Iec61850ControlSemanticResolver
             "DPC" => statusIsState &&
                      ((mmsType == "bit-string" && size == 2) ||
                       (mmsType == "boolean" &&
-                       IsStandardPosition(descriptor.ObjectReference) &&
+                       descriptor.LiveStatusIsDoublePoint &&
                        status.Equals(descriptor.ObjectReference + ".stVal",
                            StringComparison.OrdinalIgnoreCase))),
             "SPC" => statusIsState && mmsType == "boolean",
@@ -79,7 +85,9 @@ public static class Iec61850ControlSemanticResolver
 
         var provenance = supersededAdvisorySpc
             ? " Saved/DataSet CDC=SPC was advisory and superseded by exact live BSC control evidence."
-            : string.Empty;
+            : supersededAdvisoryDpcSpc
+                ? " Saved/DataSet CDC=SPC was advisory and superseded by live two-bit DPC status evidence."
+                : string.Empty;
         return new(true, cdc,
             $"Verified CDC={cdc}; live ctlModel={descriptor.ControlModel}; ctlVal={descriptor.CtlValSpecification.Signature}; status={status}.{provenance}");
     }

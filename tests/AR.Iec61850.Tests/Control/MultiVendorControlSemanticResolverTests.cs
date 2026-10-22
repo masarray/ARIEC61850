@@ -128,6 +128,7 @@ public sealed class MultiVendorControlSemanticResolverTests
             CtlValSpecification = descriptor.CtlValSpecification,
             OperSpecification = descriptor.OperSpecification,
             StatusReference = descriptor.StatusReference,
+            LiveStatusIsDoublePoint = true,
             SelectWithValueSpecification = new MmsTypeSpecificationNode { MmsType = "structure" },
             CancelSpecification = new MmsTypeSpecificationNode { MmsType = "structure" },
             SupportsCommandTermination = true
@@ -188,6 +189,36 @@ public sealed class MultiVendorControlSemanticResolverTests
         Assert.Equal("SPC", result.Cdc);
         Assert.False(Iec61850ControlSemanticResolver.Resolve(
             descriptor, "APC").IsCommandSafe);
+    }
+
+
+    [Fact]
+    public void RenamedLogicalNode_UsesTypedStatusNotLnNameForDpc()
+    {
+        const string obj = "VendorLD/ArbitraryNode42.SwitchPoint";
+        var typed = new Iec61850ControlObjectDescriptor
+        {
+            ObjectReference = obj, Cdc = "DPC",
+            ControlModel = Iec61850ControlModel.DirectNormal,
+            CtlValSpecification = new MmsTypeSpecificationNode
+                { Name = "ctlVal", MmsType = "boolean" },
+            StatusReference = obj + ".stVal",
+            LiveStatusIsDoublePoint = true
+        };
+        var correct = Iec61850ControlSemanticResolver.Resolve(typed, "");
+        Assert.True(correct.IsCommandSafe, correct.Reason);
+        Assert.Equal("DPC", correct.Cdc);
+        Assert.True(Iec61850ControlSemanticResolver.Resolve(typed, "SPC").IsCommandSafe);
+
+        var unsupported = new Iec61850ControlObjectDescriptor
+        {
+            ObjectReference = obj, Cdc = "DPC",
+            ControlModel = Iec61850ControlModel.DirectNormal,
+            CtlValSpecification = typed.CtlValSpecification,
+            StatusReference = obj + ".stVal",
+            LiveStatusIsDoublePoint = false
+        };
+        Assert.False(Iec61850ControlSemanticResolver.Resolve(unsupported, "DPC").IsCommandSafe);
     }
 
     private static Iec61850ControlObjectDescriptor NewDescriptor(

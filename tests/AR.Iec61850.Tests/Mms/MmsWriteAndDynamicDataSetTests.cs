@@ -55,7 +55,7 @@ public sealed class MmsWriteAndDynamicDataSetTests
     [Fact]
     public void DecodeWriteResponse_RejectsTwoResultsForSingleVariableRequest()
     {
-        var mms = Convert.FromHexString("A109020109A50481008100");
+        var mms = Convert.FromHexString("A109020109A50681008100");
         var result = MmsWriteResponseDecoder.Decode(MmsPresentation.WrapIsoPresentationPData(mms), 9);
 
         Assert.False(result.IsSuccess);

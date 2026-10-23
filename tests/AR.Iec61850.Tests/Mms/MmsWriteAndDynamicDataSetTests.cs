@@ -53,6 +53,36 @@ public sealed class MmsWriteAndDynamicDataSetTests
     }
 
     [Fact]
+    public void DecodeWriteResponse_RejectsTwoResultsForSingleVariableRequest()
+    {
+        var mms = Convert.FromHexString("A109020109A50481008100");
+        var result = MmsWriteResponseDecoder.Decode(MmsPresentation.WrapIsoPresentationPData(mms), 9);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("exactly one access result", result.Message);
+    }
+
+    [Fact]
+    public void DecodeWriteResponse_RejectsEmptyResultList()
+    {
+        var mms = Convert.FromHexString("A105020109A500");
+        var result = MmsWriteResponseDecoder.Decode(MmsPresentation.WrapIsoPresentationPData(mms), 9);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("exactly one access result", result.Message);
+    }
+
+    [Fact]
+    public void DecodeWriteResponse_RejectsWrongInvokeId()
+    {
+        var mms = Convert.FromHexString("A10702010A A5028100".Replace(" ", ""));
+        var result = MmsWriteResponseDecoder.Decode(MmsPresentation.WrapIsoPresentationPData(mms), 9);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("invokeID mismatch", result.Message);
+    }
+
+    [Fact]
     public void DecodeDefineNamedVariableListResponse_AcceptsNullResponse()
     {
         var mms = Convert.FromHexString("A10502010A8B00");

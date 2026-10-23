@@ -25,6 +25,62 @@ public static class CdcInferenceEngine
     public static bool IsKnownCdc(string cdc)
         => !string.IsNullOrWhiteSpace(cdc) && KnownCdcValues.Contains(cdc.Trim());
 
+    /// <summary>
+    /// Refines only low/medium-confidence generic status inference when the MMS
+    /// TypeSpecification provides an exact primitive stVal type. Exact wire type is
+    /// stronger evidence than the generic ST/stVal/q/t shape; object names are never
+    /// used as a substitute for missing type evidence.
+    /// </summary>
+    public static CdcInferenceResult RefineWithExactPrimaryType(
+        CdcInferenceResult inferred,
+        IReadOnlyCollection<LiveIedDataAttributeModel> attributes)
+    {
+        ArgumentNullException.ThrowIfNull(inferred);
+        ArgumentNullException.ThrowIfNull(attributes);
+
+        if (!string.Equals(inferred.Cdc, "SPS", StringComparison.OrdinalIgnoreCase) ||
+            inferred.Confidence >= 0.85)
+        {
+            return inferred;
+        }
+
+        var exactStatusValues = attributes
+            .Where(attribute =>
+                attribute.TypeConfidence == LiveIedDiscoveryConfidenceLevel.Exact &&
+                string.Equals(
+                    (attribute.AttributePath ?? string.Empty).Trim().Split('.').LastOrDefault(),
+                    "stVal",
+                    StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (exactStatusValues.Length != 1)
+            return inferred;
+
+        var primary = exactStatusValues[0];
+        var bType = (primary.SclBType ?? string.Empty).Trim().ToUpperInvariant();
+        var mmsType = (primary.MmsType ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (IsExactSignedIntegerType(bType, mmsType))
+        {
+            return Result(
+                "INS",
+                0.96,
+                inferred.Evidence.Append(
+                    $"exact MMS TypeSpecification stVal={FirstNonEmpty(primary.SclBType, primary.MmsType)} overrides generic SPS shape"));
+        }
+
+        if (IsExactBooleanType(bType, mmsType))
+        {
+            return Result(
+                "SPS",
+                Math.Max(inferred.Confidence, 0.96),
+                inferred.Evidence.Append(
+                    $"exact MMS TypeSpecification stVal={FirstNonEmpty(primary.SclBType, primary.MmsType)} confirms SPS"));
+        }
+
+        return inferred;
+    }
+
     public static CdcInferenceResult Infer(
         string logicalNodeClass,
         string dataObjectName,
@@ -132,6 +188,18 @@ public static class CdcInferenceEngine
 
         return Result(string.Empty, 0.0, evidence.Append("CDC cannot be inferred from current online discovery only"));
     }
+
+    private static bool IsExactSignedIntegerType(string bType, string mmsType)
+        => bType is "INT8" or "INT16" or "INT24" or "INT32" or "INT64" or "INTEGER" ||
+           mmsType.Contains("INTEGER", StringComparison.Ordinal) ||
+           mmsType.Contains("SIGNED", StringComparison.Ordinal);
+
+    private static bool IsExactBooleanType(string bType, string mmsType)
+        => bType == "BOOLEAN" ||
+           mmsType.Contains("BOOLEAN", StringComparison.Ordinal);
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 
     private static bool IsProtectionOperation(string lnClass, string dataObjectName)
         => string.Equals(dataObjectName, "Op", StringComparison.OrdinalIgnoreCase) &&

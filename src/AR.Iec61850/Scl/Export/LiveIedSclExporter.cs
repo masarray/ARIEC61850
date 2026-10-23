@@ -877,7 +877,7 @@ public static class LiveIedSclExporter
                     new XAttribute("type", enumTypeId));
             }
 
-            var bType = NormalizeBType(node.BType, node.Name, node.Path, cdc);
+            var bType = NormalizeBType(node.BType, node.Name, node.Path, cdc, node.TypeConfidence);
             return new XElement(
                 Scl + (isRootDa ? "DA" : "BDA"),
                 new XAttribute("name", SafeXmlName(node.Name)),
@@ -1198,7 +1198,12 @@ public static class LiveIedSclExporter
             string.Equals(attribute.FunctionalConstraint, "US", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(attribute.FunctionalConstraint, "LG", StringComparison.OrdinalIgnoreCase));
 
-    private static string NormalizeBType(string bType, string name, string path, string cdc)
+    private static string NormalizeBType(
+        string bType,
+        string name,
+        string path,
+        string cdc,
+        LiveIedDiscoveryConfidenceLevel typeConfidence)
     {
         if (string.Equals(name, "q", StringComparison.OrdinalIgnoreCase))
             return "Quality";
@@ -1207,15 +1212,32 @@ public static class LiveIedSclExporter
         if (string.Equals(name, "T", StringComparison.Ordinal))
             return "Timestamp";
 
+        var normalizedBType = (bType ?? string.Empty).Trim();
+        var exactPrimitive =
+            typeConfidence == LiveIedDiscoveryConfidenceLevel.Exact &&
+            !string.IsNullOrWhiteSpace(normalizedBType) &&
+            !normalizedBType.Equals("Unknown", StringComparison.OrdinalIgnoreCase) &&
+            !normalizedBType.Equals("Struct", StringComparison.OrdinalIgnoreCase);
+
+        // Exact MMS TypeSpecification is protocol evidence. Never overwrite it merely
+        // because a generic CDC shape inferred a different primitive type.
+        if (exactPrimitive)
+            return normalizedBType;
+
         var normalizedCdc = cdc.Trim().ToUpperInvariant();
         var normalizedPath = path.Trim();
         var inferred = InferBTypeFromCdc(normalizedCdc, name, normalizedPath);
         if (!string.IsNullOrWhiteSpace(inferred))
             return inferred;
 
-        if (string.IsNullOrWhiteSpace(bType) || string.Equals(bType, "Unknown", StringComparison.OrdinalIgnoreCase) || string.Equals(bType, "Struct", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(normalizedBType) ||
+            normalizedBType.Equals("Unknown", StringComparison.OrdinalIgnoreCase) ||
+            normalizedBType.Equals("Struct", StringComparison.OrdinalIgnoreCase))
+        {
             return "VisString255";
-        return bType.Trim();
+        }
+
+        return normalizedBType;
     }
 
     private static string InferBTypeFromCdc(string cdc, string name, string path)
@@ -1428,6 +1450,8 @@ public static class LiveIedSclExporter
         public string Path { get; }
         public string Fc { get; private set; } = string.Empty;
         public string BType { get; private set; } = string.Empty;
+        public LiveIedDiscoveryConfidenceLevel TypeConfidence { get; private set; } =
+            LiveIedDiscoveryConfidenceLevel.Unknown;
         public IReadOnlyList<TypeTreeNode> Children => _orderedChildren;
 
         public string EffectiveFunctionalConstraint
@@ -1491,6 +1515,7 @@ public static class LiveIedSclExporter
 
             current.Fc = attribute.FunctionalConstraint;
             current.BType = attribute.SclBType;
+            current.TypeConfidence = attribute.TypeConfidence;
         }
     }
 }

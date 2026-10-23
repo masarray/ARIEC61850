@@ -26,10 +26,8 @@ public sealed partial class MmsClientSession
             !MmsReportSubscriptionPlanner.IsExplicitlyEnabled(rcb) &&
             !MmsReportSubscriptionPlanner.IsReservedByOtherClient(rcb))
         {
-            reservationStep = await WriteReportAttributeAsync(
-                rcb,
-                "ResvTms",
-                MmsDataValue.Unsigned(60),
+            reservationStep = await WriteReportSemanticAttributeAsync(
+                rcb, MmsReportControlSemanticWrite.ReservationTime(60),
                 cancellationToken).ConfigureAwait(false);
 
             if (!reservationStep.IsSuccess)
@@ -66,10 +64,8 @@ public sealed partial class MmsClientSession
 
             if (reservationStep?.IsSuccess == true && rcb is not null)
             {
-                var release = await TryWriteReportAttributeForCleanupAsync(
-                    rcb,
-                    "ResvTms",
-                    MmsDataValue.Unsigned(0),
+                var release = await TryWriteReportSemanticAttributeForCleanupAsync(
+                    rcb, MmsReportControlSemanticWrite.ReservationTime(0),
                     CancellationToken.None).ConfigureAwait(false);
                 cleanupSteps.Add(release);
                 cleanupAttempted = true;
@@ -95,10 +91,8 @@ public sealed partial class MmsClientSession
 
         if (triggerGeneralInterrogation)
         {
-            var gi = await WriteReportAttributeAsync(
-                start.Session.ReportControl,
-                "GI",
-                MmsDataValue.Boolean(true),
+            var gi = await WriteReportSemanticAttributeAsync(
+                start.Session.ReportControl, MmsReportControlSemanticWrite.GeneralInterrogation(true),
                 cancellationToken).ConfigureAwait(false);
             writes.Add(gi);
             if (!gi.IsSuccess)

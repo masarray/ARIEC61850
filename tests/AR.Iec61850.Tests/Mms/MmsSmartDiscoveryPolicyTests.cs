@@ -26,6 +26,49 @@ public sealed class MmsSmartDiscoveryPolicyTests
         Assert.Equal(1, MmsSmartDiscoveryPolicy.ResolveWindow(0, 0, null));
     }
 
+    [Theory]
+    [InlineData(5, 64, 5)]
+    [InlineData(8, 64, 8)]
+    [InlineData(16, 64, 8)]
+    [InlineData(1, 64, 1)]
+    [InlineData(5, 2, 2)]
+    [InlineData(5, 0, 0)]
+    [InlineData(0, 64, 1)]
+    public void ReportEnrichment_UsesOnlyNegotiatedWindowAndFiniteCandidateCount(
+        int effectiveWindow, int candidates, int expected)
+    {
+        Assert.Equal(expected,
+            MmsSmartDiscoveryPolicy.ResolveReportEnrichmentWorkers(
+                effectiveWindow, candidates));
+    }
+
+    [Fact]
+    public void ReportEnrichment_PreservesExactSequentialPerRcbFieldsAndKpiCapture()
+    {
+        // Contract locks the high-throughput change to read-only RCBs.
+        // Any change to required attributes, single-RCB order, or the
+        // existing observable MMS request accounting must be reviewed.
+        var path = new DirectoryInfo(AppContext.BaseDirectory);
+        string? source = null;
+        while (path is not null)
+        {
+            var file = Path.Combine(path.FullName,
+                "src", "AR.Iec61850", "Mms", "MmsClientSession.SmartDiscovery.cs");
+            if (File.Exists(file)) { source = File.ReadAllText(file); break; }
+            path = path.Parent;
+        }
+        Assert.NotNull(source);
+        Assert.Contains("EnrichSingleReportControlSmartAsync", source);
+        Assert.Contains("ResolveReportEnrichmentWorkers(", source);
+        Assert.Contains("await Task.WhenAll(", source);
+        foreach (var field in new[] {
+            "DatSet", "RptID", "ConfRev", "IntgPd",
+            "BufTm", "TrgOps", "OptFlds", "ResvTms", "Resv" })
+            Assert.Contains($"TryReadReportAttributeSmartAsync(reportControl, \"{field}\"", source);
+        Assert.Contains("ObserveSmartDiscoveryRequest(", source);
+        Assert.DoesNotContain("WriteSingleVariableAsync(", source);
+    }
+
     [Fact]
     public void DomainPriority_ReordersOnlyAlreadyObservedDomains()
     {
@@ -192,6 +235,54 @@ public sealed class MmsSmartDiscoveryPolicyTests
         Assert.Equal("MX", root.FunctionalConstraint);
     }
 
+
+    [Fact]
+    public void DataSetClosure_SelectsOnlyObservedMissingStMxRoots_NoDuplicateOrForeignLn()
+    {
+        var directory = BuildDirectory();
+        var dataset = new MmsDataSetDirectoryResult
+        {
+            IsSuccess = true,
+            Members =
+            [
+                Member("LD0", "eveGGIO1", "ST", "Ind11"),
+                Member("LD0", "eveGGIO1", "ST", "Ind13"),
+                Member("LD0", "CSWI1", "ST", "Pos"),
+                Member("LD0", "CSWI16", "ST", "Pos"),
+                Member("LD0", "MMXU1", "MX", "A"),
+                Member("LD0", "FOREIGN1", "CO", "Oper"),
+                Member("FAKE", "eveGGIO2", "ST", "Ind1")
+            ]
+        };
+        var already = new[]
+        {
+            new MmsVariableAccessAttributesResult
+            {
+                IsSuccess = true,
+                Reference = new MmsObjectReference("LD0", "MMXU1", "")
+            },
+            new MmsVariableAccessAttributesResult
+            {
+                IsSuccess = false,
+                Reference = new MmsObjectReference("LD0", "CSWI1", "")
+            }
+        };
+        var selected = MmsSmartTypeProbePolicy.SelectUnprobedDataSetLogicalNodeRoots(
+            directory, [dataset], already);
+        Assert.Equal(2, selected.Length);
+        Assert.Equal(["CSWI16", "eveGGIO1"], selected.Select(x => x.Item).ToArray());
+    }
+
+    private static MmsDataSetDirectoryMember Member(
+        string domain, string ln, string fc, string dataObject) => new()
+    {
+        Domain = domain,
+        LogicalNode = ln,
+        FunctionalConstraint = fc,
+        DataObjectPath = dataObject,
+        MmsItemName = ln + "$" + fc + "$" + dataObject,
+        UserReference = domain + "/" + ln + "." + dataObject
+    };
     private static MmsIedModelDirectory BuildDirectory()
     {
         var snapshot = new MmsDiscoverySnapshot

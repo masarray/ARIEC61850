@@ -19,7 +19,10 @@ public enum MmsReportActivationFailureReason
     DynamicDataSetBindFailed,
     TriggerOptionsUnavailable,
     TriggerOptionsWriteFailed,
+    RcbFieldTypeConflict,
+    ReservationWriteFailed,
     ReportEnableFailed,
+    GeneralInterrogationFailed,
     ActivationException,
     OtherActivationFailure
 }
@@ -98,12 +101,22 @@ public sealed partial class MmsClientSession
             }
         }
 
-        var start = await StartPersistentReportMonitorAsync(
-            plan,
-            triggerGeneralInterrogation,
-            deleteDynamicDataSetOnStop,
-            directory,
-            cancellationToken).ConfigureAwait(false);
+        // A fresh configured static plan must use the same source-neutral activation
+        // lifecycle regardless of whether its model originated from live Discovery or SCL:
+        // receiver registration -> direct RptEna -> bounded BRCB ResvTms fallback ->
+        // readback -> optional GI. Dynamic plans retain the dynamic transaction path below.
+        var start = !isDynamic &&
+                    plan.Status == MmsReportSubscriptionPlanStatus.ReadyRequiresWrite
+            ? await StartConfiguredStaticReportMonitorAsync(
+                plan,
+                triggerGeneralInterrogation,
+                cancellationToken).ConfigureAwait(false)
+            : await StartPersistentReportMonitorAsync(
+                plan,
+                triggerGeneralInterrogation,
+                deleteDynamicDataSetOnStop,
+                directory,
+                cancellationToken).ConfigureAwait(false);
 
         if (probe is not null)
             start = MergeProbeEvidence(start, probe);
@@ -162,10 +175,8 @@ public sealed partial class MmsClientSession
 
             if (enabled)
             {
-                var disable = await TryWriteReportAttributeForCleanupAsync(
-                    rcb,
-                    "RptEna",
-                    MmsDataValue.Boolean(false),
+                var disable = await TryWriteReportSemanticAttributeForCleanupAsync(
+                    rcb, MmsReportControlSemanticWrite.ReportEnable(false),
                     CancellationToken.None).ConfigureAwait(false);
                 cleanupSteps.Add(disable);
                 cleanupSucceeded &= disable.IsSuccess;
@@ -218,8 +229,8 @@ public sealed partial class MmsClientSession
             if (reserved)
             {
                 var release = rcb.Buffered
-                    ? await TryWriteReportAttributeForCleanupAsync(rcb, "ResvTms", MmsDataValue.Unsigned(0), CancellationToken.None).ConfigureAwait(false)
-                    : await TryWriteReportAttributeForCleanupAsync(rcb, "Resv", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+                    ? await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.ReservationTime(0), CancellationToken.None).ConfigureAwait(false)
+                    : await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.Reservation(false), CancellationToken.None).ConfigureAwait(false);
                 cleanupSteps.Add(release);
                 cleanupSucceeded &= release.IsSuccess;
             }
@@ -266,9 +277,15 @@ public sealed partial class MmsClientSession
 
     private static MmsReportActivationFailureReason ClassifyFailure(MmsPersistentReportMonitorStartResult result)
     {
-        var failed = result.WriteSteps.LastOrDefault(step => step.Attempted && !step.IsSuccess);
+        var failed = result.WriteSteps.LastOrDefault(step => !step.IsSuccess);
         if (failed is not null)
         {
+            if (failed.TypeEvidence?.Status == MmsReportSemanticTypeEvidenceStatus.ExactMismatch ||
+                failed.FailureKind is MmsInteropFailureKind.TypeMismatch or MmsInteropFailureKind.TypeUnsupported)
+            {
+                return MmsReportActivationFailureReason.RcbFieldTypeConflict;
+            }
+
             if (failed.Attribute.Equals("Probe.DefineNamedVariableList", StringComparison.OrdinalIgnoreCase))
                 return MmsReportActivationFailureReason.DynamicDataSetProbeDefineFailed;
             if (failed.Attribute.Equals("Probe.GetNamedVariableListAttributes", StringComparison.OrdinalIgnoreCase))
@@ -281,8 +298,13 @@ public sealed partial class MmsClientSession
                 return MmsReportActivationFailureReason.DynamicDataSetBindFailed;
             if (failed.Attribute.Equals("TrgOps", StringComparison.OrdinalIgnoreCase))
                 return MmsReportActivationFailureReason.TriggerOptionsWriteFailed;
+            if (failed.Attribute.Equals("Resv", StringComparison.OrdinalIgnoreCase) ||
+                failed.Attribute.Equals("ResvTms", StringComparison.OrdinalIgnoreCase))
+                return MmsReportActivationFailureReason.ReservationWriteFailed;
             if (failed.Attribute.Equals("RptEna", StringComparison.OrdinalIgnoreCase))
                 return MmsReportActivationFailureReason.ReportEnableFailed;
+            if (failed.Attribute.Equals("GI", StringComparison.OrdinalIgnoreCase))
+                return MmsReportActivationFailureReason.GeneralInterrogationFailed;
         }
 
         if (result.Message.Contains("requires a writable TrgOps", StringComparison.OrdinalIgnoreCase))

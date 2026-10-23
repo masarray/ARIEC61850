@@ -162,6 +162,12 @@ public sealed class Iec61850ControlObjectDescriptor
     public MmsTypeSpecificationNode? CancelSpecification { get; init; }
     public string StatusReference { get; init; } = string.Empty;
     public string StatusFunctionalConstraint { get; init; } = string.Empty;
+    /// <summary>
+    /// Live MMS Read proved a two-bit stVal Dbpos on the SAME control DataObject.
+    /// This typed evidence, not an LN/DO name, can distinguish Boolean DPC
+    /// Oper.ctlVal from a Boolean SPC control.
+    /// </summary>
+    public bool LiveStatusIsDoublePoint { get; init; }
     public TimeSpan? SboTimeout { get; init; }
     public TimeSpan? OperTimeout { get; init; }
     public bool SupportsTimeActivatedOperate { get; init; }
@@ -174,7 +180,9 @@ public sealed class Iec61850ControlObjectDescriptor
         ControlModel is not Iec61850ControlModel.StatusOnly and not Iec61850ControlModel.Unknown &&
         !string.IsNullOrWhiteSpace(ObjectReference) &&
         !string.IsNullOrWhiteSpace(CtlValSpecification.MmsType) &&
-        (!RequiresSelect || CancelSpecification != null) &&
+        // Normal SBO Select -> Operate does not depend on optional Cancel.
+        // Enhanced SBO still requires Cancel for sequence recovery.
+        (ControlModel != Iec61850ControlModel.SelectBeforeOperateEnhanced || CancelSpecification != null) &&
         (ControlModel != Iec61850ControlModel.SelectBeforeOperateEnhanced || SelectWithValueSpecification != null) &&
         (!IsEnhanced || SupportsCommandTermination);
 

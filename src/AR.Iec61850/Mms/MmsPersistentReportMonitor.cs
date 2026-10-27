@@ -682,18 +682,36 @@ public sealed partial class MmsClientSession
 
         var dataSet = NormalizeRoutingReference(header.DataSetReference);
 
-        // Report identity is a two-field contract whenever the peer provides
-        // a domain-qualified DatSet. A matching RptID is not sufficient to
-        // project another DataSet's payload using this monitor's member order.
-        // Keep the existing RptID-only compatibility for omitted or abbreviated
-        // DatSet fields (some supported peers do not advertise a full path).
+        // A recognized RptID cannot override a contradictory advertised DatSet.
+        // Some peers shorten the DatSet to LLN0$Name (or just Name), while
+        // others supply an exact LD/LN$Name. Match an abbreviated reference
+        // only at an explicit component boundary, never by a shared tail alone.
+        // An omitted DatSet preserves the legacy exact-RptID route.
         bool ConflictsWithAdvertisedDataSet(MmsPersistentReportMonitorSession candidate)
         {
-            if (string.IsNullOrWhiteSpace(dataSet) || !dataSet.Contains('/'))
+            if (string.IsNullOrWhiteSpace(dataSet))
                 return false;
+
             var expected = NormalizeRoutingReference(candidate.Plan.DataSetReference);
-            return !string.IsNullOrWhiteSpace(expected) &&
-                   !expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(expected))
+                return false; // No authoritative plan identity to contradict.
+
+            if (dataSet.Contains('/'))
+                return !expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase);
+
+            if (dataSet.Contains('.'))
+            {
+                // Domain omitted: require the entire LN.DataSet suffix. A
+                // matching bare DataSet name under another LN is not enough.
+                var offset = expected.Length - dataSet.Length;
+                return offset <= 0 ||
+                       !expected.EndsWith(dataSet, StringComparison.OrdinalIgnoreCase) ||
+                       expected[offset - 1] != '/';
+            }
+
+            // Some peers omit both domain and LN. Retain explicit tail-only
+            // compatibility, but do not route a *different* advertised tail.
+            return !RoutingTail(expected).Equals(dataSet, StringComparison.OrdinalIgnoreCase);
         }
 
         var reportId = NormalizeRoutingReference(header.ReportId);

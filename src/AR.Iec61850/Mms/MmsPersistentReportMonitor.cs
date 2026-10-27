@@ -703,6 +703,8 @@ public sealed partial class MmsClientSession
             {
                 // Domain omitted: require the entire LN.DataSet suffix. A
                 // matching bare DataSet name under another LN is not enough.
+                if (expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase))
+                    return false;
                 var offset = expected.Length - dataSet.Length;
                 return offset <= 0 ||
                        !expected.EndsWith(dataSet, StringComparison.OrdinalIgnoreCase) ||

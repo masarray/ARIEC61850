@@ -136,12 +136,9 @@ public sealed class MmsPersistentReportRoutingTests
     {
         var a = CreateSession("BrcbA01", "RPT_A", "IEDLD0/LLN0.DS_A");
         var b = CreateSession("BrcbB01", "RPT_B", "IEDLD0/LLN0.DS_B");
-
         var result = MmsClientSession.SelectPersistentReportMonitor(
-            [a, b],
-            new MmsReportHeader { ReportId = "RPT_A", DataSetReference = advertised },
+            [a, b], new MmsReportHeader { ReportId = "RPT_A", DataSetReference = advertised },
             out var evidence);
-
         Assert.Null(result);
         Assert.Contains("RptID/DatSet conflict", evidence);
     }
@@ -154,12 +151,9 @@ public sealed class MmsPersistentReportRoutingTests
     {
         var a = CreateSession("BrcbA01", "RPT_A", "IEDLD0/LLN0.DS_A");
         var b = CreateSession("BrcbB01", "RPT_B", "IEDLD0/LLN0.DS_B");
-
         var result = MmsClientSession.SelectPersistentReportMonitor(
-            [b, a],
-            new MmsReportHeader { ReportId = "RPT_A", DataSetReference = advertised },
+            [b, a], new MmsReportHeader { ReportId = "RPT_A", DataSetReference = advertised },
             out var evidence);
-
         Assert.Same(a, result);
         Assert.Equal("exact RptID", evidence);
     }
@@ -175,83 +169,18 @@ public sealed class MmsPersistentReportRoutingTests
             CreateSession("BrcbA01", "RPT_A", "SG7_BCUMaster/LLN0.TT6DataSet3")
         };
         var reversed = sessions.Reverse().ToArray();
-        for (var i = 0; i < sessions.Length; i++)
+        foreach (var expected in sessions)
         {
-            var expected = sessions[i];
             var header = new MmsReportHeader
             {
                 ReportId = expected.ReportControl.ReportId,
-                DataSetReference = expected.Plan.DataSetReference.Replace('.', '
-    {
-        var first = CreateSession("URCBA01", "", "IEDLD0/LLN0.DS_A");
-        var second = CreateSession("URCBA02", "", "IEDLD0/LLN0.DS_B");
-
-        var selected = MmsClientSession.SelectPersistentReportMonitor(
-            [first, second],
-            new MmsReportHeader { DataSetReference = "IEDLD0/LLN0$DS_A" },
-            out var evidence);
-
-        Assert.Same(first, selected);
-        Assert.Equal("exact DataSet", evidence);
-    }
-
-    [Fact]
-    public void Selector_DoesNotProjectAmbiguousReportAgainstArbitraryMembers()
-    {
-        var first = CreateSession("URCBA01", "", "IEDLD0/LLN0.DS_A");
-        var second = CreateSession("URCBA02", "", "IEDLD0/LLN0.DS_B");
-
-        var selected = MmsClientSession.SelectPersistentReportMonitor(
-            [first, second],
-            new MmsReportHeader(),
-            out var evidence);
-
-        Assert.Null(selected);
-        Assert.Contains("ambiguous", evidence, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static MmsPersistentReportMonitorSession CreateSession(string rcbName, string reportId, string dataSet)
-    {
-        var rcb = new MmsReportControlCandidate
-        {
-            Domain = "IEDLD0",
-            LogicalNode = "LLN0",
-            FunctionalConstraint = "RP",
-            Name = rcbName,
-            Reference = $"IEDLD0/LLN0.RP.{rcbName}",
-            ReportId = reportId,
-            DataSetReference = dataSet
-        };
-        var plan = new MmsReportSubscriptionPlan
-        {
-            Mode = MmsReportSubscriptionPlanMode.StaticDataSet,
-            Status = MmsReportSubscriptionPlanStatus.ReadyRequiresWrite,
-            ReportControl = rcb,
-            DataSetReference = dataSet,
-            Members = [new MmsDataSetDirectoryMember { UserReference = $"IEDLD0/GGIO1.{rcbName}.stVal", FunctionalConstraint = "ST" }]
-        };
-
-        return new MmsPersistentReportMonitorSession(
-            plan,
-            rcb,
-            originalDataSetReference: dataSet,
-            isDynamic: false,
-            deleteDynamicDataSetOnStop: false,
-            dataSetCreated: false,
-            reservationTouched: false,
-            enabledByThisClient: true);
-    }
-}
-)
+                DataSetReference = expected.Plan.DataSetReference.Replace('.', '$')
             };
             Assert.Same(expected, MmsClientSession.SelectPersistentReportMonitor(
                 sessions, header, out _));
             Assert.Same(expected, MmsClientSession.SelectPersistentReportMonitor(
                 reversed, header, out _));
         }
-
-        // A valid RptID from one SG7 slot must never borrow a *different*
-        // target's DataSet, even if the server shortens the advertised name.
         Assert.Null(MmsClientSession.SelectPersistentReportMonitor(
             sessions,
             new MmsReportHeader { ReportId = "RPT_I", DataSetReference = "LLN0$TT3DataSet02" },

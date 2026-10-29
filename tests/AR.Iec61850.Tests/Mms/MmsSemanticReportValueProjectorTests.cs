@@ -300,8 +300,8 @@ public sealed class MmsSemanticReportValueProjectorTests
         var model = BuildMeasurementPairModel(root, dataSet);
         var when = new DateTimeOffset(2026, 10, 20, 10, 0, 0, TimeSpan.Zero);
         var invalid = BuildFrame(root, dataSet,
-            MmsDataValue.FloatingPoint(12f),
-            MmsDataValue.FloatingPoint(13f),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(12f) }),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(13f) }),
             MmsDataValue.UtcTime(new Iec61850UtcTime(when, 0)),
             MmsDataValue.BitString(3, new byte[] { 0 }));
         var result = MmsSemanticReportValueProjector.Project(
@@ -322,8 +322,8 @@ public sealed class MmsSemanticReportValueProjectorTests
         const string dataSet = "C264MASTER/LLN0.Analog";
         var when = new DateTimeOffset(2026, 10, 20, 10, 0, 0, TimeSpan.Zero);
         var valid = BuildFrame(root, dataSet,
-            MmsDataValue.FloatingPoint(12f),
-            MmsDataValue.FloatingPoint(13f),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(12f) }),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(13f) }),
             MmsDataValue.BitString(3, new byte[] { 0 }),
             MmsDataValue.UtcTime(new Iec61850UtcTime(when, 0)));
         var result = MmsSemanticReportValueProjector.Project(
@@ -344,7 +344,8 @@ public sealed class MmsSemanticReportValueProjectorTests
             Attribute(root + ".instMag.f", "instMag.f", "FLOAT32", "floating-point"),
             Attribute(root + ".instMag.f", "instMag.f", "BOOLEAN", "boolean")
         });
-        var frame = BuildFrame(root, dataSet, MmsDataValue.FloatingPoint(12f));
+        var frame = BuildFrame(root, dataSet,
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(12f) }));
         var rejected = MmsSemanticReportValueProjector.Project(
             frame, MmsReportSemanticProjectionContext.Create(contradiction));
         Assert.Empty(rejected.Updates);

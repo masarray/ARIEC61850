@@ -26,7 +26,14 @@ public static class AuthoritativeLiveIedSclExporter
         try
         {
             var document = XDocument.Load(result.SclPath, LoadOptions.PreserveWhitespace);
-            if (!string.IsNullOrWhiteSpace(options.IedNameOverride))
+            if (options.VerifiedIdentity is { } verified)
+            {
+                if (!string.IsNullOrWhiteSpace(options.IedNameOverride) &&
+                    !verified.IedName.Equals(options.IedNameOverride.Trim(), StringComparison.Ordinal))
+                    throw new InvalidDataException("Caller IED override conflicts with trusted SCL evidence.");
+                document = ApplyVerifiedIdentity(document, model, verified);
+            }
+            else if (!string.IsNullOrWhiteSpace(options.IedNameOverride))
                 document = ApplyIdentity(document, model, options.IedNameOverride);
 
             document = ApplyReportControlConfiguration(document, model, options.ResolvedSchemaProfile);
@@ -96,6 +103,80 @@ public static class AuthoritativeLiveIedSclExporter
         }
 
         ValidateIdentity(document, safeIedName, model);
+        return document;
+    }
+
+
+    /// <summary>
+    /// Normalizes both IED identity and LD instance mappings from verified SCL
+    /// topology. Physical MMS domain / FCDA evidence remains unchanged.
+    /// </summary>
+    public static XDocument ApplyVerifiedIdentity(
+        XDocument generated,
+        LiveIedModelDiscoveryDocument model,
+        LiveIedIdentity identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        var observed = model.LogicalDevices
+            .Select(LogicalDeviceDomain)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!identity.Source.Equals("TrustedSclExactDomainMatch", StringComparison.Ordinal) ||
+            identity.Confidence != LiveIedDiscoveryConfidenceLevel.High ||
+            identity.IsAmbiguous ||
+            observed.Count == 0 ||
+            identity.LogicalDeviceAliases.Count != observed.Count ||
+            identity.LogicalDeviceAliases.Keys.Any(x => !observed.Contains(x)) ||
+            identity.LogicalDeviceAliases.Values.Any(x => string.IsNullOrWhiteSpace(x)) ||
+            identity.LogicalDeviceAliases.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != observed.Count)
+            throw new InvalidDataException("SCL identity evidence is not a unique complete MMS-domain mapping.");
+
+        // Existing authoritative normalization proves identity and preserves the
+        // MMS wire-domain graph. Transform LDevice.inst and FCDA LD references
+        // together so that a single-domain BCUGEF650 becomes BCUGE/F650.
+        var document = ApplyIdentity(generated, model, identity.IedName);
+        var rewrites = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ied = document.Root?.Element(Scl + "IED")
+            ?? throw new InvalidDataException("SCL has no unique IED.");
+        var nodes = ied.Descendants(Scl + "LDevice").ToArray();
+        if (nodes.Length != observed.Count)
+            throw new InvalidDataException("Generated LD set and observed MMS domain set differ.");
+
+        foreach (var ld in nodes)
+        {
+            var oldInst = ((string?)ld.Attribute("inst") ?? "").Trim();
+            var explicitDomain = ((string?)ld.Attribute("ldName") ?? "").Trim();
+            var domain = explicitDomain.Length != 0 ? explicitDomain : identity.IedName + oldInst;
+            if (!identity.LogicalDeviceAliases.TryGetValue(domain, out var newInst) ||
+                !seen.Add(domain))
+                throw new InvalidDataException($"Generated SCL domain '{domain}' is not uniquely matched.");
+            rewrites.Add(oldInst, newInst);
+            ld.SetAttributeValue("inst", newInst);
+            ld.SetAttributeValue("ldName",
+                domain.Equals(identity.IedName + newInst, StringComparison.OrdinalIgnoreCase)
+                    ? null : domain);
+        }
+        if (seen.Count != observed.Count)
+            throw new InvalidDataException("Generated SCL did not map every observed MMS domain.");
+
+        // FCDA ldInst references refer to LDevice.inst, not the MMS domain.
+        // Never rewrite references belonging to an explicitly different IED.
+        foreach (var fcda in ied.Descendants(Scl + "FCDA"))
+        {
+            var fcdaIed = ((string?)fcda.Attribute("iedName") ?? "").Trim();
+            if (fcdaIed.Length > 0 &&
+                !fcdaIed.Equals(model.IedName, StringComparison.OrdinalIgnoreCase) &&
+                !fcdaIed.Equals(identity.IedName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var oldRef = ((string?)fcda.Attribute("ldInst") ?? "").Trim();
+            if (rewrites.TryGetValue(oldRef, out var mapped))
+                fcda.SetAttributeValue("ldInst", mapped);
+            if (fcdaIed.Equals(model.IedName, StringComparison.OrdinalIgnoreCase))
+                fcda.SetAttributeValue("iedName", identity.IedName);
+        }
+        ValidateIdentity(document, identity.IedName, model);
         return document;
     }
 

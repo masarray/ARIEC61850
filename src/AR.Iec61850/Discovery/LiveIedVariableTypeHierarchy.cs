@@ -31,6 +31,29 @@ public static class LiveIedVariableTypeProbePlanner
 /// </summary>
 public static class LiveIedVariableTypeProbeExecutor
 {
+    /// <summary>
+    /// Optional DataSet-first late-root recovery from successful live MMS directory
+    /// evidence. Retains current single-pass LN hierarchy probing and existing
+    /// negotiated-window policies; never changes the legacy directory overload.
+    /// </summary>
+    public static Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ProbeSmartAsync(
+        MmsClientSession session,
+        MmsDiscoveryResult discovery,
+        MmsSmartDiscoveryOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(discovery);
+        options ??= new MmsSmartDiscoveryOptions();
+
+        var verified = LiveIedDataSetTypeProbePlanner.BuildVerifiedMemberHints(
+            discovery,
+            options.MaxDataSetTypeExtraLogicalNodes,
+            options.MaxDataSetTypeMemberHints);
+        discovery.IedDirectory.AddSupplementalPoints(verified);
+        return ProbeSmartAsync(session, discovery.IedDirectory, options, cancellationToken);
+    }
+
     public static Task<IReadOnlyList<MmsVariableAccessAttributesResult>> ProbeSmartAsync(
         MmsClientSession session,
         MmsIedModelDirectory directory,
@@ -84,6 +107,9 @@ internal static class LiveIedTypeHierarchyPointMaterializer
         {
             var domain = result.Reference.Domain.Trim();
             var logicalNode = result.Reference.Item.Trim();
+            // Fail closed: only known directory LN roots are materialized.
+            // DataSet-root closure first promotes confirmed MMS member references
+            // into this directory, after a successful exact LN type probe.
             if (!directory.LogicalDevices.TryGetValue(domain, out var logicalDevice) ||
                 !logicalDevice.LogicalNodes.ContainsKey(logicalNode))
             {

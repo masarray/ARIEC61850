@@ -47,6 +47,13 @@ public sealed class MmsHybridReportAcquisitionOptions
     public bool AllowCallerOwnedReports { get; init; } = true;
     public bool AllowStaticBrcb { get; init; } = true;
     public bool AllowStaticUrcb { get; init; } = true;
+    /// <summary>
+    /// Explicit interoperability opt-in for configured static RCBs whose live DataSet
+    /// and RptEna=false are verified but whose reservation attribute is genuinely
+    /// unexposed. Default false preserves the exact-evidence production contract.
+    /// This option never applies to dynamic DataSet mutation.
+    /// </summary>
+    public bool AllowConfiguredStaticWithMissingReservationEvidence { get; init; }
     public bool AllowDynamicBrcb { get; init; } = true;
     public bool AllowDynamicUrcb { get; init; } = true;
     public bool AllowPollingFallback { get; init; } = true;
@@ -347,11 +354,12 @@ public static class MmsHybridReportAcquisitionPlanner
                 .Select(snapshot => new
                 {
                     Snapshot = snapshot,
+                    Eligibility = EvaluateStaticEligibility(snapshot, options),
                     Covered = remaining.Where(signal => StaticDataSetCovers(snapshot, signal)).ToArray()
                 })
                 .Where(item => item.Covered.Length > 0)
                 .OrderByDescending(item => item.Covered.Length)
-                .ThenBy(item => item.Snapshot.Availability == MmsRcbOperationalAvailability.UsedByCaller ? 0 : 1)
+                .ThenBy(item => StaticEligibilityRank(item.Eligibility.Kind))
                 .ThenBy(item => item.Snapshot.Buffered ? 0 : 1)
                 .ThenBy(item => item.Snapshot.Reference, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -361,7 +369,8 @@ public static class MmsHybridReportAcquisitionPlanner
 
             var selected = scored[0];
             var snapshot = selected.Snapshot;
-            var plan = snapshot.Availability == MmsRcbOperationalAvailability.UsedByCaller
+            var eligibility = selected.Eligibility;
+            var plan = eligibility.Kind == MmsConfiguredStaticRcbEligibilityKind.CallerOwned
                 ? BuildCallerOwnedStaticPlan(snapshot, inventory)
                 : BuildFreshStaticPlan(snapshot);
 
@@ -373,7 +382,14 @@ public static class MmsHybridReportAcquisitionPlanner
             }
 
             var kind = snapshot.Buffered ? MmsHybridAcquisitionKind.StaticBrcb : MmsHybridAcquisitionKind.StaticUrcb;
-            var callerOwned = snapshot.Availability == MmsRcbOperationalAvailability.UsedByCaller;
+            var callerOwned = eligibility.Kind == MmsConfiguredStaticRcbEligibilityKind.CallerOwned;
+            var reducedEvidence = eligibility.UsesReducedEvidence;
+            if (reducedEvidence)
+            {
+                warnings.Add(
+                    $"Configured static candidate {snapshot.Reference} is using the explicit reduced reservation-evidence policy: {eligibility.Reason}");
+            }
+
             var segment = new MmsHybridAcquisitionSegment
             {
                 Kind = kind,
@@ -387,7 +403,9 @@ public static class MmsHybridReportAcquisitionPlanner
                 IsAlreadyActiveByCaller = callerOwned,
                 Reason = callerOwned
                     ? "Fresh availability evidence identifies this report as already active in the caller's current session; reuse it without reconfiguration."
-                    : "Fresh exact availability evidence confirms a populated static DataSet and a free RCB; enable the existing report without changing its DataSet membership."
+                    : reducedEvidence
+                        ? eligibility.Reason
+                        : "Fresh availability evidence confirms a populated static DataSet, RptEna=false, and explicit free reservation state; enable the existing report without changing its DataSet membership."
             };
             segments.Add(segment);
 
@@ -681,22 +699,37 @@ public static class MmsHybridReportAcquisitionPlanner
             return false;
         if (!snapshot.Buffered && !options.AllowStaticUrcb)
             return false;
-        if (snapshot.Availability == MmsRcbOperationalAvailability.UsedByCaller)
-            return options.AllowCallerOwnedReports &&
-                   snapshot.DataSetDirectorySuccess &&
-                   snapshot.DataSetMembers.Count > 0 &&
-                   !string.IsNullOrWhiteSpace(snapshot.DataSetReference);
-        if (snapshot.Availability != MmsRcbOperationalAvailability.Available)
+
+        var eligibility = EvaluateStaticEligibility(snapshot, options);
+        if (!eligibility.IsEligible)
             return false;
-        if (options.RequireExactAvailabilityEvidence && snapshot.Confidence != MmsRcbAvailabilityConfidence.Exact)
-            return false;
-        return snapshot.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded &&
-               snapshot.DataSetDirectorySuccess &&
-               snapshot.DataSetMembers.Count > 0 &&
-               !string.IsNullOrWhiteSpace(snapshot.DataSetReference) &&
-               ParseBool(snapshot.EnabledState) == false &&
-               HasExplicitFreeReservation(snapshot);
+
+        if (eligibility.Kind == MmsConfiguredStaticRcbEligibilityKind.CallerOwned)
+            return true;
+
+        if (eligibility.UsesReducedEvidence)
+            return options.AllowConfiguredStaticWithMissingReservationEvidence;
+
+        return !options.RequireExactAvailabilityEvidence ||
+               snapshot.Confidence == MmsRcbAvailabilityConfidence.Exact;
     }
+
+    private static MmsConfiguredStaticRcbEligibility EvaluateStaticEligibility(
+        MmsRcbAvailabilitySnapshot snapshot,
+        MmsHybridReportAcquisitionOptions options)
+        => MmsConfiguredStaticRcbEligibilityPolicy.Evaluate(
+            snapshot,
+            options.AllowCallerOwnedReports,
+            options.AllowConfiguredStaticWithMissingReservationEvidence);
+
+    private static int StaticEligibilityRank(MmsConfiguredStaticRcbEligibilityKind kind)
+        => kind switch
+        {
+            MmsConfiguredStaticRcbEligibilityKind.CallerOwned => 0,
+            MmsConfiguredStaticRcbEligibilityKind.ExplicitFree => 1,
+            MmsConfiguredStaticRcbEligibilityKind.ReducedMissingReservationEvidence => 2,
+            _ => 9
+        };
 
     private static bool IsDynamicUsable(MmsRcbAvailabilitySnapshot snapshot, MmsHybridReportAcquisitionOptions options)
     {

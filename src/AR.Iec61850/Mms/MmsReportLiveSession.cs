@@ -6,6 +6,11 @@ public sealed class MmsReportAttributeWriteStep
     public string Reference { get; init; } = string.Empty;
     public bool Attempted { get; init; }
     public bool IsSuccess { get; init; }
+    public int? FailureCode { get; init; }
+    public string FailureName { get; init; } = string.Empty;
+    public MmsInteropFailureKind FailureKind { get; init; } = MmsInteropFailureKind.None;
+    public MmsInteropRecoveryHint RecoveryHint { get; init; } = MmsInteropRecoveryHint.None;
+    public MmsReportSemanticTypeEvidence? TypeEvidence { get; init; }
     public string Message { get; init; } = string.Empty;
 }
 
@@ -226,12 +231,16 @@ public sealed class MmsReportRcbSnapshot
     public string Message { get; init; } = string.Empty;
     public string Reference { get; init; } = string.Empty;
     public string Mode { get; init; } = string.Empty;
+    public bool Buffered { get; init; }
     public string DataSetReference { get; init; } = string.Empty;
+    public MmsRcbDataSetProbeState DataSetProbeState { get; init; } = MmsRcbDataSetProbeState.NotAttempted;
+    public string DataSetProbeMessage { get; init; } = string.Empty;
     public string ReportId { get; init; } = string.Empty;
     public string ConfRev { get; init; } = string.Empty;
     public string EnabledState { get; init; } = string.Empty;
     public string ReservationState { get; init; } = string.Empty;
     public string ReservationTimeSeconds { get; init; } = string.Empty;
+    public string Owner { get; init; } = string.Empty;
     public string BufferTimeMs { get; init; } = string.Empty;
     public string IntegrityPeriodMs { get; init; } = string.Empty;
     public string TriggerOptions { get; init; } = string.Empty;
@@ -251,12 +260,16 @@ public sealed class MmsReportRcbSnapshot
             Message = message,
             Reference = candidate.Reference,
             Mode = candidate.Mode,
+            Buffered = candidate.Buffered,
             DataSetReference = candidate.DataSetReference,
+            DataSetProbeState = candidate.DataSetProbeState,
+            DataSetProbeMessage = candidate.DataSetProbeMessage,
             ReportId = candidate.ReportId,
             ConfRev = candidate.ConfRev,
             EnabledState = candidate.EnabledState,
             ReservationState = candidate.ReservationState,
             ReservationTimeSeconds = candidate.ReservationTimeSeconds,
+            Owner = candidate.Owner,
             BufferTimeMs = candidate.BufferTimeMs,
             IntegrityPeriodMs = candidate.IntegrityPeriodMs,
             TriggerOptions = candidate.TriggerOptions,
@@ -1084,14 +1097,14 @@ public sealed partial class MmsClientSession
             }
             else if (!rcb.Buffered && rcb.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase))
             {
-                var reserve = await WriteReportAttributeAsync(rcb, "Resv", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+                var reserve = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.Reservation(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(reserve);
                 reservationTouched = true;
                 if (!reserve.IsSuccess)
                     warnings.Add("URCB Resv write failed. Proceeding guarded only if RptEna is accepted by the IED.");
             }
 
-            var enable = await WriteReportAttributeAsync(rcb, "RptEna", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+            var enable = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.ReportEnable(true), cancellationToken).ConfigureAwait(false);
             writes.Add(enable);
             enabledByThisClient = enable.IsSuccess;
             if (!enable.IsSuccess)
@@ -1113,7 +1126,7 @@ public sealed partial class MmsClientSession
 
             if (triggerGeneralInterrogation)
             {
-                var gi = await WriteReportAttributeAsync(rcb, "GI", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+                var gi = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.GeneralInterrogation(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(gi);
                 if (!gi.IsSuccess)
                     warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
@@ -1126,7 +1139,7 @@ public sealed partial class MmsClientSession
             {
                 periodicGiWriter = async token =>
                 {
-                    var step = await WriteReportAttributeAsync(rcb, "GI", MmsDataValue.Boolean(true), token).ConfigureAwait(false);
+                    var step = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.GeneralInterrogation(true), token).ConfigureAwait(false);
                     return new MmsReportAttributeWriteStep
                     {
                         Attribute = "GI(periodic)",
@@ -1158,7 +1171,7 @@ public sealed partial class MmsClientSession
         {
             if (enabledByThisClient)
             {
-                var disable = await TryWriteReportAttributeForCleanupAsync(rcb, "RptEna", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+                var disable = await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.ReportEnable(false), CancellationToken.None).ConfigureAwait(false);
                 writes.Add(disable);
                 if (!disable.IsSuccess)
                     verificationChecks.Add(FailCheck("after-cleanup", $"{rcb.Reference}.RptEna", "write false accepted", disable.Message, "RptEna=false cleanup write failed."));
@@ -1171,8 +1184,8 @@ public sealed partial class MmsClientSession
             if (reservationTouched)
             {
                 var release = rcb.Buffered
-                    ? await TryWriteReportAttributeForCleanupAsync(rcb, "ResvTms", MmsDataValue.Unsigned(0), CancellationToken.None).ConfigureAwait(false)
-                    : await TryWriteReportAttributeForCleanupAsync(rcb, "Resv", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+                    ? await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.ReservationTime(0), CancellationToken.None).ConfigureAwait(false)
+                    : await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.Reservation(false), CancellationToken.None).ConfigureAwait(false);
                 writes.Add(release);
             }
         }
@@ -1273,7 +1286,7 @@ public sealed partial class MmsClientSession
             }
             else if (!rcb.Buffered && rcb.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase))
             {
-                var reserve = await WriteReportAttributeAsync(rcb, "Resv", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+                var reserve = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.Reservation(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(reserve);
                 reservationTouched = true;
                 if (!reserve.IsSuccess)
@@ -1300,7 +1313,7 @@ public sealed partial class MmsClientSession
             rcbSnapshots.Add(afterBindSnapshot);
             AddRcbStateChecks(verificationChecks, afterBindSnapshot, expectedRptEna: false, expectedDataSet: plan.DataSetReference, stage: "after-bind");
 
-            var enable = await WriteReportAttributeAsync(rcb, "RptEna", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+            var enable = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.ReportEnable(true), cancellationToken).ConfigureAwait(false);
             writes.Add(enable);
             enabledByThisClient = enable.IsSuccess;
             if (!enable.IsSuccess)
@@ -1322,7 +1335,7 @@ public sealed partial class MmsClientSession
 
             if (triggerGeneralInterrogation)
             {
-                var gi = await WriteReportAttributeAsync(rcb, "GI", MmsDataValue.Boolean(true), cancellationToken).ConfigureAwait(false);
+                var gi = await WriteReportSemanticAttributeAsync(rcb, MmsReportControlSemanticWrite.GeneralInterrogation(true), cancellationToken).ConfigureAwait(false);
                 writes.Add(gi);
                 if (!gi.IsSuccess)
                     warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
@@ -1336,7 +1349,7 @@ public sealed partial class MmsClientSession
         {
             if (enabledByThisClient)
             {
-                var disable = await TryWriteReportAttributeForCleanupAsync(rcb, "RptEna", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+                var disable = await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.ReportEnable(false), CancellationToken.None).ConfigureAwait(false);
                 writes.Add(disable);
                 if (!disable.IsSuccess)
                     verificationChecks.Add(FailCheck("after-cleanup", $"{rcb.Reference}.RptEna", "write false accepted", disable.Message, "RptEna=false cleanup write failed."));
@@ -1360,8 +1373,8 @@ public sealed partial class MmsClientSession
             if (reservationTouched)
             {
                 var release = rcb.Buffered
-                    ? await TryWriteReportAttributeForCleanupAsync(rcb, "ResvTms", MmsDataValue.Unsigned(0), CancellationToken.None).ConfigureAwait(false)
-                    : await TryWriteReportAttributeForCleanupAsync(rcb, "Resv", MmsDataValue.Boolean(false), CancellationToken.None).ConfigureAwait(false);
+                    ? await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.ReservationTime(0), CancellationToken.None).ConfigureAwait(false)
+                    : await TryWriteReportSemanticAttributeForCleanupAsync(rcb, MmsReportControlSemanticWrite.Reservation(false), CancellationToken.None).ConfigureAwait(false);
                 writes.Add(release);
             }
 
@@ -1917,14 +1930,20 @@ public sealed partial class MmsClientSession
         MmsDataValue value,
         CancellationToken cancellationToken)
     {
-        var reference = MmsObjectReference.Parse($"{rcb.Reference}.{attribute}", rcb.FunctionalConstraint);
+        var reference = BuildReportAttributeReference(rcb, attribute);
         var result = await WriteSingleVariableAsync(reference, value, cancellationToken).ConfigureAwait(false);
+        var failure = result.AccessResults.FirstOrDefault(access => !access.IsSuccess);
+        var classification = MmsInteropFailureClassifier.Classify(failure);
         return new MmsReportAttributeWriteStep
         {
             Attribute = attribute,
             Reference = reference.ToString(),
             Attempted = true,
             IsSuccess = result.IsSuccess,
+            FailureCode = failure?.FailureCode,
+            FailureName = failure?.FailureName ?? string.Empty,
+            FailureKind = classification.Kind,
+            RecoveryHint = classification.RecoveryHint,
             Message = result.Message
         };
     }
@@ -1950,6 +1969,11 @@ public sealed partial class MmsClientSession
                     Reference = first.Reference,
                     Attempted = true,
                     IsSuccess = false,
+                    FailureCode = first.FailureCode,
+                    FailureName = first.FailureName,
+                    FailureKind = first.FailureKind,
+                    RecoveryHint = first.RecoveryHint,
+                    TypeEvidence = first.TypeEvidence,
                     Message = $"cleanup reconnect failed. First attempt: {first.Message}"
                 };
             }
@@ -1961,6 +1985,11 @@ public sealed partial class MmsClientSession
                 Reference = retry.Reference,
                 Attempted = true,
                 IsSuccess = retry.IsSuccess,
+                FailureCode = retry.FailureCode,
+                FailureName = retry.FailureName,
+                FailureKind = retry.FailureKind,
+                RecoveryHint = retry.RecoveryHint,
+                TypeEvidence = retry.TypeEvidence,
                 Message = retry.IsSuccess
                     ? $"cleanup retry after reconnect succeeded. First attempt: {first.Message}"
                     : $"cleanup retry after reconnect failed: {retry.Message}. First attempt: {first.Message}"
@@ -1979,6 +2008,11 @@ public sealed partial class MmsClientSession
                         Reference = retry.Reference,
                         Attempted = true,
                         IsSuccess = retry.IsSuccess,
+                        FailureCode = retry.FailureCode,
+                        FailureName = retry.FailureName,
+                        FailureKind = retry.FailureKind,
+                        RecoveryHint = retry.RecoveryHint,
+                        TypeEvidence = retry.TypeEvidence,
                         Message = retry.IsSuccess
                             ? $"cleanup retry after reconnect succeeded. First exception: {ex.GetType().Name}: {ex.Message}"
                             : $"cleanup retry after reconnect failed: {retry.Message}. First exception: {ex.GetType().Name}: {ex.Message}"

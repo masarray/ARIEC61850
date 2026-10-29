@@ -191,6 +191,183 @@ public sealed class MmsSemanticReportValueProjectorTests
             update.ProjectionStatus.Equals("semantic-structured-leaf", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void C264_Incomplete_Live_Schema_Still_Projects_Strictly_Typed_Mod_FCD()
+    {
+        // C264 smart discovery can expose stVal without type-probing every
+        // sibling. That partial model must not suppress a fully typed ST
+        // Report containing stVal, q, t and stSeld.
+        const string root = "C264CONTROL/CILO1.Mod";
+        const string dataSet = "C264CONTROL/LLN0.LLN0BRptStDs";
+        var schema = new LiveIedModelDiscoveryDocument
+        {
+            IedName = "C264",
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "C264CONTROL",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "CILO1",
+                            DataObjects =
+                            [
+                                new LiveIedDataObjectModel
+                                {
+                                    Reference = root,
+                                    Name = "Mod",
+                                    Attributes =
+                                    [
+                                        new LiveIedDataAttributeModel
+                                        {
+                                            ObjectReference = root + ".stVal",
+                                            AttributePath = "stVal",
+                                            FunctionalConstraint = "ST"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            DataSets =
+            [
+                new LiveIedDataSetModel
+                {
+                    Reference = dataSet,
+                    Domain = "C264CONTROL",
+                    LogicalNode = "LLN0",
+                    Name = "LLN0BRptStDs",
+                    MemberCount = 1,
+                    Members =
+                    [
+                        new LiveIedDataSetMemberModel
+                        {
+                            Index = 0,
+                            Reference = root,
+                            FunctionalConstraint = "ST",
+                            Confidence = LiveIedDiscoveryConfidenceLevel.Exact
+                        }
+                    ]
+                }
+            ]
+        };
+        var at = new DateTimeOffset(2026, 10, 17, 2, 24, 5, TimeSpan.Zero);
+        var frame = new MmsReportFrame
+        {
+            ReceivedAt = at,
+            Header = new MmsReportHeader { DataSetReference = dataSet },
+            Values =
+            [
+                new MmsReportValue
+                {
+                    Index = 0,
+                    Member = new MmsDataSetDirectoryMember
+                    {
+                        UserReference = root,
+                        FunctionalConstraint = "ST"
+                    },
+                    Value = MmsDataValue.Structure([
+                        MmsDataValue.Integer(1),
+                        MmsDataValue.BitString(3, [0x00, 0x00]),
+                        MmsDataValue.UtcTime(new Iec61850UtcTime(at, 0)),
+                        MmsDataValue.Boolean(false)
+                    ])
+                }
+            ]
+        };
+
+        var projected = MmsSemanticReportValueProjector.Project(
+            frame, MmsReportSemanticProjectionContext.Create(schema));
+        var scalar = Assert.Single(projected.Updates);
+        Assert.Equal(root + ".stVal", scalar.Reference);
+        Assert.Equal("good", scalar.Quality);
+        Assert.True(scalar.HasTimestamp);
+        Assert.DoesNotContain(projected.Warnings,
+            x => x.StartsWith("REPORT_RAW_STRUCT:", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(projected.Updates,
+            x => x.Value.StartsWith("Structure(", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ExactTypedFcd_SwappedQualityAndTimeIsRejectedWithoutFalseValuePublication()
+    {
+        const string root = "C264MEAS/MMXU1.A";
+        const string dataSet = "C264MASTER/LLN0.Analog";
+        var model = BuildMeasurementPairModel(root, dataSet);
+        var when = new DateTimeOffset(2026, 10, 20, 10, 0, 0, TimeSpan.Zero);
+        var invalid = BuildFrame(root, dataSet,
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(12f) }),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(13f) }),
+            MmsDataValue.UtcTime(new Iec61850UtcTime(when, 0)),
+            MmsDataValue.BitString(3, new byte[] { 0 }));
+        var result = MmsSemanticReportValueProjector.Project(
+            invalid, MmsReportSemanticProjectionContext.Create(model));
+
+        Assert.Empty(result.Updates);
+        Assert.Contains(result.Warnings,
+            warning => warning.StartsWith("REPORT_SEMANTIC_REJECTED:", StringComparison.Ordinal) &&
+                       warning.Contains("expected BitString, received UtcTime", StringComparison.Ordinal));
+        // The original received frame remains available to diagnosis.
+        Assert.Equal(4, invalid.Values[0].Value!.Children.Count);
+    }
+
+    [Fact]
+    public void ExactTypedFcd_ValidOrderedQualityAndTimestampRetainProcessProjection()
+    {
+        const string root = "C264MEAS/MMXU1.A";
+        const string dataSet = "C264MASTER/LLN0.Analog";
+        var when = new DateTimeOffset(2026, 10, 20, 10, 0, 0, TimeSpan.Zero);
+        var valid = BuildFrame(root, dataSet,
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(12f) }),
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(13f) }),
+            MmsDataValue.BitString(3, new byte[] { 0 }),
+            MmsDataValue.UtcTime(new Iec61850UtcTime(when, 0)));
+        var result = MmsSemanticReportValueProjector.Project(
+            valid, MmsReportSemanticProjectionContext.Create(BuildMeasurementPairModel(root, dataSet)));
+
+        Assert.Contains(result.Updates, x => x.Reference == root + ".instMag.f" && x.HasValue);
+        Assert.Contains(result.Updates, x => x.Reference == root + ".mag.f" && x.HasValue);
+        Assert.DoesNotContain(result.Warnings, x => x.StartsWith("REPORT_SEMANTIC_REJECTED:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ConflictingExactSchemaAndPartialUnknownTypesStayDeterministic()
+    {
+        const string root = "C264MEAS/MMXU1.A";
+        const string dataSet = "C264MASTER/LLN0.Analog";
+        var contradiction = BuildModel(root, dataSet, "MV", new[]
+        {
+            Attribute(root + ".instMag.f", "instMag.f", "FLOAT32", "floating-point"),
+            Attribute(root + ".instMag.f", "instMag.f", "BOOLEAN", "boolean")
+        });
+        var frame = BuildFrame(root, dataSet,
+            MmsDataValue.Structure(new[] { MmsDataValue.FloatingPoint(12f) }));
+        var rejected = MmsSemanticReportValueProjector.Project(
+            frame, MmsReportSemanticProjectionContext.Create(contradiction));
+        Assert.Empty(rejected.Updates);
+        Assert.Contains(rejected.Warnings, x => x.StartsWith("REPORT_SEMANTIC_REJECTED:", StringComparison.Ordinal));
+
+        var unknown = BuildModel(root, dataSet, "MV", new[]
+        {
+            new LiveIedDataAttributeModel
+            {
+                ObjectReference = root + ".instMag.f",
+                AttributePath = "instMag.f",
+                FunctionalConstraint = "MX",
+                MmsType = "",
+                TypeConfidence = LiveIedDiscoveryConfidenceLevel.Unknown
+            }
+        });
+        var fallback = MmsSemanticReportValueProjector.Project(
+            frame, MmsReportSemanticProjectionContext.Create(unknown));
+        Assert.Contains(fallback.Updates, x => x.Reference == root + ".instMag.f");
+        Assert.DoesNotContain(fallback.Warnings, x => x.StartsWith("REPORT_SEMANTIC_REJECTED:", StringComparison.Ordinal));
+    }
+
     private static LiveIedModelDiscoveryDocument BuildThreePhaseModel(
         string objectReference,
         string dataSetReference)

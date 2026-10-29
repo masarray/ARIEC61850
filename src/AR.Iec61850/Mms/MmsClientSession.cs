@@ -1,6 +1,7 @@
 using AR.Iec61850.Acse;
 using AR.Iec61850.Diagnostics;
 using AR.Iec61850.Osi;
+using System.Diagnostics;
 
 namespace AR.Iec61850.Mms;
 
@@ -561,8 +562,17 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 
         try
         {
-            var response = await SendConfirmedPresentationPayloadAsync(request, invokeId, cancellationToken).ConfigureAwait(false);
+            TimeSpan? sendDuration = null;
+            TimeSpan? responseDuration = null;
+            var response = await SendConfirmedPresentationPayloadAsync(
+                request, invokeId, cancellationToken,
+                (send, wait) => { sendDuration = send; responseDuration = wait; })
+                .ConfigureAwait(false);
+            var decodeStart = Stopwatch.GetTimestamp();
             var result = MmsWriteResponseDecoder.Decode(response, invokeId);
+            result.TpktSendElapsed = sendDuration;
+            result.ConfirmedResponseWaitElapsed = responseDuration;
+            result.ResponseDecodeElapsed = Stopwatch.GetElapsedTime(decodeStart);
             LastReadResponseHex = result.ResponseHexPreview;
             return result;
         }
@@ -659,21 +669,43 @@ public sealed partial class MmsClientSession : IAsyncDisposable
     private async Task<byte[]> SendConfirmedPresentationPayloadAsync(
         ReadOnlyMemory<byte> payload,
         int expectedInvokeId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<TimeSpan, TimeSpan>? onCompletedTiming = null)
     {
         if (!IsTransportConnected)
             throw new InvalidOperationException("Native IEC 61850 transport is not connected.");
+
+        // No global mutable timestamps: the closure and invoke ID belong to this
+        // one request. Concurrent confirmed reads cannot overwrite its evidence.
+        // The send measurement includes the local TPKT send gate and stream write.
+        // Response-wait begins AFTER the completed local send; it is NOT pure
+        // wire RTT, nor does it isolate remote IED decision time.
+        var sendStarted = onCompletedTiming is null ? 0L : Stopwatch.GetTimestamp();
+        long sentAt = 0L;
+        void CaptureCompleteTiming()
+        {
+            if (onCompletedTiming is null || sentAt == 0)
+                return;
+            onCompletedTiming(
+                Stopwatch.GetElapsedTime(sendStarted, sentAt),
+                Stopwatch.GetElapsedTime(sentAt));
+        }
 
         if (_receivePump.IsRunning)
         {
             using var pending = _receivePump.RegisterConfirmedOperation(expectedInvokeId);
             await _cotp.SendDataAsync(payload, cancellationToken).ConfigureAwait(false);
+            if (onCompletedTiming is not null)
+                sentAt = Stopwatch.GetTimestamp();
             var envelope = await pending.WaitAsync(cancellationToken).ConfigureAwait(false);
+            CaptureCompleteTiming();
             LastReceiveRoutingSummary = $"Receive pump completed {envelope.Kind} for invokeID={expectedInvokeId}. queuedReports={_receivePump.QueuedInformationReportCount}.";
             return envelope.PresentationPayload;
         }
 
         await _cotp.SendDataAsync(payload, cancellationToken).ConfigureAwait(false);
+        if (onCompletedTiming is not null)
+            sentAt = Stopwatch.GetTimestamp();
 
         while (true)
         {
@@ -681,6 +713,7 @@ public sealed partial class MmsClientSession : IAsyncDisposable
 
             if (_receiveRouter.TryDequeueConfirmedResult(expectedInvokeId, out var queued))
             {
+                CaptureCompleteTiming();
                 LastReceiveRoutingSummary = $"Dequeued queued {queued.Kind} for invokeID={expectedInvokeId}.";
                 return queued.PresentationPayload;
             }
@@ -696,11 +729,14 @@ public sealed partial class MmsClientSession : IAsyncDisposable
             if (route.Action == MmsReceiveRouteAction.QueuedConfirmedResult)
             {
                 if (_receiveRouter.TryDequeueConfirmedResult(expectedInvokeId, out var matched))
+                {
+                    CaptureCompleteTiming();
                     return matched.PresentationPayload;
-
+                }
                 continue;
             }
 
+            CaptureCompleteTiming();
             return route.Envelope.PresentationPayload;
         }
     }
@@ -764,7 +800,11 @@ public sealed partial class MmsClientSession : IAsyncDisposable
                 if (result.IsAccepted)
                 {
                     State = MmsAssociationState.MmsInitiated;
+                    // Bind paged RCB discovery to this accepted association.
+                    _canonicalStaticRcbAssociationKey = Guid.NewGuid().ToString("N");
                     LastHandshakeMessage = result.Message;
+                    ResetReportSemanticTypeEvidence();
+                    ResetConfiguredStaticDataSetDirectoryEvidence();
                     _receivePump.Start(cancellationToken);
                     return;
                 }

@@ -1,0 +1,123 @@
+using System.Net;
+using System.Xml.Linq;
+
+namespace AR.Iec61850.Discovery;
+
+/// <summary>
+/// Evidence-only IEC 61850 identity reconciliation. A server exposes MMS domains,
+/// not a guaranteed physical IED name or LDevice.inst boundary. Only a unique,
+/// fully matched engineering SCL topology can promote a provisional identity.
+/// No vendor-name heuristic, network call, cached-IP assumption, or model mutation.
+/// </summary>
+public static class TrustedSclIedIdentityMatcher
+{
+    private static readonly XNamespace Scl = "http://www.iec.ch/61850/2003/SCL";
+
+    public static LiveIedIdentity? TryMatch(
+        XDocument trustedScl,
+        IEnumerable<string> observedMmsDomains,
+        string? connectedHost,
+        string? selectedIedName = null,
+        string? selectedAccessPointName = null)
+    {
+        ArgumentNullException.ThrowIfNull(trustedScl);
+        ArgumentNullException.ThrowIfNull(observedMmsDomains);
+        if (trustedScl.Root?.Name != Scl + "SCL") return null;
+        var observed = observedMmsDomains
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToHashSet(StringComparer.Ordinal);
+        if (observed.Count == 0) return null;
+
+        var matches = new List<(string Ied, string Ap, Dictionary<string,string> Aliases, string? Ip)>();
+        var ambiguousUnboundTopology = false;
+        foreach (var ied in trustedScl.Root.Elements(Scl + "IED"))
+        {
+            var name = ((string?)ied.Attribute("name") ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(name) ||
+                (!string.IsNullOrWhiteSpace(selectedIedName) &&
+                 !name.Equals(selectedIedName.Trim(), StringComparison.Ordinal)))
+                continue;
+
+            foreach (var ap in ied.Elements(Scl + "AccessPoint"))
+            {
+                var apName = ((string?)ap.Attribute("name") ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(apName)) continue;
+                var devices = ap.Element(Scl + "Server")?.Elements(Scl + "LDevice").ToArray()
+                    ?? Array.Empty<XElement>();
+                if (devices.Length != observed.Count) continue;
+
+                var aliases = new Dictionary<string,string>(StringComparer.Ordinal);
+                var invalid = false;
+                foreach (var ld in devices)
+                {
+                    var inst = ((string?)ld.Attribute("inst") ?? "").Trim();
+                    var ldName = ((string?)ld.Attribute("ldName") ?? "").Trim();
+                    if (string.IsNullOrWhiteSpace(inst) || !IsValidSclIdentifier(inst))
+                    {
+                        invalid = true;
+                        break;
+                    }
+                    var domain = ldName.Length > 0 ? ldName : name + inst;
+                    if (!observed.Contains(domain) || !aliases.TryAdd(domain,inst))
+                    {
+                        invalid = true;
+                        break;
+                    }
+                }
+                if (invalid || aliases.Count != observed.Count) continue;
+
+                var connected = trustedScl.Root.Element(Scl + "Communication")?
+                    .Descendants(Scl + "ConnectedAP")
+                    .Where(x => string.Equals((string?)x.Attribute("iedName"),name,StringComparison.Ordinal)
+                        && string.Equals((string?)x.Attribute("apName"),apName,StringComparison.Ordinal))
+                    .ToArray() ?? Array.Empty<XElement>();
+                // SCL topology alone is not endpoint evidence. Require exactly one
+                // declared ConnectedAP/IP and an exact observed association endpoint.
+                // Missing/ambiguous endpoints remain provisional, never verified.
+                if (connected.Length != 1 || string.IsNullOrWhiteSpace(connectedHost))
+                {
+                    ambiguousUnboundTopology = true;
+                    continue;
+                }
+                var ipValues = connected[0].Element(Scl + "Address")?.Elements(Scl + "P")
+                    .Where(x => string.Equals((string?)x.Attribute("type"),"IP",StringComparison.OrdinalIgnoreCase))
+                    .Select(x => x.Value.Trim()).Take(2).ToArray() ?? Array.Empty<string>();
+                if (ipValues.Length != 1 ||
+                    !IPAddress.TryParse(ipValues[0],out var designIp) ||
+                    !IPAddress.TryParse(connectedHost.Trim(),out var observedIp))
+                {
+                    ambiguousUnboundTopology = true;
+                    continue;
+                }
+                if (!designIp.Equals(observedIp))
+                    continue;
+                matches.Add((name, apName, aliases, ipValues[0]));
+            }
+        }
+        // A single IED can have multiple APs and the same LD topology. This
+        // remains ambiguous until AP is independently selected/proven.
+        if (matches.Count != 1 || ambiguousUnboundTopology) return null;
+        var match=matches[0];
+        if (!string.IsNullOrWhiteSpace(selectedAccessPointName) &&
+            !string.Equals(match.Ap, selectedAccessPointName.Trim(), StringComparison.Ordinal))
+            return null;
+        return new LiveIedIdentity
+        {
+            IedName=match.Ied,
+            Source="TrustedSclExactDomainMatch",
+            Confidence=LiveIedDiscoveryConfidenceLevel.High,
+            IsAmbiguous=false,
+            CandidateNames=[match.Ied],
+            LogicalDeviceAliases=match.Aliases,
+            Evidence=[
+                $"Trusted SCL IED '{match.Ied}' / AccessPoint '{match.Ap}' matches all {observed.Count} observed MMS domains and unique LDevice instances.",
+                string.IsNullOrWhiteSpace(match.Ip) ? "No endpoint IP asserted by SCL." : $"SCL endpoint IP {match.Ip}."
+            ]
+        };
+    }
+
+    private static bool IsValidSclIdentifier(string s)
+        => s.All(c => char.IsLetterOrDigit(c) || c is '_' or '-' or '.');
+}

@@ -95,6 +95,45 @@ public sealed class SclParserTests
         Assert.Equal(SclEdition.Edition1, document.Edition);
     }
 
+    [Theory]
+    [InlineData("2003", null, null, SclEdition.Edition1)]
+    [InlineData("2007", "B", null, SclEdition.Edition2)]
+    [InlineData("2007", "B", "3", SclEdition.Edition2)]
+    [InlineData("2007", "B", "4", SclEdition.Edition21)]
+    [InlineData("2007", "B", "4A", SclEdition.Edition21)]
+    [InlineData("2007", "C", "5", SclEdition.Edition22)]
+    [InlineData("2007", "C", "4", SclEdition.Unknown)]
+    [InlineData("2007", "C", null, SclEdition.Unknown)]
+    [InlineData("2007", "B", "5", SclEdition.Unknown)]
+    [InlineData("2007", "Z", "5", SclEdition.Unknown)]
+    [InlineData("2003", "C", "5", SclEdition.Unknown)]
+    [InlineData("2099", "C", "5", SclEdition.Unknown)]
+    public void Parser_DetectsExactSclEditionWithoutNamespaceGuessOrDowngrade(
+        string? version, string? revision, string? release, SclEdition expected)
+    {
+        // Source-independent minimal synthetic SCL, not a vendor/customer IID.
+        static string Attr(string name, string? value)
+            => value is null ? string.Empty : " " + name + "=\"" + value + "\"";
+        var xml = "<SCL xmlns=\"http://www.iec.ch/61850/2003/SCL\"" +
+                  Attr("version", version) + Attr("revision", revision) +
+                  Attr("release", release) +
+                  "><Header id=\"SYNTHETIC\" /></SCL>";
+        var parsed = new SclParser().Parse(xml, "edition-matrix.iid");
+
+        Assert.Equal(expected, parsed.Edition);
+        Assert.Equal("http://www.iec.ch/61850/2003/SCL", parsed.NamespaceUri);
+    }
+
+    [Fact]
+    public void AddingEdition22_DoesNotRenumberPreviouslyPublishedEditionEnumValues()
+    {
+        Assert.Equal(0, (int)SclEdition.Unknown);
+        Assert.Equal(1, (int)SclEdition.Edition1);
+        Assert.Equal(2, (int)SclEdition.Edition2);
+        Assert.Equal(3, (int)SclEdition.Edition21);
+        Assert.Equal(4, (int)SclEdition.Edition22);
+    }
+
     internal static SclDocument LoadMinimalStation()
         => new SclParser().Load(MinimalStationPath());
 

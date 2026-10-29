@@ -63,6 +63,9 @@ public sealed class MmsReportSemanticProjectionContext
                         accumulated = $"{accumulated}.{part}";
                         current = current.GetOrAdd(part, accumulated);
                     }
+                    // Only a type backed by exact model evidence can veto a
+                    // wire leaf. Partial discovery must remain compatible.
+                    current.ObserveExactType(ExactMmsKind(attribute));
                 }
 
                 if (root.Children.Count == 0)
@@ -194,6 +197,16 @@ public sealed class MmsReportSemanticProjectionContext
                 return false;
             }
 
+            if (schema.HasTypeConflict)
+            {
+                reason = $"typed schema conflict for {schema.Reference}: exact model sources disagree";
+                return false;
+            }
+            if (schema.ExactKind is MmsDataKind expected && expected != value.Kind)
+            {
+                reason = $"typed MMS leaf mismatch at {schema.Reference}: expected {expected}, received {value.Kind}";
+                return false;
+            }
             leaves.Add(new ExpandedLeaf(schema.Reference, value));
             reason = string.Empty;
             return true;
@@ -253,6 +266,30 @@ public sealed class MmsReportSemanticProjectionContext
         return normalized[..(slash + 1)] + normalized[(slash + 1)..].Replace('$', '.');
     }
 
+    // Strictly known, model-qualified MMS kinds only. SCL bType alone is not
+    // live MMS type authority; unknown/partial types retain existing fallback.
+    private static MmsDataKind? ExactMmsKind(LiveIedDataAttributeModel attribute)
+    {
+        if (attribute.TypeConfidence != LiveIedDiscoveryConfidenceLevel.Exact ||
+            string.IsNullOrWhiteSpace(attribute.MmsType))
+            return null;
+
+        return attribute.MmsType.Trim().ToLowerInvariant().Replace('_', '-') switch
+        {
+            "floating-point" or "floatingpoint" => MmsDataKind.FloatingPoint,
+            "bit-string" or "bitstring" => MmsDataKind.BitString,
+            "utc-time" or "utctime" => MmsDataKind.UtcTime,
+            "boolean" => MmsDataKind.Boolean,
+            "integer" or "signed-integer" => MmsDataKind.Integer,
+            "unsigned" or "unsigned-integer" => MmsDataKind.Unsigned,
+            "octet-string" or "octetstring" => MmsDataKind.OctetString,
+            "visible-string" or "visiblestring" => MmsDataKind.VisibleString,
+            "mms-string" or "mmsstring" => MmsDataKind.MmsString,
+            "binary-time" or "binarytime" => MmsDataKind.BinaryTime,
+            _ => null
+        };
+    }
+
     private sealed class SchemaNode
     {
         private readonly Dictionary<string, SchemaNode> _byName = new(StringComparer.OrdinalIgnoreCase);
@@ -263,6 +300,18 @@ public sealed class MmsReportSemanticProjectionContext
 
         public string Reference { get; }
         public IReadOnlyList<SchemaNode> Children => _children;
+        public MmsDataKind? ExactKind { get; private set; }
+        public bool HasTypeConflict { get; private set; }
+
+        public void ObserveExactType(MmsDataKind? kind)
+        {
+            if (!kind.HasValue)
+                return;
+            if (ExactKind.HasValue && ExactKind != kind)
+                HasTypeConflict = true;
+            else
+                ExactKind = kind;
+        }
 
         public SchemaNode GetOrAdd(string name, string reference)
         {
@@ -302,6 +351,7 @@ public static class MmsSemanticReportValueProjector
 
         var baseline = MmsReportValueProjector.Project(frame);
         var semanticReplacementPositions = new HashSet<int>();
+        var rejectedTypedPositions = new HashSet<int>();
         var semanticUpdates = new List<MmsReportSignalUpdate>();
         var semanticWarnings = new List<string>();
 
@@ -323,7 +373,17 @@ public static class MmsSemanticReportValueProjector
                     out var resolvedMemberReference,
                     out var expansionReason))
             {
-                if (baselineWasRaw)
+                // A positively contradictory exact MMS type is not permission
+                // for the generic positional fallback to invent process values.
+                // Preserve the original frame and explicit rejection evidence,
+                // but exclude this member's candidate value/quality/timestamp.
+                if (expansionReason.StartsWith("typed MMS leaf mismatch", StringComparison.Ordinal) ||
+                    expansionReason.StartsWith("typed schema conflict", StringComparison.Ordinal))
+                {
+                    rejectedTypedPositions.Add(valuePosition);
+                    semanticWarnings.Add($"REPORT_SEMANTIC_REJECTED: {reportedMemberReference}; {expansionReason}; no scalar projection from this member.");
+                }
+                else if (baselineWasRaw)
                 {
                     semanticWarnings.Add($"REPORT_SEMANTIC_FALLBACK: {reportedMemberReference} remained raw; {expansionReason}. Exact scalar MMS fallback remains eligible.");
                 }
@@ -369,7 +429,7 @@ public static class MmsSemanticReportValueProjector
             semanticWarnings.Add($"REPORT_SEMANTIC_STRUCT: {resolvedMemberReference} {expansionReason}; exact static DataSet schema overrode generic structured-value heuristics.");
         }
 
-        if (semanticReplacementPositions.Count == 0)
+        if (semanticReplacementPositions.Count == 0 && rejectedTypedPositions.Count == 0)
         {
             return new MmsReportValueProjection
             {
@@ -383,7 +443,8 @@ public static class MmsSemanticReportValueProjector
             ReceivedAt = frame.ReceivedAt,
             Header = frame.Header,
             Values = frame.Values
-                .Where((_, index) => !semanticReplacementPositions.Contains(index))
+                .Where((_, index) => !semanticReplacementPositions.Contains(index) &&
+                                     !rejectedTypedPositions.Contains(index))
                 .ToArray(),
             DecoderMode = frame.DecoderMode,
             Message = frame.Message

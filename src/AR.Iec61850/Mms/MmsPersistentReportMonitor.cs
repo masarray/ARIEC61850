@@ -14,6 +14,10 @@ public sealed class MmsPersistentReportMonitorSession
     private long _firstRoutedReportUtcTicks;
     private long _lastRoutedReportUtcTicks;
     private int _routedReportCount;
+    private int _pendingReportCount;
+    private int _pendingDeliveryOverflowCount;
+    private readonly int _pendingReportCapacity;
+    internal const int DefaultPendingReportCapacity = 2048;
 
     internal MmsPersistentReportMonitorSession(
         MmsReportSubscriptionPlan plan,
@@ -23,8 +27,11 @@ public sealed class MmsPersistentReportMonitorSession
         bool deleteDynamicDataSetOnStop,
         bool dataSetCreated,
         bool reservationTouched,
-        bool enabledByThisClient)
+        bool enabledByThisClient,
+        int pendingReportCapacity = DefaultPendingReportCapacity)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pendingReportCapacity);
+        _pendingReportCapacity = Math.Min(pendingReportCapacity, DefaultPendingReportCapacity);
         Plan = plan;
         ReportControl = reportControl;
         OriginalDataSetReference = originalDataSetReference;
@@ -50,6 +57,9 @@ public sealed class MmsPersistentReportMonitorSession
     public int PollReadCount { get; internal set; }
     public bool IsStopped { get; internal set; }
     public int RoutedReportCount => Volatile.Read(ref _routedReportCount);
+    public int PendingReportCount => Volatile.Read(ref _pendingReportCount);
+    public int PendingDeliveryOverflowCount => Volatile.Read(ref _pendingDeliveryOverflowCount);
+    public bool IsDeliveryContinuityUnverified => PendingDeliveryOverflowCount > 0;
     public DateTimeOffset? FirstRoutedReportAt => ToUtcTimestamp(Volatile.Read(ref _firstRoutedReportUtcTicks));
     public DateTimeOffset? LastRoutedReportAt => ToUtcTimestamp(Volatile.Read(ref _lastRoutedReportUtcTicks));
     public MmsPersistentReportTrafficState TrafficState => IsStopped
@@ -61,7 +71,41 @@ public sealed class MmsPersistentReportMonitorSession
         ? FirstRoutedReportAt.Value - StartedAt
         : null;
 
-    internal ConcurrentQueue<MmsReportFrame> PendingReports { get; } = new();
+    private ConcurrentQueue<MmsReportFrame> PendingReports { get; } = new();
+
+    // Capacity must be reserved atomically before enqueue. No blocking, hidden
+    // frame replacement or unbounded memory growth when a consumer stalls.
+    internal bool TryQueuePendingReport(MmsReportFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        if (IsStopped)
+            return false;
+        while (true)
+        {
+            var count = Volatile.Read(ref _pendingReportCount);
+            if (count >= _pendingReportCapacity)
+            {
+                Interlocked.Increment(ref _pendingDeliveryOverflowCount);
+                return false;
+            }
+            if (Interlocked.CompareExchange(ref _pendingReportCount, count + 1, count) == count)
+                break;
+        }
+        PendingReports.Enqueue(frame);
+        return true;
+    }
+
+    internal bool TryDequeuePendingReport(out MmsReportFrame frame)
+    {
+        if (PendingReports.TryDequeue(out var queued))
+        {
+            Interlocked.Decrement(ref _pendingReportCount);
+            frame = queued;
+            return true;
+        }
+        frame = null!;
+        return false;
+    }
 
     internal void ObserveRoutedReport(MmsReportFrame frame)
     {
@@ -74,7 +118,9 @@ public sealed class MmsPersistentReportMonitorSession
 
     public string Summary =>
         $"persistent report monitor: rcb={ReportControl.Reference}, dataset={Plan.DataSetReference}, mode={Plan.Mode}, " +
-        $"traffic={TrafficState}, routedReports={RoutedReportCount}, drainedReports={ReportCount}, stopped={IsStopped}";
+        $"traffic={TrafficState}, routedReports={RoutedReportCount}, drainedReports={ReportCount}, " +
+        $"pendingReports={PendingReportCount}, pendingDeliveryOverflow={PendingDeliveryOverflowCount}, " +
+        $"deliveryContinuityUnverified={IsDeliveryContinuityUnverified}, stopped={IsStopped}";
 
     private static DateTimeOffset? ToUtcTimestamp(long ticks)
         => ticks <= 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
@@ -97,6 +143,8 @@ public sealed class MmsPersistentReportMonitorReceiveResult
     public IReadOnlyList<MmsReportPollRead> PollReads { get; init; } = Array.Empty<MmsReportPollRead>();
     public IReadOnlyList<MmsReportAttributeWriteStep> WriteSteps { get; init; } = Array.Empty<MmsReportAttributeWriteStep>();
     public string Message { get; init; } = string.Empty;
+    public int PendingDeliveryOverflowCount { get; init; }
+    public bool DeliveryContinuityUnverified { get; init; }
 }
 
 public sealed class MmsPersistentReportMonitorStopResult
@@ -147,6 +195,7 @@ public sealed partial class MmsClientSession
         var dataSetCreated = false;
         var reservationTouched = false;
         var enabledByThisClient = false;
+        MmsPersistentReportMonitorSession? registeredSession = null;
         var isDynamic = plan.Mode == MmsReportSubscriptionPlanMode.DynamicDataSet;
 
         try
@@ -292,6 +341,14 @@ public sealed partial class MmsClientSession
                 };
             }
 
+            // Other RCB receive slices can drain the shared canonical FIFO during
+            // this method. Register this target before readback or GI so its
+            // initial image is never orphaned by a concurrent dispatcher.
+            registeredSession = new MmsPersistentReportMonitorSession(
+                plan, rcb, originalDataSetReference, isDynamic, deleteDynamicDataSetOnStop,
+                dataSetCreated, reservationTouched, enabledByThisClient);
+            RegisterPersistentReportMonitor(registeredSession);
+
             var afterEnableSnapshot = await CaptureReportControlSnapshotAsync(rcb, "after-enable", cancellationToken).ConfigureAwait(false);
             rcbSnapshots.Add(afterEnableSnapshot);
 
@@ -303,21 +360,10 @@ public sealed partial class MmsClientSession
                     warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
             }
 
-            var session = new MmsPersistentReportMonitorSession(
-                plan,
-                rcb,
-                originalDataSetReference,
-                isDynamic,
-                deleteDynamicDataSetOnStop,
-                dataSetCreated,
-                reservationTouched,
-                enabledByThisClient);
-            RegisterPersistentReportMonitor(session);
-
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = true,
-                Session = session,
+                Session = registeredSession,
                 WriteSteps = writes,
                 Warnings = warnings,
                 RcbSnapshots = rcbSnapshots,
@@ -327,6 +373,8 @@ public sealed partial class MmsClientSession
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
         {
+            if (registeredSession is not null)
+                UnregisterPersistentReportMonitor(registeredSession);
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = false,
@@ -380,7 +428,11 @@ public sealed partial class MmsClientSession
             Reports = reports,
             PollReads = pollReads,
             WriteSteps = writes,
-            Message = $"Report monitor slice: reports={reports.Count}, pollReads={pollReads.Count}."
+            PendingDeliveryOverflowCount = session.PendingDeliveryOverflowCount,
+            DeliveryContinuityUnverified = session.IsDeliveryContinuityUnverified,
+            Message = $"Report monitor slice: reports={reports.Count}, pollReads={pollReads.Count}, " +
+                $"pendingDeliveryOverflow={session.PendingDeliveryOverflowCount}, " +
+                $"continuityUnverified={session.IsDeliveryContinuityUnverified}."
         };
     }
 
@@ -463,7 +515,7 @@ public sealed partial class MmsClientSession
         };
     }
 
-    private void RegisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
+    internal void RegisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
     {
         lock (_persistentReportMonitorSync)
             _persistentReportMonitors.Add(session);
@@ -474,7 +526,7 @@ public sealed partial class MmsClientSession
         lock (_persistentReportMonitorSync)
             _persistentReportMonitors.Remove(session);
 
-        while (session.PendingReports.TryDequeue(out _))
+        while (session.TryDequeuePendingReport(out _))
         {
         }
     }
@@ -492,7 +544,7 @@ public sealed partial class MmsClientSession
             foreach (var session in _persistentReportMonitors)
             {
                 session.IsStopped = true;
-                while (session.PendingReports.TryDequeue(out _))
+                while (session.TryDequeuePendingReport(out _))
                 {
                 }
             }
@@ -616,11 +668,11 @@ public sealed partial class MmsClientSession
 
     private static void DrainPendingReports(MmsPersistentReportMonitorSession session, List<MmsReportFrame> destination)
     {
-        while (session.PendingReports.TryDequeue(out var frame))
+        while (session.TryDequeuePendingReport(out var frame))
             destination.Add(frame);
     }
 
-    private void RoutePersistentInformationReport(byte[] payload)
+    internal void RoutePersistentInformationReport(byte[] payload)
     {
         if (!MmsInformationReportDecoder.IsInformationReport(payload))
             return;
@@ -655,8 +707,16 @@ public sealed partial class MmsClientSession
         }
 
         var frame = MmsReportFrameMapper.Map(decoded, target.Plan.Members, DateTimeOffset.UtcNow);
+        if (!target.TryQueuePendingReport(frame))
+        {
+            Interlocked.Increment(ref _unroutedPersistentReportCount);
+            LastReceiveRoutingSummary = target.IsStopped
+                ? $"InformationReport arrived while {target.ReportControl.Reference} was stopping; no post-stop projection."
+                : $"Routed InformationReport for {target.ReportControl.Reference} could not enter its bounded delivery queue. " +
+                  $"Delivery continuity unverified; pendingOverflow={target.PendingDeliveryOverflowCount}.";
+            return;
+        }
         target.ObserveRoutedReport(frame);
-        target.PendingReports.Enqueue(frame);
         LastReceiveRoutingSummary =
             $"Routed InformationReport to {target.ReportControl.Reference} by {evidence}. RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}.";
     }

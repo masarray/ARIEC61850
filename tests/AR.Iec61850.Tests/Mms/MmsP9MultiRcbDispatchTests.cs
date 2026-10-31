@@ -22,7 +22,7 @@ public sealed class MmsP9MultiRcbDispatchTests
         {
             foreach (var session in sessions.Reverse())
             {
-                var dataSet = round % 3 switch
+                var dataSet = (round % 3) switch
                 {
                     0 => session.Plan.DataSetReference.Replace('.', '$'),
                     1 => "LLN0$" + session.Plan.DataSetReference.Split('.').Last(),

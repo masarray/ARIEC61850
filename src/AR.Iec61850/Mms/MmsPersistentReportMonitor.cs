@@ -196,6 +196,7 @@ public sealed partial class MmsClientSession
         var reservationTouched = false;
         var enabledByThisClient = false;
         MmsPersistentReportMonitorSession? registeredSession = null;
+        var keepRegisteredSession = false;
         var isDynamic = plan.Mode == MmsReportSubscriptionPlanMode.DynamicDataSet;
 
         try
@@ -360,6 +361,7 @@ public sealed partial class MmsClientSession
                     warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
             }
 
+            keepRegisteredSession = true;
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = true,
@@ -373,8 +375,6 @@ public sealed partial class MmsClientSession
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
         {
-            if (registeredSession is not null)
-                UnregisterPersistentReportMonitor(registeredSession);
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = false,
@@ -384,6 +384,13 @@ public sealed partial class MmsClientSession
                 DataSetSnapshots = dataSetSnapshots,
                 Message = $"Persistent report monitor start failed: {ex.GetType().Name}: {ex.Message}"
             };
+        }
+        finally
+        {
+            // Also runs for cancellation and unexpected exceptions: never leave
+            // an unowned monitor target registered after failed activation.
+            if (!keepRegisteredSession && registeredSession is not null)
+                UnregisterPersistentReportMonitor(registeredSession);
         }
     }
 

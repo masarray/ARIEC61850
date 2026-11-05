@@ -14,6 +14,12 @@ public sealed class MmsPersistentReportMonitorSession
     private long _firstRoutedReportUtcTicks;
     private long _lastRoutedReportUtcTicks;
     private int _routedReportCount;
+    private int _pendingReportCount;
+    private int _pendingDeliveryOverflowCount;
+    private int _pendingAdmissionsInFlight;
+    private int _stopped;
+    private readonly int _pendingReportCapacity;
+    internal const int DefaultPendingReportCapacity = 2048;
 
     internal MmsPersistentReportMonitorSession(
         MmsReportSubscriptionPlan plan,
@@ -23,8 +29,11 @@ public sealed class MmsPersistentReportMonitorSession
         bool deleteDynamicDataSetOnStop,
         bool dataSetCreated,
         bool reservationTouched,
-        bool enabledByThisClient)
+        bool enabledByThisClient,
+        int pendingReportCapacity = DefaultPendingReportCapacity)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pendingReportCapacity);
+        _pendingReportCapacity = Math.Min(pendingReportCapacity, DefaultPendingReportCapacity);
         Plan = plan;
         ReportControl = reportControl;
         OriginalDataSetReference = originalDataSetReference;
@@ -48,8 +57,17 @@ public sealed class MmsPersistentReportMonitorSession
     public DateTimeOffset LastReportAt { get; internal set; }
     public int ReportCount { get; internal set; }
     public int PollReadCount { get; internal set; }
-    public bool IsStopped { get; internal set; }
+    // Concurrent dispatch observes stops without relying on an unsynchronized
+    // auto-property read from an old immutable RCB registry snapshot.
+    public bool IsStopped
+    {
+        get => Volatile.Read(ref _stopped) != 0;
+        internal set => Volatile.Write(ref _stopped, value ? 1 : 0);
+    }
     public int RoutedReportCount => Volatile.Read(ref _routedReportCount);
+    public int PendingReportCount => Volatile.Read(ref _pendingReportCount);
+    public int PendingDeliveryOverflowCount => Volatile.Read(ref _pendingDeliveryOverflowCount);
+    public bool IsDeliveryContinuityUnverified => PendingDeliveryOverflowCount > 0;
     public DateTimeOffset? FirstRoutedReportAt => ToUtcTimestamp(Volatile.Read(ref _firstRoutedReportUtcTicks));
     public DateTimeOffset? LastRoutedReportAt => ToUtcTimestamp(Volatile.Read(ref _lastRoutedReportUtcTicks));
     public MmsPersistentReportTrafficState TrafficState => IsStopped
@@ -61,7 +79,75 @@ public sealed class MmsPersistentReportMonitorSession
         ? FirstRoutedReportAt.Value - StartedAt
         : null;
 
-    internal ConcurrentQueue<MmsReportFrame> PendingReports { get; } = new();
+    private ConcurrentQueue<MmsReportFrame> PendingReports { get; } = new();
+
+    // Capacity must be reserved atomically before enqueue. No blocking, hidden
+    // frame replacement or unbounded memory growth when a consumer stalls.
+    internal bool TryQueuePendingReport(MmsReportFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        if (IsStopped)
+            return false;
+
+        // A stop may begin after the first closed check. Acquire the small
+        // in-flight admission lease BEFORE checking again; lifecycle cleanup
+        // waits for leased writers outside the registry lock before draining.
+        Interlocked.Increment(ref _pendingAdmissionsInFlight);
+        try
+        {
+            if (IsStopped)
+                return false;
+
+            while (true)
+            {
+                if (IsStopped)
+                    return false;
+                var count = Volatile.Read(ref _pendingReportCount);
+                if (count >= _pendingReportCapacity)
+                {
+                    // A shutdown is not consumer lag; do not inflate overflow.
+                    if (IsStopped)
+                        return false;
+                    Interlocked.Increment(ref _pendingDeliveryOverflowCount);
+                    return false;
+                }
+                if (Interlocked.CompareExchange(ref _pendingReportCount, count + 1, count) == count)
+                    break;
+            }
+
+            // The admission lease makes this enqueue visible to shutdown
+            // before it can drain; no frame can arrive behind the final drain.
+            PendingReports.Enqueue(frame);
+            return true;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _pendingAdmissionsInFlight);
+        }
+    }
+
+    // Lifecycle-only barrier, never called from MMS receive hot path. All
+    // pending writers either completed enqueue or observed IsStopped before
+    // shutdown drains the queue. Later writers reject immediately.
+    internal void CompletePendingReportAdmissions()
+    {
+        IsStopped = true;
+        var spinner = new SpinWait();
+        while (Volatile.Read(ref _pendingAdmissionsInFlight) != 0)
+            spinner.SpinOnce();
+    }
+
+    internal bool TryDequeuePendingReport(out MmsReportFrame frame)
+    {
+        if (PendingReports.TryDequeue(out var queued))
+        {
+            Interlocked.Decrement(ref _pendingReportCount);
+            frame = queued;
+            return true;
+        }
+        frame = null!;
+        return false;
+    }
 
     internal void ObserveRoutedReport(MmsReportFrame frame)
     {
@@ -74,7 +160,9 @@ public sealed class MmsPersistentReportMonitorSession
 
     public string Summary =>
         $"persistent report monitor: rcb={ReportControl.Reference}, dataset={Plan.DataSetReference}, mode={Plan.Mode}, " +
-        $"traffic={TrafficState}, routedReports={RoutedReportCount}, drainedReports={ReportCount}, stopped={IsStopped}";
+        $"traffic={TrafficState}, routedReports={RoutedReportCount}, drainedReports={ReportCount}, " +
+        $"pendingReports={PendingReportCount}, pendingDeliveryOverflow={PendingDeliveryOverflowCount}, " +
+        $"deliveryContinuityUnverified={IsDeliveryContinuityUnverified}, stopped={IsStopped}";
 
     private static DateTimeOffset? ToUtcTimestamp(long ticks)
         => ticks <= 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
@@ -97,6 +185,8 @@ public sealed class MmsPersistentReportMonitorReceiveResult
     public IReadOnlyList<MmsReportPollRead> PollReads { get; init; } = Array.Empty<MmsReportPollRead>();
     public IReadOnlyList<MmsReportAttributeWriteStep> WriteSteps { get; init; } = Array.Empty<MmsReportAttributeWriteStep>();
     public string Message { get; init; } = string.Empty;
+    public int PendingDeliveryOverflowCount { get; init; }
+    public bool DeliveryContinuityUnverified { get; init; }
 }
 
 public sealed class MmsPersistentReportMonitorStopResult
@@ -110,6 +200,9 @@ public sealed partial class MmsClientSession
 {
     private readonly object _persistentReportMonitorSync = new();
     private readonly HashSet<MmsPersistentReportMonitorSession> _persistentReportMonitors = new();
+    // Immutable registry snapshot. The association receive loop must not lock
+    // and allocate a new array for every single InformationReport.
+    private MmsPersistentReportMonitorSession[] _activePersistentReportMonitors = Array.Empty<MmsPersistentReportMonitorSession>();
     private int _unroutedPersistentReportCount;
 
     /// <summary>
@@ -147,6 +240,8 @@ public sealed partial class MmsClientSession
         var dataSetCreated = false;
         var reservationTouched = false;
         var enabledByThisClient = false;
+        MmsPersistentReportMonitorSession? registeredSession = null;
+        var keepRegisteredSession = false;
         var isDynamic = plan.Mode == MmsReportSubscriptionPlanMode.DynamicDataSet;
 
         try
@@ -292,6 +387,14 @@ public sealed partial class MmsClientSession
                 };
             }
 
+            // Other RCB receive slices can drain the shared canonical FIFO during
+            // this method. Register this target before readback or GI so its
+            // initial image is never orphaned by a concurrent dispatcher.
+            registeredSession = new MmsPersistentReportMonitorSession(
+                plan, rcb, originalDataSetReference, isDynamic, deleteDynamicDataSetOnStop,
+                dataSetCreated, reservationTouched, enabledByThisClient);
+            RegisterPersistentReportMonitor(registeredSession);
+
             var afterEnableSnapshot = await CaptureReportControlSnapshotAsync(rcb, "after-enable", cancellationToken).ConfigureAwait(false);
             rcbSnapshots.Add(afterEnableSnapshot);
 
@@ -303,21 +406,11 @@ public sealed partial class MmsClientSession
                     warnings.Add("GI=true write failed or is not supported by this RCB. Waiting for spontaneous/integrity reports only.");
             }
 
-            var session = new MmsPersistentReportMonitorSession(
-                plan,
-                rcb,
-                originalDataSetReference,
-                isDynamic,
-                deleteDynamicDataSetOnStop,
-                dataSetCreated,
-                reservationTouched,
-                enabledByThisClient);
-            RegisterPersistentReportMonitor(session);
-
+            keepRegisteredSession = true;
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = true,
-                Session = session,
+                Session = registeredSession,
                 WriteSteps = writes,
                 Warnings = warnings,
                 RcbSnapshots = rcbSnapshots,
@@ -336,6 +429,13 @@ public sealed partial class MmsClientSession
                 DataSetSnapshots = dataSetSnapshots,
                 Message = $"Persistent report monitor start failed: {ex.GetType().Name}: {ex.Message}"
             };
+        }
+        finally
+        {
+            // Also runs for cancellation and unexpected exceptions: never leave
+            // an unowned monitor target registered after failed activation.
+            if (!keepRegisteredSession && registeredSession is not null)
+                UnregisterPersistentReportMonitor(registeredSession);
         }
     }
 
@@ -380,7 +480,11 @@ public sealed partial class MmsClientSession
             Reports = reports,
             PollReads = pollReads,
             WriteSteps = writes,
-            Message = $"Report monitor slice: reports={reports.Count}, pollReads={pollReads.Count}."
+            PendingDeliveryOverflowCount = session.PendingDeliveryOverflowCount,
+            DeliveryContinuityUnverified = session.IsDeliveryContinuityUnverified,
+            Message = $"Report monitor slice: reports={reports.Count}, pollReads={pollReads.Count}, " +
+                $"pendingDeliveryOverflow={session.PendingDeliveryOverflowCount}, " +
+                $"continuityUnverified={session.IsDeliveryContinuityUnverified}."
         };
     }
 
@@ -463,42 +567,69 @@ public sealed partial class MmsClientSession
         };
     }
 
-    private void RegisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
+    internal void RegisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
     {
+        ArgumentNullException.ThrowIfNull(session);
+        if (session.IsStopped)
+            throw new InvalidOperationException("Cannot register a stopped RCB monitor.");
         lock (_persistentReportMonitorSync)
-            _persistentReportMonitors.Add(session);
+        {
+            if (_persistentReportMonitors.Add(session))
+                PublishPersistentReportMonitorSnapshotLocked();
+        }
     }
 
     private void UnregisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
     {
         lock (_persistentReportMonitorSync)
-            _persistentReportMonitors.Remove(session);
+        {
+            // Mark stopped before a stale receiver can admit more frames, then
+            // publish the new registry for all future dispatch iterations.
+            session.IsStopped = true;
+            if (_persistentReportMonitors.Remove(session))
+                PublishPersistentReportMonitorSnapshotLocked();
+        }
 
-        while (session.PendingReports.TryDequeue(out _))
+        session.CompletePendingReportAdmissions();
+        while (session.TryDequeuePendingReport(out _))
         {
         }
     }
 
-    private MmsPersistentReportMonitorSession[] SnapshotPersistentReportMonitors()
-    {
-        lock (_persistentReportMonitorSync)
-            return _persistentReportMonitors.Where(x => !x.IsStopped).ToArray();
-    }
+    // Receive/dispatch is read-mostly. Membership changes happen only on
+    // activation, stop, and association reset. A volatile read gives every
+    // report an immutable, association-owned RCB registry with no monitor lock
+    // or per-frame snapshot allocation. Never publish mutable HashSet storage.
+    internal MmsPersistentReportMonitorSession[] SnapshotPersistentReportMonitors()
+        => Volatile.Read(ref _activePersistentReportMonitors);
 
-    private void ClearPersistentReportMonitors()
+    private void PublishPersistentReportMonitorSnapshotLocked()
+        => Volatile.Write(ref _activePersistentReportMonitors,
+            _persistentReportMonitors.Where(x => !x.IsStopped).ToArray());
+
+    internal void ClearPersistentReportMonitors()
     {
+        MmsPersistentReportMonitorSession[] retired;
         lock (_persistentReportMonitorSync)
         {
-            foreach (var session in _persistentReportMonitors)
-            {
+            retired = _persistentReportMonitors.ToArray();
+            foreach (var session in retired)
                 session.IsStopped = true;
-                while (session.PendingReports.TryDequeue(out _))
-                {
-                }
-            }
 
             _persistentReportMonitors.Clear();
+            Volatile.Write(ref _activePersistentReportMonitors,
+                Array.Empty<MmsPersistentReportMonitorSession>());
             Interlocked.Exchange(ref _unroutedPersistentReportCount, 0);
+        }
+
+        // Do not hold the registry lock while draining an overloaded RCB.
+        // In-flight stale snapshots see IsStopped and fail closed at queue admit.
+        foreach (var session in retired)
+        {
+            session.CompletePendingReportAdmissions();
+            while (session.TryDequeuePendingReport(out _))
+            {
+            }
         }
     }
 
@@ -616,11 +747,11 @@ public sealed partial class MmsClientSession
 
     private static void DrainPendingReports(MmsPersistentReportMonitorSession session, List<MmsReportFrame> destination)
     {
-        while (session.PendingReports.TryDequeue(out var frame))
+        while (session.TryDequeuePendingReport(out var frame))
             destination.Add(frame);
     }
 
-    private void RoutePersistentInformationReport(byte[] payload)
+    internal void RoutePersistentInformationReport(byte[] payload)
     {
         if (!MmsInformationReportDecoder.IsInformationReport(payload))
             return;
@@ -655,8 +786,16 @@ public sealed partial class MmsClientSession
         }
 
         var frame = MmsReportFrameMapper.Map(decoded, target.Plan.Members, DateTimeOffset.UtcNow);
+        if (!target.TryQueuePendingReport(frame))
+        {
+            Interlocked.Increment(ref _unroutedPersistentReportCount);
+            LastReceiveRoutingSummary = target.IsStopped
+                ? $"InformationReport arrived while {target.ReportControl.Reference} was stopping; no post-stop projection."
+                : $"Routed InformationReport for {target.ReportControl.Reference} could not enter its bounded delivery queue. " +
+                  $"Delivery continuity unverified; pendingOverflow={target.PendingDeliveryOverflowCount}.";
+            return;
+        }
         target.ObserveRoutedReport(frame);
-        target.PendingReports.Enqueue(frame);
         LastReceiveRoutingSummary =
             $"Routed InformationReport to {target.ReportControl.Reference} by {evidence}. RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}.";
     }
@@ -673,114 +812,160 @@ public sealed partial class MmsClientSession
     {
         ArgumentNullException.ThrowIfNull(active);
         ArgumentNullException.ThrowIfNull(header);
-        var candidates = active.Where(x => !x.IsStopped).ToArray();
-        if (candidates.Length == 0)
+
+        // The common exact-RptID path scans the immutable registry once.
+        // Do not allocate LINQ candidate arrays, even with many active RCBs.
+        // Keep exact ID > RCB affinity > exact DataSet > DataSet tail >
+        // single-active fallback, including the legacy ambiguity policy.
+        var reportId = NormalizeRoutingReference(header.ReportId);
+        var dataSet = NormalizeRoutingReference(header.DataSetReference);
+        var hasReportId = !string.IsNullOrWhiteSpace(reportId);
+        var hasDataSet = !string.IsNullOrWhiteSpace(dataSet);
+        var liveCount = 0;
+        var exactIdCount = 0;
+        MmsPersistentReportMonitorSession? sole = null;
+        MmsPersistentReportMonitorSession? exactIdCandidate = null;
+
+        for (var i = 0; i < active.Count; i++)
+        {
+            var candidate = active[i];
+            if (candidate.IsStopped)
+                continue;
+            sole = candidate;
+            liveCount++;
+            if (hasReportId &&
+                NormalizeRoutingReference(candidate.ReportControl.ReportId)
+                    .Equals(reportId, StringComparison.OrdinalIgnoreCase))
+            {
+                exactIdCandidate = candidate;
+                exactIdCount++;
+            }
+        }
+
+        if (liveCount == 0)
         {
             evidence = "no active persistent monitor";
             return null;
         }
 
-        var dataSet = NormalizeRoutingReference(header.DataSetReference);
-
-        // A recognized RptID cannot override a contradictory advertised DatSet.
-        // Some peers shorten the DatSet to LLN0$Name (or just Name), while
-        // others supply an exact LD/LN$Name. Match an abbreviated reference
-        // only at an explicit component boundary, never by a shared tail alone.
-        // An omitted DatSet preserves the legacy exact-RptID route.
-        bool ConflictsWithAdvertisedDataSet(MmsPersistentReportMonitorSession candidate)
+        if (exactIdCount == 1)
         {
-            if (string.IsNullOrWhiteSpace(dataSet))
-                return false;
-
-            var expected = NormalizeRoutingReference(candidate.Plan.DataSetReference);
-            if (string.IsNullOrWhiteSpace(expected))
-                return false; // No authoritative plan identity to contradict.
-
-            if (dataSet.Contains('/'))
-                return !expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase);
-
-            if (dataSet.Contains('.'))
+            if (ConflictsWithAdvertisedDataSet(exactIdCandidate!, dataSet))
             {
-                // Domain omitted: require the entire LN.DataSet suffix. A
-                // matching bare DataSet name under another LN is not enough.
-                if (expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase))
-                    return false;
-                var offset = expected.Length - dataSet.Length;
-                return offset <= 0 ||
-                       !expected.EndsWith(dataSet, StringComparison.OrdinalIgnoreCase) ||
-                       expected[offset - 1] != '/';
+                evidence = "RptID/DatSet conflict: report was quarantined before process-value projection";
+                return null;
             }
-
-            // Some peers omit both domain and LN. Retain explicit tail-only
-            // compatibility, but do not route a *different* advertised tail.
-            return !RoutingTail(expected).Equals(dataSet, StringComparison.OrdinalIgnoreCase);
+            evidence = "exact RptID";
+            return exactIdCandidate;
         }
 
-        var reportId = NormalizeRoutingReference(header.ReportId);
-        if (!string.IsNullOrWhiteSpace(reportId))
+        if (hasReportId)
         {
-            var exactRptId = candidates
-                .Where(x => NormalizeRoutingReference(x.ReportControl.ReportId).Equals(reportId, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (exactRptId.Length == 1)
+            MmsPersistentReportMonitorSession? affinityCandidate = null;
+            var affinityCount = 0;
+            for (var i = 0; i < active.Count; i++)
             {
-                if (ConflictsWithAdvertisedDataSet(exactRptId[0]))
-                {
-                    evidence = "RptID/DatSet conflict: report was quarantined before process-value projection";
-                    return null;
-                }
-                evidence = "exact RptID";
-                return exactRptId[0];
+                var candidate = active[i];
+                if (candidate.IsStopped || !HasRcbNameAffinity(reportId, candidate.ReportControl))
+                    continue;
+                affinityCandidate = candidate;
+                affinityCount++;
             }
 
-            var rcbAffinity = candidates.Where(x => HasRcbNameAffinity(reportId, x.ReportControl)).ToArray();
-            if (rcbAffinity.Length == 1)
+            if (affinityCount == 1)
             {
-                if (ConflictsWithAdvertisedDataSet(rcbAffinity[0]))
+                if (ConflictsWithAdvertisedDataSet(affinityCandidate!, dataSet))
                 {
                     evidence = "RptID/DatSet conflict: report was quarantined before process-value projection";
                     return null;
                 }
                 evidence = "RptID-to-RCB name affinity";
-                return rcbAffinity[0];
+                return affinityCandidate;
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(dataSet))
+        if (hasDataSet)
         {
-            var exactDataSet = candidates
-                .Where(x => NormalizeRoutingReference(x.Plan.DataSetReference).Equals(dataSet, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (exactDataSet.Length == 1)
+            var dataSetTail = RoutingTail(dataSet);
+            var hasDataSetTail = !string.IsNullOrWhiteSpace(dataSetTail);
+            MmsPersistentReportMonitorSession? exactDataSetCandidate = null;
+            MmsPersistentReportMonitorSession? tailDataSetCandidate = null;
+            var exactDataSetCount = 0;
+            var tailDataSetCount = 0;
+
+            for (var i = 0; i < active.Count; i++)
+            {
+                var candidate = active[i];
+                if (candidate.IsStopped)
+                    continue;
+                var expected = NormalizeRoutingReference(candidate.Plan.DataSetReference);
+                if (expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase))
+                {
+                    exactDataSetCandidate = candidate;
+                    exactDataSetCount++;
+                }
+                if (hasDataSetTail &&
+                    RoutingTail(expected).Equals(dataSetTail, StringComparison.OrdinalIgnoreCase))
+                {
+                    tailDataSetCandidate = candidate;
+                    tailDataSetCount++;
+                }
+            }
+
+            if (exactDataSetCount == 1)
             {
                 evidence = "exact DataSet";
-                return exactDataSet[0];
+                return exactDataSetCandidate;
             }
-
-            var dataSetTail = RoutingTail(dataSet);
-            var tailMatches = candidates
-                .Where(x => RoutingTail(NormalizeRoutingReference(x.Plan.DataSetReference)).Equals(dataSetTail, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (!string.IsNullOrWhiteSpace(dataSetTail) && tailMatches.Length == 1)
+            if (tailDataSetCount == 1)
             {
                 evidence = "DataSet tail";
-                return tailMatches[0];
+                return tailDataSetCandidate;
             }
         }
 
-        if (candidates.Length == 1)
+        if (liveCount == 1)
         {
-            if (ConflictsWithAdvertisedDataSet(candidates[0]))
+            if (ConflictsWithAdvertisedDataSet(sole!, dataSet))
             {
                 evidence = "single-monitor DatSet conflict: report was quarantined before process-value projection";
                 return null;
             }
             evidence = "single active monitor fallback";
-            return candidates[0];
+            return sole;
         }
 
         evidence = "ambiguous report identity; report was not projected against an arbitrary DataSet";
         return null;
+    }
+
+    // Fail closed only when an advertised DataSet contradicts the selected RCB.
+    // Partial identity is valid on some relays, but suffixes must match at the
+    // appropriate LN/DataSet component boundary.
+    private static bool ConflictsWithAdvertisedDataSet(
+        MmsPersistentReportMonitorSession candidate, string dataSet)
+    {
+        if (string.IsNullOrWhiteSpace(dataSet))
+            return false;
+
+        var expected = NormalizeRoutingReference(candidate.Plan.DataSetReference);
+        if (string.IsNullOrWhiteSpace(expected))
+            return false;
+
+        if (dataSet.Contains('/'))
+            return !expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase);
+
+        if (dataSet.Contains('.'))
+        {
+            if (expected.Equals(dataSet, StringComparison.OrdinalIgnoreCase))
+                return false;
+            var offset = expected.Length - dataSet.Length;
+            return offset <= 0 ||
+                   !expected.EndsWith(dataSet, StringComparison.OrdinalIgnoreCase) ||
+                   expected[offset - 1] != '/';
+        }
+
+        return !RoutingTail(expected).Equals(dataSet, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasRcbNameAffinity(string reportId, MmsReportControlCandidate reportControl)

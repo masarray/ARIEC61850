@@ -24,3 +24,12 @@ P9 now publishes immutable array snapshots only on membership mutations (activat
 The xUnit P9 performance fixture produces local timing and `GC.GetAllocatedBytesForCurrentThread()` counts for a synthetic warm four-RCB MMS BER routing workload. Wire PDUs are prebuilt outside the measurement. One strict *structural* assertion verifies stable snapshot reads allocate at most a negligible fixed runtime overhead; **no speed/throughput SLA is asserted on shared GitHub Actions hardware**. Interpret latency and allocated bytes/frame only comparatively at matched exact commit/runtime/host. This is not first-report physical latency, full socket throughput, process RSS, lossless SOE, or a 77/77 field acceptance claim.
 
 Regression also verifies no snapshot republish for duplicate registration, the published registry is empty after association reset, all old RCB targets are stopped and pending queues drained, and old session frames cannot be admitted again. Future optimization of the identity selector should use these baseline metrics and retain the ambiguous identity tests rather than introducing vendor shortcuts.
+
+
+## P9 dispatch finalization: allocation-free exact-ID selection and stop admission barrier
+
+The existing selector still created fresh LINQ `Where().ToArray()` candidate sets for *every* report after the registry snapshot was optimized. It now scans immutable active RCB references directly: exact RptID is a single-pass fast path; affinity and DataSet fallback are evaluated only if higher-priority identities fail. Existing precedence and fail-closed identity quarantine are preserved, including short DataSet names, duplicate identities, and zero-frame targets. An exact RptID-only synthetic allocation regression verifies repeated selection does not allocate candidate arrays.
+
+Previous stop/reset could drain a queue while a concurrent receive thread had reserved a delivery slot but had not enqueued its frame yet, leaving a stale frame behind after the final drain. A tiny nonblocking admission lease now lets lifecycle cleanup mark targets stopped, await only in-flight enqueue operations *off the hot path*, and then drain. `IsStopped` has volatile read/write semantics. A deterministic concurrent shutdown fixture starts four independent writers and validates that all old RCB queues are empty and never accept post-reset frames.
+
+These changes are source-level design and CI evidence, not claims of field-end-to-end latency, lossless operation or SG7 recovery.

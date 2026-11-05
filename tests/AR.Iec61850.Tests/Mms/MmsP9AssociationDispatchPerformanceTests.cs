@@ -39,6 +39,37 @@ public sealed class MmsP9AssociationDispatchPerformanceTests
     }
 
     [Fact]
+    public async Task ConcurrentShutdown_PreventsPostResetPendingFrameAdmission()
+    {
+        await using var client = new MmsClientSession();
+        var sessions = MmsP9MultiRcbDispatchTests.FourSessions(pendingCapacity: 128);
+        foreach (var session in sessions)
+            client.RegisterPersistentReportMonitor(session);
+
+        var frame = new MmsReportFrame();
+        using var start = new ManualResetEventSlim(false);
+        var writers = Enumerable.Range(0, 4).Select(index => Task.Run(() =>
+        {
+            start.Wait();
+            for (var i = 0; i < 4096; i++)
+                sessions[index].TryQueuePendingReport(frame);
+        })).ToArray();
+
+        start.Set();
+        // Concurrent shutdown, not a continuation that waits for all writers.
+        client.ClearPersistentReportMonitors();
+        await Task.WhenAll(writers);
+
+        Assert.Empty(client.SnapshotPersistentReportMonitors());
+        foreach (var session in sessions)
+        {
+            Assert.True(session.IsStopped);
+            Assert.Equal(0, session.PendingReportCount);
+            Assert.False(session.TryQueuePendingReport(frame));
+        }
+    }
+
+    [Fact]
     public async Task FourRcbBerDispatch_RecordsLatencyAndAllocationsWithoutFlakySpeedGate()
     {
         await using var client = new MmsClientSession();

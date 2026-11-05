@@ -158,6 +158,9 @@ public sealed partial class MmsClientSession
 {
     private readonly object _persistentReportMonitorSync = new();
     private readonly HashSet<MmsPersistentReportMonitorSession> _persistentReportMonitors = new();
+    // Immutable registry snapshot. The association receive loop must not lock
+    // and allocate a new array for every single InformationReport.
+    private MmsPersistentReportMonitorSession[] _activePersistentReportMonitors = Array.Empty<MmsPersistentReportMonitorSession>();
     private int _unroutedPersistentReportCount;
 
     /// <summary>
@@ -524,40 +527,62 @@ public sealed partial class MmsClientSession
 
     internal void RegisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
     {
+        ArgumentNullException.ThrowIfNull(session);
+        if (session.IsStopped)
+            throw new InvalidOperationException("Cannot register a stopped RCB monitor.");
         lock (_persistentReportMonitorSync)
-            _persistentReportMonitors.Add(session);
+        {
+            if (_persistentReportMonitors.Add(session))
+                PublishPersistentReportMonitorSnapshotLocked();
+        }
     }
 
     private void UnregisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
     {
         lock (_persistentReportMonitorSync)
-            _persistentReportMonitors.Remove(session);
+        {
+            if (_persistentReportMonitors.Remove(session))
+                PublishPersistentReportMonitorSnapshotLocked();
+        }
 
         while (session.TryDequeuePendingReport(out _))
         {
         }
     }
 
-    private MmsPersistentReportMonitorSession[] SnapshotPersistentReportMonitors()
-    {
-        lock (_persistentReportMonitorSync)
-            return _persistentReportMonitors.Where(x => !x.IsStopped).ToArray();
-    }
+    // Receive/dispatch is read-mostly. Membership changes happen only on
+    // activation, stop, and association reset. A volatile read gives every
+    // report an immutable, association-owned RCB registry with no monitor lock
+    // or per-frame snapshot allocation. Never publish mutable HashSet storage.
+    internal MmsPersistentReportMonitorSession[] SnapshotPersistentReportMonitors()
+        => Volatile.Read(ref _activePersistentReportMonitors);
 
-    private void ClearPersistentReportMonitors()
+    private void PublishPersistentReportMonitorSnapshotLocked()
+        => Volatile.Write(ref _activePersistentReportMonitors,
+            _persistentReportMonitors.Where(x => !x.IsStopped).ToArray());
+
+    internal void ClearPersistentReportMonitors()
     {
+        MmsPersistentReportMonitorSession[] retired;
         lock (_persistentReportMonitorSync)
         {
-            foreach (var session in _persistentReportMonitors)
-            {
+            retired = _persistentReportMonitors.ToArray();
+            foreach (var session in retired)
                 session.IsStopped = true;
-                while (session.TryDequeuePendingReport(out _))
-                {
-                }
-            }
 
             _persistentReportMonitors.Clear();
+            Volatile.Write(ref _activePersistentReportMonitors,
+                Array.Empty<MmsPersistentReportMonitorSession>());
             Interlocked.Exchange(ref _unroutedPersistentReportCount, 0);
+        }
+
+        // Do not hold the registry lock while draining an overloaded RCB.
+        // In-flight stale snapshots see IsStopped and fail closed at queue admit.
+        foreach (var session in retired)
+        {
+            while (session.TryDequeuePendingReport(out _))
+            {
+            }
         }
     }
 

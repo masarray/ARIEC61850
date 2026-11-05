@@ -110,7 +110,42 @@ public sealed class MmsP9MultiRcbDispatchTests
         Assert.True(sessions[0].IsDeliveryContinuityUnverified);
     }
 
-    private static MmsPersistentReportMonitorSession[] FourSessions(int pendingCapacity = 2048) =>
+    [Fact]
+    public async Task AssociationRegistry_UsesStableSnapshot_UntilMembershipChangesOrReset()
+    {
+        await using var client = new MmsClientSession();
+        var sessions = FourSessions();
+        foreach (var session in sessions)
+            client.RegisterPersistentReportMonitor(session);
+
+        var snapshot = client.SnapshotPersistentReportMonitors();
+        Assert.Equal(4, snapshot.Length);
+        for (var i = 0; i < 1024; i++)
+            Assert.Same(snapshot, client.SnapshotPersistentReportMonitors());
+
+        // Re-registering the same target is idempotent and does not force
+        // allocation or alter report ownership.
+        client.RegisterPersistentReportMonitor(sessions[0]);
+        Assert.Same(snapshot, client.SnapshotPersistentReportMonitors());
+
+        client.RoutePersistentInformationReport(
+            BuildReport("RPT_A", "LLN0$TT6DataSet3", true));
+        Assert.Equal(1, sessions[0].PendingReportCount);
+
+        // A reconnect must revoke every RCB of the old association, publish
+        // an empty registry atomically and drain its old pending deliveries.
+        client.ClearPersistentReportMonitors();
+        Assert.Empty(client.SnapshotPersistentReportMonitors());
+        Assert.All(sessions, session =>
+        {
+            Assert.True(session.IsStopped);
+            Assert.Equal(0, session.PendingReportCount);
+            Assert.False(session.TryQueuePendingReport(new MmsReportFrame()));
+        });
+        Assert.Equal(0, client.UnroutedPersistentReportCount);
+    }
+
+    internal static MmsPersistentReportMonitorSession[] FourSessions(int pendingCapacity = 2048) =>
     [
         Create("BrcbA01", "RPT_A", "TT6DataSet3", pendingCapacity),
         Create("BrcbB01", "RPT_B", "TT3DataSet02", pendingCapacity),
@@ -150,7 +185,7 @@ public sealed class MmsP9MultiRcbDispatchTests
             pendingReportCapacity: capacity);
     }
 
-    private static byte[] BuildReport(string reportId, string? dataSet, bool value)
+    internal static byte[] BuildReport(string reportId, string? dataSet, bool value)
     {
         var fields = new List<MmsDataValue>
         {

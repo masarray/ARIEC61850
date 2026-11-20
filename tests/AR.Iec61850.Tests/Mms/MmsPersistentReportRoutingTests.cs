@@ -218,6 +218,73 @@ public sealed class MmsPersistentReportRoutingTests
         Assert.Contains("ambiguous", evidence, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Selector_ExactReportIdDoesNotAllocateCandidateArraysPerFrame()
+    {
+        var candidates = new[]
+        {
+            CreateSession("BrcbA01", "RPT_A", "SG7_BCUMaster/LLN0.TT6DataSet3"),
+            CreateSession("BrcbB01", "RPT_B", "SG7_BCUMaster/LLN0.TT3DataSet02"),
+            CreateSession("BrcbI01", "RPT_I", "SG7_BCUMaster/LLN0.TT6DataSet4"),
+            CreateSession("BrcbD01", "RPT_D", "SG7_BCUMaster/LLN0.TT3DataSet01")
+        };
+        var header = new MmsReportHeader { ReportId = "RPT_A" };
+        for (var i = 0; i < 256; i++)
+            MmsClientSession.SelectPersistentReportMonitor(candidates, header, out _);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 8192; i++)
+        {
+            var result = MmsClientSession.SelectPersistentReportMonitor(candidates, header, out _);
+            if (!ReferenceEquals(candidates[0], result))
+                throw new InvalidOperationException("Exact Report ID routing changed in the measured dispatch path.");
+        }
+        var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.InRange(bytes, 0, 512);
+    }
+
+    [Fact]
+    public void Selector_StoppedRcbCannotShadowLiveRptIdOrDataSetIdentity()
+    {
+        var retired = CreateSession("BrcbA01", "DUPLICATE", "IEDLD0/LLN0.DS_A");
+        var live = CreateSession("BrcbB01", "DUPLICATE", "IEDLD0/LLN0.DS_A");
+        retired.IsStopped = true;
+        var selected = MmsClientSession.SelectPersistentReportMonitor(
+            [retired, live],
+            new MmsReportHeader { ReportId = "DUPLICATE", DataSetReference = "IEDLD0/LLN0$DS_A" },
+            out var evidence);
+        Assert.Same(live, selected);
+        Assert.Equal("exact RptID", evidence);
+    }
+
+    [Fact]
+    public void Selector_ConflictingAndAmbiguousCandidatesFailClosedAcrossOrdering()
+    {
+        var a = CreateSession("BrcbA01", "SAME", "IEDLD0/LLN0.DS_A");
+        var b = CreateSession("BrcbB01", "SAME", "IEDLD0/LLN0.DS_B");
+        var third = CreateSession("BrcbC01", "DIFFERENT", "IEDLD0/LLN0.DS_A");
+        foreach (var candidates in new[]
+        {
+            new[] { a, b, third },
+            new[] { third, b, a },
+            new[] { b, a, third }
+        })
+        {
+            // Duplicate RptID cannot substitute for a unique identity.
+            Assert.Null(MmsClientSession.SelectPersistentReportMonitor(
+                candidates, new MmsReportHeader { ReportId = "SAME" }, out var conflict));
+            Assert.Contains("ambiguous", conflict);
+
+            // Exact RptID on a different target with conflicting DatSet
+            // remains quarantined even though a DataSet-only target exists.
+            Assert.Null(MmsClientSession.SelectPersistentReportMonitor(
+                candidates,
+                new MmsReportHeader { ReportId = "DIFFERENT", DataSetReference = "IEDLD0/LLN0$DS_B" },
+                out var mismatch));
+            Assert.Contains("quarantined", mismatch);
+        }
+    }
+
     private static MmsPersistentReportMonitorSession CreateSession(string rcbName, string reportId, string dataSet)
     {
         var rcb = new MmsReportControlCandidate

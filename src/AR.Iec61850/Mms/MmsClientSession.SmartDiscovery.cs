@@ -221,11 +221,13 @@ public sealed partial class MmsClientSession
         var dataSetDirectorySummary = options.ReadDataSetDirectories
             ? $"dataset directories={successfulDataSetDirectories}/{dataSetReferences.Length}, dataset members={discoveredDataSetMembers}"
             : "dataset directories=deferred";
+        var probeBudget = Math.Min(inventory.ReportControls.Count,
+            Math.Max(0, options.MaxReportAttributeProbes));
         var reportSummary = !options.ProbeReportAttributes
             ? "report enrichment=deferred"
             : reportEnrichmentInterrupted
-                ? "report enrichment=partial"
-                : "report enrichment=completed";
+                ? $"report enrichment=partial (budget {probeBudget}/{inventory.ReportControls.Count} observed RCBs)"
+                : $"report enrichment=completed (budget {probeBudget}/{inventory.ReportControls.Count} observed RCBs; not full binding proof)";
 
         UpdateSmartDiscoveryCompleteness(snapshot, iedDirectory, inventory, dataSetDirectories);
         var kpi = LastSmartDiscoveryKpi;
@@ -269,12 +271,11 @@ public sealed partial class MmsClientSession
             !IsMmsInitiated)
             return;
 
-        var candidates = inventory.ReportControls
-            .OrderByDescending(control => control.Buffered)
-            .ThenByDescending(control =>
-                control.LogicalNode.Equals("LLN0", StringComparison.OrdinalIgnoreCase))
-            .Take(maxReportAttributeProbes)
-            .ToArray();
+        // Exact live RCBs only. Round-robin across observed numbered families
+        // before spending the finite 64-Read enrichment budget on sibling
+        // client slots. No new GetNameList, inferred binding or RCB write.
+        var candidates = MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(
+            inventory.ReportControls, maxReportAttributeProbes);
 
         // The association's negotiatedCalling is authoritative. Never create
         // speculative associations or exceed the transport's existing window.

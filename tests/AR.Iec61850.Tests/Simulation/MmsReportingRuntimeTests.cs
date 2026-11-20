@@ -129,6 +129,71 @@ public sealed class MmsReportingRuntimeTests
     }
 
     [Fact]
+    public async Task ReportingRuntime_ConcurrentGiBurst_IsSerializedInWireOrder()
+    {
+        var enteredFirstSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var twoReportsSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sent = new List<byte[]>();
+        var activeSends = 0;
+        var maxConcurrentSends = 0;
+
+        using var runtime = new MmsAssociationReportingRuntime(
+            () => CreateSession(),
+            async (payload, ct) =>
+            {
+                var active = Interlocked.Increment(ref activeSends);
+                maxConcurrentSends = Math.Max(maxConcurrentSends, active);
+                try
+                {
+                    if (active == 1 && sent.Count == 0)
+                    {
+                        enteredFirstSend.TrySetResult();
+                        await releaseFirstSend.Task.WaitAsync(ct);
+                    }
+
+                    lock (sent)
+                    {
+                        sent.Add(payload);
+                        if (sent.Count == 2)
+                            twoReportsSent.TrySetResult();
+                    }
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref activeSends);
+                }
+            });
+        var rcb = Assert.Single(runtime.States, state => !state.Definition.Buffered);
+        Assert.True(runtime.TryWriteRcbAttribute(
+            $"{rcb.MmsReference}$RptEna", MmsDataValue.Boolean(true), out var enabled));
+        Assert.Equal(0, enabled);
+        Assert.True(runtime.TryWriteRcbAttribute(
+            $"{rcb.MmsReference}$GI", MmsDataValue.Boolean(true), out var first));
+        Assert.Equal(0, first);
+        await enteredFirstSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(runtime.TryWriteRcbAttribute(
+            $"{rcb.MmsReference}$GI", MmsDataValue.Boolean(true), out var second));
+        Assert.Equal(0, second);
+
+        // If a per-report fire-and-forget Task can overtake the blocked first
+        // send, the observed active sender count or frame order would fail.
+        await Task.Delay(100);
+        Assert.Equal(1, Volatile.Read(ref activeSends));
+        Assert.Equal(1, maxConcurrentSends);
+        releaseFirstSend.TrySetResult();
+        await twoReportsSent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var decoded = sent.Select(payload =>
+            MmsReportFrameMapper.DecodeHeader(MmsInformationReportDecoder.Decode(payload)))
+            .ToArray();
+        Assert.Equal(new ulong?[] { 1, 2 }, decoded.Select(frame => frame.SequenceNumber));
+        Assert.Equal(1, maxConcurrentSends);
+        Assert.All(decoded, frame => Assert.Equal(rcb.RptId, frame.ReportId));
+    }
+
+    [Fact]
     public void ReportControlBlockLayout_UsesExpectedPackedListWidths()
     {
         var optionalFields = MmsReportControlBlockLayout.ParseOptionalFields(

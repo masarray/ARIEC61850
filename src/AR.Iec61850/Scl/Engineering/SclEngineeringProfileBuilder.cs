@@ -47,7 +47,7 @@ public sealed class SclEngineeringProfileBuilder
             LogicalDeviceCount = logicalDevices.Count(ld => Same(ld.IedName, i.Name))
         }).ToList();
 
-        AddStaticFindings(scl, accessPoints, logicalDevices, logicalNodes, externalReferences, findings);
+        AddStaticFindings(root, scl, accessPoints, logicalDevices, logicalNodes, externalReferences, findings);
 
         var capabilities = new SclEngineeringCapabilityMatrix
         {
@@ -104,13 +104,18 @@ public sealed class SclEngineeringProfileBuilder
             foreach (var ap in ied.Elements().Where(e => Is(e, "AccessPoint")))
             {
                 var server = ap.Elements().FirstOrDefault(e => Is(e, "Server"));
+                var owner = server is null
+                    ? SclServerAtModelResolver.ResolveOwner(ied, ap)
+                    : ap;
+                var effectiveServer = owner?.Elements().FirstOrDefault(e => Is(e, "Server"));
                 yield return new SclEngineeringAccessPoint
                 {
                     IedName = iedName,
                     Name = Attr(ap, "name"),
+                    // HasServer describes a physically declared Server, not ServerAt.
                     HasServer = server is not null,
                     Router = Attr(ap, "router"),
-                    LogicalDeviceCount = server?.Elements().Count(e => Is(e, "LDevice")) ?? 0
+                    LogicalDeviceCount = effectiveServer?.Elements().Count(e => Is(e, "LDevice")) ?? 0
                 };
             }
         }
@@ -230,6 +235,7 @@ public sealed class SclEngineeringProfileBuilder
     }
 
     private static void AddStaticFindings(
+        XElement root,
         SclDocument document,
         IReadOnlyList<SclEngineeringAccessPoint> accessPoints,
         IReadOnlyList<SclEngineeringLogicalDevice> logicalDevices,
@@ -244,7 +250,24 @@ public sealed class SclEngineeringProfileBuilder
             findings.Add(Finding("High", "SCL_NO_SERVER_MODEL", "No Server/LDevice model was found. The file cannot seed MMS model discovery or simulator model generation."));
 
         foreach (var ap in accessPoints.Where(a => !a.HasServer))
-            findings.Add(Finding("Warning", "SCL_ACCESS_POINT_WITHOUT_SERVER", $"AccessPoint {ap.IedName}/{ap.Name} has no Server element.", $"{ap.IedName}/{ap.Name}"));
+        {
+            var iedElement = root.Elements().FirstOrDefault(e =>
+                Is(e, "IED") && Same(Attr(e, "name"), ap.IedName));
+            var apElement = iedElement?.Elements().FirstOrDefault(e =>
+                Is(e, "AccessPoint") && Same(Attr(e, "name"), ap.Name));
+            var hasServerAt = apElement?.Elements().Any(e => Is(e, "ServerAt")) == true;
+            if (hasServerAt && iedElement is not null && apElement is not null &&
+                SclServerAtModelResolver.ResolveOwner(iedElement, apElement) is not null)
+                continue; // Valid ServerAt is not a broken/missing Server.
+
+            findings.Add(hasServerAt
+                ? Finding("High", "SCL_SERVER_AT_UNRESOLVED",
+                    $"AccessPoint {ap.IedName}/{ap.Name} has a dangling, ambiguous or cyclic ServerAt reference.",
+                    $"{ap.IedName}/{ap.Name}")
+                : Finding("Warning", "SCL_ACCESS_POINT_WITHOUT_SERVER",
+                    $"AccessPoint {ap.IedName}/{ap.Name} has no Server or ServerAt element.",
+                    $"{ap.IedName}/{ap.Name}"));
+        }
 
         foreach (var ln in logicalNodes.Where(l => string.IsNullOrWhiteSpace(l.LnType)))
             findings.Add(Finding("Warning", "SCL_LN_TYPE_MISSING", $"Logical node {ln.Reference} has no lnType binding.", ln.Reference));

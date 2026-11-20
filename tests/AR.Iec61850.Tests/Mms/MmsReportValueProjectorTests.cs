@@ -194,6 +194,94 @@ public sealed class MmsReportValueProjectorTests
     }
 
     [Theory]
+    [InlineData("C264CONTROL/CILO1.Mod", true)]
+    [InlineData("C264CONTROL/CSWI1.Mod", true)]
+    [InlineData("C264SYSTEM/LPHD1.PhyHealth", false)]
+    [InlineData("C264CONTROL/CILO1.Beh", false)]
+    public void C264_Typed_ST_Status_FCD_Projects_StVal_Quality_Time(
+        string memberReference, bool hasStSeld)
+    {
+        // Exact IEC 61850 ST declaration order in the supplied C264 IID:
+        // enumerated stVal, quality q, UTC t, optionally Boolean stSeld.
+        // The old generic projector left Mod and PhyHealth as Structure(...).
+        var at = new DateTimeOffset(2026, 10, 17, 2, 24, 5, TimeSpan.Zero);
+        var children = new List<MmsDataValue>
+        {
+            MmsDataValue.Integer(1),
+            MmsDataValue.BitString(3, [0x00, 0x00]),
+            MmsDataValue.UtcTime(new Iec61850UtcTime(at, 0))
+        };
+        if (hasStSeld)
+            children.Add(MmsDataValue.Boolean(false));
+        var frame = new MmsReportFrame
+        {
+            ReceivedAt = at,
+            Values =
+            [
+                new MmsReportValue
+                {
+                    Index = 0,
+                    Member = new MmsDataSetDirectoryMember
+                    {
+                        UserReference = memberReference,
+                        FunctionalConstraint = "ST"
+                    },
+                    Value = MmsDataValue.Structure(children),
+                    ReasonForInclusion = ["general-interrogation"]
+                }
+            ]
+        };
+
+        var projected = MmsReportValueProjector.Project(frame);
+        var update = Assert.Single(projected.Updates);
+        Assert.Equal(memberReference + ".stVal", update.Reference);
+        Assert.Equal("1", update.Value); // no invented on/off enum mapping
+        Assert.Equal("good", update.Quality);
+        Assert.Contains("2026-10-17", update.Timestamp, StringComparison.Ordinal);
+        Assert.True(update.HasValue);
+        Assert.True(update.HasQuality);
+        Assert.True(update.HasTimestamp);
+        Assert.Equal("projected-typed-enumerated-status", update.ProjectionStatus);
+        Assert.DoesNotContain(projected.Warnings, x => x.StartsWith("REPORT_RAW_STRUCT", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("MX", false, false, false)]
+    [InlineData("ST", true, false, false)]
+    [InlineData("ST", false, true, false)]
+    [InlineData("ST", false, false, true)]
+    public void Typed_Enum_Status_Rejects_Unverified_Tuple_Shape(
+        string fc, bool wrongQuality, bool wrongTimestamp, bool wrongFourth)
+    {
+        var at = new DateTimeOffset(2026, 10, 17, 2, 24, 5, TimeSpan.Zero);
+        var payload = MmsDataValue.Structure([
+            MmsDataValue.Integer(1),
+            wrongQuality ? MmsDataValue.Boolean(false) : MmsDataValue.BitString(3, [0x00, 0x00]),
+            wrongTimestamp ? MmsDataValue.Boolean(false) : MmsDataValue.UtcTime(new Iec61850UtcTime(at, 0)),
+            wrongFourth ? MmsDataValue.Integer(99) : MmsDataValue.Boolean(false)
+        ]);
+        var frame = new MmsReportFrame
+        {
+            ReceivedAt = at,
+            Values = [new MmsReportValue
+            {
+                Index = 0,
+                Member = new MmsDataSetDirectoryMember
+                {
+                    UserReference = "C264CONTROL/CILO1.Mod",
+                    FunctionalConstraint = fc
+                },
+                Value = payload
+            }]
+        };
+        var projected = MmsReportValueProjector.Project(frame);
+        Assert.DoesNotContain(projected.Updates,
+            x => x.Reference.Equals("C264CONTROL/CILO1.Mod.stVal", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(projected.Warnings,
+            x => x.StartsWith("REPORT_RAW_STRUCT:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
     [InlineData(0x40, "off")]
     [InlineData(0x80, "on")]
     public void Project_Decodes_TwoBit_Dbpos_Report_For_Both_Directions(byte encoded, string expected)

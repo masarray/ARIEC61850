@@ -87,7 +87,7 @@ public static class SclAssistedMmsAssociationCandidateResolver
         var tsel = ParseSelector(remote, "OSI-TSEL", remote.Association.TransportSelector, errors);
         var ssel = ParseSelector(remote, "OSI-SSEL", remote.Association.SessionSelector, errors);
         var psel = ParseSelector(remote, "OSI-PSEL", remote.Association.PresentationSelector, errors);
-        var apTitle = ParseApTitle(remote, remote.Association.ApTitle, errors);
+        var apTitle = ParseApTitle(remote, remote.Association.ApTitle, errors, warnings);
         var aeQualifier = ParseAeQualifier(remote, errors);
 
         var fields = new[]
@@ -548,7 +548,8 @@ public static class SclAssistedMmsAssociationCandidateResolver
     private static ApTitleConstraint ParseApTitle(
         SclMmsAccessPoint remote,
         string text,
-        ICollection<string> errors)
+        ICollection<string> errors,
+        ICollection<string> warnings)
     {
         const string name = "OSI-AP-Title";
         if (remote.AmbiguousParameters.Contains(name))
@@ -568,30 +569,14 @@ public static class SclAssistedMmsAssociationCandidateResolver
                 new SclAssociationFieldEvidence { Name = name, State = SclAssociationFieldState.Unspecified });
         }
 
-        var tokens = text.Split(
-            [',', '.', ' ', ';'],
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (tokens.Length < 2)
+        if (!SclApTitleOidNotation.TryParse(text, out var arcs, out var packed, out var error))
         {
-            errors.Add($"SCL OSI-AP-Title '{text}' does not contain a valid OID.");
+            errors.Add(error);
             return InvalidApTitle(text);
         }
 
-        var arcs = new uint[tokens.Length];
-        for (var i = 0; i < tokens.Length; i++)
-        {
-            if (!uint.TryParse(tokens[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out arcs[i]))
-            {
-                errors.Add($"SCL OSI-AP-Title '{text}' contains an invalid OID arc '{tokens[i]}'.");
-                return InvalidApTitle(text);
-            }
-        }
-
-        if (arcs[0] > 2 || (arcs[0] < 2 && arcs[1] > 39))
-        {
-            errors.Add($"SCL OSI-AP-Title '{text}' violates ASN.1 object-identifier arc rules.");
-            return InvalidApTitle(text);
-        }
+        if (packed)
+            warnings.Add(SclApTitleOidNotation.CompatibilityWarning(text, arcs));
 
         return new ApTitleConstraint(
             SclAssociationFieldState.PresentValid,

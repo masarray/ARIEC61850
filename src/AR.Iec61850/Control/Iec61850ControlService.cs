@@ -41,6 +41,128 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             cancellationToken);
     }
 
+    /// <summary>
+    /// Read-only exact CF ctlModel probe. An unsuccessful read, unknown encoding,
+    /// and an explicitly reported StatusOnly model are distinct outcomes.
+    /// Never discovers variable directories or writes any control service.
+    /// </summary>
+    public Task<Iec61850ControlModelProbe> ProbeControlModelAsync(
+        MmsClientSession session,
+        string objectReference,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return ProbeControlModelCoreAsync(new MmsClientControlTransport(session), objectReference, cancellationToken);
+    }
+
+    internal async Task<Iec61850ControlModelProbe> ProbeControlModelCoreAsync(
+        IIec61850ControlTransport transport,
+        string objectReference,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+        if (!transport.IsAssociated)
+            throw new InvalidOperationException("IEC 61850 ctlModel probe requires an active MMS association.");
+
+        var references = Iec61850ControlObjectReferences.Parse(objectReference);
+        var read = await transport.ReadAsync(references.CtlModel, cancellationToken).ConfigureAwait(false);
+        var kind = read.Value?.Kind.ToString() ?? "Unavailable";
+        var numeric = read.Value?.Kind is MmsDataKind.Integer or MmsDataKind.Unsigned
+            ? Convert.ToString(read.Value.Value, System.Globalization.CultureInfo.InvariantCulture) ?? ""
+            : "";
+        var model = read.IsSuccess && read.Value != null
+            ? DecodeControlModel(read.Value)
+            : Iec61850ControlModel.Unknown;
+        var decoded = read.IsSuccess && read.Value != null && model != Iec61850ControlModel.Unknown;
+        var detail = !read.IsSuccess || read.Value == null
+            ? $"MMS Read failed/unavailable: {read.Message}"
+            : !decoded
+                ? $"MMS Read returned unsupported ctlModel encoding/value ({kind}, {numeric})."
+                : $"Exact MMS Read returned ctlModel={numeric} ({model}).";
+        return new Iec61850ControlModelProbe(
+            references.ObjectReference,
+            references.CtlModel.ToString(),
+            read.IsSuccess && read.Value != null,
+            decoded,
+            model,
+            kind,
+            numeric,
+            detail,
+            BoundedHex(transport.LastRequestHex),
+            BoundedHex(transport.LastResponseHex));
+    }
+
+    /// <summary>
+    /// Explicit commissioning-only ctlModel update. The caller must confirm
+    /// device authorization separately. One exact CF write at most; no fallback
+    /// sequence or implicit command Operate is attempted.
+    /// </summary>
+    public Task<Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(
+        MmsClientSession session, string objectReference,
+        Iec61850ControlModel expectedLiveModel, Iec61850ControlModel requestedModel,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return ConfigureControlModelCoreAsync(
+            new MmsClientControlTransport(session), objectReference,
+            expectedLiveModel, requestedModel, cancellationToken);
+    }
+
+    internal async Task<Iec61850ControlModelConfigurationResult> ConfigureControlModelCoreAsync(
+        IIec61850ControlTransport transport, string objectReference,
+        Iec61850ControlModel expectedLiveModel, Iec61850ControlModel requestedModel,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+        if (!transport.IsAssociated)
+            throw new InvalidOperationException("Control model configuration requires an active MMS association.");
+        if (expectedLiveModel == Iec61850ControlModel.Unknown ||
+            requestedModel is not (Iec61850ControlModel.StatusOnly or Iec61850ControlModel.DirectNormal or
+                Iec61850ControlModel.SelectBeforeOperateNormal or
+                Iec61850ControlModel.DirectEnhanced or
+                Iec61850ControlModel.SelectBeforeOperateEnhanced))
+            throw new ArgumentOutOfRangeException(nameof(requestedModel),
+                "Only exact, known control models 0-4 can be commissioned.");
+
+        var reference = Iec61850ControlObjectReferences.Parse(objectReference).CtlModel;
+        var before = await ProbeControlModelCoreAsync(
+            transport, objectReference, cancellationToken).ConfigureAwait(false);
+        if (!before.Decoded || before.ControlModel != expectedLiveModel)
+            return new Iec61850ControlModelConfigurationResult(
+                false, false, before.ControlModel, Iec61850ControlModel.Unknown,
+                reference.ToString(),
+                $"No Write: live ctlModel changed or could not be verified. Expected={expectedLiveModel}; {before.Detail}");
+
+        if (expectedLiveModel == requestedModel)
+            return new Iec61850ControlModelConfigurationResult(
+                false, true, before.ControlModel, before.ControlModel,
+                reference.ToString(), "No Write: requested ctlModel is already active.");
+
+        // Deliberate one-shot configuration: no retries, no auto-rollback.
+        var write = await transport.WriteControlAsync(
+            reference, MmsDataValue.Integer((long)requestedModel), cancellationToken)
+            .ConfigureAwait(false);
+        var writeAccepted = write.IsSuccess && write.AccessResults.All(x => x.IsSuccess);
+        if (!writeAccepted)
+            return new Iec61850ControlModelConfigurationResult(
+                false, false, before.ControlModel, Iec61850ControlModel.Unknown,
+                reference.ToString(),
+                $"MMS ctlModel Write rejected; readback not assumed. {write.Message}");
+
+        var after = await ProbeControlModelCoreAsync(
+            transport, objectReference, cancellationToken).ConfigureAwait(false);
+        var verified = after.Decoded && after.ControlModel == requestedModel;
+        return new Iec61850ControlModelConfigurationResult(
+            true, verified, before.ControlModel, after.ControlModel,
+            reference.ToString(),
+            verified
+                ? $"ctlModel Write accepted and exact MMS readback confirmed {requestedModel}."
+                : $"Write accepted but readback is not verified: {after.Detail}. Do not Operate until reinspection.");
+    }
+
+    private static string BoundedHex(string? hex)
+        => string.IsNullOrWhiteSpace(hex) ? "" : hex.Length <= 512 ? hex : hex[..512] + "… (truncated)";
+
     internal Task<Iec61850ControlObjectSession> OpenCoreAsync(
         IIec61850ControlTransport transport,
         string objectReference,
@@ -121,12 +243,48 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             _options.DefaultOperateTimeout,
             cancellationToken).ConfigureAwait(false);
 
-        var status = FindStatusReference(references, domainNames);
+        var isBooleanControl = ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase);
+        var isStepShapedControl =
+            (ctlValSpecification.MmsType.Equals("bit-string", StringComparison.OrdinalIgnoreCase) &&
+             ctlValSpecification.Size == 2) ||
+            ctlValSpecification.MmsType is "integer" or "unsigned";
+        var status = await FindStatusReferenceAsync(transport, references, domainNames,
+            isBooleanControl, isStepShapedControl, cancellationToken).ConfigureAwait(false);
+        var liveDoublePoint = status.TypedDoublePoint;
+        if (!status.TypedStatusRead && !liveDoublePoint &&
+            ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase) &&
+            status.Reference.Equals(references.ObjectReference + ".stVal",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            // A standard DPC can use a Boolean Oper.ctlVal while returning
+            // two-bit coded stVal. Verify the actual wire shape, not a prefix,
+            // a DO called Pos, or a remembered SCL CDC.
+            var statusRead = await transport.ReadAsync(
+                MmsObjectReference.Parse(status.Reference, "ST"),
+                cancellationToken).ConfigureAwait(false);
+            var actual = statusRead.Value;
+            liveDoublePoint = statusRead.IsSuccess && actual != null &&
+                actual.Kind == MmsDataKind.BitString &&
+                actual.RawValue.Count == 2 && actual.RawValue[0] == 6;
+            evidence.Add(liveDoublePoint
+                ? "statusShape=live-two-bit-double-point"
+                : "statusShape=not-proven-two-bit-double-point");
+        }
+        evidence.Add(string.IsNullOrWhiteSpace(status.Reference)
+            ? "status=not-verified"
+            : "status=live-confirmed:" + status.Reference);
         var supportsTimeActivated = operSpecification.Children.Any(x => NormalizeName(x.Name) == "opertm");
         var descriptor = new Iec61850ControlObjectDescriptor
         {
             ObjectReference = references.ObjectReference,
-            Cdc = InferCdc(ctlValSpecification),
+            // The exact live status shape distinguishes BSC TapChg's Tcmd enum
+            // from DPC even when both ctlVal types have a two-bit MMS encoding.
+            // Never classify a step-position value as an Open/Close switch.
+            Cdc = status.Reference.EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase)
+                ? "BSC"
+                : liveDoublePoint && ctlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase)
+                    ? "DPC"
+                    : InferCdc(ctlValSpecification),
             ControlModel = controlModel,
             CtlValSpecification = ctlValSpecification,
             OperSpecification = operSpecification,
@@ -134,6 +292,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
             CancelSpecification = cancelSpecification,
             StatusReference = status.Reference,
             StatusFunctionalConstraint = status.FunctionalConstraint,
+            LiveStatusIsDoublePoint = liveDoublePoint,
             SboTimeout = sboTimeout,
             OperTimeout = operTimeout,
             SupportsTimeActivatedOperate = supportsTimeActivated,
@@ -220,6 +379,7 @@ public sealed class Iec61850ControlService : IIec61850ControlService
     {
         var prefixes = new[]
         {
+            $"{references.LogicalNode}$ST${references.MmsDataObjectPath}$valWTr$posVal",
             $"{references.LogicalNode}$ST${references.MmsDataObjectPath}$stVal",
             $"{references.LogicalNode}$ST${references.MmsDataObjectPath}$posVal",
             $"{references.LogicalNode}$MX${references.MmsDataObjectPath}$mag$f",
@@ -237,6 +397,62 @@ public sealed class Iec61850ControlService : IIec61850ControlService
         // Hide the MMS functional-constraint segment in the user-facing IEC 61850
         // object reference: LD/LN.DO.DA instead of LD/LN.ST.DO.DA.
         return ($"{references.Domain}/{parts[0]}.{string.Join(".", parts.Skip(2))}", parts[1]);
+    }
+
+    // Some MMS NameLists omit ST scalar children or are truncated. A positive
+    // typed ctlModel and Boolean Oper.ctlVal already prove an actual control
+    // DataObject exists, regardless of arbitrary LN prefix/class/name. Allow
+    // exactly one additional *read-only* ST.stVal probe of that same DO.
+    // Only live two-bit evidence can authorize DPC; no name-only promotion.
+    private static async Task<(string Reference, string FunctionalConstraint, bool TypedDoublePoint, bool TypedStatusRead)> FindStatusReferenceAsync(
+        IIec61850ControlTransport transport, Iec61850ControlObjectReferences references,
+        IReadOnlyList<string> names, bool booleanControl, bool stepControl,
+        CancellationToken cancellationToken)
+    {
+        var exact = FindStatusReference(references, names);
+        if (!string.IsNullOrWhiteSpace(exact.Reference))
+            return (exact.Reference, exact.FunctionalConstraint, false, false);
+        var root = references.LogicalNode + "$ST$" + references.MmsDataObjectPath;
+        var hasListedStatusRoot = names.Any(name =>
+            name.Equals(root, StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith(root + "$", StringComparison.OrdinalIgnoreCase));
+        var standardPosition = Iec61850ControlSemanticResolver.IsStandardPosition(references.ObjectReference);
+
+        // A sparse NameList cannot hide a real renamed control. Boolean
+        // control structures may be SPC or DPC: only a typed ST read
+        // distinguishes them. Other unknown objects stay fail-closed.
+        if (!hasListedStatusRoot && !standardPosition && !booleanControl && !stepControl)
+            return (exact.Reference, exact.FunctionalConstraint, false, false);
+
+        // Boolean controls have one ST.stVal candidate. A typed two-bit
+        // step command may be BSC (valWTr.posVal) or DPC (stVal): try these
+        // two exact leaves at most, never broaden to wildcard NameList reads.
+        var candidates = booleanControl || standardPosition
+            ? new[] { (Suffix: "$stVal", Path: ".stVal", IsStep: false) }
+            : new[]
+            {
+                (Suffix: "$valWTr$posVal", Path: ".valWTr.posVal", IsStep: true),
+                (Suffix: "$stVal", Path: ".stVal", IsStep: false)
+            };
+        foreach (var candidate in candidates)
+        {
+            var item = new MmsObjectReference(references.Domain, root + candidate.Suffix, "ST");
+            var read = await transport.ReadAsync(item, cancellationToken).ConfigureAwait(false);
+            if (!read.IsSuccess || read.Value == null)
+                continue;
+            var value = read.Value;
+            var isExactTwoBitStatus = value.Kind == MmsDataKind.BitString &&
+                value.RawValue.Count == 2 && value.RawValue[0] == 6;
+            var valid = candidate.IsStep
+                ? value.Kind is MmsDataKind.Integer or MmsDataKind.Unsigned
+                : standardPosition && !booleanControl ? isExactTwoBitStatus :
+                    isExactTwoBitStatus || value.Kind == MmsDataKind.Boolean;
+            if (valid)
+                return (references.Domain + "/" + references.LogicalNode + "." +
+                        references.MmsDataObjectPath.Replace('$', '.') + candidate.Path,
+                        "ST", isExactTwoBitStatus, true);
+        }
+        return (exact.Reference, exact.FunctionalConstraint, false, false);
     }
 
     private static string InferCdc(MmsTypeSpecificationNode ctlVal)
@@ -258,3 +474,27 @@ public sealed class Iec61850ControlService : IIec61850ControlService
     private static string NormalizeName(string value)
         => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 }
+
+
+/// <summary>Read-only ctlModel evidence; not permission to send an MMS control write.</summary>
+public sealed record Iec61850ControlModelProbe(
+    string ObjectReference,
+    string MmsReference,
+    bool ReadSucceeded,
+    bool Decoded,
+    Iec61850ControlModel ControlModel,
+    string RawKind,
+    string RawScalar,
+    string Detail,
+    string RequestHexPreview,
+    string ResponseHexPreview);
+
+
+/// <summary>Configuration result is not permission to operate primary equipment.</summary>
+public sealed record Iec61850ControlModelConfigurationResult(
+    bool WriteAccepted,
+    bool ReadbackVerified,
+    Iec61850ControlModel BeforeModel,
+    Iec61850ControlModel AfterModel,
+    string MmsReference,
+    string Detail);

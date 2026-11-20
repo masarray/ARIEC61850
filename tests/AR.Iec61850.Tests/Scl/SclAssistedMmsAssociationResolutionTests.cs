@@ -156,6 +156,54 @@ public sealed class SclAssistedMmsAssociationResolutionTests
             field.State == SclAssociationFieldState.Ambiguous);
     }
 
+    [Fact]
+    public void Resolve_ZivStylePackedFirstSubidentifier_ProducesExactWireOid_WithoutDiscovery()
+    {
+        var remote = BuildRemote(
+            tsel: "0001",
+            ssel: "0001",
+            psel: "00000001",
+            apTitle: "41,1,999,1",
+            aeQualifierText: "12",
+            aeQualifier: 12);
+
+        var exact = SclAssistedMmsAssociationPlanBuilder.BuildExact(
+            remote, MmsLocalAssociationProfile.ExistingRuntimeDefault);
+        Assert.True(exact.IsSuccess, string.Join(" | ", exact.Errors));
+        Assert.Equal(new uint[] { 1, 1, 1, 999, 1 }, exact.Plan!.Association.Called.ApTitle);
+        Assert.Contains(exact.Warnings, message => message.Contains("BER-packed", StringComparison.Ordinal));
+
+        var result = SclAssistedMmsAssociationCandidateResolver.Resolve(
+            remote, MmsLocalAssociationProfile.ExistingRuntimeDefault);
+        Assert.True(result.IsSuccess, string.Join(" | ", result.Errors));
+        Assert.Equal(SclAssociationCandidateSource.ExactScl, result.Candidates[0].Source);
+        Assert.Contains(result.Warnings, message =>
+            message.Contains("41,1,999,1", StringComparison.Ordinal) &&
+            message.Contains("1,1,1,999,1", StringComparison.Ordinal));
+
+        var wire = AcseAssociationRequestIdentityReader.Read(
+            result.Candidates[0].AssociationProfile.Payload,
+            result.Candidates[0].Cotp.DestinationTsap);
+        Assert.Equal(new uint[] { 1, 1, 1, 999, 1 }, wire.CalledApTitle);
+        Assert.Equal(12, wire.CalledAeQualifier);
+    }
+
+    [Theory]
+    [InlineData("80,1,999,1")]
+    [InlineData("41")]
+    [InlineData("41,invalid,999,1")]
+    [InlineData("3,1,999,1")]
+    public void Resolve_StillRejectsUnprovenMalformedApTitles(string title)
+    {
+        var remote = BuildRemote("0001", "0001", "00000001", title, "12", 12);
+        var resolution = SclAssistedMmsAssociationCandidateResolver.Resolve(
+            remote, MmsLocalAssociationProfile.ExistingRuntimeDefault);
+        Assert.False(resolution.IsSuccess);
+        Assert.Empty(resolution.Candidates);
+        Assert.Contains(resolution.Fields, f => f.Name == "OSI-AP-Title" &&
+            f.State == SclAssociationFieldState.Invalid);
+    }
+
     private static SclMmsAccessPoint BuildRemote(
         string tsel,
         string ssel,

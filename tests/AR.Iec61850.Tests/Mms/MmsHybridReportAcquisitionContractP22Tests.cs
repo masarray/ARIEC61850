@@ -17,6 +17,7 @@ public sealed class MmsHybridReportAcquisitionContractP22Tests
         Assert.True(options.AllowCallerOwnedReports);
         Assert.True(options.AllowStaticBrcb);
         Assert.True(options.AllowStaticUrcb);
+        Assert.False(options.AllowConfiguredStaticWithMissingReservationEvidence);
         Assert.True(options.AllowDynamicBrcb);
         Assert.True(options.AllowDynamicUrcb);
         Assert.True(options.AllowPollingFallback);

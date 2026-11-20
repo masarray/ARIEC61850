@@ -15,6 +15,13 @@ public sealed class LiveIedSclExportOptions
     /// when an implementation uses explicit communication-level LD names.
     /// </summary>
     public string IedNameOverride { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Optional evidence proved against the exact observed MMS domain set by
+    /// TrustedSclIedIdentityMatcher. Not a display alias or an IP-based guess.
+    /// Export fails closed on incomplete/colliding aliases.
+    /// </summary>
+    public AR.Iec61850.Discovery.LiveIedIdentity? VerifiedIdentity { get; init; }
     public string IpSubnet { get; init; } = "255.255.255.0";
     public string IpGateway { get; init; } = "0.0.0.0";
     public string OsiApTitle { get; init; } = string.Empty;

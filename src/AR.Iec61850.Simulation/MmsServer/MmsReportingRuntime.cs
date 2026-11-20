@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Threading.Channels;
 using AR.Iec61850.Asn1;
 using AR.Iec61850.Mms;
 
@@ -192,6 +193,17 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
     private readonly Dictionary<string, Timer> _integrityTimers = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _gate = new();
     private readonly CancellationTokenSource _cts = new();
+    // One FIFO per MMS association. A distinct Task.Run per report previously
+    // allowed send delegates to acquire the socket lock in a different order
+    // from the SqNum assignment, manufacturing on-wire discontinuities.
+    private readonly Channel<(MmsRcbRuntimeState State, byte Reason)> _sendQueue =
+        Channel.CreateUnbounded<(MmsRcbRuntimeState, byte)>(
+            new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                AllowSynchronousContinuations = false
+            });
     private bool _disposed;
 
     public MmsAssociationReportingRuntime(
@@ -226,6 +238,12 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
                 IntgPd = (uint)Math.Max(0, rcb.IntegrityPeriodMs)
             };
         }
+
+        // One asynchronous worker is allocated per association, not per report.
+        // Capture the token here: a delayed worker must never access a CTS
+        // after Dispose() has disposed its source.
+        var senderToken = _cts.Token;
+        _ = Task.Run(() => DrainReportQueueAsync(senderToken));
     }
 
     public IReadOnlyCollection<MmsRcbRuntimeState> States => _states.Values;
@@ -414,6 +432,7 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
             return;
 
         _disposed = true;
+        _sendQueue.Writer.TryComplete();
         _cts.Cancel();
         lock (_gate)
         {
@@ -449,21 +468,39 @@ public sealed class MmsAssociationReportingRuntime : IMmsAssociationRuntime, IDi
         if (_disposed)
             return;
 
-        _ = Task.Run(async () =>
+        // Channel FIFO is the report ordering authority. No per-report Task.Run,
+        // no competing asynchronous socket writers and no silent report drop.
+        _sendQueue.Writer.TryWrite((state, reason));
+    }
+
+    private async Task DrainReportQueueAsync(CancellationToken cancellationToken)
+    {
+        try
         {
-            try
+            await foreach (var request in _sendQueue.Reader.ReadAllAsync(cancellationToken)
+                               .ConfigureAwait(false))
             {
-                await SendReportAsync(state, reason, _cts.Token).ConfigureAwait(false);
+                try
+                {
+                    await SendReportAsync(request.State, request.Reason, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch (Exception ex) when (ex is IOException or ObjectDisposedException or
+                                           System.Net.Sockets.SocketException or InvalidOperationException)
+                {
+                    _activity?.Invoke(request.State.MmsReference, false,
+                        $"InformationReport send failed: {ex.Message}");
+                }
             }
-            catch (OperationCanceledException)
-            {
-                // Association closing.
-            }
-            catch (Exception ex) when (ex is IOException or ObjectDisposedException or System.Net.Sockets.SocketException or InvalidOperationException)
-            {
-                _activity?.Invoke(state.MmsReference, false, $"InformationReport send failed: {ex.Message}");
-            }
-        }, CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Association closing: pending reports are not sent on a dead socket.
+        }
     }
 
     private async Task SendReportAsync(MmsRcbRuntimeState state, byte reason, CancellationToken cancellationToken)

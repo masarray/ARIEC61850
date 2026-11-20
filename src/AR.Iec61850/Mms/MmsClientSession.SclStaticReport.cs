@@ -45,15 +45,27 @@ public static class SclStaticReportActivationPolicy
 public sealed partial class MmsClientSession
 {
     /// <summary>
-    /// Starts a persistent monitor for a static DataSet already trusted from SCL.
+    /// Backward-compatible SCL entry point. Once a caller supplies an authoritative
+    /// ordered DataSet and configured RCB, activation is source-neutral: Discovery and
+    /// Open-SCL must execute the same wire lifecycle rather than maintain parallel
+    /// reporting implementations.
+    /// </summary>
+    public Task<MmsPersistentReportMonitorStartResult> StartStaticSclReportMonitorAsync(
+        MmsReportSubscriptionPlan plan,
+        bool triggerGeneralInterrogation = false,
+        CancellationToken cancellationToken = default)
+        => StartConfiguredStaticReportMonitorAsync(plan, triggerGeneralInterrogation, cancellationToken);
+
+    /// <summary>
+    /// Starts a persistent monitor for an authoritative configured static DataSet.
     /// The primary wire sequence is deliberately minimal: whole-RCB Read, optional
     /// URCB Resv=true, RptEna=true, then two whole-RCB verification Reads. BRCB
     /// ResvTms is a retry-only compatibility fallback when direct RptEna is rejected.
-    /// No DataSet browsing/creation and no GI are performed unless explicitly requested.
-    /// When explicit GI is requested, GI acceptance is part of startup success so a
-    /// caller cannot report an active initial-image monitor when the GI write was rejected.
+    /// No DataSet browsing/creation is performed here. When explicit GI is requested,
+    /// GI acceptance is part of startup success so a caller cannot report an active
+    /// initial-image monitor when the GI write was rejected.
     /// </summary>
-    public async Task<MmsPersistentReportMonitorStartResult> StartStaticSclReportMonitorAsync(
+    public async Task<MmsPersistentReportMonitorStartResult> StartConfiguredStaticReportMonitorAsync(
         MmsReportSubscriptionPlan plan,
         bool triggerGeneralInterrogation = false,
         CancellationToken cancellationToken = default)
@@ -66,7 +78,7 @@ public sealed partial class MmsClientSession
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = false,
-                Message = "Trusted-SCL static report activation requires a ready plan with selected RCB."
+                Message = "Configured static report activation requires a ready plan with selected RCB."
             };
         }
 
@@ -75,7 +87,7 @@ public sealed partial class MmsClientSession
             return new MmsPersistentReportMonitorStartResult
             {
                 IsSuccess = false,
-                Message = "Trusted-SCL static report activation never creates or mutates a dynamic DataSet."
+                Message = "Configured static report activation never creates or mutates a dynamic DataSet."
             };
         }
 
@@ -89,10 +101,44 @@ public sealed partial class MmsClientSession
 
         try
         {
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
+            var beforeSnapshot = await CaptureConfiguredStaticActivationSnapshotAsync(
                 rcb,
-                "scl-static-before-enable",
-                cancellationToken).ConfigureAwait(false));
+                "configured-static-before-enable",
+                includeReservationEvidence: true,
+                cancellationToken).ConfigureAwait(false);
+            snapshots.Add(beforeSnapshot);
+
+            var beforeProof = MmsConfiguredStaticActivationVerifier.VerifyBeforeWrite(
+                beforeSnapshot,
+                plan.DataSetReference);
+            if (!beforeProof.IsProven)
+            {
+                return new MmsPersistentReportMonitorStartResult
+                {
+                    IsSuccess = false,
+                    WriteSteps = writes,
+                    Warnings = warnings,
+                    RcbSnapshots = snapshots,
+                    Message = $"Configured static activation failed JIT pre-write proof: {beforeProof.Kind}: {beforeProof.Message}"
+                };
+            }
+
+            var normalPathWrites = new List<MmsReportControlSemanticWrite>
+            {
+                MmsReportControlSemanticWrite.ReportEnable(true)
+            };
+            if (!rcb.Buffered &&
+                rcb.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase))
+            {
+                normalPathWrites.Add(MmsReportControlSemanticWrite.Reservation(true));
+            }
+            if (triggerGeneralInterrogation)
+                normalPathWrites.Add(MmsReportControlSemanticWrite.GeneralInterrogation(true));
+
+            await PrimeReportSemanticTypeEvidenceFromStructureAsync(
+                rcb,
+                normalPathWrites,
+                cancellationToken).ConfigureAwait(false);
 
             monitor = new MmsPersistentReportMonitorSession(
                 plan,
@@ -107,10 +153,8 @@ public sealed partial class MmsClientSession
 
             if (!rcb.Buffered && rcb.Attributes.Contains("Resv", StringComparer.OrdinalIgnoreCase))
             {
-                var reserve = await WriteReportAttributeAsync(
-                    rcb,
-                    "Resv",
-                    MmsDataValue.Boolean(true),
+                var reserve = await WriteReportSemanticAttributeAsync(
+                    rcb, MmsReportControlSemanticWrite.Reservation(true),
                     cancellationToken).ConfigureAwait(false);
                 writes.Add(reserve);
                 reservationTouched = reserve.IsSuccess;
@@ -119,10 +163,8 @@ public sealed partial class MmsClientSession
                     warnings.Add("URCB Resv=true was not accepted; direct RptEna will still be attempted once.");
             }
 
-            var enable = await WriteReportAttributeAsync(
-                rcb,
-                "RptEna",
-                MmsDataValue.Boolean(true),
+            var enable = await WriteReportSemanticAttributeAsync(
+                rcb, MmsReportControlSemanticWrite.ReportEnable(true),
                 cancellationToken).ConfigureAwait(false);
             writes.Add(enable);
             enabled = enable.IsSuccess;
@@ -131,10 +173,8 @@ public sealed partial class MmsClientSession
                 rcb.Buffered &&
                 rcb.Attributes.Contains("ResvTms", StringComparer.OrdinalIgnoreCase))
             {
-                var reserveBrcb = await WriteReportAttributeAsync(
-                    rcb,
-                    "ResvTms",
-                    MmsDataValue.Unsigned(60),
+                var reserveBrcb = await WriteReportSemanticAttributeAsync(
+                    rcb, MmsReportControlSemanticWrite.ReservationTime(60),
                     cancellationToken).ConfigureAwait(false);
                 writes.Add(reserveBrcb);
                 reservationTouched = reserveBrcb.IsSuccess;
@@ -142,10 +182,8 @@ public sealed partial class MmsClientSession
 
                 if (reserveBrcb.IsSuccess)
                 {
-                    var retryEnable = await WriteReportAttributeAsync(
-                        rcb,
-                        "RptEna",
-                        MmsDataValue.Boolean(true),
+                    var retryEnable = await WriteReportSemanticAttributeAsync(
+                        rcb, MmsReportControlSemanticWrite.ReportEnable(true),
                         cancellationToken).ConfigureAwait(false);
                     writes.Add(retryEnable);
                     enabled = retryEnable.IsSuccess;
@@ -160,15 +198,11 @@ public sealed partial class MmsClientSession
                 if (reservationTouched)
                 {
                     var release = rcb.Buffered
-                        ? await TryWriteReportAttributeForCleanupAsync(
-                            rcb,
-                            "ResvTms",
-                            MmsDataValue.Unsigned(0),
+                        ? await TryWriteReportSemanticAttributeForCleanupAsync(
+                            rcb, MmsReportControlSemanticWrite.ReservationTime(0),
                             CancellationToken.None).ConfigureAwait(false)
-                        : await TryWriteReportAttributeForCleanupAsync(
-                            rcb,
-                            "Resv",
-                            MmsDataValue.Boolean(false),
+                        : await TryWriteReportSemanticAttributeForCleanupAsync(
+                            rcb, MmsReportControlSemanticWrite.Reservation(false),
                             CancellationToken.None).ConfigureAwait(false);
                     writes.Add(release);
                 }
@@ -179,27 +213,62 @@ public sealed partial class MmsClientSession
                     WriteSteps = writes,
                     Warnings = warnings,
                     RcbSnapshots = snapshots,
-                    Message = "RptEna=true was not accepted; trusted-SCL static report monitor was not started."
+                    Message = "RptEna=true was not accepted; configured static report monitor was not started."
                 };
             }
 
             monitor.EnabledByThisClient = true;
 
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
+            var afterEnable = await CaptureConfiguredStaticActivationSnapshotAsync(
                 rcb,
-                "scl-static-after-enable-1",
-                cancellationToken).ConfigureAwait(false));
-            snapshots.Add(await CaptureReportControlSnapshotAsync(
-                rcb,
-                "scl-static-after-enable-2",
-                cancellationToken).ConfigureAwait(false));
+                "configured-static-after-enable",
+                includeReservationEvidence: false,
+                cancellationToken).ConfigureAwait(false);
+            snapshots.Add(afterEnable);
+
+            var enableProof = MmsConfiguredStaticActivationVerifier.VerifyAfterEnable(
+                afterEnable,
+                plan.DataSetReference);
+            if (!enableProof.IsProven)
+            {
+                UnregisterPersistentReportMonitor(monitor);
+
+                writes.Add(await TryWriteReportSemanticAttributeForCleanupAsync(
+                    rcb,
+                    MmsReportControlSemanticWrite.ReportEnable(false),
+                    CancellationToken.None).ConfigureAwait(false));
+                enabled = false;
+                monitor.EnabledByThisClient = false;
+
+                if (reservationTouched)
+                {
+                    writes.Add(rcb.Buffered
+                        ? await TryWriteReportSemanticAttributeForCleanupAsync(
+                            rcb,
+                            MmsReportControlSemanticWrite.ReservationTime(0),
+                            CancellationToken.None).ConfigureAwait(false)
+                        : await TryWriteReportSemanticAttributeForCleanupAsync(
+                            rcb,
+                            MmsReportControlSemanticWrite.Reservation(false),
+                            CancellationToken.None).ConfigureAwait(false));
+                    reservationTouched = false;
+                    monitor.ReservationTouched = false;
+                }
+
+                return new MmsPersistentReportMonitorStartResult
+                {
+                    IsSuccess = false,
+                    WriteSteps = writes,
+                    Warnings = warnings,
+                    RcbSnapshots = snapshots,
+                    Message = $"Configured static activation failed post-enable proof: {enableProof.Kind}: {enableProof.Message}"
+                };
+            }
 
             if (triggerGeneralInterrogation)
             {
-                var gi = await WriteReportAttributeAsync(
-                    rcb,
-                    "GI",
-                    MmsDataValue.Boolean(true),
+                var gi = await WriteReportSemanticAttributeAsync(
+                    rcb, MmsReportControlSemanticWrite.GeneralInterrogation(true),
                     cancellationToken).ConfigureAwait(false);
                 writes.Add(gi);
 
@@ -208,10 +277,8 @@ public sealed partial class MmsClientSession
                     warnings.Add("Explicit GI=true request was rejected; initial-image startup failed closed.");
                     UnregisterPersistentReportMonitor(monitor);
 
-                    writes.Add(await TryWriteReportAttributeForCleanupAsync(
-                        rcb,
-                        "RptEna",
-                        MmsDataValue.Boolean(false),
+                    writes.Add(await TryWriteReportSemanticAttributeForCleanupAsync(
+                        rcb, MmsReportControlSemanticWrite.ReportEnable(false),
                         CancellationToken.None).ConfigureAwait(false));
                     enabled = false;
                     monitor.EnabledByThisClient = false;
@@ -219,15 +286,11 @@ public sealed partial class MmsClientSession
                     if (reservationTouched)
                     {
                         writes.Add(rcb.Buffered
-                            ? await TryWriteReportAttributeForCleanupAsync(
-                                rcb,
-                                "ResvTms",
-                                MmsDataValue.Unsigned(0),
+                            ? await TryWriteReportSemanticAttributeForCleanupAsync(
+                                rcb, MmsReportControlSemanticWrite.ReservationTime(0),
                                 CancellationToken.None).ConfigureAwait(false)
-                            : await TryWriteReportAttributeForCleanupAsync(
-                                rcb,
-                                "Resv",
-                                MmsDataValue.Boolean(false),
+                            : await TryWriteReportSemanticAttributeForCleanupAsync(
+                                rcb, MmsReportControlSemanticWrite.Reservation(false),
                                 CancellationToken.None).ConfigureAwait(false));
                         reservationTouched = false;
                         monitor.ReservationTouched = false;
@@ -252,8 +315,8 @@ public sealed partial class MmsClientSession
                 Warnings = warnings,
                 RcbSnapshots = snapshots,
                 Message = triggerGeneralInterrogation
-                    ? $"Trusted-SCL static report monitor armed for {rcb.Reference}; explicit one-shot GI=true was accepted after activation."
-                    : $"Trusted-SCL static report monitor armed for {rcb.Reference}; no DataSet discovery/mutation or GI was performed."
+                    ? $"Configured static report monitor armed for {rcb.Reference}; explicit one-shot GI=true was accepted after activation."
+                    : $"Configured static report monitor armed for {rcb.Reference}; no DataSet discovery/mutation or GI was performed."
             };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException or InvalidOperationException)
@@ -263,25 +326,19 @@ public sealed partial class MmsClientSession
 
             if (enabled)
             {
-                writes.Add(await TryWriteReportAttributeForCleanupAsync(
-                    rcb,
-                    "RptEna",
-                    MmsDataValue.Boolean(false),
+                writes.Add(await TryWriteReportSemanticAttributeForCleanupAsync(
+                    rcb, MmsReportControlSemanticWrite.ReportEnable(false),
                     CancellationToken.None).ConfigureAwait(false));
             }
 
             if (reservationTouched)
             {
                 writes.Add(rcb.Buffered
-                    ? await TryWriteReportAttributeForCleanupAsync(
-                        rcb,
-                        "ResvTms",
-                        MmsDataValue.Unsigned(0),
+                    ? await TryWriteReportSemanticAttributeForCleanupAsync(
+                        rcb, MmsReportControlSemanticWrite.ReservationTime(0),
                         CancellationToken.None).ConfigureAwait(false)
-                    : await TryWriteReportAttributeForCleanupAsync(
-                        rcb,
-                        "Resv",
-                        MmsDataValue.Boolean(false),
+                    : await TryWriteReportSemanticAttributeForCleanupAsync(
+                        rcb, MmsReportControlSemanticWrite.Reservation(false),
                         CancellationToken.None).ConfigureAwait(false));
             }
 
@@ -291,7 +348,7 @@ public sealed partial class MmsClientSession
                 WriteSteps = writes,
                 Warnings = warnings,
                 RcbSnapshots = snapshots,
-                Message = $"Trusted-SCL static report activation failed: {ex.GetType().Name}: {ex.Message}"
+                Message = $"Configured static report activation failed: {ex.GetType().Name}: {ex.Message}"
             };
         }
     }

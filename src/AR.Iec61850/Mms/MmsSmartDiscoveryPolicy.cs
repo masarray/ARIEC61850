@@ -19,6 +19,82 @@ internal static class MmsSmartDiscoveryPolicy
     }
 
     /// <summary>
+    /// Independent RCB read-only enrichment may fill the negotiated window,
+    /// but cannot exceed the peer's confirmed outstanding-calling capacity,
+    /// the finite report candidate count, or the existing hard worker cap.
+    /// Per-RCB fallback reads themselves remain ordered and serial.
+    /// </summary>
+    public static int ResolveReportEnrichmentWorkers(int effectiveWindow, int candidateCount)
+        => candidateCount <= 0 ? 0 :
+            Math.Min(Math.Clamp(effectiveWindow, 1, 8), candidateCount);
+
+    /// <summary>
+    /// Fairly samples exact, MMS-observed RCB instances under a fixed Read
+    /// budget. Large peers may expose many numbered client slots per configured
+    /// RCB family. Reading the first N sorted instances then biases discovery
+    /// toward only a few DataSets and can mislead an application into treating
+    /// every other DataSet as unreportable. One observed member per family is
+    /// read before spending more of the same budget on that family's siblings.
+    ///
+    /// The family key is a READ scheduling hint only: no RCB, DataSet binding,
+    /// availability, or write authority is fabricated from the prefix.
+    /// Every result must still be proven by an exact MMS Read of the observed
+    /// instance. The peer-negotiated worker window and original cap remain.
+    /// </summary>
+    public static MmsReportControlCandidate[] SelectReportEnrichmentCandidates(
+        IEnumerable<MmsReportControlCandidate> observed, int maxReads)
+    {
+        ArgumentNullException.ThrowIfNull(observed);
+        if (maxReads <= 0)
+            return Array.Empty<MmsReportControlCandidate>();
+
+        var families = observed
+            .Where(rcb => !string.IsNullOrWhiteSpace(rcb.Reference))
+            .DistinctBy(rcb => rcb.Reference, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(rcb => rcb.Buffered)
+            .ThenBy(rcb => rcb.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(rcb => rcb.LogicalNode, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(rcb => rcb.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(rcb => rcb.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(rcb => rcb.Reference, StringComparer.Ordinal)
+            .GroupBy(rcb => string.Concat(
+                rcb.Domain, "\u001F", rcb.LogicalNode, "\u001F",
+                rcb.FunctionalConstraint, "\u001F", RcbReadSchedulingFamily(rcb.Name)),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.ToArray())
+            .ToArray();
+
+        var result = new List<MmsReportControlCandidate>(Math.Min(maxReads, families.Sum(x => x.Length)));
+        for (var depth = 0; result.Count < maxReads; depth++)
+        {
+            var found = false;
+            foreach (var family in families)
+            {
+                if (depth >= family.Length)
+                    continue;
+                found = true;
+                result.Add(family[depth]);
+                if (result.Count == maxReads)
+                    break;
+            }
+
+            if (!found)
+                break;
+        }
+
+        return result.ToArray();
+    }
+
+    private static string RcbReadSchedulingFamily(string? name)
+    {
+        var value = name ?? string.Empty;
+        var stop = value.Length;
+        while (stop > 0 && value[stop - 1] >= '0' && value[stop - 1] <= '9')
+            stop--;
+        return stop == 0 ? value : value[..stop];
+    }
+
+    /// <summary>
     /// Selects the live domain set independently from any SCL hint. This is important:
     /// SCL may prioritize online work, but it must never manufacture or suppress live
     /// MMS evidence. Case-only collisions are collapsed deterministically because the
@@ -119,6 +195,55 @@ internal static class MmsSmartTypeProbePolicy
                 .ThenBy(node => node.Name, StringComparer.Ordinal)
                 .Where(node => requested.Contains(BuildReferenceKey(device.Name, node.Name)))
                 .Select(node => new MmsObjectReference(device.Name, node.Name, string.Empty)))
+            .ToArray();
+    }
+
+
+    /// <summary>
+    /// Wire-authoritative ST/MX LN candidates from successful DataSet directories.
+    /// No SCL guesses, no duplicate GVA requests, no extra name-list crawl.
+    /// </summary>
+    public static MmsObjectReference[] SelectUnprobedDataSetLogicalNodeRoots(
+        MmsIedModelDirectory directory,
+        IReadOnlyList<MmsDataSetDirectoryResult> directories,
+        IReadOnlyList<MmsVariableAccessAttributesResult> attemptedTypes)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(directories);
+        ArgumentNullException.ThrowIfNull(attemptedTypes);
+
+        var domains = directory.LogicalDevices.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var attempted = attemptedTypes
+            .Where(result => !result.Reference.Item.Contains('$'))
+            .Select(result => BuildReferenceKey(result.Reference.Domain, result.Reference.Item))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targets = new Dictionary<string, MmsObjectReference>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dataSet in directories.Where(dataSet => dataSet.IsSuccess))
+        foreach (var member in dataSet.Members)
+        {
+            if (!domains.Contains(member.Domain) ||
+                !(member.FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase) ||
+                  member.FunctionalConstraint.Equals("MX", StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var parts = member.MmsItemName.Split('$');
+            if (parts.Length < 3 ||
+                !parts[1].Equals(member.FunctionalConstraint, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var ln = parts[0].Trim();
+            if (ln.Length == 0 || ln.Length > 64 ||
+                !ln.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '_'))
+                continue;
+
+            var key = BuildReferenceKey(member.Domain, ln);
+            if (!attempted.Contains(key))
+                targets.TryAdd(key, new MmsObjectReference(member.Domain, ln, string.Empty));
+        }
+
+        return targets.Values
+            .OrderBy(root => root.Domain, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(root => root.Item, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 

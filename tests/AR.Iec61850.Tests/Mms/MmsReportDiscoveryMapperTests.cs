@@ -27,6 +27,7 @@ public class MmsReportDiscoveryMapperTests
 
         var inventory = MmsReportDiscoveryMapper.BuildInventory(snapshot);
 
+        Assert.Equal(MmsReportInventoryAuthority.LiveMmsObserved, inventory.Authority);
         Assert.Single(inventory.DataSets);
         Assert.Equal("IED1LD0/LLN0.DataSet", inventory.DataSets[0].Reference);
         Assert.Equal(2, inventory.ReportControls.Count);

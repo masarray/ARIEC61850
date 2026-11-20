@@ -8,6 +8,14 @@ namespace AR.Iec61850.Mms;
 public sealed partial class MmsClientSession
 {
     private readonly object _smartDiscoverySingleFlightSync = new();
+    // Reuse a complete legacy control directory once per association when the
+    // smart-discovery inventory is not present (notably trusted Open SCL).
+    // This is structural metadata only; ctlModel and Oper/SBOw types stay live.
+    private Task<IReadOnlyDictionary<string, IReadOnlyList<string>>>? _controlNameInventoryTask;
+    private object? _controlNameInventoryAssociationMarker;
+    private string _controlNameInventoryHost = string.Empty;
+    private int _controlNameInventoryPort;
+
     private object? _smartDiscoverySingleFlightAssociationMarker;
     private string _smartDiscoverySingleFlightHost = string.Empty;
     private int _smartDiscoverySingleFlightPort;
@@ -102,7 +110,52 @@ public sealed partial class MmsClientSession
             }
         }
 
-        return await DiscoverDomainVariableNamesAsync(cancellationToken).ConfigureAwait(false);
+        return await GetLegacyControlInventoryOnceAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetLegacyControlInventoryOnceAsync(
+        CancellationToken cancellationToken)
+    {
+        var marker = LastAssociationAttempts;
+        var host = _lastHost;
+        var port = _lastPort;
+        Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> pending;
+        lock (_smartDiscoverySingleFlightSync)
+        {
+            if (!ReferenceEquals(_controlNameInventoryAssociationMarker, marker) ||
+                !string.Equals(_controlNameInventoryHost, host, StringComparison.OrdinalIgnoreCase) ||
+                _controlNameInventoryPort != port)
+            {
+                _controlNameInventoryTask = null;
+                _controlNameInventoryAssociationMarker = marker;
+                _controlNameInventoryHost = host;
+                _controlNameInventoryPort = port;
+            }
+            pending = _controlNameInventoryTask ??= DiscoverDomainVariableNamesAsync(CancellationToken.None);
+        }
+        try
+        {
+            var result = await pending.WaitAsync(cancellationToken).ConfigureAwait(false);
+            // Never preserve empty/partial inventory as evidence after a failed
+            // enumeration; the next inspection can retry on the live association.
+            if (result.Count == 0 || result.Values.Any(names => names.Count == 0))
+                ClearFailedControlInventory(pending);
+            return result;
+        }
+        catch
+        {
+            ClearFailedControlInventory(pending);
+            throw;
+        }
+    }
+
+    private void ClearFailedControlInventory(Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> task)
+    {
+        lock (_smartDiscoverySingleFlightSync)
+        {
+            if (ReferenceEquals(_controlNameInventoryTask, task))
+                _controlNameInventoryTask = null;
+        }
     }
 
     private void ObserveSmartDiscoverySingleFlightCompletion(Task<MmsDiscoveryResult> task)

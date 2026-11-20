@@ -19,7 +19,8 @@ public static class CanonicalLiveIedSclExporter
         LiveIedCanonicalModel canonical,
         string sclPath,
         SclSchemaProfile schemaProfile = SclSchemaProfile.Edition2V31,
-        string profile = "safe-connection")
+        string profile = "safe-connection",
+        LiveIedIdentity? verifiedIdentity = null)
     {
         ArgumentNullException.ThrowIfNull(canonical);
         ValidateCanonicalCommunication(canonical);
@@ -41,7 +42,8 @@ public static class CanonicalLiveIedSclExporter
                         ? "StationBus"
                         : communication.SubNetworkName.Trim(),
                     IpAddress = communication.Host.Trim(),
-                    IedNameOverride = canonical.IedName,
+                    IedNameOverride = verifiedIdentity?.IedName ?? canonical.IedName,
+                    VerifiedIdentity = verifiedIdentity,
                     IpSubnet = communication.IpSubnet?.Trim() ?? string.Empty,
                     IpGateway = communication.IpGateway?.Trim() ?? string.Empty,
                     OsiApTitle = association.ApTitle.Trim(),
@@ -53,10 +55,10 @@ public static class CanonicalLiveIedSclExporter
                 });
 
             var document = XDocument.Load(result.SclPath, LoadOptions.PreserveWhitespace);
-            ApplyCanonicalCommunication(document, canonical);
+            ApplyCanonicalCommunication(document, canonical, verifiedIdentity?.IedName);
             PreserveRuntimeServiceCapacity(document, canonical.Discovery);
-            ApplyCanonicalInstanceValues(document, canonical);
-            ValidateRoundTripAssociation(document, canonical);
+            ApplyCanonicalInstanceValues(document, canonical, verifiedIdentity);
+            ValidateRoundTripAssociation(document, canonical, verifiedIdentity?.IedName);
             document.Save(result.SclPath);
             return result;
         }
@@ -106,11 +108,12 @@ public static class CanonicalLiveIedSclExporter
             throw new InvalidDataException(string.Join(" | ", errors));
     }
 
-    private static void ApplyCanonicalCommunication(XDocument document, LiveIedCanonicalModel canonical)
+    private static void ApplyCanonicalCommunication(
+        XDocument document, LiveIedCanonicalModel canonical, string? trustedIedName)
     {
         var connectedAp = document.Descendants(Scl + "ConnectedAP").SingleOrDefault()
             ?? throw new InvalidDataException("Generated SCL must contain exactly one ConnectedAP.");
-        connectedAp.SetAttributeValue("iedName", canonical.IedName);
+        connectedAp.SetAttributeValue("iedName", trustedIedName ?? canonical.IedName);
         connectedAp.SetAttributeValue("apName", canonical.AccessPointName);
 
         var subNetwork = connectedAp.Parent;
@@ -163,7 +166,8 @@ public static class CanonicalLiveIedSclExporter
 
     public static void ApplyCanonicalInstanceValues(
         XDocument document,
-        LiveIedCanonicalModel canonical)
+        LiveIedCanonicalModel canonical,
+        LiveIedIdentity? verifiedIdentity = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(canonical);
@@ -212,7 +216,7 @@ public static class CanonicalLiveIedSclExporter
             if (logicalNodeModel is null)
                 continue;
 
-            var lDevice = FindExportedLogicalDevice(document, canonical, evidence.Domain);
+            var lDevice = FindExportedLogicalDevice(document, canonical, evidence.Domain, verifiedIdentity);
             if (lDevice is null)
                 continue;
 
@@ -272,9 +276,20 @@ public static class CanonicalLiveIedSclExporter
     private static XElement? FindExportedLogicalDevice(
         XDocument document,
         LiveIedCanonicalModel canonical,
-        string domain)
+        string domain,
+        LiveIedIdentity? verifiedIdentity)
     {
         var normalizedDomain = domain.Trim();
+        // A verified engineering source provides the exact LD instance.
+        // Avoid recomputing it from the canonical *provisional* IED name.
+        if (verifiedIdentity is not null &&
+            verifiedIdentity.LogicalDeviceAliases.TryGetValue(normalizedDomain,out var trustedInst))
+        {
+            var trusted = document.Descendants(Scl + "LDevice")
+                .Where(ld => string.Equals((string?)ld.Attribute("inst"),trustedInst,StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            return trusted.Length == 1 ? trusted[0] : null;
+        }
         var iedName = canonical.IedName.Trim();
         var stripped = normalizedDomain.StartsWith(iedName, StringComparison.OrdinalIgnoreCase) &&
                        normalizedDomain.Length > iedName.Length
@@ -462,12 +477,13 @@ public static class CanonicalLiveIedSclExporter
         }
     }
 
-    private static void ValidateRoundTripAssociation(XDocument document, LiveIedCanonicalModel canonical)
+    private static void ValidateRoundTripAssociation(
+        XDocument document, LiveIedCanonicalModel canonical, string? trustedIedName)
     {
         var profiles = SclMmsAssociationProfileReader.Read(document);
-        var remote = profiles.Find(canonical.IedName, canonical.AccessPointName)
+        var remote = profiles.Find(trustedIedName ?? canonical.IedName, canonical.AccessPointName)
             ?? throw new InvalidDataException(
-                $"Generated SCL cannot round-trip its own ConnectedAP '{canonical.IedName}/{canonical.AccessPointName}'.");
+                $"Generated SCL cannot round-trip its own ConnectedAP '{trustedIedName ?? canonical.IedName}/{canonical.AccessPointName}'.");
 
         var canonicalAssociation = canonical.Communication.Association;
         var roundTripErrors = new List<string>();

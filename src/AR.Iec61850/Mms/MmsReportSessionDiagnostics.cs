@@ -11,6 +11,11 @@ public sealed class MmsReportSessionDiagnostics
     public int ValueCount { get; init; }
     public int WriteStepCount { get; init; }
     public int WriteFailureCount { get; init; }
+    public int WritePreflightBlockedCount { get; init; }
+    public int WriteTypeMismatchCount { get; init; }
+    public int WriteAccessDeniedCount { get; init; }
+    public int WriteTypeEvidenceConflictCount { get; init; }
+    public int WriteTypeEvidenceUnavailableCount { get; init; }
     public int PollReadCount { get; init; }
     public int PollReadSuccessCount { get; init; }
     public int PollReadFailureCount { get; init; }
@@ -67,7 +72,8 @@ public sealed class MmsReportSessionDiagnostics
 
     public string Summary =>
         $"diagnostics={OverallStatus}, reports={ReportCount}, values={ValueCount}, mappedFailures={MappingFailureCount}, partialMappings={PartialMappingFailureCount}, " +
-        $"pollReads={PollReadSuccessCount}/{PollReadCount}, writeFailures={WriteFailureCount}, " +
+        $"pollReads={PollReadSuccessCount}/{PollReadCount}, writeFailures={WriteFailureCount}, preflightBlocked={WritePreflightBlockedCount}, " +
+        $"typeMismatch={WriteTypeMismatchCount}, typeEvidenceConflict={WriteTypeEvidenceConflictCount}, " +
         $"seqGaps={SequenceGapCount}, seqResets={SequenceResetCount}, seqRegressions={SequenceRegressionCount}, " +
         $"entryIdGaps={EntryIdGapCount}, entryIdRegressions={EntryIdRegressionCount}, " +
         $"duplicates={DuplicateReportKeyCount}, bufOvfl={BufferOverflowObserved.ToString().ToLowerInvariant()}";
@@ -177,6 +183,13 @@ public sealed class MmsReportSessionDiagnostics
             ValueCount = reports.Sum(x => x.Values.Count),
             WriteStepCount = writeSteps.Count,
             WriteFailureCount = writeSteps.Count(x => !x.IsSuccess),
+            WritePreflightBlockedCount = writeSteps.Count(x => !x.Attempted && !x.IsSuccess),
+            WriteTypeMismatchCount = writeSteps.Count(x => x.FailureKind == MmsInteropFailureKind.TypeMismatch),
+            WriteAccessDeniedCount = writeSteps.Count(x => x.FailureKind == MmsInteropFailureKind.AccessDenied),
+            WriteTypeEvidenceConflictCount = writeSteps.Count(x =>
+                x.TypeEvidence?.Status == MmsReportSemanticTypeEvidenceStatus.ExactMismatch),
+            WriteTypeEvidenceUnavailableCount = writeSteps.Count(x =>
+                x.TypeEvidence?.Status == MmsReportSemanticTypeEvidenceStatus.Unavailable),
             PollReadCount = pollReads.Count,
             PollReadSuccessCount = pollReads.Count(x => x.IsSuccess),
             PollReadFailureCount = pollReads.Count(x => !x.IsSuccess),

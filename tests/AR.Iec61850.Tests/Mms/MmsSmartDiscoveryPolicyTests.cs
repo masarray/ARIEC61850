@@ -26,6 +26,116 @@ public sealed class MmsSmartDiscoveryPolicyTests
         Assert.Equal(1, MmsSmartDiscoveryPolicy.ResolveWindow(0, 0, null));
     }
 
+    [Theory]
+    [InlineData(5, 64, 5)]
+    [InlineData(8, 64, 8)]
+    [InlineData(16, 64, 8)]
+    [InlineData(1, 64, 1)]
+    [InlineData(5, 2, 2)]
+    [InlineData(5, 0, 0)]
+    [InlineData(0, 64, 1)]
+    public void ReportEnrichment_UsesOnlyNegotiatedWindowAndFiniteCandidateCount(
+        int effectiveWindow, int candidates, int expected)
+    {
+        Assert.Equal(expected,
+            MmsSmartDiscoveryPolicy.ResolveReportEnrichmentWorkers(
+                effectiveWindow, candidates));
+    }
+
+    [Fact]
+    public void ReportEnrichment_LargeIndexedCatalog_AdmitsEveryLiveFamilyWithin64Reads()
+    {
+        // Synthetic 35 families × 16 separately observed client slots. The
+        // former sorted Take(64) inspected only 4 families. Selection is a
+        // read-only scheduling hint; DatSet identity is still MMS Read proof.
+        var observed = Enumerable.Range(1, 35).SelectMany(family =>
+            Enumerable.Range(1, 16).Select(slot =>
+                ObservedRcb("IEDLD0", true, $"brcbFamily{family:D2}x{slot:D2}")))
+            .Reverse().ToArray();
+        var selected = MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(observed, 64);
+
+        Assert.Equal(64, selected.Length);
+        Assert.Equal(64, selected.Select(rcb => rcb.Reference).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(35, selected.Select(rcb => rcb.Name[..^2]).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(selected, rcb => Assert.Contains(observed, original =>
+            ReferenceEquals(original, rcb)));
+    }
+
+    [Fact]
+    public void ReportEnrichment_FairnessPreservesDomainsFcAndExactInstances()
+    {
+        var source = new[]
+        {
+            ObservedRcb("LD0", true, "Events01"),
+            ObservedRcb("LD0", true, "Events02"),
+            ObservedRcb("LD0", true, "Alarms01"),
+            ObservedRcb("LD1", true, "Events01"),
+            ObservedRcb("LD0", false, "Events01"),
+            ObservedRcb("LD0", false, "Events02")
+        };
+        var selected = MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source.Reverse(), 5);
+        var selectedAgain = MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source, 5);
+
+        Assert.Equal(selected.Select(x => x.Reference), selectedAgain.Select(x => x.Reference));
+        Assert.Equal(5, selected.Length);
+        Assert.Contains(selected, x => x.Reference == "LD0/LLN0.BR.Alarms01");
+        Assert.Contains(selected, x => x.Reference == "LD0/LLN0.RP.Events01");
+        Assert.Contains(selected, x => x.Reference == "LD1/LLN0.BR.Events01");
+        Assert.DoesNotContain(selected, x => x.Name == "Events03");
+    }
+
+    [Fact]
+    public void ReportEnrichment_BoundsAndDuplicatesFailClosed()
+    {
+        var source = new[]
+        {
+            ObservedRcb("LD0", true, "Events01"),
+            ObservedRcb("LD0", true, "Events01"),
+            ObservedRcb("LD0", true, "Events02")
+        };
+        Assert.Empty(MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source, 0));
+        Assert.Single(MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source, 1));
+        Assert.Equal(2, MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source, 100).Length);
+    }
+
+    private static MmsReportControlCandidate ObservedRcb(string domain, bool buffered, string name)
+        => new()
+        {
+            Domain = domain,
+            LogicalNode = "LLN0",
+            FunctionalConstraint = buffered ? "BR" : "RP",
+            Name = name,
+            Buffered = buffered,
+            Reference = $"{domain}/LLN0.{(buffered ? "BR" : "RP")}.{name}"
+        };
+
+    [Fact]
+    public void ReportEnrichment_PreservesExactSequentialPerRcbFieldsAndKpiCapture()
+    {
+        // Contract locks the high-throughput change to read-only RCBs.
+        // Any change to required attributes, single-RCB order, or the
+        // existing observable MMS request accounting must be reviewed.
+        var path = new DirectoryInfo(AppContext.BaseDirectory);
+        string? source = null;
+        while (path is not null)
+        {
+            var file = Path.Combine(path.FullName,
+                "src", "AR.Iec61850", "Mms", "MmsClientSession.SmartDiscovery.cs");
+            if (File.Exists(file)) { source = File.ReadAllText(file); break; }
+            path = path.Parent;
+        }
+        Assert.NotNull(source);
+        Assert.Contains("EnrichSingleReportControlSmartAsync", source);
+        Assert.Contains("ResolveReportEnrichmentWorkers(", source);
+        Assert.Contains("await Task.WhenAll(", source);
+        foreach (var field in new[] {
+            "DatSet", "RptID", "ConfRev", "IntgPd",
+            "BufTm", "TrgOps", "OptFlds", "ResvTms", "Resv" })
+            Assert.Contains($"TryReadReportAttributeSmartAsync(reportControl, \"{field}\"", source);
+        Assert.Contains("ObserveSmartDiscoveryRequest(", source);
+        Assert.DoesNotContain("WriteSingleVariableAsync(", source);
+    }
+
     [Fact]
     public void DomainPriority_ReordersOnlyAlreadyObservedDomains()
     {
@@ -192,6 +302,54 @@ public sealed class MmsSmartDiscoveryPolicyTests
         Assert.Equal("MX", root.FunctionalConstraint);
     }
 
+
+    [Fact]
+    public void DataSetClosure_SelectsOnlyObservedMissingStMxRoots_NoDuplicateOrForeignLn()
+    {
+        var directory = BuildDirectory();
+        var dataset = new MmsDataSetDirectoryResult
+        {
+            IsSuccess = true,
+            Members =
+            [
+                Member("LD0", "eveGGIO1", "ST", "Ind11"),
+                Member("LD0", "eveGGIO1", "ST", "Ind13"),
+                Member("LD0", "CSWI1", "ST", "Pos"),
+                Member("LD0", "CSWI16", "ST", "Pos"),
+                Member("LD0", "MMXU1", "MX", "A"),
+                Member("LD0", "FOREIGN1", "CO", "Oper"),
+                Member("FAKE", "eveGGIO2", "ST", "Ind1")
+            ]
+        };
+        var already = new[]
+        {
+            new MmsVariableAccessAttributesResult
+            {
+                IsSuccess = true,
+                Reference = new MmsObjectReference("LD0", "MMXU1", "")
+            },
+            new MmsVariableAccessAttributesResult
+            {
+                IsSuccess = false,
+                Reference = new MmsObjectReference("LD0", "CSWI1", "")
+            }
+        };
+        var selected = MmsSmartTypeProbePolicy.SelectUnprobedDataSetLogicalNodeRoots(
+            directory, [dataset], already);
+        Assert.Equal(2, selected.Length);
+        Assert.Equal(["CSWI16", "eveGGIO1"], selected.Select(x => x.Item).ToArray());
+    }
+
+    private static MmsDataSetDirectoryMember Member(
+        string domain, string ln, string fc, string dataObject) => new()
+    {
+        Domain = domain,
+        LogicalNode = ln,
+        FunctionalConstraint = fc,
+        DataObjectPath = dataObject,
+        MmsItemName = ln + "$" + fc + "$" + dataObject,
+        UserReference = domain + "/" + ln + "." + dataObject
+    };
     private static MmsIedModelDirectory BuildDirectory()
     {
         var snapshot = new MmsDiscoverySnapshot

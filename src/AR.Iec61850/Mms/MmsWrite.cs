@@ -17,6 +17,12 @@ public sealed class MmsWriteResult
     public IReadOnlyList<MmsWriteAccessResult> AccessResults { get; init; } = Array.Empty<MmsWriteAccessResult>();
     public string Message { get; init; } = string.Empty;
     public string ResponseHexPreview { get; init; } = string.Empty;
+
+    // Time inside the client process, not on-the-wire latency. Populated
+    // only when this write has a confirmed MMS response.
+    public TimeSpan? TpktSendElapsed { get; internal set; }
+    public TimeSpan? ConfirmedResponseWaitElapsed { get; internal set; }
+    public TimeSpan? ResponseDecodeElapsed { get; internal set; }
 }
 
 public static class MmsWriteRequest
@@ -102,6 +108,11 @@ public static class MmsWriteResponseDecoder
                 return Fail("MMS response has no Write service response node [5].", hex);
 
             var accessResults = DecodeAccessResults(service).ToArray();
+            // This decoder is used by the single-variable Write primitive. An empty or
+            // multi-result response is not proof that the requested single DA was written.
+            if (accessResults.Length != 1)
+                return Fail($"MMS single-variable Write expected exactly one access result, received {accessResults.Length}.", hex);
+
             var success = accessResults.Length > 0 && accessResults.All(x => x.IsSuccess);
             var failures = accessResults
                 .Select((result, index) => (result, index))

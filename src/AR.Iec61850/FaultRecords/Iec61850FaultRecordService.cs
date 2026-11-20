@@ -12,7 +12,9 @@ public enum Iec61850FaultRecordFileKind
     Information,
     Combined,
     Archive,
-    VendorPackage
+    VendorPackage,
+    /// <summary>Optional relay-settings sidecar, never a standalone COMTRADE record.</summary>
+    RioSidecar
 }
 
 public sealed class Iec61850FaultRecordFile
@@ -108,6 +110,7 @@ public static class Iec61850FaultRecordCatalogBuilder
             [".dat"] = Iec61850FaultRecordFileKind.Data,
             [".hdr"] = Iec61850FaultRecordFileKind.Header,
             [".inf"] = Iec61850FaultRecordFileKind.Information,
+            [".rio"] = Iec61850FaultRecordFileKind.RioSidecar,
             [".cff"] = Iec61850FaultRecordFileKind.Combined,
             [".zip"] = Iec61850FaultRecordFileKind.Archive
         };
@@ -140,6 +143,11 @@ public static class Iec61850FaultRecordCatalogBuilder
             .GroupBy(
                 file => BuildRecordId(file.RemoteDirectory, file.BaseName),
                 StringComparer.OrdinalIgnoreCase)
+            // A lone RIO is ordinary root inventory, not a downloadable
+            // COMTRADE record. Only exact directory + base-name matches join
+            // an already recognized primary CFG/DAT/package identity.
+            .Where(group => group.Any(file =>
+                file.Kind != Iec61850FaultRecordFileKind.RioSidecar))
             .Select(group => BuildRecord(group.Key, group))
             .OrderByDescending(record => record.LastModifiedUtc ?? DateTimeOffset.MinValue)
             .ThenBy(record => record.RecordId, StringComparer.OrdinalIgnoreCase)

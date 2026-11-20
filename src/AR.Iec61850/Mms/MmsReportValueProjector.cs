@@ -310,6 +310,14 @@ public static class MmsReportValueProjector
             }
         }
 
+        // C264/IEC status FCD members such as Mod and PhyHealth are whole
+        // structured ST DataObjects, not the selected scalar stVal leaf.
+        // Trust only a *typed* MMS tuple (integer enumeration, decoded q,
+        // decoded UTC time, optional Boolean stSeld). Never peel the first
+        // element from an arbitrary human-readable Structure(...) summary.
+        if (TryProjectEnumeratedStatusStruct(reference, fc, value, reason, receivedAt, out projected))
+            return true;
+
         if (TryProjectBooleanStatusStruct(reference, fc, value, reason, receivedAt, out projected))
             return true;
 
@@ -332,6 +340,51 @@ public static class MmsReportValueProjector
         }
 
         return false;
+    }
+
+    private static bool TryProjectEnumeratedStatusStruct(
+        string reference,
+        string fc,
+        MmsDataValue value,
+        string reason,
+        DateTimeOffset receivedAt,
+        out IReadOnlyList<MmsReportProjectedSignalCandidate> projected)
+    {
+        projected = Array.Empty<MmsReportProjectedSignalCandidate>();
+        // Constrain the standard status DO names and exact ST FC. A valid q/t
+        // tuple is not enough to authorize a guessed semantic leaf elsewhere.
+        if (!string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase) ||
+            LastSegment(reference).ToUpperInvariant() is not ("MOD" or "BEH" or "HEALTH" or "PHYHEALTH") ||
+            value.Kind != MmsDataKind.Structure ||
+            value.Children.Count is not (3 or 4) ||
+            value.Children[0].Kind is not (MmsDataKind.Integer or MmsDataKind.Unsigned) ||
+            (value.Children.Count == 4 && value.Children[3].Kind != MmsDataKind.Boolean))
+            return false;
+
+        var q = Iec61850QualityDecoder.Decode(value.Children[1]);
+        var t = Iec61850TimestampDecoder.Decode(value.Children[2]);
+        if (!q.IsDecoded || !t.IsDecoded)
+            return false;
+
+        // Extra field (if any) was type-checked but is not given an invented
+        // path. The exact IED schema can project stSeld independently.
+        var stValReference = Combine(reference, "stVal");
+        projected =
+        [
+            new MmsReportProjectedSignalCandidate
+            {
+                Reference = stValReference,
+                FunctionalConstraint = "ST",
+                Value = DisplayScalar(stValReference, value.Children[0]),
+                Quality = q.Validity,
+                Timestamp = t.DisplayTime,
+                Reason = reason,
+                UpdatedAt = receivedAt,
+                IsProjectedChild = true,
+                ProjectionStatus = "projected-typed-enumerated-status"
+            }
+        ];
+        return true;
     }
 
     private static bool TryProjectBooleanStatusStruct(

@@ -22,6 +22,15 @@ public sealed class MmsRcbAvailabilityOptions
 {
     public int MaxReportControls { get; init; } = 512;
     public bool ReadDataSetDirectories { get; init; } = true;
+
+    /// <summary>
+    /// Optional exact live RCB references to probe. Empty means broad diagnostic mode.
+    /// Runtime acquisition hot paths should supply only the concrete RCB instances that
+    /// canonical coverage/family resolution has already selected.
+    /// </summary>
+    public IReadOnlySet<string> TargetReportControlReferences { get; init; }
+        = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     public IReadOnlySet<string> CallerOwnedRcbReferences { get; init; }
         = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 }
@@ -70,10 +79,22 @@ public sealed class MmsRcbAvailabilityResult
     public IReadOnlyList<MmsRcbAvailabilitySnapshot> ReportControls { get; init; } = Array.Empty<MmsRcbAvailabilitySnapshot>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 
+    public int InventoryReportControlCount { get; init; }
+    public bool TargetFilterApplied { get; init; }
+    public int RequestedTargetReportControlCount { get; init; }
+    public int MatchedTargetReportControlCount { get; init; }
+    public int TargetedRcbStateLogicalReadCount { get; init; }
+    public int DataSetDirectoryNetworkReadCount { get; init; }
+    public int DataSetDirectoryCacheHitCount { get; init; }
+
     public int AvailableCount => ReportControls.Count(item => item.Availability == MmsRcbOperationalAvailability.Available);
     public int InUseCount => ReportControls.Count(item => item.Availability == MmsRcbOperationalAvailability.InUse);
     public int UnknownCount => ReportControls.Count(item => item.Availability == MmsRcbOperationalAvailability.Unknown);
-    public string Summary => $"RCB availability checked: total={ReportControls.Count}, available={AvailableCount}, in-use={InUseCount}, unknown={UnknownCount}.";
+    public string Summary =>
+        $"RCB availability checked: inventory={InventoryReportControlCount}, probed={ReportControls.Count}, " +
+        $"targeted={TargetFilterApplied.ToString().ToLowerInvariant()}, available={AvailableCount}, in-use={InUseCount}, unknown={UnknownCount}, " +
+        $"targetedRcbStateReads={(TargetFilterApplied ? TargetedRcbStateLogicalReadCount.ToString() : "n/a")}, " +
+        $"datasetReads={DataSetDirectoryNetworkReadCount}, datasetCacheHits={DataSetDirectoryCacheHitCount}.";
 }
 
 public static class MmsRcbAvailabilityEvaluator

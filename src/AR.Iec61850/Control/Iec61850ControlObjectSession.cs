@@ -27,6 +27,11 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
     private CancellationTokenSource? _selectionLeaseCts;
     private bool _ownsLock;
     private bool _disposed;
+    private DateTimeOffset _serviceStartedUtc;
+    private TimeSpan _serviceElapsed;
+    private long _serviceCompletedTimestamp;
+    private MmsWriteResult? _lastMeasuredWrite;
+
 
     internal Iec61850ControlObjectSession(
         IIec61850ControlTransport transport,
@@ -115,7 +120,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
         try
         {
             var context = CreateContext(request);
-            var read = await _transport.ReadAsync(Descriptor.References.Sbo, cancellationToken).ConfigureAwait(false);
+            var read = await MeasureServiceAsync(() => _transport.ReadAsync(Descriptor.References.Sbo, cancellationToken)).ConfigureAwait(false);
             if (!read.IsSuccess || !IsPositiveSboSelection(read.Value, Descriptor.References))
             {
                 ReleaseObject();
@@ -172,7 +177,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
                 context,
                 Descriptor.SelectWithValueSpecification,
                 _options.RequireExactNamedControlFields);
-            var write = await _transport.WriteControlAsync(Descriptor.References.SboWithValue, value, cancellationToken).ConfigureAwait(false);
+            var write = await MeasureServiceAsync(() => _transport.WriteControlAsync(Descriptor.References.SboWithValue, value, cancellationToken)).ConfigureAwait(false);
             if (!write.IsSuccess)
             {
                 var appError = await WaitForApplicationErrorAsync(_options.ApplicationErrorGracePeriod, cancellationToken, reports).ConfigureAwait(false);
@@ -289,7 +294,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
                 context,
                 Descriptor.OperSpecification,
                 _options.RequireExactNamedControlFields);
-            var write = await _transport.WriteControlAsync(Descriptor.References.Oper, operValue, linked.Token).ConfigureAwait(false);
+            var write = await MeasureServiceAsync(() => _transport.WriteControlAsync(Descriptor.References.Oper, operValue, linked.Token)).ConfigureAwait(false);
             if (!write.IsSuccess)
             {
                 var applicationError = await WaitForApplicationErrorAsync(_options.ApplicationErrorGracePeriod, cancellationToken, reports).ConfigureAwait(false);
@@ -432,7 +437,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
                 return Unsupported(Iec61850ControlAction.Cancel, "IED did not expose a decodable Cancel type specification.");
 
             var value = Iec61850ControlStructureBuilder.BuildCancel(context, Descriptor.CancelSpecification, _options.RequireExactNamedControlFields);
-            var write = await _transport.WriteControlAsync(Descriptor.References.Cancel, value, cancellationToken).ConfigureAwait(false);
+            var write = await MeasureServiceAsync(() => _transport.WriteControlAsync(Descriptor.References.Cancel, value, cancellationToken)).ConfigureAwait(false);
             return write.IsSuccess
                 ? Accepted(Iec61850ControlAction.Cancel, context, stopwatch.Elapsed, "Cancel accepted; local SBO ownership released.")
                 : FromWriteFailure(Iec61850ControlAction.Cancel, write, null, context, stopwatch.Elapsed);
@@ -691,7 +696,7 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
                     context,
                     Descriptor.CancelSpecification,
                     _options.RequireExactNamedControlFields);
-                await _transport.WriteControlAsync(Descriptor.References.Cancel, value, cancellationToken).ConfigureAwait(false);
+                await MeasureServiceAsync(() => _transport.WriteControlAsync(Descriptor.References.Cancel, value, cancellationToken)).ConfigureAwait(false);
             }
         }
         catch
@@ -782,6 +787,29 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
                 BuildWireStep(action, requestAccepted: true, clientMessage))
         };
 
+    // Serialized by _operationGate. These are local service boundaries, not
+    // packet capture timestamps; elapsed measurement uses the monotonic clock.
+    private async Task<T> MeasureServiceAsync<T>(Func<Task<T>> service)
+    {
+        _serviceStartedUtc = DateTimeOffset.UtcNow;
+        var started = Stopwatch.GetTimestamp();
+        _lastMeasuredWrite = null;
+        try
+        {
+            var result = await service().ConfigureAwait(false);
+            // Only the exact MMS write result which produced this step can
+            // supply transport timing. Never borrow another invoke ID's stats.
+            if (result is MmsWriteResult write)
+                _lastMeasuredWrite = write;
+            return result;
+        }
+        finally
+        {
+            _serviceElapsed = Stopwatch.GetElapsedTime(started);
+            _serviceCompletedTimestamp = Stopwatch.GetTimestamp();
+        }
+    }
+
     private Iec61850ControlWireStep BuildWireStep(
         Iec61850ControlAction action,
         bool requestAccepted,
@@ -796,6 +824,25 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             _ => Descriptor.References.Oper
         };
 
+        // Distinguish protocol service response time from the selection
+        // negative-indication observation gate. The latter dominates the
+        // field sample (~400 ms); it must not be misreported as slow MMS I/O.
+        // This is telemetry only: do not reduce the grace period or bypass
+        // LastApplError and enhanced-security CommandTermination.
+        var postResponseStage = action switch
+        {
+            Iec61850ControlAction.SelectWithValue => "sbo-application-error-observation",
+            Iec61850ControlAction.Operate => "operate-termination-observation",
+            _ => "post-service-completion"
+        };
+        var graceBudget = action == Iec61850ControlAction.SelectWithValue
+            ? _options.ApplicationErrorGracePeriod.TotalMilliseconds : 0d;
+        var transportStages = _lastMeasuredWrite is
+            { TpktSendElapsed: { } send, ConfirmedResponseWaitElapsed: { } response,
+              ResponseDecodeElapsed: { } decode }
+            ? FormattableString.Invariant(
+                $"tpktSendMs={send.TotalMilliseconds:0.###}; confirmedResponseWaitMs={response.TotalMilliseconds:0.###}; mmsDecodeMs={decode.TotalMilliseconds:0.###}")
+            : "transportStages=unavailable";
         return new Iec61850ControlWireStep
         {
             Action = action,
@@ -803,7 +850,8 @@ public sealed class Iec61850ControlObjectSession : IAsyncDisposable
             RequestAccepted = requestAccepted,
             RequestHex = _transport.LastRequestHex,
             ResponseHex = _transport.LastResponseHex,
-            Detail = detail
+            Detail = FormattableString.Invariant(
+                $"{detail} serviceStartedUtc={_serviceStartedUtc:O}; serviceMs={_serviceElapsed.TotalMilliseconds:0.###}; postResponseWaitMs={Stopwatch.GetElapsedTime(_serviceCompletedTimestamp).TotalMilliseconds:0.###}; postResponseStage={postResponseStage}; configuredApplicationErrorGraceMs={graceBudget:0.###}; {transportStages}; timingScope=local-service-not-wire")
         };
     }
 

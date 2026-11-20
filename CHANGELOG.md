@@ -1,5 +1,11 @@
 # Changelog
 
+## Control/report isolation trial — 2026-10-20
+
+- Reject non-RCB InformationReport shapes before persistent single-monitor fallback; control termination and LastApplError remain available to independent control subscribers.
+- Include monotonic service duration and post-response wait in each control wire-step detail. UTC marks local service start, not wire send. This separates SBOw/Operate service latency from asynchronous completion wait without changing timeout, checks, or command sequencing.
+- Synthetic regression coverage added; physical latency improvement is not yet established.
+
 All notable public changes to ARIEC61850 are recorded here. The project is still evolving toward stable semantic releases; entries are grouped by engineering milestone until a formal versioning policy is adopted.
 
 ## Unreleased — public wording, provenance and release assurance

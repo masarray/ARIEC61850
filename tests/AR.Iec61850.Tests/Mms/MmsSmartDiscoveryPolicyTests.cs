@@ -43,6 +43,73 @@ public sealed class MmsSmartDiscoveryPolicyTests
     }
 
     [Fact]
+    public void ReportEnrichment_LargeIndexedCatalog_AdmitsEveryLiveFamilyWithin64Reads()
+    {
+        // Synthetic 35 families × 16 separately observed client slots. The
+        // former sorted Take(64) inspected only 4 families. Selection is a
+        // read-only scheduling hint; DatSet identity is still MMS Read proof.
+        var observed = Enumerable.Range(1, 35).SelectMany(family =>
+            Enumerable.Range(1, 16).Select(slot =>
+                ObservedRcb("IEDLD0", true, $"brcbFamily{family:D2}x{slot:D2}")))
+            .Reverse().ToArray();
+        var selected = MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(observed, 64);
+
+        Assert.Equal(64, selected.Length);
+        Assert.Equal(64, selected.Select(rcb => rcb.Reference).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(35, selected.Select(rcb => rcb.Name[..^2]).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(selected, rcb => Assert.Contains(observed, original =>
+            ReferenceEquals(original, rcb)));
+    }
+
+    [Fact]
+    public void ReportEnrichment_FairnessPreservesDomainsFcAndExactInstances()
+    {
+        var source = new[]
+        {
+            ObservedRcb("LD0", true, "Events01"),
+            ObservedRcb("LD0", true, "Events02"),
+            ObservedRcb("LD0", true, "Alarms01"),
+            ObservedRcb("LD1", true, "Events01"),
+            ObservedRcb("LD0", false, "Events01"),
+            ObservedRcb("LD0", false, "Events02")
+        };
+        var selected = MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source.Reverse(), 5);
+        var selectedAgain = MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source, 5);
+
+        Assert.Equal(selected.Select(x => x.Reference), selectedAgain.Select(x => x.Reference));
+        Assert.Equal(5, selected.Length);
+        Assert.Contains(selected, x => x.Reference == "LD0/LLN0.BR.Alarms01");
+        Assert.Contains(selected, x => x.Reference == "LD0/LLN0.RP.Events01");
+        Assert.Contains(selected, x => x.Reference == "LD1/LLN0.BR.Events01");
+        Assert.DoesNotContain(selected, x => x.Name == "Events03");
+    }
+
+    [Fact]
+    public void ReportEnrichment_BoundsAndDuplicatesFailClosed()
+    {
+        var source = new[]
+        {
+            ObservedRcb("LD0", true, "Events01"),
+            ObservedRcb("LD0", true, "Events01"),
+            ObservedRcb("LD0", true, "Events02")
+        };
+        Assert.Empty(MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source, 0));
+        Assert.Single(MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source, 1));
+        Assert.Equal(2, MmsSmartDiscoveryPolicy.SelectReportEnrichmentCandidates(source, 100).Length);
+    }
+
+    private static MmsReportControlCandidate ObservedRcb(string domain, bool buffered, string name)
+        => new()
+        {
+            Domain = domain,
+            LogicalNode = "LLN0",
+            FunctionalConstraint = buffered ? "BR" : "RP",
+            Name = name,
+            Buffered = buffered,
+            Reference = $"{domain}/LLN0.{(buffered ? "BR" : "RP")}.{name}"
+        };
+
+    [Fact]
     public void ReportEnrichment_PreservesExactSequentialPerRcbFieldsAndKpiCapture()
     {
         // Contract locks the high-throughput change to read-only RCBs.
